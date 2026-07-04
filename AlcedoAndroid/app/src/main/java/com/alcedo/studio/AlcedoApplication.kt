@@ -4,9 +4,11 @@ import android.app.Application
 import android.util.Log
 import com.alcedo.studio.crash.CrashHandler
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.i18n.LanguageManager
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
+import com.alcedo.studio.ui.theme.ThemeManager
 
 class AlcedoApplication : Application() {
     override fun onCreate() {
@@ -18,6 +20,10 @@ class AlcedoApplication : Application() {
         // Initialize privacy manager and apply retention policy
         PrivacyManager.initialize(this)
         PrivacyManager.applyRetentionPolicy(this)
+
+        // Initialize theme and language persistence
+        ThemeManager.initialize(this)
+        LanguageManager.initialize(this)
 
         // Clean up old temp files
         TempFileManager.cleanupOldFiles(this)

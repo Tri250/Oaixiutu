@@ -2,22 +2,19 @@ package com.alcedo.studio.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.alcedo.studio.R
 
-// Custom font family placeholder.
-// To use a custom font, place .ttf/.otf files in res/font/ and use:
-//   val AlcedoFontFamily = FontFamily(
-//       Font(R.font.alcedo_regular, FontWeight.Normal),
-//       Font(R.font.alcedo_medium, FontWeight.Medium),
-//       Font(R.font.alcedo_semibold, FontWeight.SemiBold),
-//       Font(R.font.alcedo_light, FontWeight.Light),
-//       Font(R.font.alcedo_bold, FontWeight.Bold)
-//   )
-// Then replace FontFamily.SansSerif below with AlcedoFontFamily.
-
-val AlcedoFontFamily = FontFamily.SansSerif
+val AlcedoFontFamily = FontFamily(
+    Font(R.font.alcedo_regular, FontWeight.Normal),
+    Font(R.font.alcedo_medium, FontWeight.Medium),
+    Font(R.font.alcedo_semibold, FontWeight.SemiBold),
+    Font(R.font.alcedo_light, FontWeight.Light),
+    Font(R.font.alcedo_bold, FontWeight.Bold)
+)
 
 val AlcedoTypography = Typography(
     displayLarge = TextStyle(

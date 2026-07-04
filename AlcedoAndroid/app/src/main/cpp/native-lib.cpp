@@ -279,12 +279,44 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
     }
     LOGI("Decoding RAW: %s (demosaic=%d)", path, demosaic);
 
-    // Integer array placeholder - real implementation would use LibRaw
-    jintArray result = env->NewIntArray(0);
-    if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+    RawDecodeOptions opts;
+    opts.demosaic = static_cast<DemosaicMethod>(demosaic);
+    opts.highlight_mode = highlightReconstruction ? HighlightMode::RECONSTRUCT : HighlightMode::CLIP;
+    opts.use_camera_matrix = true;
+    opts.half_resolution = false;
+    opts.output_float = true;
+    opts.extract_thumbnail = false;
+    opts.extract_preview = false;
 
+    RawDecodeResult result;
+    RawDecoder raw;
+    bool ok = raw.decode(path, result, opts);
     env->ReleaseStringUTFChars(rawPath, path);
-    return result;
+
+    if (!ok || !result.success || result.float_rgb_data.empty()) {
+        LOGE("Failed to decode RAW file");
+        return env->NewIntArray(0);
+    }
+
+    int pixel_count = result.width * result.height;
+    std::vector<jint> argb(pixel_count);
+    const float *rgb = result.float_rgb_data.data();
+    for (int i = 0; i < pixel_count; ++i) {
+        int idx = i * 3;
+        int r = static_cast<int>(std::max(0.0f, std::min(1.0f, rgb[idx]))     * 255.0f);
+        int g = static_cast<int>(std::max(0.0f, std::min(1.0f, rgb[idx + 1])) * 255.0f);
+        int b = static_cast<int>(std::max(0.0f, std::min(1.0f, rgb[idx + 2])) * 255.0f);
+        argb[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    jintArray jresult = env->NewIntArray(pixel_count);
+    if (!jresult || env->ExceptionCheck()) {
+        LOGE("Failed to create int array for RAW decode result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetIntArrayRegion(jresult, 0, pixel_count, argb.data());
+    return jresult;
 }
 
 // ============================================================

@@ -451,9 +451,16 @@ class AlbumViewModel : ViewModel() {
         val sorted = when (_sortMode.value) {
             SortMode.DATE -> images.sortedByDescending { it.imageId }
             SortMode.NAME -> images.sortedBy { it.imageName }
-            SortMode.RATING -> images.sortedByDescending {
-                // TODO: use rating from metadata entity
-                0
+            SortMode.RATING -> {
+                val ratingsById = run {
+                    val ratings = mutableListOf<RatingEntity>()
+                    images.forEach { img ->
+                        val r = runCatching { sleeveRepository.getRating(img.imageId) }.getOrNull()
+                        if (r != null) ratings.add(r)
+                    }
+                    ratings.associateBy { it.imageId }
+                }
+                images.sortedByDescending { ratingsById[it.imageId]?.rating ?: 0 }
             }
             SortMode.TYPE -> images.sortedBy { it.imageType.ordinal }
         }
@@ -503,9 +510,9 @@ class AlbumViewModel : ViewModel() {
         }
 
         if (filter.rating > 0) {
-            result = result.filter {
-                // TODO: integrate with RatingEntity
-                true
+            result = result.filter { img ->
+                val ratingEntity = runCatching { sleeveRepository.getRating(img.imageId) }.getOrNull()
+                (ratingEntity?.rating ?: 0) >= filter.rating
             }
         }
 

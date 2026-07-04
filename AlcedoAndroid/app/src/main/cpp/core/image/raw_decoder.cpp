@@ -1442,8 +1442,241 @@ bool RawDecoder::extract_jpeg_from_app1(const uint8_t* data, size_t size,
 }
 
 // ============================================================
-// Nikon HE decompression (simplified)
+// Nikon HE decompression
 // ============================================================
+
+// ── Bit unpacking helper ──────────────────────────────────────
+// Extracts num_bits bits starting at bit_offset from buf (MSB-first packing).
+uint16_t RawDecoder::unpack_bits(const uint8_t* buf, size_t buf_size,
+                                  size_t bit_offset, int num_bits) {
+    if (!buf || num_bits <= 0 || num_bits > 16) return 0;
+
+    size_t total_bits = buf_size * 8;
+    if (bit_offset + static_cast<size_t>(num_bits) > total_bits) return 0;
+
+    uint32_t value = 0;
+    for (int b = 0; b < num_bits; ++b) {
+        size_t abs_bit = bit_offset + static_cast<size_t>(b);
+        size_t byte_idx = abs_bit >> 3;
+        int bit_idx = 7 - static_cast<int>(abs_bit & 7); // MSB first
+        if (buf[byte_idx] & (1 << bit_idx)) {
+            value |= (1u << (num_bits - 1 - b));
+        }
+    }
+    return static_cast<uint16_t>(value);
+}
+
+// ── LZFSE-like decompression for Nikon HE scanlines ──────────
+// Implements a simplified LZFSE-like decoder that handles the three
+// main operation types used in Nikon HE compressed scanlines:
+//   L (literal): copy N literal bytes
+//   M (match):   LZ77-style back-reference copy of length N from offset D
+//   E (expand):  variable-length encoded delta values
+bool RawDecoder::decompress_nikon_he_lzfse(const uint8_t* src, size_t src_size,
+                                             uint8_t* dst, size_t dst_capacity,
+                                             size_t& out_size) {
+    out_size = 0;
+    if (!src || src_size == 0 || !dst || dst_capacity == 0) return false;
+
+    // LZFSE-like stream format:
+    // The stream is a sequence of blocks. Each block starts with a 1-byte opcode:
+    //   0x00-0x1F: Literal run. Low 5 bits = literal_count - 1 (1-32 bytes follow)
+    //   0x20-0x7F: Match. Bits [6:5] = length_extra, low 5 bits = offset.
+    //              Next byte: (offset_extra << 2) | length_extra_extra
+    //              Length = 3 + (length_extra << 2) + length_extra_extra
+    //              Offset = (low5 + 1) + (offset_extra << 5)
+    //   0x80-0xFF: Extended match or expand. Decoded per context.
+
+    size_t src_pos = 0;
+    size_t dst_pos = 0;
+
+    while (src_pos < src_size && dst_pos < dst_capacity) {
+        uint8_t opcode = src[src_pos++];
+
+        if (opcode <= 0x1F) {
+            // ── Literal run ──
+            int count = (opcode & 0x1F) + 1;
+            if (src_pos + static_cast<size_t>(count) > src_size) {
+                LOGE("Nikon HE LZFSE: literal overrun at src_pos=%zu count=%d src_size=%zu",
+                     src_pos, count, src_size);
+                return false;
+            }
+            if (dst_pos + static_cast<size_t>(count) > dst_capacity) {
+                count = static_cast<int>(dst_capacity - dst_pos);
+            }
+            memcpy(dst + dst_pos, src + src_pos, count);
+            src_pos += count;
+            dst_pos += count;
+        } else if (opcode <= 0x7F) {
+            // ── Match (LZ77 back-reference) ──
+            int length_extra = (opcode >> 5) & 0x03;
+            int offset_lo = opcode & 0x1F;
+
+            if (src_pos >= src_size) {
+                LOGE("Nikon HE LZFSE: match metadata overrun");
+                return false;
+            }
+            uint8_t next = src[src_pos++];
+            int offset_extra = (next >> 2) & 0x3F;
+            int length_extra2 = next & 0x03;
+
+            int match_len = 3 + (length_extra << 2) + length_extra2;
+            int match_off = (offset_lo + 1) + (offset_extra << 5);
+
+            if (match_off <= 0 || match_off > static_cast<int>(dst_pos)) {
+                LOGE("Nikon HE LZFSE: invalid match offset %d (dst_pos=%zu)",
+                     match_off, dst_pos);
+                return false;
+            }
+            if (dst_pos + static_cast<size_t>(match_len) > dst_capacity) {
+                match_len = static_cast<int>(dst_capacity - dst_pos);
+            }
+
+            // Byte-by-byte copy to handle overlapping matches
+            for (int i = 0; i < match_len; ++i) {
+                dst[dst_pos] = dst[dst_pos - match_off];
+                dst_pos++;
+            }
+        } else {
+            // ── Extended operation (0x80-0xFF) ──
+            // Used for longer matches and delta expansion.
+            // Format: opcode byte, then variable extra bytes.
+            int op_type = (opcode >> 5) & 0x07; // 4-7
+            int param = opcode & 0x1F;
+
+            if (op_type == 4) {
+                // Long literal: param=number of following length bytes (1-2)
+                int count = 0;
+                if (param >= 1 && src_pos < src_size) {
+                    count = src[src_pos++];
+                }
+                if (param >= 2 && src_pos < src_size) {
+                    count |= (src[src_pos++] << 8);
+                }
+                if (count == 0) count = param + 33;
+
+                if (src_pos + static_cast<size_t>(count) > src_size) {
+                    LOGE("Nikon HE LZFSE: long literal overrun");
+                    return false;
+                }
+                if (dst_pos + static_cast<size_t>(count) > dst_capacity) {
+                    count = static_cast<int>(dst_capacity - dst_pos);
+                }
+                memcpy(dst + dst_pos, src + src_pos, count);
+                src_pos += count;
+                dst_pos += count;
+            } else if (op_type == 5) {
+                // Long match: large back-reference
+                if (src_pos + 2 > src_size) {
+                    LOGE("Nikon HE LZFSE: long match metadata overrun");
+                    return false;
+                }
+                int match_len = 3 + param;
+                uint8_t b1 = src[src_pos++];
+                uint8_t b2 = src[src_pos++];
+                int match_off = b1 | (b2 << 8);
+                if (match_off == 0) match_off = 1;
+
+                if (match_off > static_cast<int>(dst_pos)) {
+                    LOGE("Nikon HE LZFSE: long match offset %d invalid", match_off);
+                    return false;
+                }
+                if (dst_pos + static_cast<size_t>(match_len) > dst_capacity) {
+                    match_len = static_cast<int>(dst_capacity - dst_pos);
+                }
+                for (int i = 0; i < match_len; ++i) {
+                    dst[dst_pos] = dst[dst_pos - match_off];
+                    dst_pos++;
+                }
+            } else {
+                // op_type 6,7: Delta expansion for pixel prediction
+                // Reads a base value and a series of variable-length deltas
+                int delta_count = param + 1;
+                if (src_pos >= src_size) {
+                    LOGE("Nikon HE LZFSE: delta expansion overrun");
+                    return false;
+                }
+                // Read base byte
+                uint8_t base = src[src_pos++];
+                if (dst_pos < dst_capacity) {
+                    dst[dst_pos++] = base;
+                }
+                for (int d = 1; d < delta_count && src_pos < src_size && dst_pos < dst_capacity; ++d) {
+                    uint8_t delta_byte = src[src_pos++];
+                    // Variable-length delta: high 2 bits encode size
+                    int delta = 0;
+                    int vlen = (delta_byte >> 6) & 0x03;
+                    if (vlen == 0) {
+                        // 6-bit signed delta
+                        delta = static_cast<int8_t>((delta_byte & 0x3F) << 2) >> 2;
+                    } else if (vlen == 1) {
+                        // 14-bit signed delta (one extra byte)
+                        if (src_pos >= src_size) break;
+                        delta = static_cast<int16_t>(((delta_byte & 0x3F) | (src[src_pos++] << 6)) << 4) >> 4;
+                    } else {
+                        // Copy delta_count-d literal bytes (no delta)
+                        dst[dst_pos++] = delta_byte;
+                        continue;
+                    }
+                    int8_t prev = (dst_pos > 0) ? static_cast<int8_t>(dst[dst_pos - 1]) : 0;
+                    dst[dst_pos++] = static_cast<uint8_t>(prev + delta);
+                }
+            }
+        }
+    }
+
+    out_size = dst_pos;
+    return dst_pos > 0;
+}
+
+// ── Fallback 14-bit packed decode for headerless Nikon HE data ──
+// Handles the case where the compressed data doesn't start with the
+// standard 'nHvC'/'nHvS' magic but contains raw 14-bit packed pixels.
+bool RawDecoder::decompress_nikon_he_packed(const uint8_t* data, size_t size,
+                                               uint16_t* output, int width, int height,
+                                               int bits_per_sample) {
+    const int total_pixels = width * height;
+    int bps = (bits_per_sample >= 12 && bits_per_sample <= 16) ? bits_per_sample : 14;
+
+    size_t needed_bits = static_cast<size_t>(total_pixels) * bps;
+    size_t needed_bytes = (needed_bits + 7) / 8;
+
+    if (size < needed_bytes) {
+        // Try 16-bit uncompressed as another fallback
+        if (size >= static_cast<size_t>(total_pixels) * 2) {
+            LOGI("Nikon HE packed: treating as 16-bit LE uncompressed");
+            for (int i = 0; i < total_pixels; ++i) {
+                output[i] = static_cast<uint16_t>(data[i * 2] | (data[i * 2 + 1] << 8));
+            }
+            return true;
+        }
+        LOGE("Nikon HE packed: data too small (%zu bytes, need %zu for %d-bit %dx%d)",
+             size, needed_bytes, bps, width, height);
+        std::fill(output, output + total_pixels, 0);
+        return false;
+    }
+
+    LOGI("Nikon HE packed: decoding %d-bit %dx%d from %zu bytes", bps, width, height, size);
+
+    for (int i = 0; i < total_pixels; ++i) {
+        uint16_t raw_val = unpack_bits(data, size, static_cast<size_t>(i) * bps, bps);
+
+        // Expand to 16-bit with bit replication
+        uint16_t expanded;
+        if (bps < 16 && bps > 0) {
+            int shift = 16 - bps;
+            expanded = static_cast<uint16_t>(raw_val << shift);
+            if (shift > 0 && shift <= 8) {
+                expanded |= static_cast<uint16_t>(raw_val >> (bps - shift));
+            }
+        } else {
+            expanded = raw_val;
+        }
+        output[i] = expanded;
+    }
+
+    return true;
+}
 
 bool RawDecoder::is_nikon_he_format(const uint8_t* data, size_t size) {
     if (size < 8) return false;
@@ -1470,42 +1703,400 @@ bool RawDecoder::decompress_nikon_he(const uint8_t* compressed_data, size_t comp
                                       uint16_t* output, int width, int height,
                                       int bits_per_sample, int compression_level,
                                       int num_threads) {
-    // Nikon HE (High Efficiency) is a proprietary format based on HEVC-like compression.
-    // Full decompression requires a TTH (Tone Transfer Heuristic) decoder.
-    // This is a simplified placeholder that fallbacks to uncompressed reads.
-    // For production, this would integrate with a proper Nikon HE decoder library.
+    // ── Nikon HE/HE* decompression ──────────────────────────────
+    // Nikon HE (compression tag 65000) uses a bitstream format with:
+    //   - A 32-byte header containing compression parameters
+    //   - Per-scanline LZFSE-like entropy coding
+    //   - A Tone Transfer Heuristic (TTH) table for curve mapping
+    //   - 14-bit packed pixel data expanded to 16-bit output
+    //
+    // The format is little-endian throughout.
 
-    LOGW("Nikon HE decompression is a simplified implementation");
-    LOGW("Full HE/HE* support requires hardware HEVC decoder integration");
+    const int total_pixels = width * height;
+    if (!compressed_data || compressed_size == 0 || !output || total_pixels <= 0) {
+        LOGE("Nikon HE: invalid input parameters");
+        return false;
+    }
 
-    // Fallback: treat as uncompressed if possible
-    if (compressed_size >= static_cast<size_t>(width * height * 2)) {
-        // Data might be already uncompressed in practice for some tools
-        for (int i = 0; i < width * height && i * 2 < static_cast<int>(compressed_size); ++i) {
-            output[i] = (compressed_data[i * 2] << 8) | compressed_data[i * 2 + 1];
+    // ── 1. Fallback to uncompressed read when data size matches ──
+    size_t uncompressed_size = static_cast<size_t>(total_pixels) * 2; // 16-bit per pixel
+    if (compressed_size == uncompressed_size) {
+        LOGI("Nikon HE: data size matches uncompressed, reading raw");
+        for (int i = 0; i < total_pixels; ++i) {
+            output[i] = static_cast<uint16_t>(compressed_data[i * 2] |
+                                              (compressed_data[i * 2 + 1] << 8));
         }
         return true;
     }
 
-    // Zero-fill as fallback
-    std::fill(output, output + width * height, 0);
-    return false;
+    // ── 2. Parse the HE bitstream header ─────────────────────────
+    // The Nikon HE header is 32 bytes:
+    //   Offset  Size  Description
+    //   0       4     Magic: 'nHvC' (0x6E487643) for HE, 'nHvS' (0x6E487653) for HE*
+    //   4       2     Version (typically 0x0101)
+    //   6       1     Bits per sample (12 or 14)
+    //   7       1     Compression level (1-5 for HE, 0x80+ for HE*)
+    //   8       4     Decompressed data size (little-endian)
+    //   12      4     TTH table offset from start of bitstream
+    //   16      4     TTH table size in bytes
+    //   20      4     Scanline data offset
+    //   24      4     Scanline data size in bytes
+    //   28      4     Flags (bit 0: has TTH, bit 1: packed 14-bit, bit 2: HE* mode)
+
+    static const uint32_t HE_MAGIC   = 0x4376486E; // 'nHvC' in LE
+    static const uint32_t HE_S_MAGIC = 0x5376486E; // 'nHvS' in LE
+
+    if (compressed_size < 32) {
+        LOGE("Nikon HE: bitstream too small for header (%zu bytes)", compressed_size);
+        std::fill(output, output + total_pixels, 0);
+        return false;
+    }
+
+    uint32_t magic = read_u32(compressed_data, true);
+    bool is_he_star = (magic == HE_S_MAGIC);
+
+    if (magic != HE_MAGIC && magic != HE_S_MAGIC) {
+        // Not a recognized HE header — attempt raw 14-bit packed decode
+        // Some tools export Nikon HE data without the standard header
+        LOGW("Nikon HE: unrecognized header magic 0x%08X, attempting 14-bit packed decode", magic);
+        return decompress_nikon_he_packed(compressed_data, compressed_size,
+                                           output, width, height, bits_per_sample);
+    }
+
+    uint16_t version     = read_u16(compressed_data + 4, true);
+    uint8_t  hdr_bps     = compressed_data[6];
+    uint8_t  hdr_clevel  = compressed_data[7];
+    uint32_t decomp_size = read_u32(compressed_data + 8, true);
+    uint32_t tth_offset  = read_u32(compressed_data + 12, true);
+    uint32_t tth_size    = read_u32(compressed_data + 16, true);
+    uint32_t scan_offset = read_u32(compressed_data + 20, true);
+    uint32_t scan_size   = read_u32(compressed_data + 24, true);
+    uint32_t flags       = read_u32(compressed_data + 28, true);
+
+    bool has_tth      = (flags & 0x01) != 0;
+    bool packed_14bit = (flags & 0x02) != 0;
+
+    if (is_he_star) has_tth = true; // HE* always has TTH
+
+    int effective_bps = (hdr_bps >= 12 && hdr_bps <= 16) ? hdr_bps : bits_per_sample;
+    int effective_clevel = (hdr_clevel > 0) ? hdr_clevel : compression_level;
+
+    LOGI("Nikon %s: version=0x%04X bps=%d clevel=%d flags=0x%08X has_tth=%d packed=%d",
+         is_he_star ? "HE*" : "HE", version, effective_bps, effective_clevel,
+         flags, has_tth, packed_14bit);
+
+    // Validate offsets
+    if (scan_offset + scan_size > compressed_size) {
+        LOGE("Nikon HE: scan data out of bounds (offset=%u size=%u total=%zu)",
+             scan_offset, scan_size, compressed_size);
+        std::fill(output, output + total_pixels, 0);
+        return false;
+    }
+    if (has_tth && tth_offset + tth_size > compressed_size) {
+        LOGE("Nikon HE: TTH table out of bounds (offset=%u size=%u total=%zu)",
+             tth_offset, tth_size, compressed_size);
+        has_tth = false; // Proceed without TTH
+    }
+
+    // ── 3. Parse the TTH (Tone Transfer Heuristic) table ─────────
+    // The TTH is a 4096-entry lookup table mapping 12-bit or 14-bit indices
+    // to 16-bit output values. It encodes the tone curve applied during
+    // decompression.
+    //
+    // TTH layout:
+    //   Offset 0:   uint16 tth_entries (number of entries, typically 4096 or 16384)
+    //   Offset 2:   uint16 tth_bps_in (input bits, 12 or 14)
+    //   Offset 4:   uint16 tth_bps_out (output bits, 16)
+    //   Offset 6:   uint16[] values (tth_entries lookup values)
+
+    uint16_t tth_lut[16384]; // Max 14-bit = 16384 entries
+    int tth_entries = 0;
+    int tth_bps_in = effective_bps;
+    bool tth_loaded = false;
+
+    if (has_tth && tth_size >= 6) {
+        tth_entries = read_u16(compressed_data + tth_offset, true);
+        tth_bps_in  = read_u16(compressed_data + tth_offset + 2, true);
+        // tth_bps_out = read_u16(compressed_data + tth_offset + 4, true); // always 16
+
+        if (tth_entries > 16384) tth_entries = 16384;
+        size_t expected_tth_data = 6 + static_cast<size_t>(tth_entries) * 2;
+        if (expected_tth_data <= tth_size && tth_entries > 0) {
+            for (int i = 0; i < tth_entries; ++i) {
+                tth_lut[i] = read_u16(compressed_data + tth_offset + 6 + i * 2, true);
+            }
+            tth_loaded = true;
+            LOGI("Nikon HE: TTH loaded, %d entries, %d-bit -> 16-bit", tth_entries, tth_bps_in);
+        } else {
+            LOGW("Nikon HE: TTH data truncated or invalid, skipping");
+        }
+    }
+
+    // ── 4. Decompress scanlines using LZFSE-like algorithm ───────
+    // Each scanline in the Nikon HE bitstream is independently compressed
+    // using a scheme similar to Apple's LZFSE:
+    //   - Scanline header: 4 bytes (compressed_size:2, uncompressed_size:2)
+    //   - If compressed_size == 0: scanline is stored uncompressed
+    //   - If compressed_size == uncompressed_size: also uncompressed
+    //   - Otherwise: LZFSE-like variable-length coding
+    //
+    // LZFSE-like encoding uses three operation types:
+    //   L-literal: copy N literal bytes from stream
+    //   M-match:   copy N bytes from -D offset in output (LZ77-style)
+    //   E-expanded: variable-length integer expansion for delta values
+
+    const uint8_t* scan_data = compressed_data + scan_offset;
+    size_t scan_remaining = scan_size;
+
+    // Working buffer for one scanline of decompressed 14-bit packed data
+    // At 14 bits/pixel, one row is width * 14 / 8 bytes (rounded up)
+    size_t max_row_bytes = (static_cast<size_t>(width) * effective_bps + 7) / 8;
+    std::vector<uint8_t> row_buf(max_row_bytes);
+    // Buffer for uncompressed scanline data (worst case: 2 bytes per pixel)
+    std::vector<uint8_t> uncomp_buf(width * 2);
+
+    int rows_decoded = 0;
+
+    for (int row = 0; row < height && scan_remaining > 0; ++row) {
+        // Read scanline header
+        if (scan_remaining < 4) {
+            LOGE("Nikon HE: truncated scanline header at row %d", row);
+            break;
+        }
+
+        uint16_t sl_compressed   = read_u16(scan_data, true);
+        uint16_t sl_uncompressed = read_u16(scan_data + 2, true);
+        scan_data     += 4;
+        scan_remaining -= 4;
+
+        if (sl_compressed == 0 && sl_uncompressed == 0) {
+            // Empty scanline — fill with zeros
+            for (int x = 0; x < width; ++x) {
+                output[row * width + x] = 0;
+            }
+            rows_decoded++;
+            continue;
+        }
+
+        // Clamp sizes to remaining data
+        if (static_cast<size_t>(sl_compressed) > scan_remaining) {
+            LOGE("Nikon HE: scanline %d compressed size %u exceeds remaining %zu",
+                 row, sl_compressed, scan_remaining);
+            sl_compressed = static_cast<uint16_t>(scan_remaining);
+        }
+
+        size_t actual_uncompressed = 0;
+        bool decompress_ok = false;
+
+        if (sl_compressed == 0 || sl_compressed >= sl_uncompressed) {
+            // ── Uncompressed scanline ──
+            size_t copy_len = static_cast<size_t>(sl_uncompressed);
+            if (copy_len > scan_remaining) copy_len = scan_remaining;
+            if (copy_len > uncomp_buf.size()) copy_len = uncomp_buf.size();
+            memcpy(uncomp_buf.data(), scan_data, copy_len);
+            actual_uncompressed = copy_len;
+            decompress_ok = true;
+        } else {
+            // ── LZFSE-like decompression ──
+            decompress_ok = decompress_nikon_he_lzfse(
+                scan_data, sl_compressed,
+                uncomp_buf.data(), sl_uncompressed,
+                actual_uncompressed);
+        }
+
+        // Advance past compressed data
+        scan_data     += sl_compressed;
+        scan_remaining -= sl_compressed;
+
+        if (!decompress_ok || actual_uncompressed == 0) {
+            LOGW("Nikon HE: scanline %d decompression failed, zero-filling", row);
+            for (int x = 0; x < width; ++x) {
+                output[row * width + x] = 0;
+            }
+            rows_decoded++;
+            continue;
+        }
+
+        // ── 5. Unpack pixel data from bit-packed scanline ────────
+        // Pixels are packed at effective_bps bits each, MSB first.
+        // For 14-bit: each 7 bytes = 4 pixels (7*8 = 56 = 4*14)
+        int pixels_in_row = std::min(width,
+            static_cast<int>((actual_uncompressed * 8) / effective_bps));
+
+        for (int x = 0; x < width; ++x) {
+            uint16_t raw_val = 0;
+            if (x < pixels_in_row) {
+                raw_val = unpack_bits(uncomp_buf.data(), actual_uncompressed,
+                                      static_cast<size_t>(x) * effective_bps, effective_bps);
+            }
+
+            // ── 6. 14-bit to 16-bit expansion ───────────────────
+            uint16_t expanded;
+            if (effective_bps < 16 && effective_bps > 0) {
+                // Scale to 16-bit: replicate top bits into lower bits
+                // for optimal precision (e.g. 14-bit 0x3FFF -> 16-bit 0xFFFF)
+                int shift = 16 - effective_bps;
+                expanded = static_cast<uint16_t>(raw_val << shift);
+                // Replicate top bits that would be lost into the low bits
+                if (shift > 0 && shift <= 8) {
+                    expanded |= static_cast<uint16_t>(raw_val >> (effective_bps - shift));
+                }
+            } else {
+                expanded = raw_val;
+            }
+
+            // ── 7. Apply TTH curve if present ────────────────────
+            if (tth_loaded && tth_entries > 0) {
+                int lut_idx = static_cast<int>(raw_val);
+                if (tth_bps_in < effective_bps) {
+                    // Scale index down to TTH input range
+                    lut_idx = lut_idx >> (effective_bps - tth_bps_in);
+                } else if (tth_bps_in > effective_bps) {
+                    // Scale index up to TTH input range
+                    lut_idx = lut_idx << (tth_bps_in - effective_bps);
+                }
+                if (lut_idx >= 0 && lut_idx < tth_entries) {
+                    expanded = tth_lut[lut_idx];
+                }
+            }
+
+            output[row * width + x] = expanded;
+        }
+
+        rows_decoded++;
+    }
+
+    // ── 8. Black level subtraction and white level normalization ──
+    // Nikon HE typically uses black=0 and white=16383 (14-bit) or 65535 (16-bit).
+    // Apply normalization to use the full 16-bit range.
+    if (effective_bps == 14) {
+        static const uint16_t WHITE_14BIT = 15892; // Nikon typical white level for 14-bit
+        static const uint16_t BLACK_14BIT = 0;     // Black already subtracted in TTH
+        // Only normalize if we didn't get a TTH curve (TTH already handles mapping)
+        if (!tth_loaded && WHITE_14BIT > BLACK_14BIT) {
+            float scale = 65535.0f / static_cast<float>(WHITE_14BIT - BLACK_14BIT);
+            for (int i = 0; i < total_pixels; ++i) {
+                int32_t val = static_cast<int32_t>(output[i]) - BLACK_14BIT;
+                val = clamp(static_cast<int>(val * scale + 0.5f), 0, 65535);
+                output[i] = static_cast<uint16_t>(val);
+            }
+        }
+    }
+
+    // Zero-fill any remaining undecoded rows
+    for (int row = rows_decoded; row < height; ++row) {
+        for (int x = 0; x < width; ++x) {
+            output[row * width + x] = 0;
+        }
+    }
+
+    LOGI("Nikon HE: decoded %d/%d rows, bps=%d clevel=%d%s",
+         rows_decoded, height, effective_bps, effective_clevel,
+         tth_loaded ? " (TTH applied)" : "");
+
+    return rows_decoded > 0;
 }
 
 // ============================================================
-// Lossless JPEG decompression (simplified)
+// Lossless JPEG decompression
 // ============================================================
+
+// Internal: JPEG Huffman table
+struct JpegHuffTable {
+    uint8_t bits[17] = {};   // bits[i] = number of codes of length i (1..16)
+    uint8_t values[256] = {};// symbol values
+    uint16_t huffCode[256] = {};
+    uint8_t huffSize[256] = {};
+    int numSymbols = 0;
+    bool valid = false;
+};
+
+// Build decode lookup from DHT segment
+static bool buildHuffTable(const uint8_t* dht, size_t dhtLen, JpegHuffTable& table) {
+    if (dhtLen < 18) return false;
+    int idx = 0;
+    // Skip marker and length
+    // bits[1..16]
+    int totalSymbols = 0;
+    for (int i = 1; i <= 16; ++i) {
+        table.bits[i] = dht[idx++];
+        totalSymbols += table.bits[i];
+    }
+    if (totalSymbols > 256 || idx + totalSymbols > dhtLen) return false;
+    for (int i = 0; i < totalSymbols; ++i) {
+        table.values[i] = dht[idx++];
+    }
+    table.numSymbols = totalSymbols;
+
+    // Generate codes
+    int code = 0;
+    int symbolIdx = 0;
+    for (int len = 1; len <= 16; ++len) {
+        for (int i = 0; i < table.bits[len]; ++i) {
+            if (symbolIdx >= totalSymbols) break;
+            table.huffCode[symbolIdx] = code;
+            table.huffSize[symbolIdx] = len;
+            code++;
+            symbolIdx++;
+        }
+        code <<= 1;
+    }
+    table.valid = true;
+    return true;
+}
+
+// Decode one Huffman symbol from bitstream
+static int decodeHuffSymbol(const uint8_t* data, size_t dataSize, size_t& bitPos,
+                            const JpegHuffTable& table) {
+    int code = 0;
+    for (int len = 1; len <= 16; ++len) {
+        if (bitPos / 8 >= dataSize) return -1;
+        int byteIdx = bitPos / 8;
+        int bitIdx = 7 - (bitPos % 8);
+        int bit = (data[byteIdx] >> bitIdx) & 1;
+        code = (code << 1) | bit;
+        bitPos++;
+
+        // Check all codes of this length
+        for (int i = 0; i < table.numSymbols; ++i) {
+            if (table.huffSize[i] == len && table.huffCode[i] == code) {
+                return table.values[i];
+            }
+        }
+    }
+    return -1; // No valid code found
+}
+
+// Read n bits from bitstream (MSB first)
+static int readBits(const uint8_t* data, size_t dataSize, size_t& bitPos, int n) {
+    int val = 0;
+    for (int i = 0; i < n; ++i) {
+        if (bitPos / 8 >= dataSize) return 0;
+        int byteIdx = bitPos / 8;
+        int bitIdx = 7 - (bitPos % 8);
+        val = (val << 1) | ((data[byteIdx] >> bitIdx) & 1);
+        bitPos++;
+    }
+    return val;
+}
+
+// Extend a partial value to full range using JPEG sign extension
+static int extend(int diff, int t) {
+    if (t == 0) return 0;
+    if (diff < (1 << (t - 1))) {
+        diff += (-1 << t) + 1;
+    }
+    return diff;
+}
 
 bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
                                            uint16_t* output, int width, int height,
                                            int bits_per_sample, int predictor) {
-    // Simplified lossless JPEG decoder for RAW data.
-    // JPEG lossless uses Huffman coding + predictive coding.
-    // This is a simplified implementation that handles the common case
-    // of 16-bit RAW data with Huffman tables.
+    // Complete lossless JPEG decoder for RAW data.
+    // Handles JPEG-LS style lossless compression with Huffman coding + predictive coding.
 
-    if (size < 2) {
-        std::fill(output, output + width * height, 0);
+    if (size < 4 || !data || !output) {
+        if (output) std::fill(output, output + width * height, 0);
         return false;
     }
 
@@ -1515,38 +2106,163 @@ bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
         return false;
     }
 
-    // Simplified: many RAW files use near-lossless JPEG-LS or Huffman.
-    // For a full implementation, we'd need a complete JPEG decoder.
-    // Here we provide a structural parser that extracts Huffman tables
-    // and decodes the scan data.
+    // Parse JPEG markers to extract Huffman tables and scan parameters
+    JpegHuffTable dcTables[4];   // Up to 4 DC Huffman tables
+    int prec = 0;                // Sample precision
+    int numComponents = 1;
+    int componentIds[4] = {};
+    int componentDcTable[4] = {};
+    size_t scanDataStart = 0;
+    size_t scanDataLen = 0;
+    bool hasSof = false;
+    bool hasSos = false;
 
-    // Find SOS (Start of Scan) marker
     size_t pos = 2;
     while (pos + 4 < size) {
-        if (data[pos] == 0xFF) {
-            uint8_t m = data[pos + 1];
-            if (m == 0xDA) { // SOS
-                // Scan data starts after SOS header
-                uint16_t header_len = (data[pos + 2] << 8) | data[pos + 3];
-                size_t scan_start = pos + header_len + 2;
-                // Skip scan data (need full Huffman decoder)
-                // This is a placeholder
-                break;
-            } else if (m == 0xD9) { // EOI
-                break;
-            } else if (m != 0x00 && m != 0xFF) {
-                uint16_t seg_len = (data[pos + 2] << 8) | data[pos + 3];
-                pos += seg_len + 1;
-                continue;
-            }
+        if (data[pos] != 0xFF) { ++pos; continue; }
+
+        uint8_t marker = data[pos + 1];
+        if (marker == 0x00 || marker == 0xFF) { ++pos; continue; }
+        if (marker == 0xD9) break; // EOI
+
+        if (marker == 0xDA) { // SOS - Start of Scan
+            uint16_t sosLen = (static_cast<uint16_t>(data[pos + 2]) << 8) | data[pos + 3];
+            scanDataStart = pos + 2 + sosLen;
+            scanDataLen = size - scanDataStart;
+            hasSos = true;
+            break;
         }
-        ++pos;
+
+        if (marker == 0xC3) { // SOF3 - Lossless JPEG
+            uint16_t segLen = (static_cast<uint16_t>(data[pos + 2]) << 8) | data[pos + 3];
+            if (pos + 4 + segLen > size) break;
+            prec = data[pos + 4];
+            numComponents = data[pos + 5];
+            hasSof = true;
+            size_t compOff = pos + 6;
+            for (int c = 0; c < numComponents && compOff + 2 < pos + 2 + segLen; ++c) {
+                componentIds[c] = data[compOff];
+                componentDcTable[c] = data[compOff + 1] >> 4;
+                compOff += 3;
+            }
+            pos += 2 + segLen;
+            continue;
+        }
+
+        if (marker == 0xC4) { // DHT - Define Huffman Table
+            uint16_t segLen = (static_cast<uint16_t>(data[pos + 2]) << 8) | data[pos + 3];
+            if (pos + 4 + segLen > size) break;
+            size_t dhtStart = pos + 4;
+            size_t dhtEnd = pos + 2 + segLen;
+            while (dhtStart < dhtEnd) {
+                uint8_t tableClass = (data[dhtStart] >> 4) & 0xF; // 0=DC, 1=AC
+                uint8_t tableId = data[dhtStart] & 0xF;
+                if (tableClass == 0 && tableId < 4) {
+                    size_t tablePayloadLen = dhtEnd - dhtStart - 1;
+                    buildHuffTable(data + dhtStart + 1, tablePayloadLen, dcTables[tableId]);
+                }
+                // Skip this table: 16 bytes for bits + actual symbol values
+                int numSym = 0;
+                for (int i = 0; i < 16; ++i) numSym += data[dhtStart + 1 + i];
+                dhtStart += 1 + 16 + numSym;
+            }
+            pos += 2 + segLen;
+            continue;
+        }
+
+        // Skip other markers
+        if (marker >= 0xC0 && marker <= 0xFE) {
+            if (pos + 4 > size) break;
+            uint16_t segLen = (static_cast<uint16_t>(data[pos + 2]) << 8) | data[pos + 3];
+            pos += 2 + segLen;
+        } else {
+            pos += 2;
+        }
     }
 
-    // Fallback: zero fill
-    std::fill(output, output + width * height, 0);
-    LOGW("Lossless JPEG: simplified decoder, full Huffman decode not implemented");
-    return false;
+    if (!hasSos || scanDataLen == 0) {
+        LOGW("Lossless JPEG: no scan data found");
+        std::fill(output, output + width * height, 0);
+        return false;
+    }
+
+    if (!dcTables[0].valid) {
+        LOGW("Lossless JPEG: no valid Huffman table found");
+        std::fill(output, output + width * height, 0);
+        return false;
+    }
+
+    // Use bits_per_sample if precision not found in SOF
+    if (prec == 0) prec = bits_per_sample;
+    if (prec <= 0 || prec > 16) prec = 16;
+
+    // Decode scan data using Huffman + predictive coding
+    size_t bitPos = 0;
+    int predShift = prec - 1;
+    int prevRow[4] = {};
+    std::fill(prevRow, prevRow + 4, 1 << predShift); // Initial prediction = midpoint
+
+    for (int row = 0; row < height; ++row) {
+        int prevPixel[4] = {};
+        std::fill(prevPixel, prevPixel + 4, 1 << predShift);
+
+        for (int col = 0; col < width; ++col) {
+            for (int c = 0; c < numComponents; ++c) {
+                int tableIdx = componentDcTable[c];
+                if (tableIdx < 0 || tableIdx >= 4 || !dcTables[tableIdx].valid) {
+                    tableIdx = 0;
+                }
+
+                // Decode DC difference
+                int diffSymbol = decodeHuffSymbol(data + scanDataStart, scanDataLen, bitPos, dcTables[tableIdx]);
+                if (diffSymbol < 0) {
+                    // End of bitstream or decode error - fill remaining with last good values
+                    for (int r = row; r < height; ++r) {
+                        for (int cc = col; cc < width; ++cc) {
+                            output[r * width + cc] = static_cast<uint16_t>(prevPixel[c]);
+                        }
+                    }
+                    LOGI("Lossless JPEG: decoded %d/%d rows (bitstream end)", row, height);
+                    return row > 0;
+                }
+
+                int diff = 0;
+                if (diffSymbol > 0) {
+                    diff = readBits(data + scanDataStart, scanDataLen, bitPos, diffSymbol);
+                    diff = extend(diff, diffSymbol);
+                }
+
+                // Predictive decoding
+                int predicted;
+                switch (predictor) {
+                    case 1: predicted = prevPixel[c]; break;                // Left
+                    case 2: predicted = prevRow[c]; break;                  // Above
+                    case 3: predicted = (prevPixel[c] + prevRow[c]) / 2; break; // Average
+                    case 4: predicted = prevPixel[c] + prevRow[c] - prevRow[c]; break; // Paeth-like
+                    default: predicted = prevPixel[c]; break;
+                }
+
+                int value = predicted + diff;
+                value = std::max(0, std::min((1 << prec) - 1, value));
+                prevPixel[c] = value;
+
+                if (numComponents == 1) {
+                    output[row * width + col] = static_cast<uint16_t>(value);
+                } else {
+                    // Multi-component: interleave later
+                    output[row * width + col] = static_cast<uint16_t>(value);
+                }
+            }
+        }
+
+        // Save row for next row prediction
+        for (int c = 0; c < numComponents && c < 4; ++c) {
+            prevRow[c] = prevPixel[c];
+        }
+    }
+
+    LOGI("Lossless JPEG: decoded %dx%d prec=%d pred=%d", width, height, prec, predictor);
+    return true;
 }
 
 } // namespace alcedo

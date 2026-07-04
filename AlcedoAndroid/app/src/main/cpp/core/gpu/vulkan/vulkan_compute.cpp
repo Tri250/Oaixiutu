@@ -603,16 +603,8 @@ void VulkanCommandBuffer::reset() {
 }
 
 // ============================================================
-// SpirvCompiler implementation
+// SpirvCompiler implementation (now inline in vulkan_compute.h)
 // ============================================================
-
-bool SpirvCompiler::compileGlslToSpirv(const std::string& /*glslSource*/,
-                                       std::vector<uint32_t>& /*outSpirv*/) {
-    // On Android, SPIR-V compilation is typically done offline using glslangValidator
-    // or shaderc during the build process. At runtime, we use pre-compiled SPIR-V.
-    GPU_LOGE("Runtime SPIR-V compilation not supported - use pre-compiled SPIR-V binaries");
-    return false;
-}
 
 } // namespace gpu
 } // namespace alcedo

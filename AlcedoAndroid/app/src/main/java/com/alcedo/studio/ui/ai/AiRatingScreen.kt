@@ -1,5 +1,7 @@
 package com.alcedo.studio.ui.ai
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +44,34 @@ fun AiRatingScreen(navController: NavController) {
     var currentRating by remember { mutableStateOf<AiRating?>(null) }
     var ratingHistory by remember { mutableStateOf<List<AiRating>>(emptyList()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Image selection state
+    var selectedImageId by remember { mutableStateOf<UInt?>(null) }
+    var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var selectedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Photo picker for selecting an image to rate
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedImageUri = uri
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                    inputStream.close()
+                    selectedBitmap = bitmap
+                    // Use a hash of the URI path as imageId
+                    selectedImageId = (uri.path?.hashCode()?.toLong()?.toULong() ?: 0u)
+                }
+            } catch (_: Exception) {
+                errorMessage = "无法加载图片"
+            }
+        }
+    }
 
     // Load credentials
     LaunchedEffect(Unit) {
@@ -100,19 +130,66 @@ fun AiRatingScreen(navController: NavController) {
                 )
             }
 
-            // Rate button
+            // Rate button / Image picker
+            item {
+                if (selectedBitmap != null && selectedImageId != null) {
+                    // Show selected image preview
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "已选择图片",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            TextButton(onClick = {
+                                selectedBitmap?.recycle()
+                                selectedBitmap = null
+                                selectedImageId = null
+                                selectedImageUri = null
+                            }) {
+                                Text("取消选择")
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("选择图片")
+                    }
+                }
+            }
+
             item {
                 Button(
                     onClick = {
+                        val imgId = selectedImageId
+                        val bmp = selectedBitmap
+                        if (imgId == null || bmp == null) {
+                            errorMessage = "请先选择一张图片"
+                            return@Button
+                        }
                         scope.launch {
                             isRating = true
                             errorMessage = null
                             try {
-                                // Use a placeholder imageId for demo
-                                // In production, user selects images from the album
                                 val rating = aiRatingService.rateImage(
-                                    imageId = 0u,
-                                    bitmap = null, // Demo: no actual bitmap
+                                    imageId = imgId,
+                                    bitmap = bmp,
                                     mood = selectedMood,
                                     providerId = selectedProviderId
                                 )
@@ -129,7 +206,7 @@ fun AiRatingScreen(navController: NavController) {
                             }
                         }
                     },
-                    enabled = !isRating && selectedProviderId != null,
+                    enabled = !isRating && selectedProviderId != null && selectedBitmap != null && selectedImageId != null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (isRating) {

@@ -6,6 +6,7 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <onnxruntime_cxx_api.h>
 
 namespace alcedo::ai {
 
@@ -81,7 +82,7 @@ private:
     // Preprocess image: resize, center-crop, normalize to model input
     std::vector<float> preprocessImage(const uint8_t* rgbData, int width, int height) const;
 
-    // Run ONNX inference (placeholder for actual ORT integration)
+    // Run ONNX Runtime inference
     std::vector<float> runInference(const std::vector<float>& input, const std::string& inputName) const;
 
     // Simple tokenizer (word-level with CLIP vocab approximations)
@@ -92,6 +93,12 @@ private:
 
     // Normalize pixel values (mean/std for CLIP)
     static void normalizePixels(std::vector<float>& pixels, int size);
+
+    // ── ONNX Runtime members ──
+    Ort::Env env_{nullptr};
+    std::unique_ptr<Ort::Session> session_;
+    Ort::SessionOptions sessionOptions_;
+    Ort::AllocatorWithDefaultOptions allocator_;
 };
 
 } // namespace alcedo::ai

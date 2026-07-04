@@ -272,3 +272,23 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# ── Firebase Crashlytics ────────────────────────────────────────
+-keep class com.google.firebase.crashlytics.** { *; }
+-keep class com.google.firebase.analytics.** { *; }
+-dontwarn com.google.firebase.**
+
+# ── Vulkan / SPIR-V / shaderc ──────────────────────────────────
+-keep class org.shaderc.** { *; }
+-dontwarn org.shaderc.**
+-dontwarn android.hardware.graphics.common.**
+
+# ── ONNX Runtime Native ────────────────────────────────────────
+-keep class ai.onnxruntime.OrtSession { *; }
+-keep class ai.onnxruntime.OrtEnvironment { *; }
+-keep class ai.onnxruntime.OnnxTensor { *; }
+-keep class ai.onnxruntime.NnApiDelegate { *; }
+
+# ── Accessibility ──────────────────────────────────────────────
+-keep class androidx.compose.ui.text.googlefonts.** { *; }
+-keep class com.google.android.libraries.compose.googlefonts.** { *; }

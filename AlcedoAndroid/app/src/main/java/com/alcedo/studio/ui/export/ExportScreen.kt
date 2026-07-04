@@ -1,5 +1,7 @@
 package com.alcedo.studio.ui.export
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -35,6 +38,32 @@ fun ExportScreen(
     // Show result snackbar
     var showResultSnack by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf("") }
+
+    // SAF directory picker for output path
+    val context = LocalContext.current
+    val directoryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            val flags = context.contentResolver.persistableUriPermissions
+            context.contentResolver.takePersistableUriPermission(
+                treeUri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            viewModel.outputPath = treeUri.toString()
+        }
+    }
+
+    // Photo picker for batch image selection
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val imageIds = uris.map { it.toString() }
+            viewModel.addBatchImageIds(imageIds)
+        }
+    }
 
     LaunchedEffect(lastResult, batchResult) {
         when {
@@ -199,7 +228,7 @@ fun ExportScreen(
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                 trailingIcon = {
-                    IconButton(onClick = { /* Open directory picker */ }) {
+                    IconButton(onClick = { directoryPickerLauncher.launch(null) }) {
                         Icon(Icons.Default.FolderOpen, contentDescription = stringRes { browse })
                     }
                 }
@@ -230,7 +259,9 @@ fun ExportScreen(
                     )
                 }
                 OutlinedButton(
-                    onClick = { /* Add images from album */ },
+                    onClick = {
+                        photoPickerLauncher.launch(arrayOf("image/*"))
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))

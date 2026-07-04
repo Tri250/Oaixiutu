@@ -17,6 +17,24 @@ find_library(android-log-lib log)
 find_library(android-lib android)
 find_library(egl-lib EGL)
 find_library(gles-lib GLESv3)
+find_library(vulkan-lib vulkan)
+
+# ── ONNX Runtime ──────────────────────────────────────────────
+# ONNX Runtime is used via the Kotlin layer (onnxruntime-android AAR).
+# The C++ clip_inference.cpp uses the ORT C++ API headers which are
+# bundled in the ONNX Runtime shared library loaded at runtime.
+# We include the headers from the ORT distribution if available.
+if(DEFINED ONNXRUNTIME_INCLUDE_DIR)
+    target_include_directories(alcedo_core PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+    target_compile_definitions(alcedo_core PRIVATE HAS_ONNXRUNTIME=1)
+endif()
+
+# ── Vulkan Headers ────────────────────────────────────────────
+# Vulkan headers are included with the NDK; the library is loaded at runtime.
+find_package(Vulkan QUIET)
+if(Vulkan_FOUND)
+    target_include_directories(alcedo_core PRIVATE ${Vulkan_INCLUDE_DIRS})
+endif()
 
 # Core library
 add_library(
@@ -77,6 +95,11 @@ add_library(
     core/utils/time_provider.cpp
     core/utils/app_logging.cpp
     core/utils/crash_handler.cpp
+    core/ai/clip_inference.cpp
+    core/ai/embedding_utils.cpp
+    core/ai/hnsw_index.cpp
+    core/gpu/gpu_buffer.cpp
+    core/gpu/gpu_pipeline.cpp
 )
 
 target_include_directories(alcedo_core PRIVATE
@@ -90,6 +113,7 @@ target_link_libraries(alcedo_core
     ${android-lib}
     ${egl-lib}
     ${gles-lib}
+    ${vulkan-lib}
 )
 
 # Hide all symbols by default

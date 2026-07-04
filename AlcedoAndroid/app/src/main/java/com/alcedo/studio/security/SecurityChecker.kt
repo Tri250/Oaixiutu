@@ -37,7 +37,7 @@ object SecurityChecker {
     // ── Root Detection ──
 
     fun isDeviceRooted(): Boolean {
-        return checkRootMethod1() || checkRootMethod2() || checkRootMethod3()
+        return checkRootMethod1() || checkRootMethod2() || checkRootMethod3() || checkRootMethod4()
     }
 
     // Check for su binary
@@ -51,17 +51,38 @@ object SecurityChecker {
         return paths.any { File(it).exists() }
     }
 
-    // Check for root-related apps
+    // Check for root-related apps and data directories
     private fun checkRootMethod2(): Boolean {
-        val packages = arrayOf(
-            "com.noshufou.android.su",
-            "com.thirdparty.superuser",
-            "eu.chainfire.supersu",
-            "com.koushikdutta.superuser",
-            "com.topjohnwu.magisk"
+        // Check for root app data directories
+        val rootDataDirs = arrayOf(
+            "/data/data/com.noshufou.android.su",
+            "/data/data/com.thirdparty.superuser",
+            "/data/data/eu.chainfire.supersu",
+            "/data/data/com.koushikdutta.superuser",
+            "/data/data/com.topjohnwu.magisk",
+            "/data/user_de/0/com.topjohnwu.magisk"
         )
-        // Can't check installed packages without query intent, use file check instead
-        return false // Simplified - actual check would use PackageManager
+        if (rootDataDirs.any { File(it).exists() }) return true
+
+        // Check for su daemon socket
+        val suSocketPaths = arrayOf(
+            "/dev/com.koushikdutta.superuser.daemon",
+            "/dev/com.noshufou.android.su.daemon",
+            "/dev/com.topjohnwu.magisk.daemon"
+        )
+        if (suSocketPaths.any { File(it).exists() }) return true
+
+        // Check for Magisk files and directories
+        val magiskPaths = arrayOf(
+            "/sbin/.magisk",
+            "/cache/.disable_magisk",
+            "/dev/.magisk.unblock",
+            "/data/adb/magisk",
+            "/data/adb/modules"
+        )
+        if (magiskPaths.any { File(it).exists() }) return true
+
+        return false
     }
 
     // Check for dangerous properties
@@ -74,6 +95,44 @@ object SecurityChecker {
             // Expected on non-rooted devices
         }
         return false
+    }
+
+    // Check for additional root indicators: dangerous props, su daemon socket
+    private fun checkRootMethod4(): Boolean {
+        // Check for dangerous system properties that indicate root
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("getprop", "ro.debuggable"))
+            val debuggable = process.inputStream.bufferedReader().readText().trim()
+            if (debuggable == "1") return true
+
+            val secureProcess = Runtime.getRuntime().exec(arrayOf("getprop", "ro.secure"))
+            val secure = secureProcess.inputStream.bufferedReader().readText().trim()
+            if (secure == "0") return true
+
+            val selinuxProcess = Runtime.getRuntime().exec(arrayOf("getprop", "ro.build.selinux"))
+            val selinux = selinuxProcess.inputStream.bufferedReader().readText().trim()
+            if (selinux.isEmpty()) return true
+        } catch (_: Exception) {
+            // Property checks may fail without shell access
+        }
+
+        // Check for su daemon socket file
+        try {
+            val socketFile = File("/dev/com.topjohnwu.magisk.daemon")
+            if (socketFile.exists()) return true
+        } catch (_: Exception) {
+            // File access may be restricted
+        }
+
+        // Check for additional root-related files
+        val additionalRootPaths = arrayOf(
+            "/system/app/Superuser.apk",
+            "/system/app/SuperSU.apk",
+            "/system/app/Magisk.apk",
+            "/system/etc/init.d",
+            "/system/xbin/daemonsu"
+        )
+        return additionalRootPaths.any { File(it).exists() }
     }
 
     // ── App Integrity Check ──

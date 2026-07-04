@@ -118,7 +118,8 @@ fun VersioningPanel(
             onCreate = { name ->
                 onCreateVersion(name)
                 showCreateDialog = false
-            }
+            },
+            currentVersionCount = versions.size
         )
     }
 
@@ -257,9 +258,11 @@ private fun VersionItem(
 @Composable
 private fun CreateVersionDialog(
     onDismiss: () -> Unit,
-    onCreate: (String) -> Unit
+    onCreate: (String) -> Unit,
+    currentVersionCount: Int = 0
 ) {
     var name by remember { mutableStateOf("") }
+    val nextVersionNumber = currentVersionCount + 1
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -276,7 +279,7 @@ private fun CreateVersionDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Version Name") },
-                    placeholder = { Text("Version ${java.util.concurrent.atomic.AtomicInteger().incrementAndGet()}") },
+                    placeholder = { Text("Version $nextVersionNumber") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

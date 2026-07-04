@@ -315,6 +315,16 @@ public:
                                      int num_threads = 4);
     static bool is_nikon_he_format(const uint8_t* data, size_t size);
 
+    // ── Nikon HE internal helpers ──
+    static bool decompress_nikon_he_lzfse(const uint8_t* src, size_t src_size,
+                                           uint8_t* dst, size_t dst_capacity,
+                                           size_t& out_size);
+    static bool decompress_nikon_he_packed(const uint8_t* data, size_t size,
+                                            uint16_t* output, int width, int height,
+                                            int bits_per_sample);
+    static uint16_t unpack_bits(const uint8_t* buf, size_t buf_size,
+                                size_t bit_offset, int num_bits);
+
     // ── Lossless JPEG decompression (for CR2/NEF/etc) ──
     static bool decompress_lossless_jpeg(const uint8_t* data, size_t size,
                                           uint16_t* output, int width, int height,

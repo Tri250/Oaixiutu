@@ -189,6 +189,13 @@ dependencies {
     // ── Security (EncryptedSharedPreferences) ──────────────────────
     implementation("androidx.security:security-crypto:1.0.0")
 
+    // ── Crash Reporting ─────────────────────────────────────────────
+    implementation("com.google.firebase:firebase-crashlytics-ktx:19.0.3")
+    implementation("com.google.firebase:firebase-analytics-ktx:22.0.2")
+
+    // ── Accessibility ───────────────────────────────────────────────
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
+
     // ── Testing ────────────────────────────────────────────────────
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

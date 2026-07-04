@@ -138,6 +138,8 @@ private:
     EGLImageKHR eglImage_ = EGL_NO_IMAGE_KHR;
     GLuint glTexture_ = 0;
     uint64_t vkImage_ = 0;
+    void* vkDevice_ = nullptr;
+    uint64_t vkDeviceMemory_ = 0;
 };
 
 using GpuBufferPtr = std::shared_ptr<GpuBuffer>;

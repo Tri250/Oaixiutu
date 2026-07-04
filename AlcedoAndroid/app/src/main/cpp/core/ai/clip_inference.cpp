@@ -1,10 +1,12 @@
 #include "clip_inference.h"
+#include <onnxruntime_cxx_api.h>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
 #include <numeric>
 #include <sstream>
 #include <unordered_map>
+#include <stdexcept>
 
 namespace alcedo::ai {
 
@@ -20,24 +22,48 @@ bool ClipInference::loadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
     if (loaded_) return true;
 
-    // In production, this would call:
-    //   Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "AlcedoClip");
-    //   Ort::SessionOptions sessionOptions;
-    //   sessionOptions.SetIntraOpNumThreads(config_.numThreads);
-    //   if (config_.useFP16) sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    //   session_ = std::make_unique<Ort::Session>(env, config_.modelPath.c_str(), sessionOptions);
-    //
-    // For now, we validate the model path is non-empty
     if (config_.modelPath.empty()) {
         return false;
     }
 
-    loaded_ = true;
-    return true;
+    try {
+        // Create ORT environment (one per process; safe to recreate on reload)
+        env_ = Ort::Env{ORT_LOGGING_LEVEL_WARNING, "AlcedoClip"};
+
+        // Configure session options
+        sessionOptions_ = Ort::SessionOptions{};
+
+        sessionOptions_.SetIntraOpNumThreads(config_.numThreads);
+        sessionOptions_.SetInterOpNumThreads(1);
+        sessionOptions_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+
+        if (config_.useFP16) {
+            // Enable FP16 where supported
+            OrtSessionOptionsAppendExecutionProvider(sessionOptions_, /*device_id=*/0);
+        }
+
+        // Create the session from the model file
+        // Ort::Session expects a wide string on Windows; use the portable helper.
+        session_ = std::make_unique<Ort::Session>(env_, config_.modelPath.c_str(), sessionOptions_);
+
+        loaded_ = true;
+        return true;
+    } catch (const Ort::Exception& e) {
+        session_.reset();
+        loaded_ = false;
+        return false;
+    } catch (const std::exception& e) {
+        session_.reset();
+        loaded_ = false;
+        return false;
+    }
 }
 
 void ClipInference::unloadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
+    session_.reset();
+    sessionOptions_ = Ort::SessionOptions{};
+    env_ = Ort::Env{nullptr};
     loaded_ = false;
 }
 
@@ -164,32 +190,80 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 
 // ── Inference ──
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
-    // Placeholder for actual ONNX Runtime inference.
-    // In production, this would:
-    //   1. Create Ort::Value input tensor from input data
-    //   2. Run session_->Run(...)
-    //   3. Extract output tensor data
-    //
-    // For now, we return a deterministic hash-based embedding that serves as
-    // a valid placeholder during development. The actual ONNX integration
-    // replaces this method body.
-
-    std::vector<float> output(config_.embeddingDim, 0.0f);
-
-    // Compute a seed from the input data for deterministic behavior
-    float seed = 0.0f;
-    for (size_t i = 0; i < input.size(); ++i) {
-        seed += input[i] * static_cast<float>(i + 1);
-    }
-    uint32_t hash = static_cast<uint32_t>(std::abs(seed) * 1000000.0f);
-
-    // Generate a deterministic pseudo-random embedding
-    for (int i = 0; i < config_.embeddingDim; ++i) {
-        hash = hash * 1103515245u + 12345u;
-        output[i] = (static_cast<float>(hash & 0x7FFFFFFF) / 2147483648.0f) - 1.0f;
+    if (!session_) {
+        throw std::runtime_error("ONNX Runtime session is not initialized");
     }
 
+    Ort::AllocatorWithDefaultOptions allocator;
+
+    // ── Determine input shape ──
+    // For image input ("pixel_values"): shape is [1, 3, imageSize, imageSize]
+    // For text input ("input_ids"): shape is [1, textMaxLength]
+    std::vector<int64_t> inputShape;
+    if (inputName == "pixel_values") {
+        inputShape = {1, 3, static_cast<int64_t>(config_.imageSize), static_cast<int64_t>(config_.imageSize)};
+    } else {
+        inputShape = {1, static_cast<int64_t>(config_.textMaxLength)};
+    }
+
+    size_t inputTensorSize = input.size();
+    if (inputTensorSize == 0) {
+        throw std::runtime_error("Input data is empty");
+    }
+
+    // ── Create input tensor ──
+    auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    auto inputTensor = Ort::Value::CreateTensor<float>(
+        memoryInfo,
+        const_cast<float*>(input.data()),   // ORT does not modify input data
+        inputTensorSize,
+        inputShape.data(),
+        inputShape.size()
+    );
+
+    // ── Resolve model input / output names ──
+    // Use the provided inputName; fall back to the model's first input if needed.
+    auto inputNameAlloc = session_->GetInputNameAllocated(0, allocator);
+    std::string resolvedInputName = inputName;
+    if (resolvedInputName.empty()) {
+        resolvedInputName = inputNameAlloc.get();
+    }
+
+    const char* inputNames[] = { resolvedInputName.c_str() };
+
+    // Assume a single output node
+    auto outputNameAlloc = session_->GetOutputNameAllocated(0, allocator);
+    const char* outputNames[] = { outputNameAlloc.get() };
+
+    // ── Run inference ──
+    auto outputTensors = session_->Run(
+        Ort::RunOptions{nullptr},
+        inputNames,
+        &inputTensor,
+        1,              // number of inputs
+        outputNames,
+        1               // number of outputs
+    );
+
+    // ── Extract output data ──
+    if (outputTensors.empty()) {
+        throw std::runtime_error("ONNX Runtime returned no output tensors");
+    }
+
+    auto& outputTensor = outputTensors[0];
+    auto outputType = outputTensor.GetTypeInfo();
+    auto tensorInfo = outputType.GetTensorTypeAndShapeInfo();
+    size_t outputSize = tensorInfo.GetElementCount();
+
+    const float* outputData = outputTensor.GetTensorData<float>();
+    if (!outputData) {
+        throw std::runtime_error("Failed to retrieve output tensor data");
+    }
+
+    // Copy output to a std::vector and L2-normalize the embedding
+    std::vector<float> output(outputData, outputData + outputSize);
     normalize(output);
+
     return output;
 }
 
