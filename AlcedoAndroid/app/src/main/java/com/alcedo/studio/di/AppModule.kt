@@ -179,18 +179,11 @@ object AppModule {
 
     val sleeveRepository: SleeveRepository by lazy {
         SleeveRepository(
-            sleeveService = sleeveService,
-            filterService = sleeveFilterService,
-            elementDao = elementDao,
-            fileDao = fileDao,
-            folderDao = folderDao,
-            metadataDao = metadataDao,
-            collectionDao = collectionDao,
-            ratingDao = ratingDao,
-            labelDao = labelDao,
-            filterDao = filterDao,
-            pathResolver = pathResolver,
-            cacheManager = dentryCacheManager
+            sleeveElementDao = elementDao,
+            imageDao = imageDao,
+            editHistoryDao = editHistoryDao,
+            pipelinePresetDao = pipelinePresetDao,
+            aiEmbeddingDao = aiEmbeddingDao
         )
     }
 

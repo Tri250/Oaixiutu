@@ -20,7 +20,7 @@ find_library(gles-lib GLESv3)
 
 # Core library
 add_library(
-    alcedo_core
+    alcedo
     SHARED
     native-lib.cpp
     core/sleeve/sleeve_base.cpp
@@ -103,13 +103,13 @@ add_library(
     core/utils/crash_handler.cpp
 )
 
-target_include_directories(alcedo_core PRIVATE
+target_include_directories(alcedo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(alcedo_core
+target_link_libraries(alcedo
     ${android-log-lib}
     ${android-lib}
     ${egl-lib}
@@ -117,7 +117,7 @@ target_link_libraries(alcedo_core
 )
 
 # Hide all symbols by default
-set_target_properties(alcedo_core PROPERTIES
+set_target_properties(alcedo PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
@@ -125,12 +125,12 @@ set_target_properties(alcedo_core PROPERTIES
 
 # Compiler flags for Android
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(alcedo_core PRIVATE -g -O0)
+    target_compile_options(alcedo PRIVATE -g -O0)
 else()
-    target_compile_options(alcedo_core PRIVATE -O3 -DNDEBUG)
+    target_compile_options(alcedo PRIVATE -O3 -DNDEBUG)
 endif()
 
-target_compile_options(alcedo_core PRIVATE
+target_compile_options(alcedo PRIVATE
     -Wall
     -Wextra
     -fexceptions
@@ -144,9 +144,9 @@ target_compile_options(alcedo_core PRIVATE
 #   -DLIBRAW_INCLUDE_DIR=/path/to/libraw/include
 #   -DLIBRAW_LIB_DIR=/path/to/libraw/libs
 # if(DEFINED LIBRAW_INCLUDE_DIR AND DEFINED LIBRAW_LIB_DIR)
-#     target_include_directories(alcedo_core PRIVATE ${LIBRAW_INCLUDE_DIR})
-#     target_link_libraries(alcedo_core ${LIBRAW_LIB_DIR}/libraw.a)
-#     target_compile_definitions(alcedo_core PRIVATE HAS_LIBRAW=1)
+#     target_include_directories(alcedo PRIVATE ${LIBRAW_INCLUDE_DIR})
+#     target_link_libraries(alcedo ${LIBRAW_LIB_DIR}/libraw.a)
+#     target_compile_definitions(alcedo PRIVATE HAS_LIBRAW=1)
 # endif()
 
 # ============================================================
@@ -156,11 +156,11 @@ target_compile_options(alcedo_core PRIVATE
 #   -DEXIV2_INCLUDE_DIR=/path/to/exiv2/include
 #   -DEXIV2_LIB_DIR=/path/to/exiv2/libs
 # if(DEFINED EXIV2_INCLUDE_DIR AND DEFINED EXIV2_LIB_DIR)
-#     target_include_directories(alcedo_core PRIVATE ${EXIV2_INCLUDE_DIR})
-#     target_link_libraries(alcedo_core
+#     target_include_directories(alcedo PRIVATE ${EXIV2_INCLUDE_DIR})
+#     target_link_libraries(alcedo
 #         ${EXIV2_LIB_DIR}/libexiv2.a
 #         ${EXIV2_LIB_DIR}/libexpat.a
 #         z
 #     )
-#     target_compile_definitions(alcedo_core PRIVATE HAS_EXIV2=1)
+#     target_compile_definitions(alcedo PRIVATE HAS_EXIV2=1)
 # endif()

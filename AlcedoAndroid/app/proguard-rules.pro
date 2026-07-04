@@ -61,6 +61,9 @@
 -keep class com.alcedo.studio.data.model.SemanticLabelV2Entity { *; }
 -keep class com.alcedo.studio.data.model.CollectionV2Entity { *; }
 -keep class com.alcedo.studio.data.model.CollectionImageV2Entity { *; }
+-keep class com.alcedo.studio.data.model.EditHistoryEntity { *; }
+-keep class com.alcedo.studio.data.model.PipelinePresetEntity { *; }
+-keep class com.alcedo.studio.data.model.AiEmbeddingEntity { *; }
 
 # Keep Room DAO interfaces (all DAOs in SleeveDao.kt and others)
 -keep @interface androidx.room.Dao { *; }

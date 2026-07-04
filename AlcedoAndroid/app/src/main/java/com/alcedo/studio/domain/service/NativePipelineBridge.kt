@@ -253,7 +253,7 @@ class NativePipelineBridge {
 
     companion object {
         init {
-            System.loadLibrary("alcedo_core")
+            System.loadLibrary("alcedo")
         }
     }
 }

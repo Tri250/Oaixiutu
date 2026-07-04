@@ -9,14 +9,38 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.alcedo.studio.data.model.*
-import com.alcedo.studio.data.dao.*
+import com.alcedo.studio.data.dao.EditHistoryDao
+import com.alcedo.studio.data.dao.PipelinePresetDao
+import com.alcedo.studio.data.dao.AiEmbeddingDao
 import net.sqlcipher.database.SupportFactory
 import java.security.SecureRandom
 
 @Database(
     entities = [
+        // Sleeve element system (SleeveElement.kt)
         SleeveElementEntity::class,
+        SleeveFileEntity::class,
+        SleeveFolderEntity::class,
+        ElementFts::class,
+        CollectionEntity::class,
+        CollectionImageEntity::class,
+        RatingEntity::class,
+        FilterPresetEntity::class,
+        // Image system (ImageModel.kt)
+        ImageMetadataEntity::class,
+        SemanticLabelEntity::class,
+        VectorIndexEntity::class,
         ImageEntity::class,
+        PipelineEntity::class,
+        HistoryEntity::class,
+        FilterEntity::class,
+        AiDescriptionEntity::class,
+        AiRatingEntity::class,
+        SemanticEmbeddingEntity::class,
+        SemanticLabelV2Entity::class,
+        CollectionV2Entity::class,
+        CollectionImageV2Entity::class,
+        // Simple entities (Models.kt)
         EditHistoryEntity::class,
         PipelinePresetEntity::class,
         AiEmbeddingEntity::class
@@ -25,8 +49,26 @@ import java.security.SecureRandom
     exportSchema = false
 )
 abstract class SleeveDatabase : RoomDatabase() {
+    // DAOs from data.local.SleeveDao.kt
     abstract fun sleeveElementDao(): SleeveElementDao
+    abstract fun sleeveFileDao(): SleeveFileDao
+    abstract fun sleeveFolderDao(): SleeveFolderDao
+    abstract fun imageMetadataDao(): ImageMetadataDao
+    abstract fun ratingDao(): RatingDao
+    abstract fun semanticLabelDao(): SemanticLabelDao
+    abstract fun collectionDao(): CollectionDao
+    abstract fun filterDao(): FilterDao
     abstract fun imageDao(): ImageDao
+    abstract fun pipelineDao(): PipelineDao
+    abstract fun historyDao(): HistoryDao
+    abstract fun filterV2Dao(): FilterV2Dao
+    abstract fun aiDescriptionDao(): AiDescriptionDao
+    abstract fun aiRatingDao(): AiRatingDao
+    abstract fun semanticEmbeddingDao(): SemanticEmbeddingDao
+    abstract fun semanticLabelV2Dao(): SemanticLabelV2Dao
+    abstract fun collectionV2Dao(): CollectionV2Dao
+
+    // DAOs from data.dao package
     abstract fun editHistoryDao(): EditHistoryDao
     abstract fun pipelinePresetDao(): PipelinePresetDao
     abstract fun aiEmbeddingDao(): AiEmbeddingDao

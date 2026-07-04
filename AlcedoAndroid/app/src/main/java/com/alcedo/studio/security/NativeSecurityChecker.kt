@@ -2,7 +2,7 @@ package com.alcedo.studio.security
 
 object NativeSecurityChecker {
     init {
-        System.loadLibrary("alcedo_core")
+        System.loadLibrary("alcedo")
     }
 
     external fun nativeIsDebuggerAttached(): Boolean

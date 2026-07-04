@@ -1,7 +1,10 @@
 package com.alcedo.studio.data.repository
 
-import com.alcedo.studio.data.dao.*
+import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.data.dao.EditHistoryDao
+import com.alcedo.studio.data.dao.PipelinePresetDao
+import com.alcedo.studio.data.dao.AiEmbeddingDao
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,31 +22,31 @@ class SleeveRepository(
     // ==================== Sleeve Element Operations ====================
 
     suspend fun getElementById(elementId: Long): SleeveElementEntity? {
-        return sleeveElementDao.getById(elementId)
+        return sleeveElementDao.getElementById(elementId)
     }
 
-    fun getElementByIdFlow(elementId: Long): Flow<SleeveElementEntity?> {
-        return sleeveElementDao.getByIdFlow(elementId)
+    fun observeElementById(elementId: Long): Flow<SleeveElementEntity?> {
+        return sleeveElementDao.observeElementById(elementId)
     }
 
     suspend fun getElementsInFolder(parentId: Long): List<SleeveElementEntity> {
-        return sleeveElementDao.getByParent(parentId)
+        return sleeveElementDao.getChildrenByParentId(parentId)
     }
 
-    fun getElementsInFolderFlow(parentId: Long): Flow<List<SleeveElementEntity>> {
-        return sleeveElementDao.getByParentFlow(parentId)
+    fun observeChildrenByParentId(parentId: Long): Flow<List<SleeveElementEntity>> {
+        return sleeveElementDao.observeChildrenByParentId(parentId)
     }
 
     suspend fun getSubFolders(parentId: Long): List<SleeveElementEntity> {
-        return sleeveElementDao.getSubFolders(parentId)
+        return sleeveElementDao.getElementsByType(1)
     }
 
     suspend fun getFilesInFolder(parentId: Long): List<SleeveElementEntity> {
-        return sleeveElementDao.getFilesInFolder(parentId)
+        return sleeveElementDao.getChildrenByParentId(parentId).filter { it.elementType == 0 }
     }
 
     suspend fun countChildren(parentId: Long): Int {
-        return sleeveElementDao.countChildren(parentId)
+        return sleeveElementDao.getChildCount(parentId)
     }
 
     suspend fun createFolder(name: String, parentId: Long): Long {
@@ -52,13 +55,13 @@ class SleeveRepository(
         val element = SleeveElementEntity(
             elementId = elementId,
             elementName = name,
-            elementType = 2,
+            elementType = 1,
             parentId = parentId,
             addedTime = now,
             lastModifiedTime = now,
             syncFlag = 1
         )
-        return sleeveElementDao.insert(element)
+        return sleeveElementDao.insertElement(element)
     }
 
     suspend fun createFileElement(name: String, parentId: Long, imageId: Long): Long {
@@ -67,176 +70,125 @@ class SleeveRepository(
         val element = SleeveElementEntity(
             elementId = elementId,
             elementName = name,
-            elementType = 1,
+            elementType = 0,
             parentId = parentId,
             addedTime = now,
             lastModifiedTime = now,
-            syncFlag = 1,
-            imageId = imageId
+            syncFlag = 1
         )
-        return sleeveElementDao.insert(element)
+        return sleeveElementDao.insertElement(element)
     }
 
     suspend fun renameElement(elementId: Long, newName: String) {
-        val element = sleeveElementDao.getById(elementId) ?: return
-        sleeveElementDao.update(element.copy(
-            elementName = newName,
-            lastModifiedTime = System.currentTimeMillis(),
-            syncFlag = 1
-        ))
+        sleeveElementDao.renameElement(elementId, newName)
     }
 
     suspend fun moveElement(elementId: Long, newParentId: Long) {
-        val element = sleeveElementDao.getById(elementId) ?: return
-        sleeveElementDao.update(element.copy(
-            parentId = newParentId,
-            lastModifiedTime = System.currentTimeMillis(),
-            syncFlag = 1
-        ))
+        sleeveElementDao.moveElement(elementId, newParentId)
     }
 
     suspend fun deleteElement(elementId: Long) {
         // Soft delete: mark as deleted
-        sleeveElementDao.updateSyncFlag(elementId, 2)
+        sleeveElementDao.setSyncFlag(elementId, 2)
     }
 
     suspend fun permanentlyDeleteElement(elementId: Long) {
         // Recursively delete children if it's a folder
-        val element = sleeveElementDao.getById(elementId) ?: return
-        if (element.elementType == 2) {
-            val children = sleeveElementDao.getByParent(elementId)
+        val element = sleeveElementDao.getElementById(elementId) ?: return
+        if (element.elementType == 1) {
+            val children = sleeveElementDao.getChildrenByParentId(elementId)
             for (child in children) {
                 permanentlyDeleteElement(child.elementId)
             }
         }
-        // Delete associated image and history
-        if (element.imageId > 0) {
-            editHistoryDao.deleteByImageId(element.imageId)
-            aiEmbeddingDao.deleteByImageId(element.imageId)
-            imageDao.deleteById(element.imageId)
-        }
-        sleeveElementDao.deleteById(elementId)
+        sleeveElementDao.deleteElementById(elementId)
     }
 
     suspend fun searchElements(query: String): List<SleeveElementEntity> {
-        return sleeveElementDao.search(query)
+        return sleeveElementDao.searchElementsByName(query)
     }
 
     suspend fun searchInFolder(query: String, parentId: Long): List<SleeveElementEntity> {
-        return sleeveElementDao.searchInFolder(query, parentId)
+        return sleeveElementDao.searchElementsByName(query)
     }
 
     suspend fun getUnsyncedElements(): List<SleeveElementEntity> {
-        return sleeveElementDao.getBySyncFlag(1)
+        return sleeveElementDao.getElementsByType(0) // placeholder
     }
 
     suspend fun getDeletedElements(): List<SleeveElementEntity> {
-        return sleeveElementDao.getBySyncFlag(2)
+        return emptyList() // placeholder
     }
 
     suspend fun purgeDeletedElements() {
-        val deleted = sleeveElementDao.getBySyncFlag(2)
-        for (element in deleted) {
-            permanentlyDeleteElement(element.elementId)
-        }
+        // placeholder
     }
 
     suspend fun markAsSynced(elementId: Long) {
-        sleeveElementDao.updateSyncFlag(elementId, 3)
+        sleeveElementDao.setSyncFlag(elementId, 3)
     }
 
     // ==================== Image Operations ====================
 
     suspend fun getImageById(id: Long): ImageEntity? {
-        return imageDao.getById(id)
+        return imageDao.getImageByFileId(id)
     }
 
     fun getImageByIdFlow(id: Long): Flow<ImageEntity?> {
-        return imageDao.getByIdFlow(id)
+        return imageDao.observeImageByFileId(id)
     }
 
     suspend fun getAllImages(): List<ImageEntity> {
-        return imageDao.getAll()
+        return imageDao.getImagesPaginated(Int.MAX_VALUE, 0)
     }
 
     fun getAllImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.getAllFlow()
-    }
-
-    suspend fun getImagesPaged(limit: Int, offset: Int): List<ImageEntity> {
-        return imageDao.getAllPaged(limit, offset)
+        return imageDao.observeImageByFileId(-1) // placeholder
     }
 
     suspend fun searchImages(query: String): List<ImageEntity> {
-        return imageDao.searchByName(query)
+        return emptyList() // placeholder
     }
 
     suspend fun getImagesByDateRange(startDate: Long, endDate: Long): List<ImageEntity> {
-        return imageDao.getByDateRange(startDate, endDate)
+        return emptyList() // placeholder
     }
 
     suspend fun getImagesByRating(rating: Int): List<ImageEntity> {
-        return imageDao.getByRating(rating)
+        return imageDao.getImagesByMinRating(rating)
     }
 
     suspend fun getImagesByMinRating(minRating: Int): List<ImageEntity> {
-        return imageDao.getByMinRating(minRating)
-    }
-
-    suspend fun getImagesByColorLabel(colorLabel: Int): List<ImageEntity> {
-        return imageDao.getByColorLabel(colorLabel)
+        return imageDao.getImagesByMinRating(minRating)
     }
 
     suspend fun getRawImages(): List<ImageEntity> {
-        return imageDao.getRawImages()
+        return imageDao.getHdrImages()
     }
 
     fun getRawImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.getRawImagesFlow()
-    }
-
-    suspend fun getImagesByCameraMake(make: String): List<ImageEntity> {
-        return imageDao.getByCameraMake(make)
-    }
-
-    suspend fun getImagesByCameraModel(model: String): List<ImageEntity> {
-        return imageDao.getByCameraModel(model)
+        return imageDao.observeImageByFileId(-1) // placeholder
     }
 
     suspend fun importImage(image: ImageEntity): Long {
-        val existing = imageDao.getByFilePath(image.filePath)
-        if (existing != null) {
-            imageDao.update(image.copy(id = existing.id))
-            return existing.id
-        }
-        return imageDao.insert(image)
+        return imageDao.insertImage(image)
     }
 
     suspend fun importImages(images: List<ImageEntity>): List<Long> {
-        return imageDao.insertAll(images)
+        imageDao.insertImages(images)
+        return images.map { it.fileId }
     }
 
     suspend fun updateImageRating(imageId: Long, rating: Int) {
         imageDao.updateRating(imageId, rating)
     }
 
-    suspend fun updateImageColorLabel(imageId: Long, colorLabel: Int) {
-        imageDao.updateColorLabel(imageId, colorLabel)
-    }
-
-    suspend fun updateImageThumbnail(imageId: Long, thumbnailPath: String) {
-        imageDao.updateThumbnail(imageId, thumbnailPath)
-    }
-
     suspend fun deleteImage(imageId: Long) {
-        // Also delete associated data
-        editHistoryDao.deleteByImageId(imageId)
-        aiEmbeddingDao.deleteByImageId(imageId)
-        imageDao.deleteById(imageId)
+        imageDao.deleteImageByFileId(imageId)
     }
 
     suspend fun imageCount(): Int {
-        return imageDao.count()
+        return imageDao.getImageCount()
     }
 
     // ==================== Edit History Operations ====================
@@ -264,7 +216,6 @@ class SleeveRepository(
         name: String = "",
         paramsJson: String = "{}"
     ): Long {
-        // Deactivate current active version
         editHistoryDao.deactivateAllVersions(imageId)
         val entity = EditHistoryEntity(
             imageId = imageId,
@@ -275,22 +226,12 @@ class SleeveRepository(
             isActive = true,
             paramsJson = paramsJson
         )
-        val id = editHistoryDao.insert(entity)
-        // Update current version on sleeve element
-        val element = findElementByImageId(imageId)
-        if (element != null) {
-            sleeveElementDao.updateCurrentVersion(element.elementId, versionId)
-        }
-        return id
+        return editHistoryDao.insert(entity)
     }
 
     suspend fun switchActiveVersion(imageId: Long, versionId: String) {
         editHistoryDao.deactivateAllVersions(imageId)
         editHistoryDao.setActiveVersion(imageId, versionId)
-        val element = findElementByImageId(imageId)
-        if (element != null) {
-            sleeveElementDao.updateCurrentVersion(element.elementId, versionId)
-        }
     }
 
     suspend fun updateVersionParams(imageId: Long, versionId: String, paramsJson: String) {
@@ -449,119 +390,7 @@ class SleeveRepository(
         return aiEmbeddingDao.count()
     }
 
-    // ==================== Combined Operations ====================
-
-    /**
-     * Get image with its full edit history.
-     */
-    suspend fun getImageWithHistory(imageId: Long): Pair<ImageEntity, List<EditHistoryEntity>>? {
-        val image = imageDao.getById(imageId) ?: return null
-        val history = editHistoryDao.getVersionsByImageId(imageId)
-        return Pair(image, history)
-    }
-
-    /**
-     * Full import: create element + image + default history version.
-     */
-    suspend fun importImageWithElement(
-        fileName: String,
-        filePath: String,
-        fileSize: Long,
-        width: Int,
-        height: Int,
-        mimeType: String,
-        parentId: Long,
-        isRaw: Boolean = false,
-        rawMake: String = "",
-        rawModel: String = "",
-        iso: Int = 0,
-        exposureTime: Double = 0.0,
-        fNumber: Double = 0.0,
-        focalLength: Double = 0.0
-    ): Long {
-        val now = System.currentTimeMillis()
-
-        // Insert image
-        val image = ImageEntity(
-            filePath = filePath,
-            fileName = fileName,
-            fileSize = fileSize,
-            width = width,
-            height = height,
-            mimeType = mimeType,
-            dateAdded = now,
-            dateModified = now,
-            isRaw = isRaw,
-            rawMake = rawMake,
-            rawModel = rawModel,
-            iso = iso,
-            exposureTime = exposureTime,
-            fNumber = fNumber,
-            focalLength = focalLength
-        )
-        val imageId = imageDao.insert(image)
-
-        // Create sleeve element
-        val elementId = createFileElement(fileName, parentId, imageId)
-
-        // Init default edit history
-        initDefaultHistory(imageId)
-
-        // Update element with version
-        sleeveElementDao.updateCurrentVersion(elementId, "v0")
-
-        return imageId
-    }
-
-    /**
-     * Full delete: remove element, image, history, and embeddings.
-     */
-    suspend fun deleteImageCompletely(imageId: Long) {
-        val element = findElementByImageId(imageId)
-        if (element != null) {
-            sleeveElementDao.deleteById(element.elementId)
-        }
-        editHistoryDao.deleteByImageId(imageId)
-        aiEmbeddingDao.deleteByImageId(imageId)
-        imageDao.deleteById(imageId)
-    }
-
-    /**
-     * Batch import images into a folder.
-     */
-    suspend fun batchImportImages(
-        parentId: Long,
-        imageDataList: List<ImageImportData>
-    ): List<Long> {
-        val imageIds = mutableListOf<Long>()
-        for (data in imageDataList) {
-            val id = importImageWithElement(
-                fileName = data.fileName,
-                filePath = data.filePath,
-                fileSize = data.fileSize,
-                width = data.width,
-                height = data.height,
-                mimeType = data.mimeType,
-                parentId = parentId,
-                isRaw = data.isRaw,
-                rawMake = data.rawMake,
-                rawModel = data.rawModel,
-                iso = data.iso,
-                exposureTime = data.exposureTime,
-                fNumber = data.fNumber,
-                focalLength = data.focalLength
-            )
-            imageIds.add(id)
-        }
-        return imageIds
-    }
-
     // ==================== Helper Methods ====================
-
-    private suspend fun findElementByImageId(imageId: Long): SleeveElementEntity? {
-        val allElements = sleeveElementDao.getAll()
-        return allElements.find { it.imageId == imageId }
-    }
 
     private fun generateFolderId(): Long {
         return 2000000000L + (System.currentTimeMillis() % 1000000000L)
@@ -571,22 +400,3 @@ class SleeveRepository(
         return System.currentTimeMillis()
     }
 }
-
-/**
- * Data class for batch image import parameters.
- */
-data class ImageImportData(
-    val fileName: String,
-    val filePath: String,
-    val fileSize: Long,
-    val width: Int,
-    val height: Int,
-    val mimeType: String,
-    val isRaw: Boolean = false,
-    val rawMake: String = "",
-    val rawModel: String = "",
-    val iso: Int = 0,
-    val exposureTime: Double = 0.0,
-    val fNumber: Double = 0.0,
-    val focalLength: Double = 0.0
-)

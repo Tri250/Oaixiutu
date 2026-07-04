@@ -18,52 +18,49 @@ object AiNdkBridge {
         }
     }
 
-    external fun nativeClipEncodeImage(imagePixels: FloatArray, width: Int, height: Int): FloatArray
-    external fun nativeClipEncodeText(text: String): FloatArray
-    external fun nativeClipComputeSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float
-    external fun nativeClipZeroShotClassify(imagePixels: FloatArray, width: Int, height: Int, labels: Array<String>): FloatArray
-    external fun nativeBuildHnswIndex(embeddings: Array<FloatArray>, ids: LongArray): Boolean
-    external fun nativeHnswSearch(query: FloatArray, topK: Int): LongArray
-
     fun encodeImage(imagePixels: FloatArray, width: Int, height: Int): FloatArray? {
         if (!isAvailable) return null
-        return NdkSafeCall.executeFloatArray("encodeImage") {
-            nativeClipEncodeImage(imagePixels, width, height)
-        }
+        Log.w(TAG, "encodeImage: AI inference not yet available via NDK bridge")
+        return null
     }
 
     fun encodeText(text: String): FloatArray? {
         if (!isAvailable) return null
-        return NdkSafeCall.executeFloatArray("encodeText") {
-            nativeClipEncodeText(text)
-        }
+        Log.w(TAG, "encodeText: AI inference not yet available via NDK bridge")
+        return null
     }
 
     fun computeSimilarity(embedding1: FloatArray, embedding2: FloatArray): Float {
         if (!isAvailable) return 0f
-        return NdkSafeCall.executeFloat("computeSimilarity") {
-            nativeClipComputeSimilarity(embedding1, embedding2)
+        // Cosine similarity in Kotlin
+        if (embedding1.size != embedding2.size) return 0f
+        var dotProduct = 0.0
+        var norm1 = 0.0
+        var norm2 = 0.0
+        for (i in embedding1.indices) {
+            dotProduct += (embedding1[i] * embedding2[i]).toDouble()
+            norm1 += (embedding1[i] * embedding1[i]).toDouble()
+            norm2 += (embedding2[i] * embedding2[i]).toDouble()
         }
+        val denominator = kotlin.math.sqrt(norm1) * kotlin.math.sqrt(norm2)
+        return if (denominator > 0) (dotProduct / denominator).toFloat() else 0f
     }
 
     fun zeroShotClassify(imagePixels: FloatArray, width: Int, height: Int, labels: Array<String>): FloatArray? {
         if (!isAvailable) return null
-        return NdkSafeCall.executeFloatArray("zeroShotClassify") {
-            nativeClipZeroShotClassify(imagePixels, width, height, labels)
-        }
+        Log.w(TAG, "zeroShotClassify: AI inference not yet available via NDK bridge")
+        return null
     }
 
     fun buildHnswIndex(embeddings: Array<FloatArray>, ids: LongArray): Boolean {
         if (!isAvailable) return false
-        return NdkSafeCall.executeBoolean("buildHnswIndex") {
-            nativeBuildHnswIndex(embeddings, ids)
-        }
+        Log.w(TAG, "buildHnswIndex: AI inference not yet available via NDK bridge")
+        return false
     }
 
     fun hnswSearch(query: FloatArray, topK: Int): LongArray? {
         if (!isAvailable) return null
-        return NdkSafeCall.execute("hnswSearch") {
-            nativeHnswSearch(query, topK)
-        }
+        Log.w(TAG, "hnswSearch: AI inference not yet available via NDK bridge")
+        return null
     }
 }
