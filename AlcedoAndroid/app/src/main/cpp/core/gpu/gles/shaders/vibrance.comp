@@ -1,0 +1,43 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform float uVibrance; // -1.0 to 1.0
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    vec4 color = imageLoad(imgInput, pos);
+
+    // Compute luminance and max channel for saturation measure
+    float lum = luminance(color.rgb);
+    float maxC = max(max(color.r, color.g), color.b);
+    float minC = min(min(color.r, color.g), color.b);
+    float saturation = safe_div(maxC - minC, maxC);
+
+    // Vibrance: less saturated colors get more boost
+    // The boost factor decreases as saturation increases
+    float boost = uVibrance * (1.0 - saturation);
+
+    // Apply per-channel vibrance
+    // Desaturate channels that exceed luminance when boosting
+    vec3 result = color.rgb;
+    for (int i = 0; i < 3; i++) {
+        if (result[i] > lum) {
+            result[i] = mix(lum, result[i], 1.0 / (1.0 + boost * 0.5));
+        } else {
+            result[i] = mix(lum, result[i], 1.0 - boost * 0.5);
+        }
+    }
+
+    // Blend with original based on vibrance amount
+    result = mix(color.rgb, result, abs(uVibrance));
+    color.rgb = clamp(result, 0.0, 1.0);
+
+    imageStore(imgOutput, pos, color);
+}

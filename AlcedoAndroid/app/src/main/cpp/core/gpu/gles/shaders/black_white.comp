@@ -1,0 +1,25 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform float uBlackPoint; // 0.0 to 0.1
+uniform float uWhitePoint; // 0.9 to 1.0
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    vec4 color = imageLoad(imgInput, pos);
+
+    // Remap from [blackPoint, whitePoint] to [0, 1]
+    float range = max(uWhitePoint - uBlackPoint, EPSILON);
+    color.rgb = (color.rgb - vec3(uBlackPoint)) / vec3(range);
+
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
+
+    imageStore(imgOutput, pos, color);
+}

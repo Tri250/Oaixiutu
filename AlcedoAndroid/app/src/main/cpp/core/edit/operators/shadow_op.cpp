@@ -17,19 +17,14 @@ namespace {
 void ShadowOperator::apply(float* pixels, int count, int channels, float shadow_amount) {
     if (!pixels || count <= 0 || channels <= 0 || shadow_amount == 0.0f) return;
 
-    const float shadow_threshold = 0.25f;
-
     for (int i = 0; i < count; ++i) {
         float* pixel = pixels + i * channels;
         float lum = compute_luminance(pixel, channels);
+        float inv_lum = 1.0f - lum;
+        float shadow_boost = shadow_amount * inv_lum * inv_lum;
 
-        if (lum < shadow_threshold) {
-            float mask = 1.0f - (lum / shadow_threshold);
-            float adjustment = shadow_amount * mask;
-            for (int c = 0; c < channels; ++c) {
-                float v = pixel[c] + adjustment;
-                pixel[c] = std::max(0.0f, std::min(1.0f, v));
-            }
+        for (int c = 0; c < channels; ++c) {
+            pixel[c] = std::max(0.0f, std::min(1.0f, pixel[c] + shadow_boost));
         }
     }
 }

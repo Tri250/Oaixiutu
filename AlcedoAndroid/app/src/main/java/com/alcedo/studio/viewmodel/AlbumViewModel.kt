@@ -1,5 +1,6 @@
 package com.alcedo.studio.viewmodel
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -8,10 +9,12 @@ import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.*
+import com.alcedo.studio.ndk.AiNdkBridge
 import com.alcedo.studio.ui.album.FilterState
 import com.alcedo.studio.ui.album.SortMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AlbumViewModel : ViewModel() {
@@ -22,11 +25,13 @@ class AlbumViewModel : ViewModel() {
     private val searchService = AppModule.searchService
     private val aiService = AppModule.aiService
 
+    // ── Image list state ──
+
     private val _images = MutableStateFlow<List<ImageModel>>(emptyList())
     val images: StateFlow<List<ImageModel>> = _images
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
+    private val _filteredImages = MutableStateFlow<List<ImageModel>>(emptyList())
+    val filteredImages: StateFlow<List<ImageModel>> = _filteredImages
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -34,8 +39,15 @@ class AlbumViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
-    private val _selectedImages = mutableStateListOf<UInt>()
-    val selectedImages: List<UInt> get() = _selectedImages
+    // ── Selection ──
+
+    private val _selectedImages = mutableStateListOf<Long>()
+    val selectedImages: List<Long> get() = _selectedImages
+
+    // ── Search ──
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
 
     private val _showSearch = mutableStateOf(false)
     val showSearch get() = _showSearch
@@ -43,8 +55,13 @@ class AlbumViewModel : ViewModel() {
     private val _semanticSearchEnabled = mutableStateOf(false)
     val semanticSearchEnabled get() = _semanticSearchEnabled
 
-    private val _folders = MutableStateFlow<List<SleeveFolder>>(emptyList())
-    val folders: StateFlow<List<SleeveFolder>> = _folders
+    private val _searchResults = MutableStateFlow<List<RankedSearchResult>>(emptyList())
+    val searchResults: StateFlow<List<RankedSearchResult>> = _searchResults
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching
+
+    // ── Sort & Filter ──
 
     private val _sortMode = MutableStateFlow(SortMode.DATE)
     val sortMode: StateFlow<SortMode> = _sortMode
@@ -52,18 +69,59 @@ class AlbumViewModel : ViewModel() {
     private val _currentFilter = mutableStateOf<FilterState?>(null)
     val currentFilter get() = _currentFilter
 
-    private val _selectedFolderId = mutableStateOf<UInt?>(null)
-    val selectedFolderId get() = _selectedFolderId
+    // ── Folder navigation ──
+
+    private val _folders = MutableStateFlow<List<SleeveFolder>>(emptyList())
+    val folders: StateFlow<List<SleeveFolder>> = _folders
+
+    private val _currentFolderId = MutableStateFlow<Long?>(null)
+    val currentFolderId: StateFlow<Long?> = _currentFolderId
+
+    private val _currentFolderPath = MutableStateFlow("/")
+    val currentFolderPath: StateFlow<String> = _currentFolderPath
+
+    private val _folderBreadcrumbs = MutableStateFlow<List<FolderBreadcrumb>>(emptyList())
+    val folderBreadcrumbs: StateFlow<List<FolderBreadcrumb>> = _folderBreadcrumbs
+
+    // ── Thumbnail loading ──
+
+    private val _thumbnailCache = MutableStateFlow<Map<Long, Bitmap>>(emptyMap())
+    val thumbnailCache: StateFlow<Map<Long, Bitmap>> = _thumbnailCache
+
+    private val _thumbnailsLoading = mutableStateListOf<Long>()
+    val thumbnailsLoading: List<Long> get() = _thumbnailsLoading
+
+    // ── Collections ──
+
+    private val _collections = MutableStateFlow<List<CollectionEntity>>(emptyList())
+    val collections: StateFlow<List<CollectionEntity>> = _collections
+
+    // ── Statistics ──
+
+    private val _imageCount = MutableStateFlow(0)
+    val imageCount: StateFlow<Int> = _imageCount
+
+    private val _totalSize = MutableStateFlow(0L)
+    val totalSize: StateFlow<Long> = _totalSize
 
     init {
         loadImages()
         loadFolders()
+        loadCollections()
     }
+
+    // ================================================================
+    // Image loading
+    // ================================================================
 
     fun loadImages() {
         viewModelScope.launch {
             _isLoading.value = true
-            _images.value = imageRepository.getAllImages()
+            val allImages = imageRepository.getAllImages()
+            _images.value = allImages
+            _imageCount.value = allImages.size
+            _totalSize.value = allImages.sumOf { it.fileSize }
+            applyCurrentSortAndFilter(allImages)
             _isLoading.value = false
         }
     }
@@ -71,42 +129,98 @@ class AlbumViewModel : ViewModel() {
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            _images.value = imageRepository.getAllImages()
+            val allImages = imageRepository.getAllImages()
+            _images.value = allImages
+            _imageCount.value = allImages.size
+            _totalSize.value = allImages.sumOf { it.fileSize }
+            applyCurrentSortAndFilter(allImages)
             _isRefreshing.value = false
         }
     }
 
+    // ================================================================
+    // Folder navigation
+    // ================================================================
+
     fun loadFolders() {
         viewModelScope.launch {
-            _folders.value = sleeveRepository.getAllFolders()
+            _folders.value = sleeveRepository.getRootElements()
+                .filterIsInstance<SleeveFolder>()
         }
     }
 
-    fun selectFolder(folderId: UInt) {
-        _selectedFolderId.value = folderId
+    fun navigateToFolder(folderId: Long?) {
+        _currentFolderId.value = folderId
         viewModelScope.launch {
             _isLoading.value = true
-            if (folderId == 0u) {
-                _images.value = imageRepository.getAllImages()
+            if (folderId == null) {
+                _currentFolderPath.value = "/"
+                _folderBreadcrumbs.value = emptyList()
+                loadImages()
             } else {
-                val folder = sleeveRepository.getFolder(folderId)
-                if (folder != null) {
-                    val elementIds = folder.listElements()
-                    val allImages = imageRepository.getAllImages()
-                    // Filter images by folder contents
-                    _images.value = allImages.filter { img ->
-                        elementIds.any { /* Match by element ID */ false }
-                    }
+                val path = sleeveRepository.getFolderPath(folderId)
+                _currentFolderPath.value = path
+                val children = sleeveRepository.getChildren(folderId)
+                val fileChildren = children.filterIsInstance<SleeveFile>()
+                val imagesInFolder = fileChildren.mapNotNull { file ->
+                    imageRepository.getImage(file.imageId)
+                }
+                _images.value = imagesInFolder
+                applyCurrentSortAndFilter(imagesInFolder)
+
+                // Update breadcrumbs
+                val folder = sleeveRepository.getElement(folderId) as? SleeveFolder
+                val currentBreadcrumbs = _folderBreadcrumbs.value.toMutableList()
+                if (currentBreadcrumbs.none { it.folderId == folderId }) {
+                    currentBreadcrumbs.add(FolderBreadcrumb(folderId, folder?.elementName ?: "Folder"))
+                    _folderBreadcrumbs.value = currentBreadcrumbs
                 }
             }
             _isLoading.value = false
         }
     }
 
-    fun importImage(uri: Uri) {
+    fun navigateToBreadcrumb(index: Int) {
+        val breadcrumbs = _folderBreadcrumbs.value
+        if (index < 0) {
+            navigateToFolder(null)
+        } else if (index < breadcrumbs.size) {
+            _folderBreadcrumbs.value = breadcrumbs.subList(0, index + 1)
+            navigateToFolder(breadcrumbs[index].folderId)
+        }
+    }
+
+    fun createFolder(name: String) {
+        viewModelScope.launch {
+            val parentId = _currentFolderId.value
+            sleeveRepository.createFolder(name, parentId)
+            loadFolders()
+            if (parentId != null) {
+                navigateToFolder(parentId)
+            }
+        }
+    }
+
+    // ================================================================
+    // Import
+    // ================================================================
+
+    fun importFromGallery(uri: Uri) {
         viewModelScope.launch {
             _isLoading.value = true
             importService.importImage(uri)
+            loadImages()
+            loadFolders()
+            _isLoading.value = false
+        }
+    }
+
+    fun importFromStorage(uris: List<Uri>) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            for (uri in uris) {
+                importService.importImage(uri)
+            }
             loadImages()
             loadFolders()
             _isLoading.value = false
@@ -123,29 +237,229 @@ class AlbumViewModel : ViewModel() {
         }
     }
 
+    // ================================================================
+    // Search (text-based + AI semantic search)
+    // ================================================================
+
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
         if (query.isBlank()) {
-            loadImages()
+            _searchResults.value = emptyList()
+            applyCurrentSortAndFilter(_images.value)
             return
         }
+        performSearch(query)
+    }
+
+    private fun performSearch(query: String) {
         viewModelScope.launch {
-            val results = searchService.search(query, _semanticSearchEnabled.value)
-            val imageIds = results.map { it.imageId }.toSet()
-            _images.value = imageRepository.getAllImages().filter { it.imageId in imageIds }
+            _isSearching.value = true
+            try {
+                val results = searchService.combinedSearch(
+                    textQuery = query,
+                    enableSemantic = _semanticSearchEnabled.value,
+                    maxResults = 100
+                )
+                _searchResults.value = results
+
+                val resultImageIds = results.map { it.imageId }.toSet()
+                val allImages = imageRepository.getAllImages()
+                val matchedImages = allImages.filter { it.imageId in resultImageIds }
+                _filteredImages.value = matchedImages
+            } catch (_: Exception) {
+                // Fallback to name-based search
+                val allImages = imageRepository.getAllImages()
+                _filteredImages.value = allImages.filter {
+                    it.imageName.contains(query, ignoreCase = true) ||
+                    it.imagePath.contains(query, ignoreCase = true)
+                }
+            }
+            _isSearching.value = false
+        }
+    }
+
+    fun performSemanticSearch(query: String) {
+        viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val textEmbedding = aiService.generateTextEmbedding(query)
+                val searchResults = aiService.searchByText(query, topK = 50)
+                val imageIds = searchResults.map { it.imageId.toLong() }.toSet()
+                val allImages = imageRepository.getAllImages()
+                _filteredImages.value = allImages.filter { it.imageId in imageIds }
+            } catch (_: Exception) {
+                _filteredImages.value = emptyList()
+            }
+            _isSearching.value = false
         }
     }
 
     fun toggleSemanticSearch() {
         _semanticSearchEnabled.value = !_semanticSearchEnabled.value
+        val query = _searchQuery.value
+        if (query.isNotBlank()) {
+            performSearch(query)
+        }
     }
 
-    fun toggleImageSelection(imageId: UInt) {
+    fun toggleSearch() {
+        _showSearch.value = !_showSearch.value
+        if (!_showSearch.value) {
+            _searchQuery.value = ""
+            _searchResults.value = emptyList()
+            applyCurrentSortAndFilter(_images.value)
+        }
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+        _searchResults.value = emptyList()
+        applyCurrentSortAndFilter(_images.value)
+    }
+
+    // ================================================================
+    // Sort
+    // ================================================================
+
+    fun setSortMode(mode: SortMode) {
+        _sortMode.value = mode
+        applyCurrentSortAndFilter(_filteredImages.value.ifEmpty { _images.value })
+    }
+
+    private fun applyCurrentSortAndFilter(images: List<ImageModel>) {
+        val sorted = when (_sortMode.value) {
+            SortMode.DATE -> images.sortedByDescending { it.imageId }
+            SortMode.NAME -> images.sortedBy { it.imageName }
+            SortMode.RATING -> images.sortedByDescending {
+                // TODO: use rating from metadata entity
+                0
+            }
+            SortMode.TYPE -> images.sortedBy { it.imageType.ordinal }
+        }
+        val filter = _currentFilter.value
+        _filteredImages.value = if (filter != null) applyFilter(sorted, filter) else sorted
+    }
+
+    // ================================================================
+    // Filter
+    // ================================================================
+
+    fun applyFilter(filter: FilterState) {
+        _currentFilter.value = filter
+        val source = _images.value
+        val filtered = applyFilter(source, filter)
+        _filteredImages.value = when (_sortMode.value) {
+            SortMode.DATE -> filtered.sortedByDescending { it.imageId }
+            SortMode.NAME -> filtered.sortedBy { it.imageName }
+            SortMode.RATING -> filtered
+            SortMode.TYPE -> filtered.sortedBy { it.imageType.ordinal }
+        }
+    }
+
+    private fun applyFilter(images: List<ImageModel>, filter: FilterState): List<ImageModel> {
+        var result = images
+
+        if (filter.cameraMakes.isNotEmpty()) {
+            result = result.filter { img ->
+                filter.cameraMakes.any { make ->
+                    img.exifDisplay.cameraMake.contains(make, ignoreCase = true)
+                }
+            }
+        }
+
+        if (filter.cameraModels.isNotEmpty()) {
+            result = result.filter { img ->
+                filter.cameraModels.any { model ->
+                    img.exifDisplay.cameraModel.contains(model, ignoreCase = true)
+                }
+            }
+        }
+
+        if (filter.lensModel.isNotEmpty()) {
+            result = result.filter { img ->
+                img.exifDisplay.lensModel.contains(filter.lensModel, ignoreCase = true)
+            }
+        }
+
+        if (filter.rating > 0) {
+            result = result.filter {
+                // TODO: integrate with RatingEntity
+                true
+            }
+        }
+
+        if (filter.fileTypes.isNotEmpty()) {
+            result = result.filter { img ->
+                filter.fileTypes.any { type ->
+                    img.imageType.name.equals(type, ignoreCase = true) ||
+                    img.mimeType.contains(type, ignoreCase = true)
+                }
+            }
+        }
+
+        if (filter.aiLabels.isNotEmpty()) {
+            result = result.filter { img ->
+                val labels = aiService.getLabels(img.imageId.toUInt())
+                filter.aiLabels.any { filterLabel ->
+                    labels.any { it.label.contains(filterLabel, ignoreCase = true) }
+                }
+            }
+        }
+
+        return result
+    }
+
+    fun resetFilters() {
+        _currentFilter.value = null
+        applyCurrentSortAndFilter(_images.value)
+    }
+
+    // ================================================================
+    // Thumbnail loading
+    // ================================================================
+
+    fun loadThumbnail(imageId: Long) {
+        if (_thumbnailCache.value.containsKey(imageId)) return
+        if (_thumbnailsLoading.contains(imageId)) return
+
+        _thumbnailsLoading.add(imageId)
+        viewModelScope.launch {
+            try {
+                val bitmap = thumbnailService.loadThumbnail(imageId)
+                if (bitmap != null) {
+                    val updated = _thumbnailCache.value.toMutableMap()
+                    updated[imageId] = bitmap
+                    _thumbnailCache.value = updated
+                }
+            } catch (_: Exception) {
+                // Thumbnail load failure is non-fatal
+            } finally {
+                _thumbnailsLoading.remove(imageId)
+            }
+        }
+    }
+
+    fun preloadThumbnails(imageIds: List<Long>) {
+        for (id in imageIds) {
+            loadThumbnail(id)
+        }
+    }
+
+    // ================================================================
+    // Selection
+    // ================================================================
+
+    fun toggleImageSelection(imageId: Long) {
         if (_selectedImages.contains(imageId)) {
             _selectedImages.remove(imageId)
         } else {
             _selectedImages.add(imageId)
         }
+    }
+
+    fun selectAll() {
+        _selectedImages.clear()
+        _selectedImages.addAll(_filteredImages.value.map { it.imageId })
     }
 
     fun clearSelection() {
@@ -161,72 +475,90 @@ class AlbumViewModel : ViewModel() {
         }
     }
 
-    fun toggleSearch() {
-        _showSearch.value = !_showSearch.value
-        if (!_showSearch.value) {
-            _searchQuery.value = ""
-            loadImages()
-        }
-    }
-
-    fun setSortMode(mode: SortMode) {
-        _sortMode.value = mode
+    fun rateSelected(rating: Int) {
         viewModelScope.launch {
-            val sorted = when (mode) {
-                SortMode.DATE -> _images.value.sortedByDescending { it.imageId }
-                SortMode.NAME -> _images.value.sortedBy { it.imageName }
-                SortMode.RATING -> _images.value // Would sort by rating field
-                SortMode.TYPE -> _images.value.sortedBy { it.imageType.ordinal }
+            for (imageId in _selectedImages) {
+                sleeveRepository.setRating(imageId, rating)
             }
-            _images.value = sorted
         }
     }
 
-    fun applyFilter(filter: FilterState) {
-        _currentFilter.value = filter
+    fun addSelectedToCollection(collectionId: Long) {
         viewModelScope.launch {
-            var filtered = imageRepository.getAllImages()
-
-            if (filter.cameraMakes.isNotEmpty()) {
-                filtered = filtered.filter { img ->
-                    filter.cameraMakes.any { make ->
-                        img.exifDisplay.cameraMake.contains(make, ignoreCase = true)
-                    }
-                }
+            for (imageId in _selectedImages) {
+                sleeveRepository.addImageToCollection(collectionId, imageId)
             }
-
-            if (filter.cameraModels.isNotEmpty()) {
-                filtered = filtered.filter { img ->
-                    filter.cameraModels.any { model ->
-                        img.exifDisplay.cameraModel.contains(model, ignoreCase = true)
-                    }
-                }
-            }
-
-            if (filter.lensModel.isNotEmpty()) {
-                filtered = filtered.filter { img ->
-                    img.exifDisplay.lensModel.contains(filter.lensModel, ignoreCase = true)
-                }
-            }
-
-            if (filter.rating > 0) {
-                // Filter by rating when available
-            }
-
-            if (filter.fileTypes.isNotEmpty()) {
-                filtered = filtered.filter { img ->
-                    filter.fileTypes.any { type ->
-                        img.imageType.name.equals(type, ignoreCase = true)
-                    }
-                }
-            }
-
-            _images.value = filtered
         }
     }
 
-    fun resetFilters() {
-        _currentFilter.value = null
-        loadImages()
+    // ================================================================
+    // Collections
+    // ================================================================
+
+    fun loadCollections() {
+        viewModelScope.launch {
+            _collections.value = sleeveRepository.getAllCollections()
+        }
+    }
+
+    fun createCollection(name: String, description: String = "") {
+        viewModelScope.launch {
+            sleeveRepository.createCollection(name, description)
+            loadCollections()
+        }
+    }
+
+    fun deleteCollection(collectionId: Long) {
+        viewModelScope.launch {
+            sleeveRepository.deleteCollection(collectionId)
+            loadCollections()
+        }
+    }
+
+    // ================================================================
+    // Rating
+    // ================================================================
+
+    fun setRating(imageId: Long, rating: Int) {
+        viewModelScope.launch {
+            sleeveRepository.setRating(imageId, rating)
+        }
+    }
+
+    // ================================================================
+    // AI features
+    // ================================================================
+
+    fun generateLabelsForImage(imageId: Long) {
+        viewModelScope.launch {
+            val image = imageRepository.getImage(imageId) ?: return@launch
+            val thumbnail = thumbnailService.loadThumbnail(imageId) ?: return@launch
+            aiService.generateLabels(imageId.toUInt(), thumbnail)
+        }
+    }
+
+    // ================================================================
+    // Export helpers
+    // ================================================================
+
+    fun getSelectedImagePaths(): List<String> {
+        return _filteredImages.value
+            .filter { it.imageId in _selectedImages }
+            .map { it.imagePath }
+    }
+
+    // ================================================================
+    // Internal
+    // ================================================================
+
+    override fun onCleared() {
+        super.onCleared()
+        _thumbnailCache.value.values.forEach { it.recycle() }
+        _thumbnailCache.value = emptyMap()
     }
 }
+
+data class FolderBreadcrumb(
+    val folderId: Long,
+    val name: String
+)

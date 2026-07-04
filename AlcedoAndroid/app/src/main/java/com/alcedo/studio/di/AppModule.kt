@@ -4,6 +4,10 @@ import android.content.Context
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.domain.repository.*
 import com.alcedo.studio.domain.service.*
+import com.alcedo.studio.service.RenderService
+import com.alcedo.studio.service.SleeveFilterService as AppSleeveFilterService
+import com.alcedo.studio.service.ExportService as AppExportService
+import com.alcedo.studio.service.AiService as AppAiService
 
 object AppModule {
     private lateinit var appContext: Context
@@ -29,6 +33,17 @@ object AppModule {
     val collectionDao: CollectionDao by lazy { database.collectionDao() }
     val filterDao: FilterDao by lazy { database.filterDao() }
 
+    // Desktop schema DAOs
+    val imageDao: ImageDao by lazy { database.imageDao() }
+    val pipelineDao: PipelineDao by lazy { database.pipelineDao() }
+    val historyDao: HistoryDao by lazy { database.historyDao() }
+    val filterV2Dao: FilterV2Dao by lazy { database.filterV2Dao() }
+    val aiDescriptionDao: AiDescriptionDao by lazy { database.aiDescriptionDao() }
+    val aiRatingDao: AiRatingDao by lazy { database.aiRatingDao() }
+    val semanticEmbeddingDao: SemanticEmbeddingDao by lazy { database.semanticEmbeddingDao() }
+    val semanticLabelV2Dao: SemanticLabelV2Dao by lazy { database.semanticLabelV2Dao() }
+    val collectionV2Dao: CollectionV2Dao by lazy { database.collectionV2Dao() }
+
     // Cache
     val thumbnailDiskCache: ThumbnailDiskCache by lazy {
         ThumbnailDiskCache(appContext.cacheDir.resolve("thumbnails"))
@@ -43,7 +58,8 @@ object AppModule {
         PathResolver(elementDao, fileDao, folderDao)
     }
 
-    // Services
+    // ── Domain Services ──
+
     val sleeveService: SleeveService by lazy {
         SleeveService(
             elementDao = elementDao,
@@ -65,6 +81,7 @@ object AppModule {
             labelDao = labelDao,
             collectionDao = collectionDao,
             filterDao = filterDao,
+            filterV2Dao = filterV2Dao,
             elementDao = elementDao
         )
     }
@@ -126,7 +143,33 @@ object AppModule {
         SemanticGenerationService(appContext, aiService, metadataDao, modelDownloadService)
     }
 
-    // Repositories
+    // ── App Services (com.alcedo.studio.service) ──
+
+    val renderService: RenderService by lazy {
+        RenderService()
+    }
+
+    val appSleeveFilterService: AppSleeveFilterService by lazy {
+        AppSleeveFilterService(
+            metadataDao = metadataDao,
+            ratingDao = ratingDao,
+            labelDao = labelDao,
+            collectionDao = collectionDao,
+            filterDao = filterDao,
+            elementDao = elementDao
+        )
+    }
+
+    val appExportService: AppExportService by lazy {
+        AppExportService(appContext)
+    }
+
+    val appAiService: AppAiService by lazy {
+        AppAiService(appContext)
+    }
+
+    // ── Repositories ──
+
     val sleeveRepository: SleeveRepository by lazy {
         SleeveRepository(
             sleeveService = sleeveService,

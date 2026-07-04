@@ -1,0 +1,29 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform float uShadowAmount;
+uniform float uShadowBoundary;
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    vec4 color = imageLoad(imgInput, pos);
+    float lum = luminance(color.rgb);
+
+    // Shadow mask: quadratic falloff from boundary
+    float mask = 1.0 - smoothstep(0.0, uShadowBoundary, lum);
+    mask = mask * mask;
+
+    // Apply shadow boost
+    vec3 boost = vec3(uShadowAmount) * mask;
+    color.rgb += boost * color.rgb;
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
+
+    imageStore(imgOutput, pos, color);
+}

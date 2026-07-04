@@ -22,7 +22,9 @@ add_library(
     core/sleeve/path_resolver.cpp
     core/sleeve/dentry_cache_manager.cpp
     core/sleeve/storage_service.cpp
+    core/sleeve/sleeve_filter.cpp
     core/image/image_buffer.cpp
+    core/image/image_pool.cpp
     core/image/raw_decoder.cpp
     core/image/metadata_decoder.cpp
     core/image/thumbnail_decoder.cpp

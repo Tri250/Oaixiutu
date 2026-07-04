@@ -1,0 +1,76 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform vec2  uImageSize;
+uniform float uK1;      // radial distortion coefficient 1
+uniform float uK2;      // radial distortion coefficient 2
+uniform float uK3;      // radial distortion coefficient 3
+uniform float uP1;      // tangential distortion coefficient 1
+uniform float uP2;      // tangential distortion coefficient 2
+uniform vec2  uCenter;  // principal point, normalized [0,1]
+uniform float uFocalRatio; // fx/fy aspect correction
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    // Normalized coordinates centered at principal point
+    vec2 uv = (vec2(pos) + 0.5) / vec2(size);
+    vec2 d = uv - uCenter;
+
+    // Aspect correction
+    d.x *= uFocalRatio;
+
+    float x = d.x;
+    float y = d.y;
+    float r2 = x * x + y * y;
+    float r4 = r2 * r2;
+    float r6 = r4 * r2;
+
+    // Brown-Conrady inverse distortion model
+    // Radial: correct the distorted position to find undistorted source
+    float radialFactor = 1.0 + uK1 * r2 + uK2 * r4 + uK3 * r6;
+
+    // Tangential distortion
+    float dx = 2.0 * uP1 * x * y + uP2 * (r2 + 2.0 * x * x);
+    float dy = uP1 * (r2 + 2.0 * y * y) + 2.0 * uP2 * x * y;
+
+    // Compute corrected (undistorted) normalized position
+    vec2 corrected = vec2(x, y) * radialFactor + vec2(dx, dy);
+
+    // Undo aspect correction
+    corrected.x /= uFocalRatio;
+
+    // Map back to pixel coordinates
+    vec2 srcUV = corrected + uCenter;
+
+    // Bilinear sample from input
+    vec2 inCoord = srcUV * uImageSize - 0.5;
+    ivec2 i0 = ivec2(floor(inCoord));
+    ivec2 i1 = i0 + ivec2(1, 0);
+    ivec2 i2 = i0 + ivec2(0, 1);
+    ivec2 i3 = i0 + ivec2(1, 1);
+
+    vec2 f = fract(inCoord);
+
+    // Clamp to valid range
+    ivec2 inSize = ivec2(uImageSize);
+    i0 = clamp(i0, ivec2(0), inSize - 1);
+    i1 = clamp(i1, ivec2(0), inSize - 1);
+    i2 = clamp(i2, ivec2(0), inSize - 1);
+    i3 = clamp(i3, ivec2(0), inSize - 1);
+
+    vec4 c0 = imageLoad(imgInput, i0);
+    vec4 c1 = imageLoad(imgInput, i1);
+    vec4 c2 = imageLoad(imgInput, i2);
+    vec4 c3 = imageLoad(imgInput, i3);
+
+    vec4 result = mix(mix(c0, c1, f.x), mix(c2, c3, f.x), f.y);
+
+    imageStore(imgOutput, pos, result);
+}

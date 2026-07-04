@@ -1,0 +1,44 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform float uStrength;  // 0.0 to 1.0 (correction amount)
+uniform float uMidpoint;  // 0.0 to 1.0 (where falloff begins)
+uniform float uRoundness; // 0.0 = circular, 1.0 = square-ish
+uniform vec2  uCenter;    // normalized center, default (0.5, 0.5)
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    vec4 color = imageLoad(imgInput, pos);
+
+    // Normalized coordinates from center
+    vec2 uv = (vec2(pos) + 0.5) / vec2(size);
+    vec2 d = uv - uCenter;
+
+    // Aspect-corrected distance
+    float aspect = float(size.x) / float(size.y);
+    d.x *= aspect;
+
+    // Distance from center
+    float dist = length(d);
+
+    // Adjust for roundness: blend between circular and square distance
+    vec2 absD = abs(d);
+    float squareDist = max(absD.x, absD.y);
+    dist = mix(dist, squareDist, uRoundness);
+
+    // Radial falloff using smoothstep
+    float falloff = smoothstep(uMidpoint, uMidpoint + 0.5, dist);
+
+    // Apply vignette: darken edges
+    vec3 result = color.rgb * (1.0 - uStrength * falloff);
+    color.rgb = clamp(result, 0.0, 1.0);
+
+    imageStore(imgOutput, pos, color);
+}

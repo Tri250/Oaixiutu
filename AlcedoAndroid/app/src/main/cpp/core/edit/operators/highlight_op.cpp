@@ -17,19 +17,13 @@ namespace {
 void HighlightOperator::apply(float* pixels, int count, int channels, float highlight_amount) {
     if (!pixels || count <= 0 || channels <= 0 || highlight_amount == 0.0f) return;
 
-    const float highlight_threshold = 0.75f;
-
     for (int i = 0; i < count; ++i) {
         float* pixel = pixels + i * channels;
         float lum = compute_luminance(pixel, channels);
+        float highlight_compress = -highlight_amount * lum * lum;
 
-        if (lum > highlight_threshold) {
-            float mask = (lum - highlight_threshold) / (1.0f - highlight_threshold);
-            float adjustment = highlight_amount * mask;
-            for (int c = 0; c < channels; ++c) {
-                float v = pixel[c] + adjustment;
-                pixel[c] = std::max(0.0f, std::min(1.0f, v));
-            }
+        for (int c = 0; c < channels; ++c) {
+            pixel[c] = std::max(0.0f, std::min(1.0f, pixel[c] + highlight_compress));
         }
     }
 }

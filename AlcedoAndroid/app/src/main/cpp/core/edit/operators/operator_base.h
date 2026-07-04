@@ -26,6 +26,15 @@ enum class OperatorType {
     FILM_GRAIN,
     HALATION,
     CROP_ROTATE,
+    HSL,
+    CHANNEL_MIXER,
+    LUT,
+    LENS_CORRECTION,
+    GEOMETRY,
+    HIGHLIGHT_RECONSTRUCTION,
+    DEMOSAIC,
+    AUTO_EXPOSURE,
+    TONE_REGION,
     UNKNOWN
 };
 

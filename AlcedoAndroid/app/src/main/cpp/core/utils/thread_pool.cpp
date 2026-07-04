@@ -106,6 +106,16 @@ size_t ThreadPool::queue_size() const {
     return tasks_.size();
 }
 
+void ThreadPool::wait_idle() {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    idle_condition_.wait(lock, [this] { return tasks_.empty() && active_count_ == 0; });
+}
+
+bool ThreadPool::is_started() const {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    return started_;
+}
+
 void ThreadPool::worker_loop() {
     while (true) {
         std::function<void()> task;
@@ -117,10 +127,16 @@ void ThreadPool::worker_loop() {
             }
             task = std::move(tasks_.front());
             tasks_.pop();
+            ++active_count_;
         }
         if (task) {
             task();
         }
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            --active_count_;
+        }
+        idle_condition_.notify_all();
     }
 }
 

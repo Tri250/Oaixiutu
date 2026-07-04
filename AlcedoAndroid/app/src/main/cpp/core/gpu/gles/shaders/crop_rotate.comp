@@ -1,0 +1,68 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform vec2  uInputSize;
+uniform vec2  uOutputSize;
+uniform float uRotation; // degrees
+uniform vec2  uCropOffset; // normalized [0,1]
+uniform vec2  uCropSize;   // normalized [0,1]
+uniform int   uFlipH;      // 0 or 1
+uniform int   uFlipV;      // 0 or 1
+
+#include "common.glsl"
+
+mat2 rotation_matrix(float degrees) {
+    float rad = radians(degrees);
+    float c = cos(rad);
+    float s = sin(rad);
+    return mat2(c, s, -s, c);
+}
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(uOutputSize.x) || pos.y >= int(uOutputSize.y)) return;
+
+    // Map output pixel to normalized [0,1]
+    vec2 outUV = (vec2(pos) + 0.5) / uOutputSize;
+
+    // Apply flip
+    if (uFlipH != 0) outUV.x = 1.0 - outUV.x;
+    if (uFlipV != 0) outUV.y = 1.0 - outUV.y;
+
+    // Inverse rotation around center
+    vec2 center = vec2(0.5);
+    vec2 p = outUV - center;
+    mat2 rot = rotation_matrix(-uRotation);
+    p = rot * p;
+    vec2 inUV = p + center;
+
+    // Map to crop region
+    inUV = uCropOffset + inUV * uCropSize;
+
+    // Bilinear interpolation from input
+    vec2 inCoord = inUV * uInputSize - 0.5;
+    ivec2 i0 = ivec2(floor(inCoord));
+    ivec2 i1 = i0 + ivec2(1, 0);
+    ivec2 i2 = i0 + ivec2(0, 1);
+    ivec2 i3 = i0 + ivec2(1, 1);
+
+    vec2 f = fract(inCoord);
+
+    // Clamp to valid range
+    ivec2 inSize = ivec2(uInputSize);
+    i0 = clamp(i0, ivec2(0), inSize - 1);
+    i1 = clamp(i1, ivec2(0), inSize - 1);
+    i2 = clamp(i2, ivec2(0), inSize - 1);
+    i3 = clamp(i3, ivec2(0), inSize - 1);
+
+    vec4 c0 = imageLoad(imgInput, i0);
+    vec4 c1 = imageLoad(imgInput, i1);
+    vec4 c2 = imageLoad(imgInput, i2);
+    vec4 c3 = imageLoad(imgInput, i3);
+
+    vec4 result = mix(mix(c0, c1, f.x), mix(c2, c3, f.x), f.y);
+
+    imageStore(imgOutput, pos, result);
+}

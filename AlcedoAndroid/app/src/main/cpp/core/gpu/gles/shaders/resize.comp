@@ -1,0 +1,41 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform vec2 uInputSize;
+uniform vec2 uOutputSize;
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(uOutputSize.x) || pos.y >= int(uOutputSize.y)) return;
+
+    // Map output coordinate back to input coordinate (bilinear)
+    vec2 outUV = (vec2(pos) + 0.5) / uOutputSize;
+    vec2 inCoord = outUV * uInputSize - 0.5;
+
+    ivec2 i0 = ivec2(floor(inCoord));
+    ivec2 i1 = i0 + ivec2(1, 0);
+    ivec2 i2 = i0 + ivec2(0, 1);
+    ivec2 i3 = i0 + ivec2(1, 1);
+
+    vec2 f = fract(inCoord);
+
+    // Clamp to valid range
+    ivec2 inSize = ivec2(uInputSize);
+    i0 = clamp(i0, ivec2(0), inSize - 1);
+    i1 = clamp(i1, ivec2(0), inSize - 1);
+    i2 = clamp(i2, ivec2(0), inSize - 1);
+    i3 = clamp(i3, ivec2(0), inSize - 1);
+
+    vec4 c0 = imageLoad(imgInput, i0);
+    vec4 c1 = imageLoad(imgInput, i1);
+    vec4 c2 = imageLoad(imgInput, i2);
+    vec4 c3 = imageLoad(imgInput, i3);
+
+    vec4 result = mix(mix(c0, c1, f.x), mix(c2, c3, f.x), f.y);
+
+    imageStore(imgOutput, pos, result);
+}

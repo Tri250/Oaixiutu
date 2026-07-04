@@ -1,0 +1,59 @@
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) writeonly restrict uniform image2D imgOutput;
+layout(rgba32f, binding = 1) readonly restrict uniform image2D imgInput;
+
+uniform float uShadows;
+uniform float uMidtones;
+uniform float uHighlights;
+uniform float uShadowBoundary;    // default 0.25
+uniform float uHighlightBoundary; // default 0.75
+uniform float uSmoothness;        // transition sharpness
+
+#include "common.glsl"
+
+void main() {
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(imgOutput);
+    if (pos.x >= size.x || pos.y >= size.y) return;
+
+    vec4 color = imageLoad(imgInput, pos);
+    float lum = luminance(color.rgb);
+
+    // Smooth boundary widths scaled by smoothness
+    float sw = uShadowBoundary * uSmoothness;
+    float hw = (1.0 - uHighlightBoundary) * uSmoothness;
+
+    // Shadow mask: 1 in shadows, 0 elsewhere
+    float shadowMask = 1.0 - smoothstep(
+        max(0.0, uShadowBoundary - sw),
+        uShadowBoundary + sw,
+        lum
+    );
+
+    // Highlight mask: 1 in highlights, 0 elsewhere
+    float highlightMask = smoothstep(
+        uHighlightBoundary - hw,
+        min(1.0, uHighlightBoundary + hw),
+        lum
+    );
+
+    // Midtone mask: 1 in midtones, 0 elsewhere
+    float midtoneMask = 1.0 - shadowMask - highlightMask;
+    midtoneMask = max(midtoneMask, 0.0);
+
+    // Apply per-region adjustments
+    // Shadows: boost shadows by adding proportional to existing color
+    vec3 shadowAdj = uShadows * shadowMask * color.rgb;
+
+    // Midtones: shift midtone values
+    vec3 midAdj = uMidtones * midtoneMask * (color.rgb - vec3(0.18));
+
+    // Highlights: compress or expand highlights
+    vec3 highAdj = uHighlights * highlightMask * (vec3(1.0) - color.rgb);
+
+    color.rgb += shadowAdj + midAdj + highAdj;
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
+
+    imageStore(imgOutput, pos, color);
+}
