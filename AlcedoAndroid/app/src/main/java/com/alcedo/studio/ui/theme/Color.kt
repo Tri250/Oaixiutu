@@ -15,11 +15,19 @@ val PurpleGrey40 = Color(0xFF625B71)
 val Pink40 = Color(0xFF7D5260)
 
 // Alcedo accent colors (used across themes)
+val AlcedoHasselblad = Color(0xFFFF7A3D)   // Hasselblad iconic burnt orange
 val AlcedoGold = Color(0xFFFFD54F)
 val AlcedoWine = Color(0xFFAD1457)
 val AlcedoSteel = Color(0xFF4FC3F7)
 val AlcedoGraphite = Color(0xFF66BB6A)
 val AlcedoMist = Color(0xFF90A4AE)
+
+// Hasselblad Orange palette – semantic tones
+val HasselbladOrange = Color(0xFFFF6D2E)    // Primary action orange
+val HasselbladOrangeLight = Color(0xFFFFB999) // Soft / container
+val HasselbladOrangeDark = Color(0xFF8B4E2C)  // Muted / text on light
+val HasselbladAmber = Color(0xFFFF9100)      // Accent highlight
+val HasselbladWarmGray = Color(0xFFA09286)   // Neutral warm gray
 
 // Common semantic colors
 val AlcedoError = Color(0xFFBA1A1A)

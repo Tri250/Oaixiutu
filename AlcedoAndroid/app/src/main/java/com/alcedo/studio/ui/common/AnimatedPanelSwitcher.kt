@@ -18,8 +18,10 @@ fun AnimatedPanelSwitcher(
         targetState = currentPanel,
         transitionSpec = {
             val direction = transitionSpec()
-            slideIntoContainer(direction, tween(300)) + fadeIn(tween(200, delayMillis = 50)) with
-            slideOutOfContainer(direction, tween(300)) + fadeOut(tween(150))
+            slideIntoContainer(direction, animationSpec = spring(dampingRatio = 0.82f, stiffness = 400f)) +
+                    fadeIn(animationSpec = tween(180, delayMillis = 40, easing = AlcedoEasing.EmphasizedDecelerate)) with
+            slideOutOfContainer(direction, animationSpec = spring(dampingRatio = 0.82f, stiffness = 400f)) +
+                    fadeOut(animationSpec = tween(120, easing = AlcedoEasing.Accelerate))
         },
         modifier = modifier,
         label = "panelSwitcher"

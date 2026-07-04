@@ -39,7 +39,43 @@ data class AlcedoColorScheme(
     val inversePrimary: Color,
     val scrim: Color,
     val accent: Color,
-    val onAccent: Color
+    val onAccent: Color,
+    // Liquid Glass – frosted-glass tint colors
+    val glassTint: Color,
+    val glassBorder: Color,
+    val glassHighlight: Color
+)
+
+// ═══════════════════════════════════════════════════════════════════
+// Hasselblad Orange – Inspired by the iconic Hasselblad camera brand
+// Warm burnt-orange primary, premium photographic feel, 2026 flagship
+// ═══════════════════════════════════════════════════════════════════
+val HasselbladDarkColors = AlcedoColorScheme(
+    bgDeep = Color(0xFF0E0906), bgBase = Color(0xFF18110C), bgPanel = Color(0xFF221A14), bgCanvas = Color(0xFF1C1510),
+    primary = Color(0xFFFF7A3D), onPrimary = Color(0xFF3A0E00), primaryContainer = Color(0xFF5C2A10), onPrimaryContainer = Color(0xFFFFB999),
+    secondary = Color(0xFFE0C8B8), onSecondary = Color(0xFF3E2E20), secondaryContainer = Color(0xFF574435), onSecondaryContainer = Color(0xFFFDE4D2),
+    tertiary = Color(0xFFD4C8A0), onTertiary = Color(0xFF38300E), tertiaryContainer = Color(0xFF504622), onTertiaryContainer = Color(0xFFF0E2B8),
+    surface = Color(0xFF18110C), onSurface = Color(0xFFF0E4DA), surfaceVariant = Color(0xFF524438), onSurfaceVariant = Color(0xFFD8C8B8),
+    surfaceContainerLowest = Color(0xFF120C07), surfaceContainerLow = Color(0xFF201914), surfaceContainer = Color(0xFF251D16), surfaceContainerHigh = Color(0xFF302820), surfaceContainerHighest = Color(0xFF3B322A),
+    error = Color(0xFFFFB4AB), onError = Color(0xFF690005), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
+    outline = Color(0xFFA09286), outlineVariant = Color(0xFF524438),
+    inverseSurface = Color(0xFFF0E4DA), inverseOnSurface = Color(0xFF302820), inversePrimary = Color(0xFF8B4E2C),
+    scrim = Color(0xFF000000), accent = Color(0xFFFF6D2E), onAccent = Color(0xFF3A0E00),
+    glassTint = Color(0x40FF7A3D), glassBorder = Color(0x33FFB999), glassHighlight = Color(0x1AFFFFFF)
+)
+
+val HasselbladLightColors = AlcedoColorScheme(
+    bgDeep = Color(0xFFFFF3EB), bgBase = Color(0xFFFFF7F2), bgPanel = Color(0xFFF5EAE0), bgCanvas = Color(0xFFFFFAF6),
+    primary = Color(0xFF8B4E2C), onPrimary = Color(0xFFFFFFFF), primaryContainer = Color(0xFFFFB999), onPrimaryContainer = Color(0xFF3A0E00),
+    secondary = Color(0xFF735A48), onSecondary = Color(0xFFFFFFFF), secondaryContainer = Color(0xFFFDE4D2), onSecondaryContainer = Color(0xFF2A1C10),
+    tertiary = Color(0xFF5A4F28), onTertiary = Color(0xFFFFFFFF), tertiaryContainer = Color(0xFFF0E2B8), onTertiaryContainer = Color(0xFF171408),
+    surface = Color(0xFFFFF7F2), onSurface = Color(0xFF1E1612), surfaceVariant = Color(0xFFF2E4D8), onSurfaceVariant = Color(0xFF524438),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFDF0E6), surfaceContainer = Color(0xFFF7EBE0), surfaceContainerHigh = Color(0xFFF1E5DA), surfaceContainerHighest = Color(0xFFEBDFD4),
+    error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
+    outline = Color(0xFF857468), outlineVariant = Color(0xFFD8C8B8),
+    inverseSurface = Color(0xFF302820), inverseOnSurface = Color(0xFFF0E4DA), inversePrimary = Color(0xFFFF7A3D),
+    scrim = Color(0xFF000000), accent = Color(0xFFD84315), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x288B4E2C), glassBorder = Color(0x1AFF7A3D), glassHighlight = Color(0x33FFFFFF)
 )
 
 // Gold - Warm golden tones, luxurious feel
@@ -53,7 +89,8 @@ val GoldDarkColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
     outline = Color(0xFF99907A), outlineVariant = Color(0xFF4B4636),
     inverseSurface = Color(0xFFE8E2D0), inverseOnSurface = Color(0xFF312D25), inversePrimary = Color(0xFF594600),
-    scrim = Color(0xFF000000), accent = Color(0xFFFFD54F), onAccent = Color(0xFF1A1500)
+    scrim = Color(0xFF000000), accent = Color(0xFFFFD54F), onAccent = Color(0xFF1A1500),
+    glassTint = Color(0x40D4A843), glassBorder = Color(0x33F2D96A), glassHighlight = Color(0x1AFFFFFF)
 )
 
 val GoldLightColors = AlcedoColorScheme(
@@ -66,7 +103,8 @@ val GoldLightColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     outline = Color(0xFF7D7664), outlineVariant = Color(0xFFD0C8B0),
     inverseSurface = Color(0xFF312D25), inverseOnSurface = Color(0xFFE8E2D0), inversePrimary = Color(0xFFD4A843),
-    scrim = Color(0xFF000000), accent = Color(0xFFFF8F00), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFFFF8F00), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x28594600), glassBorder = Color(0x1AD4A843), glassHighlight = Color(0x33FFFFFF)
 )
 
 // Wine - Deep burgundy/purple, rich and elegant
@@ -80,7 +118,8 @@ val WineDarkColors = AlcedoColorScheme(
     error = Color(0xFFBFA1A1), onError = Color(0xFF450002), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
     outline = Color(0xFF9D8D93), outlineVariant = Color(0xFF504248),
     inverseSurface = Color(0xFFEEDDE3), inverseOnSurface = Color(0xFF32272E), inversePrimary = Color(0xFF764D5C),
-    scrim = Color(0xFF000000), accent = Color(0xFFAD1457), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFFAD1457), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x40E0B4C8), glassBorder = Color(0x33FDD5E5), glassHighlight = Color(0x1AFFFFFF)
 )
 
 val WineLightColors = AlcedoColorScheme(
@@ -93,7 +132,8 @@ val WineLightColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     outline = Color(0xFF827279), outlineVariant = Color(0xFFD4C2C8),
     inverseSurface = Color(0xFF32272E), inverseOnSurface = Color(0xFFEEDDE3), inversePrimary = Color(0xFFE0B4C8),
-    scrim = Color(0xFF000000), accent = Color(0xFFAD1457), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFFAD1457), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x28764D5C), glassBorder = Color(0x1AE0B4C8), glassHighlight = Color(0x33FFFFFF)
 )
 
 // Steel - Cool blue-gray, professional and clean
@@ -107,7 +147,8 @@ val SteelDarkColors = AlcedoColorScheme(
     error = Color(0xFFBFA1A1), onError = Color(0xFF450002), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
     outline = Color(0xFF8C919A), outlineVariant = Color(0xFF42474F),
     inverseSurface = Color(0xFFE0E2E8), inverseOnSurface = Color(0xFF272C33), inversePrimary = Color(0xFF3E5C76),
-    scrim = Color(0xFF000000), accent = Color(0xFF4FC3F7), onAccent = Color(0xFF002E42)
+    scrim = Color(0xFF000000), accent = Color(0xFF4FC3F7), onAccent = Color(0xFF002E42),
+    glassTint = Color(0x40A8C8E8), glassBorder = Color(0x33CCE5FF), glassHighlight = Color(0x1AFFFFFF)
 )
 
 val SteelLightColors = AlcedoColorScheme(
@@ -120,7 +161,8 @@ val SteelLightColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     outline = Color(0xFF72787F), outlineVariant = Color(0xFFC2C7D0),
     inverseSurface = Color(0xFF272C33), inverseOnSurface = Color(0xFFE0E2E8), inversePrimary = Color(0xFFA8C8E8),
-    scrim = Color(0xFF000000), accent = Color(0xFF0288D1), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFF0288D1), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x283E5C76), glassBorder = Color(0x1AA8C8E8), glassHighlight = Color(0x33FFFFFF)
 )
 
 // Graphite - Dark charcoal, minimal and modern
@@ -134,7 +176,8 @@ val GraphiteDarkColors = AlcedoColorScheme(
     error = Color(0xFFCF6679), onError = Color(0xFF1A0002), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
     outline = Color(0xFF8E8E8E), outlineVariant = Color(0xFF444444),
     inverseSurface = Color(0xFFE4E4E4), inverseOnSurface = Color(0xFF2A2A2A), inversePrimary = Color(0xFF4A634A),
-    scrim = Color(0xFF000000), accent = Color(0xFF66BB6A), onAccent = Color(0xFF0A2E0A)
+    scrim = Color(0xFF000000), accent = Color(0xFF66BB6A), onAccent = Color(0xFF0A2E0A),
+    glassTint = Color(0x40B0C4B0), glassBorder = Color(0x33CCE0CC), glassHighlight = Color(0x1AFFFFFF)
 )
 
 val GraphiteLightColors = AlcedoColorScheme(
@@ -147,7 +190,8 @@ val GraphiteLightColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     outline = Color(0xFF747474), outlineVariant = Color(0xFFC4C4C4),
     inverseSurface = Color(0xFF2A2A2A), inverseOnSurface = Color(0xFFE4E4E4), inversePrimary = Color(0xFFB0C4B0),
-    scrim = Color(0xFF000000), accent = Color(0xFF2E7D32), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFF2E7D32), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x284A634A), glassBorder = Color(0x1AB0C4B0), glassHighlight = Color(0x33FFFFFF)
 )
 
 // Mist - Light silver-gray, soft and subtle
@@ -161,7 +205,8 @@ val MistDarkColors = AlcedoColorScheme(
     error = Color(0xFFBFA1A1), onError = Color(0xFF450002), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
     outline = Color(0xFF929699), outlineVariant = Color(0xFF44484C),
     inverseSurface = Color(0xFFE8EAEC), inverseOnSurface = Color(0xFF2F3132), inversePrimary = Color(0xFF4A5464),
-    scrim = Color(0xFF000000), accent = Color(0xFF90A4AE), onAccent = Color(0xFF1A2028)
+    scrim = Color(0xFF000000), accent = Color(0xFF90A4AE), onAccent = Color(0xFF1A2028),
+    glassTint = Color(0x40C0C8D4), glassBorder = Color(0x33D8E0EC), glassHighlight = Color(0x1AFFFFFF)
 )
 
 val MistLightColors = AlcedoColorScheme(
@@ -174,5 +219,6 @@ val MistLightColors = AlcedoColorScheme(
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
     outline = Color(0xFF74787C), outlineVariant = Color(0xFFC8CCD0),
     inverseSurface = Color(0xFF2F3132), inverseOnSurface = Color(0xFFE8EAEC), inversePrimary = Color(0xFFC0C8D4),
-    scrim = Color(0xFF000000), accent = Color(0xFF607D8B), onAccent = Color(0xFFFFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFF607D8B), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x284A5464), glassBorder = Color(0x1AC0C8D4), glassHighlight = Color(0x33FFFFFF)
 )

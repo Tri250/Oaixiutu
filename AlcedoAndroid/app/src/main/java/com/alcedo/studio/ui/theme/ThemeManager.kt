@@ -10,7 +10,7 @@ object ThemeManager {
     private const val KEY_THEME_VARIANT = "theme_variant"
     private const val KEY_DARK_MODE = "dark_mode" // "system", "light", "dark"
 
-    private val _themeVariant = MutableStateFlow(AlcedoThemeVariant.GRAPHITE)
+    private val _themeVariant = MutableStateFlow(AlcedoThemeVariant.HASSELBLAD)
     val themeVariant: StateFlow<AlcedoThemeVariant> = _themeVariant
 
     private val _darkMode = MutableStateFlow("system")
@@ -20,8 +20,8 @@ object ThemeManager {
 
     fun initialize(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedVariant = prefs?.getString(KEY_THEME_VARIANT, AlcedoThemeVariant.GRAPHITE.name)
-            ?: AlcedoThemeVariant.GRAPHITE.name
+        val savedVariant = prefs?.getString(KEY_THEME_VARIANT, AlcedoThemeVariant.HASSELBLAD.name)
+            ?: AlcedoThemeVariant.HASSELBLAD.name
         _themeVariant.value = AlcedoThemeVariant.fromName(savedVariant)
         _darkMode.value = prefs?.getString(KEY_DARK_MODE, "system") ?: "system"
     }
@@ -38,12 +38,13 @@ object ThemeManager {
 
     fun getAlcedoColorScheme(variant: AlcedoThemeVariant, darkTheme: Boolean): AlcedoColorScheme {
         return when (variant) {
+            AlcedoThemeVariant.HASSELBLAD -> if (darkTheme) HasselbladDarkColors else HasselbladLightColors
             AlcedoThemeVariant.GOLD -> if (darkTheme) GoldDarkColors else GoldLightColors
             AlcedoThemeVariant.WINE -> if (darkTheme) WineDarkColors else WineLightColors
             AlcedoThemeVariant.STEEL -> if (darkTheme) SteelDarkColors else SteelLightColors
             AlcedoThemeVariant.GRAPHITE -> if (darkTheme) GraphiteDarkColors else GraphiteLightColors
             AlcedoThemeVariant.MIST -> if (darkTheme) MistDarkColors else MistLightColors
-            AlcedoThemeVariant.DYNAMIC -> if (darkTheme) GraphiteDarkColors else GraphiteLightColors
+            AlcedoThemeVariant.DYNAMIC -> if (darkTheme) HasselbladDarkColors else HasselbladLightColors
         }
     }
 }
