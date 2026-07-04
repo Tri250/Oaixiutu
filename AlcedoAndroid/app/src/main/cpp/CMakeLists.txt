@@ -49,6 +49,9 @@ add_library(
     core/edit/operators/lut_op.cpp
     core/edit/operators/highlight_reconstruction_op.cpp
     core/edit/operators/rcd_demosaic_op.cpp
+    core/edit/operators/ahd_demosaic_op.cpp
+    core/edit/operators/amaze_demosaic_op.cpp
+    core/edit/operators/auto_exposure_op.cpp
     core/edit/operators/lens_correction_op.cpp
     core/edit/operators/geometry_op.cpp
     core/edit/operators/operator_factory.cpp

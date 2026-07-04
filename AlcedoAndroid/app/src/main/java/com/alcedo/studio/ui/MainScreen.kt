@@ -14,20 +14,24 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.alcedo.studio.ui.album.AlbumScreen
+import com.alcedo.studio.ui.album.StatsView
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
 import com.alcedo.studio.ui.settings.SettingsScreen
+import com.alcedo.studio.ui.settings.AboutPage
 import com.alcedo.studio.ui.ai.AiSearchScreen
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
+import com.alcedo.studio.i18n.StringResources
+import com.alcedo.studio.i18n.stringRes
 
 enum class MainDestination(
     val route: String,
-    val label: String,
+    val labelKey: StringResources.() -> String,
     val icon: @Composable () -> Unit
 ) {
-    ALBUM("album", "Album", { Icon(Icons.Default.PhotoLibrary, contentDescription = "Album") }),
-    AI_SEARCH("ai_search", "AI Search", { Icon(Icons.Default.Search, contentDescription = "AI") }),
-    SETTINGS("settings", "Settings", { Icon(Icons.Default.Settings, contentDescription = "Settings") })
+    ALBUM("album", { navAlbum }, { Icon(Icons.Default.PhotoLibrary, contentDescription = stringRes { navAlbum }) }),
+    AI_SEARCH("ai_search", { navAiSearch }, { Icon(Icons.Default.Search, contentDescription = stringRes { navAi }) }),
+    SETTINGS("settings", { navSettings }, { Icon(Icons.Default.Settings, contentDescription = stringRes { navSettings }) })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +70,7 @@ fun MainScreen(
                             icon = destination.icon,
                             label = {
                                 Text(
-                                    destination.label,
+                                    stringRes(destination.labelKey),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -75,7 +79,7 @@ fun MainScreen(
                 }
             }
         }
-    ) { padding ->
+    } { padding ->
         if (isTablet) {
             // Tablet: NavigationRail layout
             Row(
@@ -103,7 +107,7 @@ fun MainScreen(
                             icon = destination.icon,
                             label = {
                                 Text(
-                                    destination.label,
+                                    stringRes(destination.labelKey),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -137,6 +141,12 @@ fun MainScreen(
                     composable("ai_models") {
                         AiModelManagerScreen(navController = navController)
                     }
+                    composable("about") {
+                        AboutPage(navController = navController)
+                    }
+                    composable("stats") {
+                        StatsView(navController = navController)
+                    }
                 }
             }
         } else {
@@ -167,6 +177,12 @@ fun MainScreen(
                 }
                 composable("ai_models") {
                     AiModelManagerScreen(navController = navController)
+                }
+                composable("about") {
+                    AboutPage(navController = navController)
+                }
+                composable("stats") {
+                    StatsView(navController = navController)
                 }
             }
         }

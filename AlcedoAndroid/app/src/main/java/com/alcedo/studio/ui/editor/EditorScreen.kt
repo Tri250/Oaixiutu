@@ -17,7 +17,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -25,6 +24,13 @@ import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 import com.alcedo.studio.ui.common.LoadingOverlay
+
+enum class ScopeType(val label: String) {
+    HISTOGRAM("Histogram"),
+    WAVEFORM("Waveform"),
+    VECTORSCOPE("Vectorscope"),
+    CHROMATICITY("Chromaticity")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,17 +51,40 @@ fun EditorScreen(
     var comparePosition by remember { mutableFloatStateOf(0.5f) }
     var showExport by remember { mutableStateOf(false) }
     var showScope by remember { mutableStateOf(false) }
-    var showHistogram by remember { mutableStateOf(true) }
-    var histogramMode by remember { mutableStateOf(HistogramChannel.RGB) }
+    var selectedScopeType by remember { mutableStateOf(ScopeType.HISTOGRAM) }
+    var histogramChannel by remember { mutableStateOf(HistogramChannel.RGB) }
+    var histogramScale by remember { mutableStateOf(HistogramScale.LINEAR) }
     var waveformMode by remember { mutableStateOf(WaveformMode.RGB_PARADE) }
+    var gamutOverlay by remember { mutableStateOf(setOf(GamutOverlay.SRGB)) }
 
     val configuration = LocalConfiguration.current
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
     val isTablet = configuration.screenWidthDp >= 600
 
     // Zoom/Pan state
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+
+    // Scope data
+    var histogramData by remember { mutableStateOf(HistogramData()) }
+    var waveformData by remember { mutableStateOf(WaveformData()) }
+    var vectorscopeData by remember { mutableStateOf(VectorscopeData()) }
+    var chromaticityData by remember { mutableStateOf(ChromaticityData()) }
+    var isScopeComputing by remember { mutableStateOf(false) }
+
+    // Compute scope data when bitmap changes
+    LaunchedEffect(preview) {
+        preview?.let { bitmap ->
+            isScopeComputing = true
+            try {
+                histogramData = ScopeAnalyzer.computeHistogram(bitmap)
+                waveformData = ScopeAnalyzer.computeWaveform(bitmap)
+                vectorscopeData = ScopeAnalyzer.computeVectorscope(bitmap)
+                chromaticityData = ScopeAnalyzer.computeChromaticity(bitmap)
+            } finally {
+                isScopeComputing = false
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -86,18 +115,10 @@ fun EditorScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    IconButton(onClick = { showHistogram = !showHistogram }) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = "Histogram",
-                            tint = if (showHistogram) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
                     IconButton(onClick = { showScope = !showScope }) {
                         Icon(
-                            Icons.Default.GraphicEq,
-                            contentDescription = "Waveform",
+                            Icons.Default.BarChart,
+                            contentDescription = "Scope Analyzer",
                             tint = if (showScope) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -132,12 +153,6 @@ fun EditorScreen(
                         offset = offset,
                         onScaleChange = { scale = it },
                         onOffsetChange = { offset = it },
-                        showHistogram = showHistogram,
-                        histogramMode = histogramMode,
-                        onHistogramModeChange = { histogramMode = it },
-                        showScope = showScope,
-                        waveformMode = waveformMode,
-                        onWaveformModeChange = { waveformMode = it },
                         imagePath = image?.imagePath ?: ""
                     )
 
@@ -176,12 +191,6 @@ fun EditorScreen(
                         offset = offset,
                         onScaleChange = { scale = it },
                         onOffsetChange = { offset = it },
-                        showHistogram = showHistogram,
-                        histogramMode = histogramMode,
-                        onHistogramModeChange = { histogramMode = it },
-                        showScope = showScope,
-                        waveformMode = waveformMode,
-                        onWaveformModeChange = { waveformMode = it },
                         imagePath = image?.imagePath ?: ""
                     )
 
@@ -253,6 +262,32 @@ fun EditorScreen(
                 }
             }
 
+            // Scope Analyzer overlay panel
+            if (showScope) {
+                ScopeAnalyzerPanel(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .fillMaxWidth(if (isTablet) 0.35f else 0.5f)
+                        .padding(8.dp),
+                    selectedScopeType = selectedScopeType,
+                    onScopeTypeSelected = { selectedScopeType = it },
+                    histogramData = histogramData,
+                    histogramChannel = histogramChannel,
+                    onHistogramChannelChange = { histogramChannel = it },
+                    histogramScale = histogramScale,
+                    onHistogramScaleChange = { histogramScale = it },
+                    waveformData = waveformData,
+                    waveformMode = waveformMode,
+                    onWaveformModeChange = { waveformMode = it },
+                    vectorscopeData = vectorscopeData,
+                    chromaticityData = chromaticityData,
+                    gamutOverlay = gamutOverlay,
+                    onGamutOverlayChange = { gamutOverlay = it },
+                    isComputing = isScopeComputing,
+                    onClose = { showScope = false }
+                )
+            }
+
             // Loading overlay
             LoadingOverlay(
                 isProcessing,
@@ -275,6 +310,212 @@ fun EditorScreen(
     }
 }
 
+// ── Scope Analyzer Panel ──────────────────────────────────────────────────
+
+@Composable
+private fun ScopeAnalyzerPanel(
+    modifier: Modifier = Modifier,
+    selectedScopeType: ScopeType,
+    onScopeTypeSelected: (ScopeType) -> Unit,
+    histogramData: HistogramData,
+    histogramChannel: HistogramChannel,
+    onHistogramChannelChange: (HistogramChannel) -> Unit,
+    histogramScale: HistogramScale,
+    onHistogramScaleChange: (HistogramScale) -> Unit,
+    waveformData: WaveformData,
+    waveformMode: WaveformMode,
+    onWaveformModeChange: (WaveformMode) -> Unit,
+    vectorscopeData: VectorscopeData,
+    chromaticityData: ChromaticityData,
+    gamutOverlay: Set<GamutOverlay>,
+    onGamutOverlayChange: (Set<GamutOverlay>) -> Unit,
+    isComputing: Boolean,
+    onClose: () -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        color = Color(0xE0121212),
+        shape = MaterialTheme.shapes.medium,
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp)
+        ) {
+            // Header with scope type tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ScopeType.entries.forEach { scopeType ->
+                    FilterChip(
+                        selected = selectedScopeType == scopeType,
+                        onClick = { onScopeTypeSelected(scopeType) },
+                        label = {
+                            Text(
+                                scopeType.label,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        modifier = Modifier.height(28.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            if (isComputing) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                )
+            }
+
+            // Scope content
+            when (selectedScopeType) {
+                ScopeType.HISTOGRAM -> {
+                    HistogramView(
+                        histogramData = histogramData,
+                        showChannels = histogramChannel,
+                        scale = histogramScale,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Channel selector row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        HistogramChannel.entries.forEach { ch ->
+                            val color = when (ch) {
+                                HistogramChannel.RGB -> Color.White
+                                HistogramChannel.RED -> Color.Red
+                                HistogramChannel.GREEN -> Color.Green
+                                HistogramChannel.BLUE -> Color(0xFF4488FF)
+                                HistogramChannel.LUMINANCE -> Color.White
+                            }
+                            FilterChip(
+                                selected = histogramChannel == ch,
+                                onClick = { onHistogramChannelChange(ch) },
+                                label = {
+                                    Text(
+                                        ch.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (histogramChannel == ch) color
+                                        else Color.Gray
+                                    )
+                                },
+                                modifier = Modifier.height(26.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        HistogramScale.entries.forEach { sc ->
+                            FilterChip(
+                                selected = histogramScale == sc,
+                                onClick = { onHistogramScaleChange(sc) },
+                                label = {
+                                    Text(
+                                        sc.label,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                modifier = Modifier.height(26.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+                    }
+                }
+                ScopeType.WAVEFORM -> {
+                    WaveformView(
+                        waveformData = waveformData,
+                        mode = waveformMode,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        WaveformMode.entries.forEach { m ->
+                            FilterChip(
+                                selected = waveformMode == m,
+                                onClick = { onWaveformModeChange(m) },
+                                label = {
+                                    Text(
+                                        m.label,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                modifier = Modifier.height(26.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+                    }
+                }
+                ScopeType.VECTORSCOPE -> {
+                    VectorscopeView(
+                        vectorscopeData = vectorscopeData,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                ScopeType.CHROMATICITY -> {
+                    ChromaticityView(
+                        chromaticityData = chromaticityData,
+                        showGamut = gamutOverlay,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        GamutOverlay.entries.forEach { g ->
+                            val color = when (g) {
+                                GamutOverlay.SRGB -> Color.White
+                                GamutOverlay.P3 -> Color(0xFF4FC3F7)
+                                GamutOverlay.REC2020 -> Color(0xFFFFB74D)
+                                GamutOverlay.ACES -> Color(0xFFCE93D8)
+                            }
+                            FilterChip(
+                                selected = g in gamutOverlay,
+                                onClick = {
+                                    onGamutOverlayChange(
+                                        if (g in gamutOverlay) gamutOverlay - g
+                                        else gamutOverlay + g
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        g.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (g in gamutOverlay) color else Color.Gray
+                                    )
+                                },
+                                modifier = Modifier.height(26.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Image Preview Area ────────────────────────────────────────────────────
+
 @Composable
 private fun ImagePreviewArea(
     modifier: Modifier = Modifier,
@@ -285,12 +526,6 @@ private fun ImagePreviewArea(
     offset: Offset,
     onScaleChange: (Float) -> Unit,
     onOffsetChange: (Offset) -> Unit,
-    showHistogram: Boolean,
-    histogramMode: HistogramChannel,
-    onHistogramModeChange: (HistogramChannel) -> Unit,
-    showScope: Boolean,
-    waveformMode: WaveformMode,
-    onWaveformModeChange: (WaveformMode) -> Unit,
     imagePath: String
 ) {
     Box(
@@ -432,42 +667,10 @@ private fun ImagePreviewArea(
                 }
             }
         }
-
-        // Histogram overlay
-        if (showHistogram) {
-            HistogramView(
-                histogramData = HistogramData(
-                    red = List(256) { (kotlin.math.sin(it * 0.05f) * 100 + 100).toInt() },
-                    green = List(256) { (kotlin.math.sin(it * 0.05f + 1f) * 80 + 120).toInt() },
-                    blue = List(256) { (kotlin.math.sin(it * 0.05f + 2f) * 90 + 110).toInt() },
-                    luminance = List(256) { (kotlin.math.sin(it * 0.04f) * 100 + 100).toInt() }
-                ),
-                showChannels = histogramMode,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .fillMaxWidth(0.4f)
-                    .padding(8.dp)
-            )
-        }
-
-        // Waveform overlay
-        if (showScope) {
-            WaveformView(
-                waveformData = WaveformData(
-                    red = List(128) { (kotlin.math.sin(it * 0.1f) * 0.3f + 0.5f).coerceIn(0f, 1f) },
-                    green = List(128) { (kotlin.math.sin(it * 0.1f + 1f) * 0.3f + 0.5f).coerceIn(0f, 1f) },
-                    blue = List(128) { (kotlin.math.sin(it * 0.1f + 2f) * 0.3f + 0.5f).coerceIn(0f, 1f) },
-                    luminance = List(128) { (kotlin.math.sin(it * 0.08f) * 0.3f + 0.5f).coerceIn(0f, 1f) }
-                ),
-                mode = waveformMode,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .fillMaxWidth(0.4f)
-                    .padding(8.dp)
-            )
-        }
     }
 }
+
+// ── Editor Panel Column ───────────────────────────────────────────────────
 
 @Composable
 private fun EditorPanelColumn(

@@ -10,29 +10,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.ui.common.ProgressBar
+import com.alcedo.studio.viewmodel.ExportViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportScreen(
     navController: NavController,
-    imageId: String
+    imageId: String,
+    viewModel: ExportViewModel = viewModel()
 ) {
-    var format by remember { mutableStateOf(ExportFormat.JPEG) }
-    var quality by remember { mutableIntStateOf(95) }
-    var colorSpace by remember { mutableStateOf(ColorSpace.SRGB) }
-    var embedIcc by remember { mutableStateOf(true) }
-    var includeMetadata by remember { mutableStateOf(true) }
-    var isHdr by remember { mutableStateOf(false) }
-    var maxDimension by remember { mutableStateOf("") }
-    var bitDepth by remember { mutableIntStateOf(8) }
-    var outputPath by remember { mutableStateOf("/sdcard/Pictures/export") }
-    var isExporting by remember { mutableStateOf(false) }
-    var exportProgress by remember { mutableFloatStateOf(0f) }
-    var showBatchExport by remember { mutableStateOf(false) }
-    var batchImages by remember { mutableStateOf(listOf<String>()) }
+    // Collect progress from ViewModel
+    val progress by viewModel.exportProgress.collectAsState()
+    val lastResult by viewModel.lastResult.collectAsState()
+    val batchResult by viewModel.batchResult.collectAsState()
+    val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
+
+    // Show result snackbar
+    var showResultSnack by remember { mutableStateOf(false) }
+    var resultMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(lastResult, batchResult) {
+        when {
+            lastResult is ExportService.ExportResult.Success -> {
+                resultMessage = "导出成功：${(lastResult as ExportService.ExportResult.Success).filePath}"
+                showResultSnack = true
+            }
+            lastResult is ExportService.ExportResult.Error -> {
+                resultMessage = "导出失败：${(lastResult as ExportService.ExportResult.Error).message}"
+                showResultSnack = true
+            }
+            batchResult != null -> {
+                val br = batchResult!!
+                resultMessage = "批量导出完成：成功 ${br.successCount}，失败 ${br.errorCount}"
+                showResultSnack = true
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -44,6 +62,20 @@ fun ExportScreen(
                     }
                 }
             )
+        },
+        snackbarHost = {
+            if (showResultSnack) {
+                Snackbar(
+                    action = {
+                        TextButton(onClick = { showResultSnack = false }) {
+                            Text("OK")
+                        }
+                    },
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(resultMessage, maxLines = 2)
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -59,36 +91,36 @@ fun ExportScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExportFormat.entries.forEach { f ->
                     FilterChip(
-                        selected = format == f,
-                        onClick = { format = f },
+                        selected = viewModel.format == f,
+                        onClick = { viewModel.format = f },
                         label = { Text(f.name, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
 
             // Quality
-            if (format == ExportFormat.JPEG || format == ExportFormat.ULTRA_HDR) {
-                Text("Quality: $quality%", style = MaterialTheme.typography.labelLarge)
+            if (viewModel.format == ExportFormat.JPEG || viewModel.format == ExportFormat.ULTRA_HDR) {
+                Text("Quality: ${viewModel.quality}%", style = MaterialTheme.typography.labelLarge)
                 Slider(
-                    value = quality.toFloat(),
-                    onValueChange = { quality = it.toInt() },
+                    value = viewModel.quality.toFloat(),
+                    onValueChange = { viewModel.quality = it.toInt() },
                     valueRange = 1f..100f,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
             // Bit depth
-            if (format == ExportFormat.PNG || format == ExportFormat.TIFF) {
+            if (viewModel.format == ExportFormat.PNG || viewModel.format == ExportFormat.TIFF) {
                 Text("Bit Depth", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = bitDepth == 8,
-                        onClick = { bitDepth = 8 },
+                        selected = viewModel.bitDepth == 8,
+                        onClick = { viewModel.bitDepth = 8 },
                         label = { Text("8-bit") }
                     )
                     FilterChip(
-                        selected = bitDepth == 16,
-                        onClick = { bitDepth = 16 },
+                        selected = viewModel.bitDepth == 16,
+                        onClick = { viewModel.bitDepth = 16 },
                         label = { Text("16-bit") }
                     )
                 }
@@ -100,8 +132,8 @@ fun ExportScreen(
                 listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
                         FilterChip(
-                            selected = colorSpace == cs,
-                            onClick = { colorSpace = cs },
+                            selected = viewModel.colorSpace == cs,
+                            onClick = { viewModel.colorSpace = cs },
                             label = { Text(cs.name, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
@@ -109,24 +141,24 @@ fun ExportScreen(
 
             // Options
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = embedIcc, onCheckedChange = { embedIcc = it })
+                Checkbox(checked = viewModel.embedIcc, onCheckedChange = { viewModel.embedIcc = it })
                 Text("Embed ICC Profile", style = MaterialTheme.typography.bodyMedium)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = includeMetadata, onCheckedChange = { includeMetadata = it })
+                Checkbox(checked = viewModel.includeMetadata, onCheckedChange = { viewModel.includeMetadata = it })
                 Text("Include Metadata", style = MaterialTheme.typography.bodyMedium)
             }
-            if (format == ExportFormat.ULTRA_HDR) {
+            if (viewModel.format == ExportFormat.ULTRA_HDR) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = isHdr, onCheckedChange = { isHdr = it })
+                    Checkbox(checked = viewModel.isHdr, onCheckedChange = { viewModel.isHdr = it })
                     Text("HDR Output", style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
-            // Max dimension
+            // Max dimension (unified)
             OutlinedTextField(
-                value = maxDimension,
-                onValueChange = { maxDimension = it.filter { c -> c.isDigit() } },
+                value = viewModel.maxDimension,
+                onValueChange = { viewModel.maxDimension = it.filter { c -> c.isDigit() } },
                 label = { Text("Max dimension (px)") },
                 placeholder = { Text("No limit") },
                 singleLine = true,
@@ -134,10 +166,32 @@ fun ExportScreen(
                 leadingIcon = { Icon(Icons.Default.AspectRatio, contentDescription = null) }
             )
 
+            // Max width
+            OutlinedTextField(
+                value = viewModel.maxWidth,
+                onValueChange = { viewModel.maxWidth = it.filter { c -> c.isDigit() } },
+                label = { Text("Max width (px)") },
+                placeholder = { Text("No limit") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Crop, contentDescription = null) }
+            )
+
+            // Max height
+            OutlinedTextField(
+                value = viewModel.maxHeight,
+                onValueChange = { viewModel.maxHeight = it.filter { c -> c.isDigit() } },
+                label = { Text("Max height (px)") },
+                placeholder = { Text("No limit") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Crop, contentDescription = null) }
+            )
+
             // Output path
             OutlinedTextField(
-                value = outputPath,
-                onValueChange = { outputPath = it },
+                value = viewModel.outputPath,
+                onValueChange = { viewModel.outputPath = it },
                 label = { Text("Output path") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -157,19 +211,19 @@ fun ExportScreen(
             ) {
                 Text("Batch Export", style = MaterialTheme.typography.labelLarge)
                 Switch(
-                    checked = showBatchExport,
-                    onCheckedChange = { showBatchExport = it }
+                    checked = viewModel.showBatchExport,
+                    onCheckedChange = { viewModel.showBatchExport = it }
                 )
             }
-            if (showBatchExport) {
+            if (viewModel.showBatchExport) {
                 Text(
                     "Select images from album to batch export",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (batchImages.isNotEmpty()) {
+                if (viewModel.batchImageIds.isNotEmpty()) {
                     Text(
-                        "${batchImages.size} images selected",
+                        "${viewModel.batchImageIds.size} images selected",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -184,12 +238,100 @@ fun ExportScreen(
             }
 
             // Export progress
-            if (isExporting) {
-                ProgressBar(
-                    progress = exportProgress,
-                    label = "Exporting...",
-                    onCancel = { isExporting = false }
-                )
+            if (isExporting || progress.status == ExportService.ExportStatus.COMPLETED ||
+                progress.status == ExportService.ExportStatus.ERROR ||
+                progress.status == ExportService.ExportStatus.CANCELLED
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Overall progress
+                        ProgressBar(
+                            progress = progress.overallProgress,
+                            label = if (progress.totalItems > 1) {
+                                "Overall: ${progress.completedItems}/${progress.totalItems}"
+                            } else {
+                                "Exporting..."
+                            },
+                            showPercentage = true,
+                            onCancel = if (isExporting) ({ viewModel.cancelExport() }) else null
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Per-item progress
+                        if (progress.currentItemName.isNotEmpty()) {
+                            Text(
+                                "Current: ${progress.currentItemName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LinearProgressIndicator(
+                                progress = { progress.currentItemProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Statistics
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Text(
+                                "✓ ${progress.successCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "✗ ${progress.failureCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                "${progress.completedItems}/${progress.totalItems}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // Status
+                        when (progress.status) {
+                            ExportService.ExportStatus.COMPLETED -> {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "导出完成",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            ExportService.ExportStatus.CANCELLED -> {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "已取消",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            ExportService.ExportStatus.ERROR -> {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "导出出错",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                            else -> {}
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -197,10 +339,17 @@ fun ExportScreen(
             // Export button
             Button(
                 onClick = {
-                    isExporting = true
-                    // Simulate export progress
-                    kotlinx.coroutines.MainScope().let { scope ->
-                        // Export would happen here
+                    viewModel.resetState()
+                    // For single image export, use the imageId as source path
+                    // In production, resolve imageId to actual file path
+                    val sourcePath = imageId
+                    if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) {
+                        val items = viewModel.batchImageIds.map { id ->
+                            ExportService.ExportBatchItem(sourcePath = id)
+                        }
+                        viewModel.exportBatch(items)
+                    } else {
+                        viewModel.exportSingle(sourcePath)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -216,7 +365,7 @@ fun ExportScreen(
                 }
                 Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Export ${if (showBatchExport) "${batchImages.size} " else ""}Image${if (showBatchExport && batchImages.size != 1) "s" else ""}")
+                Text("Export ${if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) "${viewModel.batchImageIds.size} " else ""}Image${if (viewModel.showBatchExport && viewModel.batchImageIds.size != 1) "s" else ""}")
             }
         }
     }

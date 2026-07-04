@@ -132,6 +132,12 @@ struct DisplayTransform {
 };
 
 struct PipelineParams {
+    // Auto exposure
+    bool auto_exposure_enabled = false;
+    float auto_exposure_target_percentile = 0.5f;
+    float auto_exposure_target_luminance = 0.18f;
+    float auto_exposure_value = 0.0f; // computed result in EV
+
     // Exposure
     float exposure = 0.0f;
     float contrast = 0.0f;
@@ -237,17 +243,18 @@ enum class PipelineStage {
     RAW_DECODE = 0,
     HIGHLIGHT_RECONSTRUCTION = 1,
     DEMOSAIC = 2,
-    EXPOSURE = 3,
-    WHITE_BALANCE = 4,
-    TONE = 5,
-    TONE_CURVE = 6,
-    COLOR = 7,
-    CLARITY = 8,
-    SHARPEN = 9,
-    EFFECTS = 10,
-    GEOMETRY = 11,
-    DISPLAY_TRANSFORM = 12,
-    FINAL = 13
+    AUTO_EXPOSURE = 3,
+    EXPOSURE = 4,
+    WHITE_BALANCE = 5,
+    TONE = 6,
+    TONE_CURVE = 7,
+    COLOR = 8,
+    CLARITY = 9,
+    SHARPEN = 10,
+    EFFECTS = 11,
+    GEOMETRY = 12,
+    DISPLAY_TRANSFORM = 13,
+    FINAL = 14
 };
 
 // ============================================================
@@ -289,15 +296,21 @@ public:
     void apply_display_transform(float* pixels, int width, int height, int channels,
                                   const DisplayTransform& transform);
 
+    // Auto exposure: compute recommended exposure value (EV)
+    float compute_auto_exposure(const float* pixels, int width, int height, int channels,
+                                float target_percentile = 0.5f,
+                                float target_luminance = 0.18f);
+
     // Get pipeline info
     std::string get_pipeline_info() const;
 
 private:
     BufferBackend backend_ = BufferBackend::CPU;
     int working_color_space_ = 0; // sRGB linear
-    bool stage_enabled_[14] = {true}; // All enabled by default
+    bool stage_enabled_[15] = {true}; // All enabled by default
 
     // Internal helpers
+    void apply_auto_exposure(float* pixels, int width, int height, int channels, PipelineParams& params);
     void apply_exposure(float* pixels, int count, int channels, float exposure);
     void apply_contrast(float* pixels, int count, int channels, float contrast);
     void apply_white_balance(float* pixels, int count, int channels, float temp, float tint);
@@ -308,6 +321,44 @@ private:
     void apply_sharpen(float* pixels, int width, int height, int channels, float amount);
     void apply_effects(float* pixels, int width, int height, int channels, const PipelineParams& params);
     void apply_geometry(float* pixels, int width, int height, int channels, const PipelineParams& params);
+};
+
+// ============================================================
+// Pipeline Snapshot
+// ============================================================
+
+// Read-only clone of pipeline state for background analysis rendering.
+// Does not interfere with the active pipeline and can be released independently.
+class PipelineSnapshot {
+public:
+    PipelineSnapshot(int width, int height, int channels, const PipelineParams& params);
+    ~PipelineSnapshot();
+
+    // Create from existing pixel data (makes a deep copy)
+    static std::unique_ptr<PipelineSnapshot> create(const float* pixels, int width, int height,
+                                                     int channels, const PipelineParams& params);
+
+    // Render the snapshot through a simplified pipeline (read-only, no side effects)
+    bool render(float* output, int output_width, int output_height) const;
+
+    // Accessors
+    const float* data() const { return data_.data(); }
+    int width() const { return width_; }
+    int height() const { return height_; }
+    int channels() const { return channels_; }
+    const PipelineParams& params() const { return params_; }
+
+    // Release snapshot data
+    void release();
+
+    bool is_valid() const { return !data_.empty(); }
+
+private:
+    std::vector<float> data_;
+    int width_ = 0;
+    int height_ = 0;
+    int channels_ = 0;
+    PipelineParams params_;
 };
 
 } // namespace alcedo

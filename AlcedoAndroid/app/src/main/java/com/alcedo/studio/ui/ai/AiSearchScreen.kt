@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.domain.service.ClipInferenceEngine
 import com.alcedo.studio.domain.service.SearchQueryClassifier
 import kotlinx.coroutines.launch
 
@@ -41,6 +42,11 @@ fun AiSearchScreen(navController: NavController) {
     var selectedLabels by remember { mutableStateOf<Set<String>>(emptySet()) }
     var allLabels by remember { mutableStateOf<List<String>>(emptyList()) }
     var showLabelFilter by remember { mutableStateOf(false) }
+
+    // Model loading status from ClipInferenceEngine
+    var modelLoadStatus by remember { mutableStateOf(aiService.getModelLoadStatus()) }
+    var embeddingDim by remember { mutableIntStateOf(aiService.getClipEngine().embeddingDim) }
+
     val scope = rememberCoroutineScope()
 
     // Refresh model status and labels
@@ -48,6 +54,22 @@ fun AiSearchScreen(navController: NavController) {
         indexedCount = aiService.getIndexedCount()
         allLabels = aiService.getAllUniqueLabels()
         activeModel = aiService.getActiveModel()
+        modelLoadStatus = aiService.getModelLoadStatus()
+        embeddingDim = aiService.getClipEngine().embeddingDim
+    }
+
+    // Observe model load status changes
+    LaunchedEffect(Unit) {
+        aiService.modelLoadStatus.collect { status ->
+            modelLoadStatus = status
+        }
+    }
+
+    // Observe embedding dimension changes
+    LaunchedEffect(Unit) {
+        aiService.embeddingDimension.collect { dim ->
+            embeddingDim = dim
+        }
     }
 
     Scaffold(
@@ -74,14 +96,26 @@ fun AiSearchScreen(navController: NavController) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Model status indicator
+            // Model status indicator with loading state and embedding dimension
             ModelStatusBar(
                 activeModel = activeModel,
+                modelLoadStatus = modelLoadStatus,
+                embeddingDim = embeddingDim,
                 indexedCount = indexedCount,
                 onRefresh = {
                     scope.launch {
                         indexedCount = aiService.getIndexedCount()
                         activeModel = aiService.getActiveModel()
+                        modelLoadStatus = aiService.getModelLoadStatus()
+                        embeddingDim = aiService.getClipEngine().embeddingDim
+                    }
+                },
+                onLoadModel = {
+                    scope.launch {
+                        val modelId = activeModel?.modelId ?: return@launch
+                        aiService.loadModel(modelId)
+                        modelLoadStatus = aiService.getModelLoadStatus()
+                        embeddingDim = aiService.getClipEngine().embeddingDim
                     }
                 }
             )
@@ -107,10 +141,11 @@ fun AiSearchScreen(navController: NavController) {
                         scope.launch {
                             isSearching = true
                             try {
-                                results = searchService.search(
+                                val searchResults = aiService.searchByText(
                                     query = query,
-                                    enableSemantic = semanticEnabled
+                                    topK = 20
                                 )
+                                results = searchResults
                             } finally {
                                 isSearching = false
                             }
@@ -211,7 +246,7 @@ fun AiSearchScreen(navController: NavController) {
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        "相关度排序",
+                        "相关度排序 · ${embeddingDim}d",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -277,11 +312,19 @@ fun AiSearchScreen(navController: NavController) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
+                        if (modelLoadStatus == ClipInferenceEngine.ModelStatus.LOADED) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "ONNX 模型已加载 · ${embeddingDim}d 向量",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
             }
 
-            // Bottom info bar
+            // Bottom info bar with model loading status and embedding dimensions
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -292,11 +335,35 @@ fun AiSearchScreen(navController: NavController) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "Powered by ${activeModel?.modelName ?: "CLIP"}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val statusIcon = when (modelLoadStatus) {
+                            ClipInferenceEngine.ModelStatus.LOADED -> Icons.Default.CheckCircle
+                            ClipInferenceEngine.ModelStatus.LOADING -> Icons.Default.HourglassTop
+                            ClipInferenceEngine.ModelStatus.FAILED -> Icons.Default.Error
+                            else -> Icons.Default.CloudOff
+                        }
+                        Icon(
+                            statusIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = when (modelLoadStatus) {
+                                ClipInferenceEngine.ModelStatus.LOADED -> MaterialTheme.colorScheme.primary
+                                ClipInferenceEngine.ModelStatus.LOADING -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            buildString {
+                                append(activeModel?.modelName ?: "CLIP")
+                                if (modelLoadStatus == ClipInferenceEngine.ModelStatus.LOADED) {
+                                    append(" · ${embeddingDim}d")
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         "${indexedCount} 张已索引",
                         style = MaterialTheme.typography.labelSmall,
@@ -311,16 +378,22 @@ fun AiSearchScreen(navController: NavController) {
 @Composable
 private fun ModelStatusBar(
     activeModel: AiModelProfile?,
+    modelLoadStatus: ClipInferenceEngine.ModelStatus,
+    embeddingDim: Int,
     indexedCount: Int,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onLoadModel: () -> Unit
 ) {
+    val backgroundColor = when (modelLoadStatus) {
+        ClipInferenceEngine.ModelStatus.LOADED -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ClipInferenceEngine.ModelStatus.LOADING -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+        ClipInferenceEngine.ModelStatus.FAILED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = if (activeModel != null) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        } else {
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        },
+        color = backgroundColor,
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
@@ -331,15 +404,53 @@ private fun ModelStatusBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (activeModel != null) Icons.Default.CheckCircle else Icons.Default.Warning,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (activeModel != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
+                when (modelLoadStatus) {
+                    ClipInferenceEngine.ModelStatus.LOADED -> {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    ClipInferenceEngine.ModelStatus.LOADING -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    ClipInferenceEngine.ModelStatus.FAILED -> {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    else -> {
+                        Icon(
+                            Icons.Default.CloudOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = activeModel?.modelName ?: "无活动模型",
+                    text = buildString {
+                        append(activeModel?.modelName ?: "无活动模型")
+                        when (modelLoadStatus) {
+                            ClipInferenceEngine.ModelStatus.LOADED -> append(" · 已加载")
+                            ClipInferenceEngine.ModelStatus.LOADING -> append(" · 加载中...")
+                            ClipInferenceEngine.ModelStatus.FAILED -> append(" · 加载失败")
+                            else -> append(" · 未加载")
+                        }
+                        if (modelLoadStatus == ClipInferenceEngine.ModelStatus.LOADED) {
+                            append(" · ${embeddingDim}d")
+                        }
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -352,6 +463,19 @@ private fun ModelStatusBar(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(4.dp))
+                if (modelLoadStatus == ClipInferenceEngine.ModelStatus.NOT_LOADED && activeModel != null) {
+                    IconButton(
+                        onClick = onLoadModel,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "加载模型",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 IconButton(
                     onClick = onRefresh,
                     modifier = Modifier.size(24.dp)
@@ -408,7 +532,10 @@ private fun SearchResultCard(result: SearchResult) {
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     // Relevance score bar
                     Box(
                         modifier = Modifier
@@ -434,7 +561,12 @@ private fun SearchResultCard(result: SearchResult) {
                     Text(
                         "%.1f%%".format(result.score * 100),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = when {
+                            result.score > 0.7f -> MaterialTheme.colorScheme.primary
+                            result.score > 0.4f -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (result.score > 0.7f) FontWeight.Medium else FontWeight.Normal
                     )
                 }
             }

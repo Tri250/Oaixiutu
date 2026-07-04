@@ -10,6 +10,7 @@ import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 
@@ -49,6 +50,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _isCompareMode = MutableStateFlow(false)
     val isCompareMode: StateFlow<Boolean> = _isCompareMode
+
+    // Export progress exposed from service
+    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress
+
+    private val _lastExportResult = MutableStateFlow<ExportService.ExportResult?>(null)
+    val lastExportResult: StateFlow<ExportService.ExportResult?> = _lastExportResult.asStateFlow()
 
     init {
         loadImage()
@@ -103,9 +110,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val settings = ExportSettings(
                 format = ExportFormat.JPEG,
                 quality = 95,
-                outputPath = img.imagePath
+                outputPath = img.imagePath,
+                sourceExifPath = img.imagePath,
+                includeMetadata = true
             )
-            exportService.exportImage(img.imagePath, settings, finalBitmap)
+            val result = exportService.exportImage(img.imagePath, settings, finalBitmap)
+            _lastExportResult.value = result
         }
     }
 
@@ -113,8 +123,20 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch {
             val img = _imageModel.value ?: return@launch
             val finalBitmap = _previewBitmap.value ?: return@launch
-            exportService.exportImage(img.imagePath, settings, finalBitmap)
+            val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
+            val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
+            _lastExportResult.value = result
         }
+    }
+
+    fun exportBatch(items: List<ExportService.ExportBatchItem>, settings: ExportSettings) {
+        viewModelScope.launch {
+            exportService.exportBatch(items, settings)
+        }
+    }
+
+    fun cancelExport() {
+        exportService.cancelExport()
     }
 
     // History management
@@ -200,5 +222,89 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun toggleCompareMode() {
         _isCompareMode.value = !_isCompareMode.value
+    }
+
+    // ================================================================
+    // Auto Exposure
+    // ================================================================
+
+    fun applyAutoExposure() {
+        viewModelScope.launch {
+            val bitmap = _originalBitmap.value ?: return@launch
+            val width = bitmap.width
+            val height = bitmap.height
+            val pixelCount = width * height
+
+            // Convert bitmap to float array
+            val pixels = IntArray(pixelCount)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val floatPixels = FloatArray(pixelCount * 4)
+            for (i in 0 until pixelCount) {
+                val pixel = pixels[i]
+                floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
+                floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
+                floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+            }
+
+            val ev = pipelineService.computeAutoExposure(
+                floatPixels, width, height, 4,
+                _params.value.autoExposureTargetPercentile,
+                _params.value.autoExposureTargetLuminance
+            )
+
+            _params.value = _params.value.copy(
+                autoExposureEnabled = true,
+                autoExposureValue = ev,
+                exposure = ev
+            )
+            regeneratePreview()
+        }
+    }
+
+    // ================================================================
+    // Pipeline Snapshot
+    // ================================================================
+
+    private var snapshotHandle: Long = 0
+
+    fun createPipelineSnapshot() {
+        viewModelScope.launch {
+            val bitmap = _originalBitmap.value ?: return@launch
+            val width = bitmap.width
+            val height = bitmap.height
+            val pixelCount = width * height
+
+            val pixels = IntArray(pixelCount)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val floatPixels = FloatArray(pixelCount * 4)
+            for (i in 0 until pixelCount) {
+                val pixel = pixels[i]
+                floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
+                floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
+                floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+            }
+
+            // Release previous snapshot
+            if (snapshotHandle != 0L) {
+                pipelineService.releaseSnapshot(snapshotHandle)
+            }
+
+            snapshotHandle = pipelineService.createSnapshot(
+                floatPixels, width, height, 4, _params.value)
+        }
+    }
+
+    fun releasePipelineSnapshot() {
+        if (snapshotHandle != 0L) {
+            pipelineService.releaseSnapshot(snapshotHandle)
+            snapshotHandle = 0
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        releasePipelineSnapshot()
     }
 }

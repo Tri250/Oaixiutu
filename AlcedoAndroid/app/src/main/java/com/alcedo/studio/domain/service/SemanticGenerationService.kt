@@ -12,6 +12,30 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
+// ── Semantic Generation State Models ──
+
+enum class SemanticGenerationStatus {
+    IDLE, RUNNING, PAUSED, COMPLETED, FAILED
+}
+
+data class SemanticGenerationProgress(
+    val totalImages: Int = 0,
+    val processedImages: Int = 0,
+    val currentImageId: Long = 0L,
+    val currentImageName: String = "",
+    val status: SemanticGenerationStatus = SemanticGenerationStatus.IDLE,
+    val elapsedMs: Long = 0L,
+    val modelId: String = "",
+    val embeddingDim: Int = 0
+)
+
+/**
+ * Service for batch semantic label generation and embedding indexing.
+ *
+ * Uses [AiService] (backed by [ClipInferenceEngine]) for real CLIP inference,
+ * generating embeddings and zero-shot classification labels for all images
+ * in the library. Progress is tracked via [progress] StateFlow.
+ */
 class SemanticGenerationService(
     private val context: Context,
     private val aiService: AiService,
@@ -74,9 +98,22 @@ class SemanticGenerationService(
         val allMetadata = metadataDao.getAllMetadata()
         if (allMetadata.isEmpty()) return false
 
+        // Ensure the model is loaded in the CLIP engine before batch processing
+        val modelLoaded = aiService.isModelLoaded()
+        if (!modelLoaded) {
+            val loaded = aiService.loadModel(activeModel.modelId)
+            if (!loaded) {
+                Log.w(TAG, "Failed to load model ${activeModel.modelId}, proceeding with fallback embeddings")
+            }
+        }
+
+        val currentEmbeddingDim = aiService.getClipEngine().embeddingDim
+
         _progress.value = SemanticGenerationProgress(
             totalImages = allMetadata.size,
-            status = SemanticGenerationStatus.RUNNING
+            status = SemanticGenerationStatus.RUNNING,
+            modelId = activeModel.modelId,
+            embeddingDim = currentEmbeddingDim
         )
 
         generationJob?.cancel()
@@ -98,9 +135,17 @@ class SemanticGenerationService(
                 try {
                     val bitmap = loadBitmap(metadata.imagePath)
                     if (bitmap != null) {
-                        val labels = aiService.generateLabels(metadata.imageId, bitmap)
-                        val embedding = aiService.generateEmbedding(metadata.imageId, bitmap)
-                        aiService.indexImage(metadata.imageId, embedding, activeModel.modelId)
+                        val imageIdUInt = metadata.imageId.toUInt()
+
+                        // Generate labels using real CLIP zero-shot classification
+                        val labels = aiService.generateLabels(imageIdUInt, bitmap)
+
+                        // Generate real CLIP embedding
+                        val embedding = aiService.generateEmbedding(imageIdUInt, bitmap)
+
+                        // Index in HNSW for fast similarity search
+                        aiService.indexImage(imageIdUInt, embedding, activeModel.modelId)
+
                         bitmap.recycle()
                     }
                 } catch (e: Exception) {
@@ -110,7 +155,8 @@ class SemanticGenerationService(
                 processed++
                 _progress.value = _progress.value.copy(
                     processedImages = processed,
-                    elapsedMs = System.currentTimeMillis() - startTime
+                    elapsedMs = System.currentTimeMillis() - startTime,
+                    embeddingDim = aiService.getClipEngine().embeddingDim
                 )
 
                 withContext(Dispatchers.Main) {
@@ -131,14 +177,47 @@ class SemanticGenerationService(
     }
 
     suspend fun generateLabelsForImage(imageId: Long, bitmap: Bitmap): List<SemanticLabel> {
-        return aiService.generateLabels(imageId, bitmap)
+        // Ensure model is loaded for real inference
+        if (!aiService.isModelLoaded()) {
+            val activeModel = modelDownloadService.getActiveModel()
+            if (activeModel != null) {
+                aiService.loadModel(activeModel.modelId)
+            }
+        }
+        return aiService.generateLabels(imageId.toUInt(), bitmap)
     }
 
     suspend fun generateEmbeddingForImage(imageId: Long, bitmap: Bitmap): FloatArray? {
         return try {
-            aiService.generateEmbedding(imageId, bitmap)
+            // Ensure model is loaded for real inference
+            if (!aiService.isModelLoaded()) {
+                val activeModel = modelDownloadService.getActiveModel()
+                if (activeModel != null) {
+                    aiService.loadModel(activeModel.modelId)
+                }
+            }
+            aiService.generateEmbedding(imageId.toUInt(), bitmap)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to generate embedding: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Generate a text embedding for search queries using the real CLIP model.
+     */
+    suspend fun generateTextEmbedding(text: String): FloatArray? {
+        return try {
+            if (!aiService.isModelLoaded()) {
+                val activeModel = modelDownloadService.getActiveModel()
+                if (activeModel != null) {
+                    aiService.loadModel(activeModel.modelId)
+                }
+            }
+            val dim = aiService.getClipEngine().embeddingDim
+            aiService.generateTextEmbedding(text, dim)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate text embedding: ${e.message}")
             null
         }
     }
@@ -175,7 +254,7 @@ class SemanticGenerationService(
     }
 
     suspend fun getExistingLabels(imageId: Long): List<SemanticLabel> {
-        return aiService.getLabels(imageId)
+        return aiService.getLabels(imageId.toUInt())
     }
 
     suspend fun getLabelCount(): Int {

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.exifinterface.media.ExifInterface
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.time.Instant
@@ -444,4 +445,441 @@ data class RatingDistribution(
 data class LabelFrequency(
     val label: String,
     val count: Int
+)
+
+// ================================================================
+// Room Entity: Image (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "images",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["format"]),
+        Index(value = ["color_space"]),
+        Index(value = ["is_hdr"]),
+        Index(value = ["rating"]),
+        Index(value = ["import_date"])
+    ]
+)
+data class ImageEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "width")
+    val width: Int = 0,
+
+    @ColumnInfo(name = "height")
+    val height: Int = 0,
+
+    @ColumnInfo(name = "format")
+    val format: String = "",
+
+    @ColumnInfo(name = "color_space")
+    val colorSpace: String = "",
+
+    @ColumnInfo(name = "bit_depth")
+    val bitDepth: Int = 8,
+
+    @ColumnInfo(name = "is_hdr")
+    val isHdr: Boolean = false,
+
+    @ColumnInfo(name = "rating")
+    val rating: Int = 0,
+
+    @ColumnInfo(name = "import_date")
+    val importDate: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "last_modified")
+    val lastModified: Long = System.currentTimeMillis()
+)
+
+// ================================================================
+// Room Entity: Pipeline (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "pipelines",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["is_active"])
+    ]
+)
+data class PipelineEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "pipeline_id")
+    val pipelineId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "params_json")
+    val paramsJson: String,
+
+    @ColumnInfo(name = "is_active")
+    val isActive: Boolean = true,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// ================================================================
+// Room Entity: History (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "histories",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["version_id"]),
+        Index(value = ["is_active"])
+    ]
+)
+data class HistoryEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "row_id")
+    val rowId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "version_id")
+    val versionId: String,
+
+    @ColumnInfo(name = "version_name")
+    val versionName: String = "",
+
+    @ColumnInfo(name = "params_json")
+    val paramsJson: String,
+
+    @ColumnInfo(name = "parent_version_id")
+    val parentVersionId: String? = null,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "is_active")
+    val isActive: Boolean = false
+)
+
+// ================================================================
+// Room Entity: Filter (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "filters",
+    indices = [
+        Index(value = ["name"])
+    ]
+)
+data class FilterEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "filter_id")
+    val filterId: Long = 0L,
+
+    @ColumnInfo(name = "name")
+    val name: String,
+
+    @ColumnInfo(name = "filter_json")
+    val filterJson: String,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// ================================================================
+// Room Entity: AI Description (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "ai_descriptions",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["task_id"]),
+        Index(value = ["provider_id"]),
+        Index(value = ["is_active"])
+    ]
+)
+data class AiDescriptionEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "row_id")
+    val rowId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "task_id")
+    val taskId: String = "",
+
+    @ColumnInfo(name = "provider_id")
+    val providerId: String = "",
+
+    @ColumnInfo(name = "model_id")
+    val modelId: String = "",
+
+    @ColumnInfo(name = "caption")
+    val caption: String = "",
+
+    @ColumnInfo(name = "tags_json")
+    val tagsJson: String = "[]",
+
+    @ColumnInfo(name = "scene")
+    val scene: String = "",
+
+    @ColumnInfo(name = "confidence")
+    val confidence: Float = 0f,
+
+    @ColumnInfo(name = "is_active")
+    val isActive: Boolean = true
+)
+
+// ================================================================
+// Room Entity: AI Rating (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "ai_ratings",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["task_id"]),
+        Index(value = ["provider_id"]),
+        Index(value = ["is_active"])
+    ]
+)
+data class AiRatingEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "row_id")
+    val rowId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "task_id")
+    val taskId: String = "",
+
+    @ColumnInfo(name = "provider_id")
+    val providerId: String = "",
+
+    @ColumnInfo(name = "model_id")
+    val modelId: String = "",
+
+    @ColumnInfo(name = "rating")
+    val rating: Int = 0,
+
+    @ColumnInfo(name = "rubric_id")
+    val rubricId: String = "",
+
+    @ColumnInfo(name = "reasons_json")
+    val reasonsJson: String = "[]",
+
+    @ColumnInfo(name = "is_active")
+    val isActive: Boolean = true
+)
+
+// ================================================================
+// Room Entity: Semantic Embedding (desktop schema)
+// ================================================================
+
+@Entity(
+    tableName = "semantic_embeddings",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["model_id"])
+    ]
+)
+data class SemanticEmbeddingEntity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "row_id")
+    val rowId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "model_id")
+    val modelId: String = "",
+
+    @ColumnInfo(name = "embedding_blob")
+    val embeddingBlob: ByteArray = byteArrayOf(),
+
+    @ColumnInfo(name = "dimension")
+    val dimension: Int = 0,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SemanticEmbeddingEntity) return false
+        return rowId == other.rowId && fileId == other.fileId && embeddingBlob.contentEquals(other.embeddingBlob)
+    }
+
+    override fun hashCode(): Int {
+        var result = rowId.hashCode()
+        result = 31 * result + fileId.hashCode()
+        result = 31 * result + embeddingBlob.contentHashCode()
+        return result
+    }
+}
+
+// ================================================================
+// Room Entity: Semantic Label (desktop schema - v2)
+// ================================================================
+
+@Entity(
+    tableName = "semantic_labels_v2",
+    foreignKeys = [
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"]),
+        Index(value = ["model_id"]),
+        Index(value = ["primary_label"])
+    ]
+)
+data class SemanticLabelV2Entity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "row_id")
+    val rowId: Long = 0L,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "model_id")
+    val modelId: String = "",
+
+    @ColumnInfo(name = "primary_label")
+    val primaryLabel: String = "",
+
+    @ColumnInfo(name = "secondary_label")
+    val secondaryLabel: String = "",
+
+    @ColumnInfo(name = "primary_confidence")
+    val primaryConfidence: Float = 0f,
+
+    @ColumnInfo(name = "marginal")
+    val marginal: Float = 0f,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// ================================================================
+// Room Entity: Collection (desktop schema - replaces existing)
+// ================================================================
+
+@Entity(
+    tableName = "collections_v2",
+    indices = [
+        Index(value = ["name"], unique = true)
+    ]
+)
+data class CollectionV2Entity(
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "collection_id")
+    val collectionId: Long = 0L,
+
+    @ColumnInfo(name = "name")
+    val name: String,
+
+    @ColumnInfo(name = "description")
+    val description: String = "",
+
+    @ColumnInfo(name = "cover_file_id")
+    val coverFileId: Long? = null,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+// ================================================================
+// Room Entity: Collection Image (desktop schema - v2)
+// ================================================================
+
+@Entity(
+    tableName = "collection_images_v2",
+    primaryKeys = ["collection_id", "file_id"],
+    foreignKeys = [
+        ForeignKey(
+            entity = CollectionV2Entity::class,
+            parentColumns = ["collection_id"],
+            childColumns = ["collection_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = SleeveFileEntity::class,
+            parentColumns = ["element_id"],
+            childColumns = ["file_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["file_id"])
+    ]
+)
+data class CollectionImageV2Entity(
+    @ColumnInfo(name = "collection_id")
+    val collectionId: Long,
+
+    @ColumnInfo(name = "file_id")
+    val fileId: Long,
+
+    @ColumnInfo(name = "added_at")
+    val addedAt: Long = System.currentTimeMillis()
 )

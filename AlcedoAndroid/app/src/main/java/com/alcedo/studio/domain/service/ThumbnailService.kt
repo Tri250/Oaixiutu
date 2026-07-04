@@ -9,13 +9,15 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Multi-resolution thumbnail generation service with disk cache,
- * memory cache, async loading, and placeholder generation.
+ * memory cache, async loading, placeholder generation, cache invalidation,
+ * and analysis-specific rendition support.
  */
 class ThumbnailService(
     private val diskCache: ThumbnailDiskCache,
@@ -50,7 +52,6 @@ class ThumbnailService(
     private val memoryCacheLock = Any()
 
     private val pendingLoads = ConcurrentHashMap<String, Job>()
-
     private val loadingStates = ConcurrentHashMap<String, LoadingState>()
 
     enum class LoadingState { NOT_LOADED, LOADING, LOADED, FAILED }
@@ -142,8 +143,15 @@ class ThumbnailService(
         val bitmap = generateThumbnailFromPath(imagePath, size.pixels)
         if (bitmap != null) {
             generatedCount.incrementAndGet()
+            val sourceLastModified = File(imagePath).lastModified()
             try {
-                diskCache.put(makeDiskCacheKey(imageId, size), bitmap)
+                diskCache.put(
+                    makeDiskCacheKey(imageId, size),
+                    bitmap,
+                    toResolutionTier(size),
+                    THUMBNAIL_QUALITY,
+                    sourceLastModified = sourceLastModified
+                )
             } catch (_: Exception) {}
             synchronized(memoryCacheLock) { memoryCache[cacheKey] = bitmap }
             loadingStates[cacheKey] = LoadingState.LOADED
@@ -205,7 +213,7 @@ class ThumbnailService(
                 try {
                     val bitmap = generateThumbnailFromPath(path, size.pixels)
                     if (bitmap != null) {
-                        diskCache.put(diskKey, bitmap)
+                        diskCache.put(diskKey, bitmap, toResolutionTier(size))
                         generatedCount.incrementAndGet()
                     }
                 } catch (_: Exception) {
@@ -343,6 +351,14 @@ class ThumbnailService(
         return makeDiskCacheKey(imageId, size)
     }
 
+    private fun toResolutionTier(size: ThumbnailSize): ThumbnailDiskCache.ResolutionTier = when (size) {
+        ThumbnailSize.MICRO -> ThumbnailDiskCache.ResolutionTier.SMALL
+        ThumbnailSize.SMALL -> ThumbnailDiskCache.ResolutionTier.SMALL
+        ThumbnailSize.MEDIUM -> ThumbnailDiskCache.ResolutionTier.MEDIUM
+        ThumbnailSize.LARGE -> ThumbnailDiskCache.ResolutionTier.LARGE
+        ThumbnailSize.XLARGE -> ThumbnailDiskCache.ResolutionTier.XLARGE
+    }
+
     // ================================================================
     // Cache management
     // ================================================================
@@ -358,7 +374,7 @@ class ThumbnailService(
     }
 
     suspend fun clearDiskCache() = withContext(Dispatchers.IO) {
-        diskCache.clear()
+        diskCache.clearAll()
     }
 
     fun evict(imageId: Long) {
@@ -385,17 +401,97 @@ class ThumbnailService(
     }
 
     // ================================================================
+    // Cache invalidation
+    // ================================================================
+
+    /**
+     * Invalidate cache when the source image has been modified.
+     */
+    fun invalidateIfSourceModified(imageId: Long, sourceLastModified: Long) {
+        diskCache.invalidateIfSourceModified(imageId.toString(), sourceLastModified)
+        // Also clear from memory cache
+        ThumbnailSize.entries.forEach { size ->
+            val cacheKey = makeCacheKey(imageId, size)
+            synchronized(memoryCacheLock) {
+                memoryCache.remove(cacheKey)?.recycle()
+            }
+            loadingStates.remove(cacheKey)
+        }
+    }
+
+    /**
+     * Invalidate cache when pipeline parameters have changed.
+     */
+    fun invalidateIfPipelineChanged(imageId: Long, pipelineHash: Int) {
+        diskCache.invalidateIfPipelineChanged(imageId.toString(), pipelineHash)
+        ThumbnailSize.entries.forEach { size ->
+            val cacheKey = makeCacheKey(imageId, size)
+            synchronized(memoryCacheLock) {
+                memoryCache.remove(cacheKey)?.recycle()
+            }
+            loadingStates.remove(cacheKey)
+        }
+    }
+
+    /**
+     * Invalidate cache when an editing session ends.
+     */
+    fun invalidateSession(imageIds: List<Long>) {
+        imageIds.forEach { imageId ->
+            evict(imageId)
+        }
+    }
+
+    /**
+     * Partial invalidation: invalidate only specific resolution levels.
+     */
+    fun invalidateTiers(imageId: Long, sizes: Set<ThumbnailSize>) {
+        sizes.forEach { size ->
+            val cacheKey = makeCacheKey(imageId, size)
+            synchronized(memoryCacheLock) {
+                memoryCache.remove(cacheKey)?.recycle()
+            }
+            loadingStates.remove(cacheKey)
+            try {
+                diskCache.evict(makeDiskCacheKey(imageId, size), toResolutionTier(size))
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Check if a cached thumbnail is still valid.
+     */
+    fun isCacheValid(
+        imageId: Long,
+        size: ThumbnailSize = ThumbnailSize.MEDIUM,
+        sourceLastModified: Long = 0L,
+        pipelineHash: Int = 0
+    ): Boolean {
+        return diskCache.isValid(
+            imageId.toString(),
+            toResolutionTier(size),
+            sourceLastModified = sourceLastModified,
+            pipelineHash = pipelineHash
+        )
+    }
+
+    // ================================================================
     // Statistics
     // ================================================================
 
     fun getStats(): ThumbnailStats {
+        val diskStats = diskCache.getStats()
         return ThumbnailStats(
             memoryCacheSize = synchronized(memoryCacheLock) { memoryCache.size },
             memoryHits = memoryHits.get(),
             diskHits = diskHits.get(),
             generatedCount = generatedCount.get(),
             pendingLoads = pendingLoads.size,
-            diskCacheSize = try { diskCache.size() } catch (_: Exception) { 0L }
+            diskCacheSize = diskStats.totalSizeBytes,
+            diskCacheEntries = diskStats.totalEntries,
+            diskCacheHitRate = diskStats.hitRate,
+            diskCacheAverageEntrySize = diskStats.averageEntrySizeBytes,
+            analysisQueueSize = analysisRequestQueue.size
         )
     }
 
@@ -403,6 +499,7 @@ class ThumbnailService(
         memoryHits.set(0)
         diskHits.set(0)
         generatedCount.set(0)
+        diskCache.resetStats()
     }
 
     data class ThumbnailStats(
@@ -411,7 +508,11 @@ class ThumbnailService(
         val diskHits: Long,
         val generatedCount: Long,
         val pendingLoads: Int,
-        val diskCacheSize: Long
+        val diskCacheSize: Long,
+        val diskCacheEntries: Int,
+        val diskCacheHitRate: Float,
+        val diskCacheAverageEntrySize: Long,
+        val analysisQueueSize: Int
     )
 
     // ================================================================
@@ -462,5 +563,224 @@ class ThumbnailService(
         onResult: (ThumbnailResult) -> Unit
     ) {
         loadThumbnailAsync(item.imageId, item.imagePath, item.size, scope, onResult)
+    }
+
+    // ================================================================
+    // Analysis-Specific Rendition
+    // ================================================================
+
+    /**
+     * Priority levels for analysis rendition requests.
+     */
+    enum class AnalysisPriority(val value: Int) {
+        LOW(0),
+        NORMAL(1),
+        HIGH(2),
+        URGENT(3)
+    }
+
+    /**
+     * Request for an analysis-specific thumbnail rendition.
+     * Like the desktop version's RequestAnalysisRendition - generates thumbnails
+     * specifically for AI analysis, not pinned to active pipeline.
+     */
+    data class AnalysisRenditionRequest(
+        val imageId: Long,
+        val imagePath: String,
+        val size: ThumbnailSize = ThumbnailSize.LARGE,
+        val priority: AnalysisPriority = AnalysisPriority.NORMAL,
+        val pipelineHash: Int = 0,
+        val sourceLastModified: Long = 0L,
+        val callback: ((AnalysisRenditionResult) -> Unit)? = null
+    ) : Comparable<AnalysisRenditionRequest> {
+        override fun compareTo(other: AnalysisRenditionRequest): Int {
+            // Higher priority first
+            return other.priority.value.compareTo(this.priority.value)
+        }
+    }
+
+    sealed class AnalysisRenditionResult {
+        data class Ready(val bitmap: Bitmap, val fromCache: Boolean) : AnalysisRenditionResult()
+        data class Error(val message: String) : AnalysisRenditionResult()
+    }
+
+    private val analysisRequestQueue = PriorityBlockingQueue<AnalysisRenditionRequest>()
+    private val analysisProcessing = ConcurrentHashMap<Long, Job>()
+    private val analysisScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val analysisExecutor = ThreadPoolExecutor(
+        1, 2, 30, TimeUnit.SECONDS,
+        PriorityBlockingQueue<Runnable>(),
+        ThreadPoolExecutor.DiscardOldestPolicy()
+    )
+
+    init {
+        startAnalysisQueueProcessor()
+    }
+
+    /**
+     * Request an analysis-specific rendition.
+     * Uses a separate cache namespace ("analysis") to avoid polluting browse thumbnails.
+     * Returns Bitmap directly for immediate consumption by CLIP/AI.
+     */
+    suspend fun requestAnalysisRendition(
+        imageId: Long,
+        imagePath: String,
+        size: ThumbnailSize = ThumbnailSize.LARGE,
+        priority: AnalysisPriority = AnalysisPriority.NORMAL,
+        pipelineHash: Int = 0,
+        sourceLastModified: Long = 0L
+    ): AnalysisRenditionResult = withContext(Dispatchers.IO) {
+        // Check analysis namespace cache first
+        val analysisCacheKey = makeAnalysisCacheKey(imageId, size)
+
+        // 1. Check memory cache (analysis namespace)
+        synchronized(memoryCacheLock) {
+            memoryCache[analysisCacheKey]?.let {
+                memoryHits.incrementAndGet()
+                return@withContext AnalysisRenditionResult.Ready(it, true)
+            }
+        }
+
+        // 2. Check disk cache in analysis namespace
+        try {
+            val diskBitmap = diskCache.get(
+                imageId.toString(),
+                toResolutionTier(size),
+                ThumbnailDiskCache.CacheFormat.JPEG
+            )
+            if (diskBitmap != null) {
+                diskHits.incrementAndGet()
+                synchronized(memoryCacheLock) { memoryCache[analysisCacheKey] = diskBitmap }
+                return@withContext AnalysisRenditionResult.Ready(diskBitmap, true)
+            }
+        } catch (_: Exception) {}
+
+        // 3. Generate new rendition (not pinned to active pipeline)
+        val bitmap = generateThumbnailFromPath(imagePath, size.pixels)
+        if (bitmap != null) {
+            generatedCount.incrementAndGet()
+            // Store in analysis namespace
+            try {
+                diskCache.put(
+                    imageId.toString(),
+                    bitmap,
+                    toResolutionTier(size),
+                    THUMBNAIL_QUALITY,
+                    format = ThumbnailDiskCache.CacheFormat.JPEG,
+                    namespace = ThumbnailDiskCache.CacheConfig.NAMESPACE_ANALYSIS,
+                    sourceLastModified = sourceLastModified,
+                    pipelineHash = pipelineHash
+                )
+            } catch (_: Exception) {}
+            synchronized(memoryCacheLock) { memoryCache[analysisCacheKey] = bitmap }
+            return@withContext AnalysisRenditionResult.Ready(bitmap, false)
+        }
+
+        AnalysisRenditionResult.Error("Failed to generate analysis rendition for image $imageId")
+    }
+
+    /**
+     * Enqueue an async analysis rendition request with priority.
+     */
+    fun enqueueAnalysisRendition(request: AnalysisRenditionRequest) {
+        analysisRequestQueue.put(request)
+    }
+
+    /**
+     * Request analysis rendition with callback (on-demand with priority queuing).
+     */
+    fun requestAnalysisRenditionAsync(
+        imageId: Long,
+        imagePath: String,
+        size: ThumbnailSize = ThumbnailSize.LARGE,
+        priority: AnalysisPriority = AnalysisPriority.NORMAL,
+        pipelineHash: Int = 0,
+        sourceLastModified: Long = 0L,
+        callback: (AnalysisRenditionResult) -> Unit
+    ) {
+        val request = AnalysisRenditionRequest(
+            imageId = imageId,
+            imagePath = imagePath,
+            size = size,
+            priority = priority,
+            pipelineHash = pipelineHash,
+            sourceLastModified = sourceLastModified,
+            callback = callback
+        )
+        analysisRequestQueue.put(request)
+    }
+
+    /**
+     * Cancel a pending analysis rendition request.
+     */
+    fun cancelAnalysisRendition(imageId: Long) {
+        analysisProcessing.remove(imageId)?.cancel()
+        analysisRequestQueue.removeAll { it.imageId == imageId }
+    }
+
+    /**
+     * Cancel all pending analysis requests.
+     */
+    fun cancelAllAnalysisRenditions() {
+        analysisProcessing.values.forEach { it.cancel() }
+        analysisProcessing.clear()
+        analysisRequestQueue.clear()
+    }
+
+    /**
+     * Get the current analysis queue size.
+     */
+    fun getAnalysisQueueSize(): Int = analysisRequestQueue.size
+
+    /**
+     * Invalidate analysis-specific cache entries.
+     */
+    fun invalidateAnalysisCache() {
+        diskCache.invalidateNamespace(ThumbnailDiskCache.CacheConfig.NAMESPACE_ANALYSIS)
+    }
+
+    private fun startAnalysisQueueProcessor() {
+        analysisScope.launch {
+            while (isActive) {
+                try {
+                    val request = analysisRequestQueue.take()
+                    if (analysisProcessing.containsKey(request.imageId)) continue
+
+                    val job = launch {
+                        val result = requestAnalysisRendition(
+                            imageId = request.imageId,
+                            imagePath = request.imagePath,
+                            size = request.size,
+                            priority = request.priority,
+                            pipelineHash = request.pipelineHash,
+                            sourceLastModified = request.sourceLastModified
+                        )
+                        request.callback?.invoke(result)
+                        analysisProcessing.remove(request.imageId)
+                    }
+                    analysisProcessing[request.imageId] = job
+                } catch (_: CancellationException) {
+                    break
+                } catch (_: Exception) {
+                    // Continue processing
+                }
+            }
+        }
+    }
+
+    private fun makeAnalysisCacheKey(imageId: Long, size: ThumbnailSize): String {
+        return "analysis_${imageId}_${size.name}"
+    }
+
+    // ================================================================
+    // Cleanup
+    // ================================================================
+
+    fun shutdown() {
+        cancelAllLoads()
+        cancelAllAnalysisRenditions()
+        analysisScope.cancel()
+        clearMemoryCache()
     }
 }

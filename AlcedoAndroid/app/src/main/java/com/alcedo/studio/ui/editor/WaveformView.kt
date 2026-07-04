@@ -8,17 +8,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.unit.dp
 
-data class WaveformData(
-    val red: List<Float> = emptyList(),
-    val green: List<Float> = emptyList(),
-    val blue: List<Float> = emptyList(),
-    val luminance: List<Float> = emptyList()
-)
+enum class WaveformMode(val label: String) {
+    RGB_PARADE("RGB Parade"),
+    OVERLAY("Overlay"),
+    LUMINANCE("Luminance")
+}
 
 @Composable
 fun WaveformView(
@@ -45,36 +45,75 @@ fun WaveformView(
                     val paradeWidth = (w - 2 * padding) / 3f
                     val paradeHeight = h - 2 * padding
 
-                    drawWaveformChannel(
-                        data = waveformData.red,
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.r },
                         color = Color.Red,
                         rect = Rect(
                             padding, padding,
                             padding + paradeWidth, padding + paradeHeight
-                        )
+                        ),
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
                     )
-                    drawWaveformChannel(
-                        data = waveformData.green,
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.g },
                         color = Color.Green,
                         rect = Rect(
                             padding + paradeWidth, padding,
                             padding + 2 * paradeWidth, padding + paradeHeight
-                        )
+                        ),
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
                     )
-                    drawWaveformChannel(
-                        data = waveformData.blue,
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.b },
                         color = Color(0xFF4488FF),
                         rect = Rect(
                             padding + 2 * paradeWidth, padding,
                             padding + 3 * paradeWidth, padding + paradeHeight
-                        )
+                        ),
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
+                    )
+                }
+                WaveformMode.OVERLAY -> {
+                    val drawRect = Rect(padding, padding, w - padding, h - padding)
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.r },
+                        color = Color.Red.copy(alpha = 0.5f),
+                        rect = drawRect,
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
+                    )
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.g },
+                        color = Color.Green.copy(alpha = 0.5f),
+                        rect = drawRect,
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
+                    )
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.b },
+                        color = Color(0xFF4488FF).copy(alpha = 0.5f),
+                        rect = drawRect,
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
                     )
                 }
                 WaveformMode.LUMINANCE -> {
-                    drawWaveformChannel(
-                        data = waveformData.luminance,
+                    drawWaveformChannel2D(
+                        data = waveformData,
+                        channel = { it.luminance },
                         color = Color.White,
-                        rect = Rect(padding, padding, w - padding, h - padding)
+                        rect = Rect(padding, padding, w - padding, h - padding),
+                        dataCols = waveformData.columns,
+                        dataRows = waveformData.rows
                     )
                 }
             }
@@ -96,18 +135,27 @@ fun WaveformView(
     }
 }
 
-private fun DrawScope.drawWaveformChannel(
-    data: List<Float>,
+/**
+ * Draw a 2D waveform: x = column position, y = brightness level,
+ * pixel brightness = data intensity (frequency).
+ */
+private fun DrawScope.drawWaveformChannel2D(
+    data: WaveformData,
+    channel: (WaveformData) -> FloatArray,
     color: Color,
-    rect: Rect
+    rect: Rect,
+    dataCols: Int,
+    dataRows: Int
 ) {
-    if (data.isEmpty()) return
+    if (dataCols <= 0 || dataRows <= 0) return
+    val channelData = channel(data)
+    if (channelData.isEmpty()) return
 
     val graphW = rect.width
     val graphH = rect.height
 
-    // Draw IRE grid lines
-    val ireColor = Color.White.copy(alpha = 0.08f)
+    // IRE grid lines
+    val ireColor = Color.White.copy(alpha = 0.06f)
     for (i in 1..9) {
         val y = rect.top + graphH * i / 10f
         drawLine(
@@ -118,17 +166,22 @@ private fun DrawScope.drawWaveformChannel(
         )
     }
 
-    // Draw waveform
-    val barWidth = graphW / data.size
-    for (i in data.indices) {
-        val intensity = data[i].coerceIn(0f, 1f)
-        if (intensity > 0.001f) {
-            val barHeight = intensity * graphH
-            drawRect(
-                color = color.copy(alpha = 0.6f),
-                topLeft = Offset(rect.left + i * barWidth, rect.top + graphH - barHeight),
-                size = Size(barWidth.coerceAtLeast(1f), barHeight)
-            )
+    // Draw waveform pixels
+    val cellW = graphW / dataCols
+    val cellH = graphH / dataRows
+
+    for (col in 0 until dataCols) {
+        for (row in 0 until dataRows) {
+            val intensity = channelData[col * dataRows + row]
+            if (intensity > 0.02f) {
+                val x = rect.left + col * cellW
+                val y = rect.top + row * cellH
+                drawRect(
+                    color = color.copy(alpha = intensity.coerceIn(0f, 1f) * 0.8f),
+                    topLeft = Offset(x, y),
+                    size = Size(cellW.coerceAtLeast(1f), cellH.coerceAtLeast(1f))
+                )
+            }
         }
     }
 
@@ -139,9 +192,4 @@ private fun DrawScope.drawWaveformChannel(
         size = rect.size,
         style = Stroke(width = 1f)
     )
-}
-
-enum class WaveformMode(val label: String) {
-    RGB_PARADE("RGB Parade"),
-    LUMINANCE("Luminance")
 }

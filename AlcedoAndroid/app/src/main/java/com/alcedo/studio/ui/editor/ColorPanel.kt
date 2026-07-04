@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.ui.common.AdjustmentSlider
@@ -20,7 +22,6 @@ fun ColorPanel(
     onParamsChanged: (PipelineParams) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorWheelMode = remember { mutableStateOf(ColorWheelMode.HUE_RING_WITH_TRIANGLE) }
     var selectedWheel by remember { mutableStateOf(ColorWheelType.LIFT) }
 
     Column(
@@ -29,6 +30,7 @@ fun ColorPanel(
     ) {
         // Color Wheels
         SectionHeader(title = "Color Wheels") {
+            // Wheel type selector
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -46,44 +48,114 @@ fun ColorPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // CDL Color Wheel for selected type
+            val (r, g, b) = when (selectedWheel) {
+                ColorWheelType.LIFT -> Triple(
+                    params.colorWheelLiftR,
+                    params.colorWheelLiftG,
+                    params.colorWheelLiftB
+                )
+                ColorWheelType.GAMMA -> Triple(
+                    params.colorWheelGammaR,
+                    params.colorWheelGammaG,
+                    params.colorWheelGammaB
+                )
+                ColorWheelType.GAIN -> Triple(
+                    params.colorWheelGainR,
+                    params.colorWheelGainG,
+                    params.colorWheelGainB
+                )
+            }
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val (r, g, b) = when (selectedWheel) {
-                    ColorWheelType.LIFT -> Triple(
-                        params.colorWheelLiftR,
-                        params.colorWheelLiftG,
-                        params.colorWheelLiftB
-                    )
-                    ColorWheelType.GAMMA -> Triple(
-                        params.colorWheelGammaR,
-                        params.colorWheelGammaG,
-                        params.colorWheelGammaB
-                    )
-                    ColorWheelType.GAIN -> Triple(
-                        params.colorWheelGainR,
-                        params.colorWheelGainG,
-                        params.colorWheelGainB
-                    )
+                CdlColorWheel(
+                    wheelType = selectedWheel,
+                    r = r,
+                    g = g,
+                    b = b,
+                    onColorChanged = { newR, newG, newB ->
+                        val newParams = when (selectedWheel) {
+                            ColorWheelType.LIFT -> params.copy(
+                                colorWheelLiftR = newR,
+                                colorWheelLiftG = newG,
+                                colorWheelLiftB = newB
+                            )
+                            ColorWheelType.GAMMA -> params.copy(
+                                colorWheelGammaR = newR,
+                                colorWheelGammaG = newG,
+                                colorWheelGammaB = newB
+                            )
+                            ColorWheelType.GAIN -> params.copy(
+                                colorWheelGainR = newR,
+                                colorWheelGainG = newG,
+                                colorWheelGainB = newB
+                            )
+                        }
+                        onParamsChanged(newParams)
+                    },
+                    modifier = Modifier.fillMaxWidth(0.7f),
+                    wheelSizeDp = 200.dp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // RGB value readout
+                val valueRange = when (selectedWheel) {
+                    ColorWheelType.LIFT -> -0.5f..0.5f
+                    ColorWheelType.GAMMA -> 0f..2f
+                    ColorWheelType.GAIN -> 0f..2f
                 }
 
-                // Simplified color wheel display
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    listOf(
+                        "R" to r to Color.Red,
+                        "G" to g to Color(0xFF4CAF50),
+                        "B" to b to Color(0xFF4488FF)
+                    ).forEach { (pair, color) ->
+                        val (label, value) = pair
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = color
+                            )
+                            Text(
+                                "%.3f".format(value),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Fine-tune sliders for RGB
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        "R" to r to androidx.compose.ui.graphics.Color.Red,
-                        "G" to g to androidx.compose.ui.graphics.Color(0xFF4CAF50),
-                        "B" to b to androidx.compose.ui.graphics.Color(0xFF4488FF)
+                        "R" to r to Color.Red,
+                        "G" to g to Color(0xFF4CAF50),
+                        "B" to b to Color(0xFF4488FF)
                     ).forEach { (pair, color) ->
                         val (label, value) = pair
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = color
+                            )
                             Slider(
                                 value = value,
                                 onValueChange = { newVal ->
@@ -106,16 +178,43 @@ fun ColorPanel(
                                     }
                                     onParamsChanged(newParams)
                                 },
-                                valueRange = when (selectedWheel) {
-                                    ColorWheelType.LIFT -> -0.5f..0.5f
-                                    ColorWheelType.GAMMA -> 0f..2f
-                                    ColorWheelType.GAIN -> 0f..2f
-                                },
+                                valueRange = valueRange,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Reset button for current wheel
+            OutlinedButton(
+                onClick = {
+                    val newParams = when (selectedWheel) {
+                        ColorWheelType.LIFT -> params.copy(
+                            colorWheelLiftR = 0f,
+                            colorWheelLiftG = 0f,
+                            colorWheelLiftB = 0f
+                        )
+                        ColorWheelType.GAMMA -> params.copy(
+                            colorWheelGammaR = 1f,
+                            colorWheelGammaG = 1f,
+                            colorWheelGammaB = 1f
+                        )
+                        ColorWheelType.GAIN -> params.copy(
+                            colorWheelGainR = 1f,
+                            colorWheelGainG = 1f,
+                            colorWheelGainB = 1f
+                        )
+                    }
+                    onParamsChanged(newParams)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Reset ${selectedWheel.label}")
             }
         }
 
@@ -132,14 +231,14 @@ fun ColorPanel(
                 hslChannels.forEach { (name, index) ->
                     val isExpanded = expandedChannel == index
                     val hueColors = listOf(
-                        androidx.compose.ui.graphics.Color(0xFFE53935),
-                        androidx.compose.ui.graphics.Color(0xFFFF9800),
-                        androidx.compose.ui.graphics.Color(0xFFFFEB3B),
-                        androidx.compose.ui.graphics.Color(0xFF4CAF50),
-                        androidx.compose.ui.graphics.Color(0xFF00BCD4),
-                        androidx.compose.ui.graphics.Color(0xFF2196F3),
-                        androidx.compose.ui.graphics.Color(0xFF9C27B0),
-                        androidx.compose.ui.graphics.Color(0xFFE91E63)
+                        Color(0xFFE53935),
+                        Color(0xFFFF9800),
+                        Color(0xFFFFEB3B),
+                        Color(0xFF4CAF50),
+                        Color(0xFF00BCD4),
+                        Color(0xFF2196F3),
+                        Color(0xFF9C27B0),
+                        Color(0xFFE91E63)
                     )
 
                     Card(

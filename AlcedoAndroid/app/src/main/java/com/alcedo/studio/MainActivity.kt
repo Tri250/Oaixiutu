@@ -25,6 +25,9 @@ import com.alcedo.studio.ui.ai.AiSearchScreen
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.theme.AlcedoTheme
+import com.alcedo.studio.i18n.LanguageManager
+import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.theme.ThemeManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,6 +36,11 @@ import androidx.compose.ui.unit.dp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize managers
+        ThemeManager.initialize(this)
+        LanguageManager.initialize(this)
+
         enableEdgeToEdge()
         setContent {
             AlcedoTheme {
@@ -62,8 +70,8 @@ class MainActivity : ComponentActivity() {
                                                 restoreState = true
                                             }
                                         },
-                                        icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = "Album") },
-                                        label = { Text("Album") }
+                                        icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = stringRes { navAlbum }) },
+                                        label = { Text(stringRes { navAlbum }) }
                                     )
                                     NavigationBarItem(
                                         selected = currentRoute == "ai_search",
@@ -74,8 +82,8 @@ class MainActivity : ComponentActivity() {
                                                 restoreState = true
                                             }
                                         },
-                                        icon = { Icon(Icons.Default.Search, contentDescription = "AI") },
-                                        label = { Text("Search") }
+                                        icon = { Icon(Icons.Default.Search, contentDescription = stringRes { navAi }) },
+                                        label = { Text(stringRes { navAiSearch }) }
                                     )
                                     NavigationBarItem(
                                         selected = currentRoute == "settings",
@@ -86,8 +94,8 @@ class MainActivity : ComponentActivity() {
                                                 restoreState = true
                                             }
                                         },
-                                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                                        label = { Text("Settings") }
+                                        icon = { Icon(Icons.Default.Settings, contentDescription = stringRes { navSettings }) },
+                                        label = { Text(stringRes { navSettings }) }
                                     )
                                 }
                             }
@@ -132,5 +140,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        LanguageManager.onSystemLocaleChanged(this)
     }
 }

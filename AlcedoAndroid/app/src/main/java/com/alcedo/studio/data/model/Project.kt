@@ -218,8 +218,14 @@ data class ExportSettings(
     val embedIcc: Boolean = true,
     val includeMetadata: Boolean = true,
     val maxDimension: Int? = null,
+    val maxWidth: Int? = null,
+    val maxHeight: Int? = null,
     val isHdr: Boolean = false,
-    val outputPath: String = ""
+    val bitDepth: Int = 8,
+    val rating: Int = 0,
+    val tags: List<String> = emptyList(),
+    val outputPath: String = "",
+    val sourceExifPath: String? = null
 )
 
 enum class ExportFormat {
@@ -247,6 +253,12 @@ data class PipelineParams(
     val highlightBoundary: Float = 0.75f,
     val whiteBalanceTemp: Float = 6500f,
     val whiteBalanceTint: Float = 0f,
+
+    // Auto exposure
+    val autoExposureEnabled: Boolean = false,
+    val autoExposureTargetPercentile: Float = 0.5f,
+    val autoExposureTargetLuminance: Float = 0.18f,
+    val autoExposureValue: Float = 0f, // computed result in EV
 
     // Tone curve
     val toneCurveX: FloatArray = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f),
@@ -364,7 +376,7 @@ data class RawDecodeParams(
 )
 
 enum class DemosaicAlgorithm {
-    RCD, AMAZE, DCB, SIMPLE
+    RCD, AHD, AMAZE, DCB, SIMPLE
 }
 
 // ================================================================

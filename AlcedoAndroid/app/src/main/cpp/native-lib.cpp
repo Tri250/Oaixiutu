@@ -510,6 +510,280 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplySigmoidCon
 }
 
 // ============================================================
+// Auto Exposure
+// ============================================================
+
+JNIEXPORT jfloat JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeComputeAutoExposure(
+        JNIEnv *env,
+        jobject thiz,
+        jfloatArray input,
+        jint width,
+        jint height,
+        jint channels,
+        jfloat targetPercentile,
+        jfloat targetLuminance
+) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return 0.0f;
+
+    float ev = AutoExposureOperator::compute_auto_exposure(
+        pixels, width, height, channels, targetPercentile, targetLuminance);
+
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    return ev;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAutoExposure(
+        JNIEnv *env,
+        jobject thiz,
+        jfloatArray input,
+        jint width,
+        jint height,
+        jint channels,
+        jfloat targetPercentile,
+        jfloat targetLuminance
+) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    AutoExposureOperator::apply(float_pixels.data(), width, height, channels,
+                                 targetPercentile, targetLuminance);
+
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+// ============================================================
+// Pipeline Snapshot
+// ============================================================
+
+// Store snapshots in a map keyed by jlong handle
+#include <unordered_map>
+#include <mutex>
+
+static std::unordered_map<jlong, std::unique_ptr<PipelineSnapshot>> g_snapshots;
+static std::mutex g_snapshot_mutex;
+static jlong g_next_snapshot_id = 1;
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeCreateSnapshot(
+        JNIEnv *env,
+        jobject thiz,
+        jfloatArray input,
+        jint width,
+        jint height,
+        jint channels,
+        jfloatArray paramsArray
+) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return 0;
+
+    // Parse params (simplified - reuse same format as pipeline)
+    PipelineParams params;
+    if (paramsArray) {
+        jfloat *p = env->GetFloatArrayElements(paramsArray, nullptr);
+        if (p) {
+            int idx = 0;
+            params.exposure = p[idx++];
+            params.contrast = p[idx++];
+            params.saturation = p[idx++];
+            env->ReleaseFloatArrayElements(paramsArray, p, JNI_ABORT);
+        }
+    }
+
+    auto snapshot = PipelineSnapshot::create(pixels, width, height, channels, params);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    if (!snapshot || !snapshot->is_valid()) return 0;
+
+    jlong handle;
+    {
+        std::lock_guard<std::mutex> lock(g_snapshot_mutex);
+        handle = g_next_snapshot_id++;
+        g_snapshots[handle] = std::move(snapshot);
+    }
+
+    LOGI("PipelineSnapshot created: handle=%lld, %dx%d", (long long)handle, width, height);
+    return handle;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeRenderSnapshot(
+        JNIEnv *env,
+        jobject thiz,
+        jlong snapshotHandle,
+        jint width,
+        jint height,
+        jint channels
+) {
+    std::lock_guard<std::mutex> lock(g_snapshot_mutex);
+    auto it = g_snapshots.find(snapshotHandle);
+    if (it == g_snapshots.end()) return nullptr;
+
+    int total = width * height * channels;
+    std::vector<float> output(total);
+    if (!it->second->render(output.data(), width, height)) return nullptr;
+
+    jfloatArray result = env->NewFloatArray(total);
+    env->SetFloatArrayRegion(result, 0, total, output.data());
+    return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeReleaseSnapshot(
+        JNIEnv *env,
+        jobject thiz,
+        jlong snapshotHandle
+) {
+    std::lock_guard<std::mutex> lock(g_snapshot_mutex);
+    auto it = g_snapshots.find(snapshotHandle);
+    if (it != g_snapshots.end()) {
+        it->second->release();
+        g_snapshots.erase(it);
+        LOGI("PipelineSnapshot released: handle=%lld", (long long)snapshotHandle);
+    }
+}
+
+// ============================================================
+// Planckian Locus Color Temperature
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativePlanckianWhiteBalance(
+        JNIEnv *env,
+        jobject thiz,
+        jfloatArray input,
+        jint width,
+        jint height,
+        jint channels,
+        jfloat temperature,
+        jfloat tint
+) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    int pixel_count = width * height;
+    color_science::planckian_white_balance_bulk(float_pixels.data(), pixel_count, channels,
+                                                 temperature, tint);
+
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeGetPlanckianMultipliers(
+        JNIEnv *env,
+        jobject thiz,
+        jfloat temperature
+) {
+    float r, g, b;
+    color_science::planckian_locus_rgb(temperature, &r, &g, &b);
+    jfloatArray result = env->NewFloatArray(3);
+    float vals[3] = {r, g, b};
+    env->SetFloatArrayRegion(result, 0, 3, vals);
+    return result;
+}
+
+// ============================================================
+// AHD / AMAZE Demosaic
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
+        JNIEnv *env,
+        jobject thiz,
+        jshortArray rawData,
+        jint width,
+        jint height,
+        jint bayerPattern,
+        jint whiteLevel,
+        jint blackLevel
+) {
+    jsize len = env->GetArrayLength(rawData);
+    jshort *raw = env->GetShortArrayElements(rawData, nullptr);
+    if (!raw) return nullptr;
+
+    int outputSize = width * height * 3;
+    std::vector<float> output_r(width * height);
+    std::vector<float> output_g(width * height);
+    std::vector<float> output_b(width * height);
+
+    AHDDemosaicOperator::demosaic_uint16(
+        reinterpret_cast<const uint16_t*>(raw), width, height, bayerPattern,
+        output_r.data(), output_g.data(), output_b.data(),
+        static_cast<uint16_t>(whiteLevel), static_cast<uint16_t>(blackLevel));
+
+    env->ReleaseShortArrayElements(rawData, raw, JNI_ABORT);
+
+    // Interleave R, G, B
+    std::vector<float> rgb(outputSize);
+    int total = width * height;
+    for (int i = 0; i < total; ++i) {
+        rgb[i * 3]     = output_r[i];
+        rgb[i * 3 + 1] = output_g[i];
+        rgb[i * 3 + 2] = output_b[i];
+    }
+
+    jfloatArray result = env->NewFloatArray(outputSize);
+    env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
+        JNIEnv *env,
+        jobject thiz,
+        jshortArray rawData,
+        jint width,
+        jint height,
+        jint bayerPattern,
+        jint whiteLevel,
+        jint blackLevel
+) {
+    jsize len = env->GetArrayLength(rawData);
+    jshort *raw = env->GetShortArrayElements(rawData, nullptr);
+    if (!raw) return nullptr;
+
+    int outputSize = width * height * 3;
+    std::vector<float> output_r(width * height);
+    std::vector<float> output_g(width * height);
+    std::vector<float> output_b(width * height);
+
+    AMAZEDemosaicOperator::demosaic_uint16(
+        reinterpret_cast<const uint16_t*>(raw), width, height, bayerPattern,
+        output_r.data(), output_g.data(), output_b.data(),
+        static_cast<uint16_t>(whiteLevel), static_cast<uint16_t>(blackLevel));
+
+    env->ReleaseShortArrayElements(rawData, raw, JNI_ABORT);
+
+    std::vector<float> rgb(outputSize);
+    int total = width * height;
+    for (int i = 0; i < total; ++i) {
+        rgb[i * 3]     = output_r[i];
+        rgb[i * 3 + 1] = output_g[i];
+        rgb[i * 3 + 2] = output_b[i];
+    }
+
+    jfloatArray result = env->NewFloatArray(outputSize);
+    env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
+    return result;
+}
+
+// ============================================================
 // NDK String (legacy)
 // ============================================================
 

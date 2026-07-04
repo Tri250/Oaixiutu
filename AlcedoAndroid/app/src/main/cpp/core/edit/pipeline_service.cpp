@@ -11,6 +11,9 @@
 #include "operators/lut_op.h"
 #include "operators/highlight_reconstruction_op.h"
 #include "operators/rcd_demosaic_op.h"
+#include "operators/ahd_demosaic_op.h"
+#include "operators/amaze_demosaic_op.h"
+#include "operators/auto_exposure_op.h"
 #include "operators/lens_correction_op.h"
 #include "operators/geometry_op.h"
 #include "color_science.h"
@@ -46,7 +49,7 @@ public:
 // ============================================================
 
 PipelineService::PipelineService() {
-    for (int i = 0; i < 14; ++i) stage_enabled_[i] = true;
+    for (int i = 0; i < 15; ++i) stage_enabled_[i] = true;
     LOGI("PipelineService created");
 }
 
@@ -76,6 +79,12 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     int pixel_count = width * height;
     auto en = [&](PipelineStage s) { return stage_enabled_[static_cast<int>(s)]; };
 
+    // Stage: Auto Exposure (must run before Exposure)
+    if (en(PipelineStage::AUTO_EXPOSURE) && params.auto_exposure_enabled) {
+        PipelineParams mutable_params = params;
+        apply_auto_exposure(pixels, width, height, channels, mutable_params);
+    }
+
     // Stage: Exposure
     if (en(PipelineStage::EXPOSURE) && params.exposure != 0.0f) {
         float scale = std::pow(2.0f, params.exposure);
@@ -85,19 +94,12 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         }
     }
 
-    // Stage: White Balance
+    // Stage: White Balance (Planckian locus for physically accurate color temperature)
     if (en(PipelineStage::WHITE_BALANCE) &&
         (params.white_balance_temp != 6500.0f || params.white_balance_tint != 0.0f)) {
-        float temp_scale = params.white_balance_temp / 6500.0f;
-        float r_mult = std::max(0.5f, std::min(2.0f, temp_scale));
-        float b_mult = std::max(0.5f, std::min(2.0f, 2.0f - temp_scale));
-        float g_off = params.white_balance_tint * 0.01f;
-        for (int i = 0; i < pixel_count; ++i) {
-            int idx = i * channels;
-            pixels[idx]     *= r_mult;
-            pixels[idx + 1] += g_off;
-            pixels[idx + 2] *= b_mult;
-        }
+        color_science::planckian_white_balance_bulk(pixels, pixel_count, channels,
+                                                     params.white_balance_temp,
+                                                     params.white_balance_tint);
     }
 
     // Stage: Contrast
@@ -355,6 +357,22 @@ bool PipelineService::process_raw(const uint16_t* raw_data, int raw_width, int r
             output_rgb + 2 * output_width * output_height,
             params.raw_decode_params.white_level,
             params.raw_decode_params.black_level);
+    } else if (params.raw_decode_params.demosaic_algorithm == 1) {
+        AHDDemosaicOperator::demosaic_uint16(
+            src, raw_width, raw_height,
+            params.raw_decode_params.bayer_pattern,
+            output_rgb, output_rgb + output_width * output_height,
+            output_rgb + 2 * output_width * output_height,
+            params.raw_decode_params.white_level,
+            params.raw_decode_params.black_level);
+    } else if (params.raw_decode_params.demosaic_algorithm == 2) {
+        AMAZEDemosaicOperator::demosaic_uint16(
+            src, raw_width, raw_height,
+            params.raw_decode_params.bayer_pattern,
+            output_rgb, output_rgb + output_width * output_height,
+            output_rgb + 2 * output_width * output_height,
+            params.raw_decode_params.white_level,
+            params.raw_decode_params.black_level);
     }
 
     return process(output_rgb, output_width, output_height, 3, params);
@@ -379,13 +397,31 @@ bool PipelineService::decode_raw(const uint16_t* raw_data, int raw_width, int ra
         src = raw_copy.data();
     }
 
-    RCDDemosaicOperator::demosaic_uint16(
-        src, raw_width, raw_height,
-        raw_params.bayer_pattern,
-        output_rgb, output_rgb + output_width * output_height,
-        output_rgb + 2 * output_width * output_height,
-        raw_params.white_level,
-        raw_params.black_level);
+    if (raw_params.demosaic_algorithm == 0) {
+        RCDDemosaicOperator::demosaic_uint16(
+            src, raw_width, raw_height,
+            raw_params.bayer_pattern,
+            output_rgb, output_rgb + output_width * output_height,
+            output_rgb + 2 * output_width * output_height,
+            raw_params.white_level,
+            raw_params.black_level);
+    } else if (raw_params.demosaic_algorithm == 1) {
+        AHDDemosaicOperator::demosaic_uint16(
+            src, raw_width, raw_height,
+            raw_params.bayer_pattern,
+            output_rgb, output_rgb + output_width * output_height,
+            output_rgb + 2 * output_width * output_height,
+            raw_params.white_level,
+            raw_params.black_level);
+    } else if (raw_params.demosaic_algorithm == 2) {
+        AMAZEDemosaicOperator::demosaic_uint16(
+            src, raw_width, raw_height,
+            raw_params.bayer_pattern,
+            output_rgb, output_rgb + output_width * output_height,
+            output_rgb + 2 * output_width * output_height,
+            raw_params.white_level,
+            raw_params.black_level);
+    }
 
     LOGI("RAW decode: %dx%d -> %dx%d", raw_width, raw_height, output_width, output_height);
     return true;
@@ -451,6 +487,11 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
                                      int channels, const PipelineParams& params) {
     int pixel_count = width * height;
     switch (stage) {
+        case PipelineStage::AUTO_EXPOSURE: {
+            PipelineParams mutable_params = params;
+            apply_auto_exposure(pixels, width, height, channels, mutable_params);
+            break;
+        }
         case PipelineStage::EXPOSURE: {
             float scale = std::pow(2.0f, params.exposure);
             for (int i = 0; i < pixel_count; ++i) {
@@ -460,14 +501,9 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
             break;
         }
         case PipelineStage::WHITE_BALANCE: {
-            float temp_scale = params.white_balance_temp / 6500.0f;
-            float r_mult = std::max(0.5f, std::min(2.0f, temp_scale));
-            float b_mult = std::max(0.5f, std::min(2.0f, 2.0f - temp_scale));
-            for (int i = 0; i < pixel_count; ++i) {
-                int idx = i * channels;
-                pixels[idx] *= r_mult;
-                pixels[idx + 2] *= b_mult;
-            }
+            color_science::planckian_white_balance_bulk(pixels, pixel_count, channels,
+                                                         params.white_balance_temp,
+                                                         params.white_balance_tint);
             break;
         }
         case PipelineStage::TONE: {
@@ -510,6 +546,69 @@ std::string PipelineService::get_pipeline_info() const {
     std::ostringstream ss;
     ss << "Alcedo Pipeline v2.0 | Backend: " << (backend_ == BufferBackend::CPU ? "CPU" : "GPU");
     return ss.str();
+}
+
+void PipelineService::apply_auto_exposure(float* pixels, int width, int height, int channels,
+                                           PipelineParams& params) {
+    float ev = AutoExposureOperator::compute_auto_exposure(
+        pixels, width, height, channels,
+        params.auto_exposure_target_percentile,
+        params.auto_exposure_target_luminance);
+
+    params.auto_exposure_value = ev;
+    LOGI("AutoExposure computed: %.2f EV", ev);
+
+    // Apply the computed exposure
+    if (ev != 0.0f) {
+        float scale = std::pow(2.0f, ev);
+        int pixel_count = width * height;
+        for (int i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c) {
+                pixels[idx + c] *= scale;
+            }
+        }
+    }
+}
+
+float PipelineService::compute_auto_exposure(const float* pixels, int width, int height, int channels,
+                                              float target_percentile, float target_luminance) {
+    return AutoExposureOperator::compute_auto_exposure(
+        pixels, width, height, channels, target_percentile, target_luminance);
+}
+
+// ============================================================
+// PipelineSnapshot Implementation
+// ============================================================
+
+PipelineSnapshot::PipelineSnapshot(int width, int height, int channels, const PipelineParams& params)
+    : width_(width), height_(height), channels_(channels), params_(params) {}
+
+PipelineSnapshot::~PipelineSnapshot() {
+    release();
+}
+
+std::unique_ptr<PipelineSnapshot> PipelineSnapshot::create(const float* pixels, int width, int height,
+                                                             int channels, const PipelineParams& params) {
+    auto snapshot = std::make_unique<PipelineSnapshot>(width, height, channels, params);
+    int total = width * height * channels;
+    snapshot->data_.assign(pixels, pixels + total);
+    return snapshot;
+}
+
+bool PipelineSnapshot::render(float* output, int output_width, int output_height) const {
+    if (!is_valid() || !output) return false;
+    if (output_width != width_ || output_height != height_) return false;
+
+    // Simple copy for read-only rendering
+    int total = width_ * height_ * channels_;
+    std::copy(data_.data(), data_.data() + total, output);
+    return true;
+}
+
+void PipelineSnapshot::release() {
+    data_.clear();
+    data_.shrink_to_fit();
 }
 
 } // namespace alcedo

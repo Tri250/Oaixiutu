@@ -150,6 +150,61 @@ class NativePipelineBridge {
         dstWidth: Int, dstHeight: Int, method: Int
     ): FloatArray
 
+    // ── Auto Exposure ──
+
+    /** Compute auto exposure value (EV) for the given image. Returns exposure in stops. */
+    external fun nativeComputeAutoExposure(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        targetPercentile: Float, targetLuminance: Float
+    ): Float
+
+    /** Apply auto exposure adjustment to the image in-place. */
+    external fun nativeApplyAutoExposure(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        targetPercentile: Float, targetLuminance: Float
+    ): FloatArray
+
+    // ── Pipeline Snapshot ──
+
+    /** Create a read-only snapshot of the pipeline state. Returns a handle (0 = failure). */
+    external fun nativeCreateSnapshot(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        paramsArray: FloatArray
+    ): Long
+
+    /** Render a snapshot to a float array. Returns null on failure. */
+    external fun nativeRenderSnapshot(
+        snapshotHandle: Long, width: Int, height: Int, channels: Int
+    ): FloatArray
+
+    /** Release a snapshot and free its memory. */
+    external fun nativeReleaseSnapshot(snapshotHandle: Long)
+
+    // ── Planckian Locus Color Temperature ──
+
+    /** Apply Planckian locus white balance (physically accurate color temperature). */
+    external fun nativePlanckianWhiteBalance(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        temperature: Float, tint: Float
+    ): FloatArray
+
+    /** Get the Planckian locus RGB multipliers for a given color temperature. */
+    external fun nativeGetPlanckianMultipliers(temperature: Float): FloatArray
+
+    // ── AHD / AMAZE Demosaic ──
+
+    /** AHD (Adaptive Homogeneity-Directed) demosaic algorithm. */
+    external fun nativeDemosaicAHD(
+        rawData: ShortArray, width: Int, height: Int,
+        bayerPattern: Int, whiteLevel: Int, blackLevel: Int
+    ): FloatArray
+
+    /** AMAZE (Aliasing Minimization and Zipper Elimination) demosaic algorithm. */
+    external fun nativeDemosaicAMAZE(
+        rawData: ShortArray, width: Int, height: Int,
+        bayerPattern: Int, whiteLevel: Int, blackLevel: Int
+    ): FloatArray
+
     companion object {
         init {
             System.loadLibrary("alcedo_core")

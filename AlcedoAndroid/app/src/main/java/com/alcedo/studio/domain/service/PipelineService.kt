@@ -122,6 +122,132 @@ class PipelineService {
     }
 
     // ================================================================
+    // Auto Exposure
+    // ================================================================
+
+    /**
+     * Compute auto exposure value (EV) for the given bitmap.
+     * Uses percentile-based approach targeting middle-gray (18%) at 50th percentile.
+     * Returns exposure adjustment in stops (EV).
+     */
+    fun computeAutoExposure(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        targetPercentile: Float = 0.5f,
+        targetLuminance: Float = 0.18f
+    ): Float {
+        return nativeBridge.nativeComputeAutoExposure(
+            floatPixels, width, height, channels, targetPercentile, targetLuminance)
+    }
+
+    /**
+     * Apply auto exposure adjustment to float pixel data.
+     */
+    fun applyAutoExposure(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        targetPercentile: Float = 0.5f,
+        targetLuminance: Float = 0.18f
+    ): FloatArray {
+        return nativeBridge.nativeApplyAutoExposure(
+            floatPixels, width, height, channels, targetPercentile, targetLuminance)
+    }
+
+    // ================================================================
+    // Pipeline Snapshot
+    // ================================================================
+
+    private var activeSnapshotHandle: Long = 0
+
+    /**
+     * Create a read-only snapshot of the current pipeline state.
+     * Can be used for background analysis rendering without interfering
+     * with the active pipeline.
+     */
+    fun createSnapshot(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        params: PipelineParams
+    ): Long {
+        val paramsArray = buildParamsArray(params)
+        val handle = nativeBridge.nativeCreateSnapshot(floatPixels, width, height, channels, paramsArray)
+        activeSnapshotHandle = handle
+        return handle
+    }
+
+    /**
+     * Render a pipeline snapshot to a float array.
+     */
+    fun renderSnapshot(handle: Long, width: Int, height: Int, channels: Int): FloatArray? {
+        return nativeBridge.nativeRenderSnapshot(handle, width, height, channels)
+    }
+
+    /**
+     * Release a pipeline snapshot and free its memory.
+     */
+    fun releaseSnapshot(handle: Long) {
+        nativeBridge.nativeReleaseSnapshot(handle)
+        if (activeSnapshotHandle == handle) {
+            activeSnapshotHandle = 0
+        }
+    }
+
+    /**
+     * Release the active snapshot if any.
+     */
+    fun releaseActiveSnapshot() {
+        if (activeSnapshotHandle != 0L) {
+            releaseSnapshot(activeSnapshotHandle)
+        }
+    }
+
+    // ================================================================
+    // Planckian Locus White Balance
+    // ================================================================
+
+    /**
+     * Apply Planckian locus white balance for physically accurate color temperature.
+     */
+    fun applyPlanckianWhiteBalance(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        temperature: Float, tint: Float
+    ): FloatArray {
+        return nativeBridge.nativePlanckianWhiteBalance(
+            floatPixels, width, height, channels, temperature, tint)
+    }
+
+    /**
+     * Get the Planckian locus RGB multipliers for a given color temperature.
+     * Returns [r_mult, g_mult, b_mult].
+     */
+    fun getPlanckianMultipliers(temperature: Float): FloatArray {
+        return nativeBridge.nativeGetPlanckianMultipliers(temperature)
+    }
+
+    // ================================================================
+    // AHD / AMAZE Demosaic
+    // ================================================================
+
+    /**
+     * AHD (Adaptive Homogeneity-Directed) demosaic algorithm.
+     * Higher quality than RCD, reduces color artifacts and zipper effects.
+     */
+    fun demosaicAHD(
+        rawData: ShortArray, width: Int, height: Int,
+        bayerPattern: Int, whiteLevel: Int, blackLevel: Int
+    ): FloatArray {
+        return nativeBridge.nativeDemosaicAHD(rawData, width, height, bayerPattern, whiteLevel, blackLevel)
+    }
+
+    /**
+     * AMAZE (Aliasing Minimization and Zipper Elimination) demosaic algorithm.
+     * Popular high-quality demosaic known for excellent detail preservation.
+     */
+    fun demosaicAMAZE(
+        rawData: ShortArray, width: Int, height: Int,
+        bayerPattern: Int, whiteLevel: Int, blackLevel: Int
+    ): FloatArray {
+        return nativeBridge.nativeDemosaicAMAZE(rawData, width, height, bayerPattern, whiteLevel, blackLevel)
+    }
+
+    // ================================================================
     // Helpers
     // ================================================================
 

@@ -16,6 +16,7 @@ class SleeveFilterService(
     private val labelDao: SemanticLabelDao,
     private val collectionDao: CollectionDao,
     private val filterDao: FilterDao,
+    private val filterV2Dao: FilterV2Dao,
     private val elementDao: SleeveElementDao
 ) {
     // ================================================================
@@ -399,6 +400,138 @@ class SleeveFilterService(
         labelDao.getLabelFrequency(limit).map {
             LabelFrequency(label = it.label, count = it.count)
         }
+    }
+
+    // ================================================================
+    // FilterNode tree-based filtering
+    // ================================================================
+
+    suspend fun filterByNodeTree(
+        rootNode: FilterNode,
+        allImageIds: List<Long>,
+        page: Int = 0,
+        pageSize: Int = 50
+    ): FilterResult = withContext(Dispatchers.IO) {
+        val context = createEvaluationContext()
+        val matchedIds = allImageIds.filter { imageId ->
+            rootNode.evaluate(imageId, context)
+        }.toSet()
+
+        val totalCount = matchedIds.size
+        val offset = page * pageSize
+        val paged = matchedIds.toList().drop(offset).take(pageSize)
+
+        FilterResult(
+            imageIds = paged,
+            totalCount = totalCount,
+            page = page,
+            pageSize = pageSize
+        )
+    }
+
+    suspend fun filterByComboWithTree(
+        combo: FilterCombo,
+        page: Int = 0,
+        pageSize: Int = 50
+    ): FilterResult = withContext(Dispatchers.IO) {
+        val rootNode = combo.rootNode
+        if (rootNode != null) {
+            val allIds = metadataDao.getAllMetadata().map { it.imageId }
+            return@withContext filterByNodeTree(rootNode, allIds, page, pageSize)
+        }
+        // Fallback to flat filter logic
+        filterCombined(combo, page, pageSize)
+    }
+
+    private fun createEvaluationContext(): FilterEvaluationContext {
+        return object : FilterEvaluationContext {
+            private val ratingCache = mutableMapOf<Long, Int>()
+            private val labelCache = mutableMapOf<Long, List<String>>()
+            private val collectionCache = mutableMapOf<Long, Set<Long>>()
+
+            override fun evaluateLeaf(imageId: Long, filter: SleeveFilter): Boolean {
+                return when (filter) {
+                    is RatingFilterNode -> {
+                        val rating = ratingCache[imageId] ?: 0
+                        rating in filter.minRating..filter.maxRating
+                    }
+                    is DateRangeFilterNode -> {
+                        // Simplified - in production would query metadata
+                        true
+                    }
+                    is CameraFilterNode -> {
+                        true // Would check against metadataDao
+                    }
+                    is LensFilterNode -> {
+                        true // Would check against metadataDao
+                    }
+                    is TagFilterNode -> {
+                        val labels = labelCache[imageId] ?: emptyList()
+                        filter.tags.any { it in labels }
+                    }
+                    is CollectionFilterNode -> {
+                        val collections = collectionCache[imageId] ?: emptySet()
+                        filter.collectionId in collections
+                    }
+                    is FileTypeFilterNode -> {
+                        true // Would check against metadataDao
+                    }
+                    else -> {
+                        // Default: cannot evaluate without DB access
+                        true
+                    }
+                }
+            }
+        }
+    }
+
+    // ================================================================
+    // FilterCombo persistence (desktop schema - FilterEntity)
+    // ================================================================
+
+    suspend fun saveFilterCombo(name: String, combo: FilterCombo): Long =
+        withContext(Dispatchers.IO) {
+            filterV2Dao.insertFilter(
+                FilterEntity(
+                    name = name,
+                    filterJson = combo.toJson()
+                )
+            )
+        }
+
+    suspend fun loadFilterCombo(filterId: Long): FilterCombo? = withContext(Dispatchers.IO) {
+        val entity = filterV2Dao.getFilterById(filterId) ?: return@withContext null
+        FilterCombo.fromEntity(entity)
+    }
+
+    suspend fun loadFilterComboByName(name: String): FilterCombo? = withContext(Dispatchers.IO) {
+        val entity = filterV2Dao.getFilterByName(name) ?: return@withContext null
+        FilterCombo.fromEntity(entity)
+    }
+
+    suspend fun getAllFilterCombos(): List<Pair<Long, String>> = withContext(Dispatchers.IO) {
+        filterV2Dao.getAllFilters().map { it.filterId to it.name }
+    }
+
+    suspend fun deleteFilterCombo(filterId: Long) = withContext(Dispatchers.IO) {
+        filterV2Dao.deleteFilterById(filterId)
+    }
+
+    suspend fun applyFilterCombo(
+        filterId: Long,
+        page: Int = 0,
+        pageSize: Int = 50
+    ): FilterResult? = withContext(Dispatchers.IO) {
+        val combo = loadFilterCombo(filterId) ?: return@withContext null
+        filterByComboWithTree(combo, page, pageSize)
+    }
+
+    suspend fun applyFilterComboToAlbum(
+        combo: FilterCombo,
+        page: Int = 0,
+        pageSize: Int = 50
+    ): FilterResult = withContext(Dispatchers.IO) {
+        filterByComboWithTree(combo, page, pageSize)
     }
 
     // ================================================================

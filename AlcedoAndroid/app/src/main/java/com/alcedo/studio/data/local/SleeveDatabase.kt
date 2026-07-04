@@ -22,9 +22,20 @@ import com.alcedo.studio.data.model.*
         CollectionEntity::class,
         CollectionImageEntity::class,
         FilterPresetEntity::class,
-        ElementFts::class
+        ElementFts::class,
+        // Desktop schema entities (v3)
+        ImageEntity::class,
+        PipelineEntity::class,
+        HistoryEntity::class,
+        FilterEntity::class,
+        AiDescriptionEntity::class,
+        AiRatingEntity::class,
+        SemanticEmbeddingEntity::class,
+        SemanticLabelV2Entity::class,
+        CollectionV2Entity::class,
+        CollectionImageV2Entity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(SleeveTypeConverters::class)
@@ -38,6 +49,17 @@ abstract class SleeveDatabase : RoomDatabase() {
     abstract fun semanticLabelDao(): SemanticLabelDao
     abstract fun collectionDao(): CollectionDao
     abstract fun filterDao(): FilterDao
+
+    // Desktop schema DAOs
+    abstract fun imageDao(): ImageDao
+    abstract fun pipelineDao(): PipelineDao
+    abstract fun historyDao(): HistoryDao
+    abstract fun filterV2Dao(): FilterV2Dao
+    abstract fun aiDescriptionDao(): AiDescriptionDao
+    abstract fun aiRatingDao(): AiRatingDao
+    abstract fun semanticEmbeddingDao(): SemanticEmbeddingDao
+    abstract fun semanticLabelV2Dao(): SemanticLabelV2Dao
+    abstract fun collectionV2Dao(): CollectionV2Dao
 
     companion object {
         const val DATABASE_NAME = "alcedo_sleeve.db"
@@ -57,7 +79,7 @@ abstract class SleeveDatabase : RoomDatabase() {
                 SleeveDatabase::class.java,
                 DATABASE_NAME
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
@@ -266,6 +288,188 @@ abstract class SleeveDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_collections_name ON collections(collection_name)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_collection_images_image_id ON collection_images(image_id)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_filter_presets_name ON filter_presets(name)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // ── ImageEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS images (
+                        file_id INTEGER PRIMARY KEY NOT NULL,
+                        width INTEGER NOT NULL DEFAULT 0,
+                        height INTEGER NOT NULL DEFAULT 0,
+                        format TEXT NOT NULL DEFAULT '',
+                        color_space TEXT NOT NULL DEFAULT '',
+                        bit_depth INTEGER NOT NULL DEFAULT 8,
+                        is_hdr INTEGER NOT NULL DEFAULT 0,
+                        rating INTEGER NOT NULL DEFAULT 0,
+                        import_date INTEGER NOT NULL DEFAULT 0,
+                        last_modified INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_file_id ON images(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_format ON images(format)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_color_space ON images(color_space)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_is_hdr ON images(is_hdr)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_rating ON images(rating)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_images_import_date ON images(import_date)")
+
+                // ── PipelineEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS pipelines (
+                        pipeline_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        params_json TEXT NOT NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_pipelines_file_id ON pipelines(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_pipelines_is_active ON pipelines(is_active)")
+
+                // ── HistoryEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS histories (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        version_id TEXT NOT NULL,
+                        version_name TEXT NOT NULL DEFAULT '',
+                        params_json TEXT NOT NULL,
+                        parent_version_id TEXT,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        is_active INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_histories_file_id ON histories(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_histories_version_id ON histories(version_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_histories_is_active ON histories(is_active)")
+
+                // ── FilterEntity table (desktop schema) ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS filters (
+                        filter_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        filter_json TEXT NOT NULL,
+                        created_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_filters_name ON filters(name)")
+
+                // ── AiDescriptionEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS ai_descriptions (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        task_id TEXT NOT NULL DEFAULT '',
+                        provider_id TEXT NOT NULL DEFAULT '',
+                        model_id TEXT NOT NULL DEFAULT '',
+                        caption TEXT NOT NULL DEFAULT '',
+                        tags_json TEXT NOT NULL DEFAULT '[]',
+                        scene TEXT NOT NULL DEFAULT '',
+                        confidence REAL NOT NULL DEFAULT 0,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_descriptions_file_id ON ai_descriptions(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_descriptions_task_id ON ai_descriptions(task_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_descriptions_provider_id ON ai_descriptions(provider_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_descriptions_is_active ON ai_descriptions(is_active)")
+
+                // ── AiRatingEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS ai_ratings (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        task_id TEXT NOT NULL DEFAULT '',
+                        provider_id TEXT NOT NULL DEFAULT '',
+                        model_id TEXT NOT NULL DEFAULT '',
+                        rating INTEGER NOT NULL DEFAULT 0,
+                        rubric_id TEXT NOT NULL DEFAULT '',
+                        reasons_json TEXT NOT NULL DEFAULT '[]',
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_ratings_file_id ON ai_ratings(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_ratings_task_id ON ai_ratings(task_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_ratings_provider_id ON ai_ratings(provider_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_ratings_is_active ON ai_ratings(is_active)")
+
+                // ── SemanticEmbeddingEntity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS semantic_embeddings (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        model_id TEXT NOT NULL DEFAULT '',
+                        embedding_blob BLOB NOT NULL DEFAULT X'',
+                        dimension INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_semantic_embeddings_file_id ON semantic_embeddings(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_semantic_embeddings_model_id ON semantic_embeddings(model_id)")
+
+                // ── SemanticLabelV2Entity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS semantic_labels_v2 (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        model_id TEXT NOT NULL DEFAULT '',
+                        primary_label TEXT NOT NULL DEFAULT '',
+                        secondary_label TEXT NOT NULL DEFAULT '',
+                        primary_confidence REAL NOT NULL DEFAULT 0,
+                        marginal REAL NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_semantic_labels_v2_file_id ON semantic_labels_v2(file_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_semantic_labels_v2_model_id ON semantic_labels_v2(model_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_semantic_labels_v2_primary_label ON semantic_labels_v2(primary_label)")
+
+                // ── CollectionV2Entity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS collections_v2 (
+                        collection_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        cover_file_id INTEGER,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_v2_name ON collections_v2(name)")
+
+                // ── CollectionImageV2Entity table ──
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS collection_images_v2 (
+                        collection_id INTEGER NOT NULL,
+                        file_id INTEGER NOT NULL,
+                        added_at INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (collection_id, file_id),
+                        FOREIGN KEY (collection_id) REFERENCES collections_v2(collection_id) ON DELETE CASCADE,
+                        FOREIGN KEY (file_id) REFERENCES sleeve_files(element_id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_collection_images_v2_file_id ON collection_images_v2(file_id)")
+
+                // ── Migrate data from old collections to collections_v2 ──
+                db.execSQL("""
+                    INSERT INTO collections_v2 (collection_id, name, description, cover_file_id, created_at, updated_at)
+                    SELECT collection_id, collection_name, description, cover_image_id, created_at, updated_at
+                    FROM collections
+                """)
+                db.execSQL("""
+                    INSERT INTO collection_images_v2 (collection_id, file_id, added_at)
+                    SELECT collection_id, image_id, added_at
+                    FROM collection_images
+                """)
             }
         }
     }

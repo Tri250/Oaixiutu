@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.json.*
 import java.time.Instant
 
 // ================================================================
@@ -558,7 +559,8 @@ data class StringFilter(
 data class FilterCombo(
     val filterId: Long = 0L,
     val logic: FilterLogic = FilterLogic.AND,
-    val filters: MutableList<SleeveFilter> = mutableListOf()
+    val filters: MutableList<SleeveFilter> = mutableListOf(),
+    val rootNode: FilterNode? = null
 ) {
     fun addFilter(filter: SleeveFilter) = filters.add(filter)
     fun removeFilter(filter: SleeveFilter) = filters.remove(filter)
@@ -581,6 +583,279 @@ data class FilterCombo(
             }
         }
     }
+
+    fun toEntity(): FilterEntity = FilterEntity(
+        filterId = filterId,
+        name = "",
+        filterJson = toJson()
+    )
+
+    companion object {
+        fun fromEntity(entity: FilterEntity): FilterCombo {
+            return fromJson(entity.filterJson)
+        }
+
+        fun fromJson(jsonString: String): FilterCombo {
+            return try {
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                val element = json.parseToJsonElement(jsonString).jsonObject
+                val filterId = element["filterId"]?.jsonPrimitive?.longOrNull ?: 0L
+                val logicName = element["logic"]?.jsonPrimitive?.contentOrNull ?: "AND"
+                val logic = runCatching { FilterLogic.valueOf(logicName) }.getOrDefault(FilterLogic.AND)
+
+                val filters = mutableListOf<SleeveFilter>()
+                element["filters"]?.jsonArray?.forEach { filterElement ->
+                    parseFilterNode(filterElement.jsonObject)?.let { filters.add(it) }
+                }
+
+                val rootNode = element["rootNode"]?.let { parseNodeTree(it.jsonObject) }
+
+                FilterCombo(filterId = filterId, logic = logic, filters = filters, rootNode = rootNode)
+            } catch (_: Exception) {
+                FilterCombo()
+            }
+        }
+
+        private fun parseFilterNode(obj: kotlinx.serialization.json.JsonObject): SleeveFilter? {
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull ?: return null
+            return when (type) {
+                "RATING" -> RatingFilterNode(
+                    minRating = obj["minRating"]?.jsonPrimitive?.intOrNull ?: 0,
+                    maxRating = obj["maxRating"]?.jsonPrimitive?.intOrNull ?: 5
+                )
+                "FILE_TYPE" -> FileTypeFilterNode(
+                    imageTypes = obj["imageTypes"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                        ?: emptyList()
+                )
+                "DATE_RANGE" -> DateRangeFilterNode(
+                    from = obj["from"]?.jsonPrimitive?.longOrNull ?: 0L,
+                    to = obj["to"]?.jsonPrimitive?.longOrNull ?: Long.MAX_VALUE
+                )
+                "CAMERA" -> CameraFilterNode(
+                    cameraMake = obj["cameraMake"]?.jsonPrimitive?.contentOrNull,
+                    cameraModel = obj["cameraModel"]?.jsonPrimitive?.contentOrNull
+                )
+                "LENS" -> LensFilterNode(
+                    lensModel = obj["lensModel"]?.jsonPrimitive?.contentOrNull
+                )
+                "TAG" -> TagFilterNode(
+                    tags = obj["tags"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+                )
+                "COLLECTION" -> CollectionFilterNode(
+                    collectionId = obj["collectionId"]?.jsonPrimitive?.longOrNull ?: 0L
+                )
+                "EXIF" -> ExifFilter(
+                    cameraMake = obj["cameraMake"]?.jsonPrimitive?.contentOrNull,
+                    cameraModel = obj["cameraModel"]?.jsonPrimitive?.contentOrNull,
+                    lensModel = obj["lensModel"]?.jsonPrimitive?.contentOrNull
+                )
+                "DATETIME" -> DateTimeFilter(
+                    startDate = obj["startDate"]?.jsonPrimitive?.longOrNull ?: 0L,
+                    endDate = obj["endDate"]?.jsonPrimitive?.longOrNull ?: Long.MAX_VALUE
+                )
+                else -> null
+            }
+        }
+
+        private fun parseNodeTree(obj: kotlinx.serialization.json.JsonObject): FilterNode? {
+            val kind = obj["kind"]?.jsonPrimitive?.contentOrNull ?: return null
+            return when (kind) {
+                "LEAF" -> {
+                    val filter = obj["filter"]?.jsonObject?.let { parseFilterNode(it) } ?: return null
+                    FilterNode.Leaf(filter)
+                }
+                "AND" -> {
+                    val children = obj["children"]?.jsonArray?.mapNotNull { parseNodeTree(it.jsonObject) } ?: emptyList()
+                    FilterNode.And(children)
+                }
+                "OR" -> {
+                    val children = obj["children"]?.jsonArray?.mapNotNull { parseNodeTree(it.jsonObject) } ?: emptyList()
+                    FilterNode.Or(children)
+                }
+                "NOT" -> {
+                    val child = obj["child"]?.jsonObject?.let { parseNodeTree(it) } ?: return null
+                    FilterNode.Not(child)
+                }
+                else -> null
+            }
+        }
+    }
+}
+
+// ================================================================
+// FilterNode Tree Structure (AND/OR/NOT logic)
+// ================================================================
+
+sealed class FilterNode {
+    abstract fun toJsonElement(): kotlinx.serialization.json.JsonElement
+    abstract fun evaluate(imageId: Long, context: FilterEvaluationContext): Boolean
+
+    data class Leaf(val filter: SleeveFilter) : FilterNode() {
+        override fun toJsonElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+            put("kind", "LEAF")
+            put("filter", filter.toJsonNodeElement())
+        }
+
+        override fun evaluate(imageId: Long, context: FilterEvaluationContext): Boolean {
+            return context.evaluateLeaf(imageId, filter)
+        }
+    }
+
+    data class And(val children: List<FilterNode>) : FilterNode() {
+        override fun toJsonElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+            put("kind", "AND")
+            put("children", buildJsonArray { children.forEach { add(it.toJsonElement()) } })
+        }
+
+        override fun evaluate(imageId: Long, context: FilterEvaluationContext): Boolean {
+            return children.all { it.evaluate(imageId, context) }
+        }
+    }
+
+    data class Or(val children: List<FilterNode>) : FilterNode() {
+        override fun toJsonElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+            put("kind", "OR")
+            put("children", buildJsonArray { children.forEach { add(it.toJsonElement()) } })
+        }
+
+        override fun evaluate(imageId: Long, context: FilterEvaluationContext): Boolean {
+            return children.any { it.evaluate(imageId, context) }
+        }
+    }
+
+    data class Not(val child: FilterNode) : FilterNode() {
+        override fun toJsonElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+            put("kind", "NOT")
+            put("child", child.toJsonElement())
+        }
+
+        override fun evaluate(imageId: Long, context: FilterEvaluationContext): Boolean {
+            return !child.evaluate(imageId, context)
+        }
+    }
+}
+
+// ================================================================
+// Filter Evaluation Context (injected by service layer)
+// ================================================================
+
+interface FilterEvaluationContext {
+    fun evaluateLeaf(imageId: Long, filter: SleeveFilter): Boolean
+}
+
+// ================================================================
+// Specific Filter Types for FilterNode tree
+// ================================================================
+
+data class RatingFilterNode(
+    val minRating: Int = 0,
+    val maxRating: Int = 5
+) : SleeveFilter(FilterType.RANGE) {
+    override fun resetFilter() { minRating; maxRating }
+    override fun getPredicate(): String = "rating BETWEEN ? AND ?"
+    fun getBindArgs(): List<Any?> = listOf(minRating, maxRating)
+    override fun toJson(): String = """{"type":"RATING","minRating":$minRating,"maxRating":$maxRating}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "RATING")
+        put("minRating", minRating)
+        put("maxRating", maxRating)
+    }
+}
+
+data class FileTypeFilterNode(
+    val imageTypes: List<String> = emptyList()
+) : SleeveFilter(FilterType.VALUE) {
+    override fun resetFilter() { imageTypes; }
+    override fun getPredicate(): String =
+        if (imageTypes.isEmpty()) "" else "image_type IN (${imageTypes.joinToString(",") { "?" }})"
+    fun getBindArgs(): List<Any?> = imageTypes
+    override fun toJson(): String = """{"type":"FILE_TYPE","imageTypes":${imageTypes.joinToString(",", "[", "]") { "\"$it\"" }}}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "FILE_TYPE")
+        put("imageTypes", buildJsonArray { imageTypes.forEach { add(it) } })
+    }
+}
+
+data class DateRangeFilterNode(
+    val from: Long = 0L,
+    val to: Long = Long.MAX_VALUE
+) : SleeveFilter(FilterType.DATETIME) {
+    override fun resetFilter() { from; to }
+    override fun getPredicate(): String = "capture_date BETWEEN ? AND ?"
+    fun getBindArgs(): List<Any?> = listOf(from, to)
+    override fun toJson(): String = """{"type":"DATE_RANGE","from":$from,"to":$to}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "DATE_RANGE")
+        put("from", from)
+        put("to", to)
+    }
+}
+
+data class CameraFilterNode(
+    val cameraMake: String? = null,
+    val cameraModel: String? = null
+) : SleeveFilter(FilterType.EXIF) {
+    override fun resetFilter() { cameraMake; cameraModel }
+    override fun getPredicate(): String {
+        val conditions = mutableListOf<String>()
+        cameraMake?.let { conditions.add("camera_make LIKE '%' || ? || '%'") }
+        cameraModel?.let { conditions.add("camera_model LIKE '%' || ? || '%'") }
+        return conditions.joinToString(" AND ")
+    }
+    fun getBindArgs(): List<Any?> = listOfNotNull(cameraMake, cameraModel)
+    override fun toJson(): String = """{"type":"CAMERA","cameraMake":"$cameraMake","cameraModel":"$cameraModel"}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "CAMERA")
+        cameraMake?.let { put("cameraMake", it) }
+        cameraModel?.let { put("cameraModel", it) }
+    }
+}
+
+data class LensFilterNode(
+    val lensModel: String? = null
+) : SleeveFilter(FilterType.EXIF) {
+    override fun resetFilter() { lensModel; }
+    override fun getPredicate(): String = lensModel?.let { "lens_model LIKE '%' || ? || '%'" } ?: ""
+    fun getBindArgs(): List<Any?> = listOfNotNull(lensModel)
+    override fun toJson(): String = """{"type":"LENS","lensModel":"$lensModel"}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "LENS")
+        lensModel?.let { put("lensModel", it) }
+    }
+}
+
+data class TagFilterNode(
+    val tags: List<String> = emptyList()
+) : SleeveFilter(FilterType.STRING) {
+    override fun resetFilter() { tags; }
+    override fun getPredicate(): String =
+        if (tags.isEmpty()) "" else "label IN (${tags.joinToString(",") { "?" }})"
+    fun getBindArgs(): List<Any?> = tags
+    override fun toJson(): String = """{"type":"TAG","tags":${tags.joinToString(",", "[", "]") { "\"$it\"" }}}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "TAG")
+        put("tags", buildJsonArray { tags.forEach { add(it) } })
+    }
+}
+
+data class CollectionFilterNode(
+    val collectionId: Long = 0L
+) : SleeveFilter(FilterType.COMBO) {
+    override fun resetFilter() { collectionId }
+    override fun getPredicate(): String = "image_id IN (SELECT image_id FROM collection_images WHERE collection_id = ?)"
+    fun getBindArgs(): List<Any?> = listOf(collectionId)
+    override fun toJson(): String = """{"type":"COLLECTION","collectionId":$collectionId}"""
+    override fun fromJson(json: String) {}
+    fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
+        put("type", "COLLECTION")
+        put("collectionId", collectionId)
+    }
 }
 
 data class FilterPreset(
@@ -600,8 +875,7 @@ data class FilterPreset(
 
     companion object {
         fun fromEntity(entity: FilterPresetEntity): FilterPreset {
-            val combo = FilterCombo()
-            // Parse JSON back to FilterCombo
+            val combo = FilterCombo.fromJson(entity.filterJson)
             return FilterPreset(
                 presetId = entity.presetId,
                 name = entity.name,
@@ -641,7 +915,33 @@ data class IntRangeFilter(
 
 fun FilterCombo.toJson(): String {
     val filterJsons = filters.map { it.toJson() }
-    return """{"filterId":$filterId,"logic":"${logic.name}","filters":[${filterJsons.joinToString(",")}]}"""
+    val rootNodeJson = rootNode?.toJsonElement()?.toString()
+    return """{"filterId":$filterId,"logic":"${logic.name}","filters":[${filterJsons.joinToString(",")}],"rootNode":${rootNodeJson ?: "null"}}"""
+}
+
+// ================================================================
+// JSON builder helpers for FilterNode
+// ================================================================
+
+private fun buildJsonObject(builder: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit): kotlinx.serialization.json.JsonObject {
+    return kotlinx.serialization.json.buildJsonObject(builder)
+}
+
+private fun buildJsonArray(builder: kotlinx.serialization.json.JsonArrayBuilder.() -> Unit): kotlinx.serialization.json.JsonArray {
+    return kotlinx.serialization.json.buildJsonArray(builder)
+}
+
+private fun SleeveFilter.toJsonNodeElement(): kotlinx.serialization.json.JsonObject {
+    return when (this) {
+        is RatingFilterNode -> toJsonNodeElement()
+        is FileTypeFilterNode -> toJsonNodeElement()
+        is DateRangeFilterNode -> toJsonNodeElement()
+        is CameraFilterNode -> toJsonNodeElement()
+        is LensFilterNode -> toJsonNodeElement()
+        is TagFilterNode -> toJsonNodeElement()
+        is CollectionFilterNode -> toJsonNodeElement()
+        else -> buildJsonObject { put("type", type.name) }
+    }
 }
 
 // ================================================================

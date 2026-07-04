@@ -747,3 +747,527 @@ data class LabelFrequencyResult(
     @ColumnInfo(name = "label") val label: String,
     @ColumnInfo(name = "cnt") val count: Int
 )
+
+// ================================================================
+// ImageDao - Desktop schema image table CRUD
+// ================================================================
+
+@Dao
+interface ImageDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertImage(image: ImageEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertImages(images: List<ImageEntity>)
+
+    @Update
+    suspend fun updateImage(image: ImageEntity)
+
+    @Delete
+    suspend fun deleteImage(image: ImageEntity)
+
+    @Query("DELETE FROM images WHERE file_id = :fileId")
+    suspend fun deleteImageByFileId(fileId: Long)
+
+    @Query("SELECT * FROM images WHERE file_id = :fileId")
+    suspend fun getImageByFileId(fileId: Long): ImageEntity?
+
+    @Query("SELECT * FROM images WHERE file_id = :fileId")
+    fun observeImageByFileId(fileId: Long): Flow<ImageEntity?>
+
+    @Query("SELECT * FROM images WHERE is_hdr = 1")
+    suspend fun getHdrImages(): List<ImageEntity>
+
+    @Query("SELECT * FROM images WHERE rating >= :minRating ORDER BY rating DESC")
+    suspend fun getImagesByMinRating(minRating: Int): List<ImageEntity>
+
+    @Query("SELECT * FROM images WHERE format = :format ORDER BY import_date DESC")
+    suspend fun getImagesByFormat(format: String): List<ImageEntity>
+
+    @Query("SELECT * FROM images WHERE color_space = :colorSpace")
+    suspend fun getImagesByColorSpace(colorSpace: String): List<ImageEntity>
+
+    @Query("SELECT * FROM images ORDER BY import_date DESC LIMIT :limit OFFSET :offset")
+    suspend fun getImagesPaginated(limit: Int, offset: Int): List<ImageEntity>
+
+    @Query("SELECT COUNT(*) FROM images")
+    suspend fun getImageCount(): Int
+
+    @Query("UPDATE images SET rating = :rating WHERE file_id = :fileId")
+    suspend fun updateRating(fileId: Long, rating: Int)
+
+    @Query("UPDATE images SET last_modified = :lastModified WHERE file_id = :fileId")
+    suspend fun updateLastModified(fileId: Long, lastModified: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM images")
+    suspend fun deleteAllImages()
+}
+
+// ================================================================
+// PipelineDao - Desktop schema pipeline table CRUD
+// ================================================================
+
+@Dao
+interface PipelineDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPipeline(pipeline: PipelineEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPipelines(pipelines: List<PipelineEntity>)
+
+    @Update
+    suspend fun updatePipeline(pipeline: PipelineEntity)
+
+    @Delete
+    suspend fun deletePipeline(pipeline: PipelineEntity)
+
+    @Query("DELETE FROM pipelines WHERE pipeline_id = :pipelineId")
+    suspend fun deletePipelineById(pipelineId: Long)
+
+    @Query("DELETE FROM pipelines WHERE file_id = :fileId")
+    suspend fun deletePipelinesByFileId(fileId: Long)
+
+    @Query("SELECT * FROM pipelines WHERE pipeline_id = :pipelineId")
+    suspend fun getPipelineById(pipelineId: Long): PipelineEntity?
+
+    @Query("SELECT * FROM pipelines WHERE file_id = :fileId AND is_active = 1 LIMIT 1")
+    suspend fun getActivePipelineByFileId(fileId: Long): PipelineEntity?
+
+    @Query("SELECT * FROM pipelines WHERE file_id = :fileId ORDER BY created_at DESC")
+    suspend fun getPipelinesByFileId(fileId: Long): List<PipelineEntity>
+
+    @Query("SELECT * FROM pipelines WHERE file_id = :fileId ORDER BY created_at DESC")
+    fun observePipelinesByFileId(fileId: Long): Flow<List<PipelineEntity>>
+
+    @Query("UPDATE pipelines SET is_active = 0 WHERE file_id = :fileId")
+    suspend fun deactivateAllPipelinesForFile(fileId: Long)
+
+    @Query("UPDATE pipelines SET is_active = 1 WHERE pipeline_id = :pipelineId")
+    suspend fun activatePipeline(pipelineId: Long)
+
+    @Query("SELECT COUNT(*) FROM pipelines WHERE file_id = :fileId")
+    suspend fun getPipelineCountForFile(fileId: Long): Int
+
+    @Query("DELETE FROM pipelines")
+    suspend fun deleteAllPipelines()
+}
+
+// ================================================================
+// HistoryDao - Desktop schema history table CRUD
+// ================================================================
+
+@Dao
+interface HistoryDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertHistory(history: HistoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertHistories(histories: List<HistoryEntity>)
+
+    @Update
+    suspend fun updateHistory(history: HistoryEntity)
+
+    @Delete
+    suspend fun deleteHistory(history: HistoryEntity)
+
+    @Query("DELETE FROM histories WHERE row_id = :rowId")
+    suspend fun deleteHistoryById(rowId: Long)
+
+    @Query("DELETE FROM histories WHERE file_id = :fileId")
+    suspend fun deleteHistoriesByFileId(fileId: Long)
+
+    @Query("SELECT * FROM histories WHERE row_id = :rowId")
+    suspend fun getHistoryById(rowId: Long): HistoryEntity?
+
+    @Query("SELECT * FROM histories WHERE file_id = :fileId ORDER BY created_at DESC")
+    suspend fun getHistoriesByFileId(fileId: Long): List<HistoryEntity>
+
+    @Query("SELECT * FROM histories WHERE file_id = :fileId AND is_active = 1 LIMIT 1")
+    suspend fun getActiveHistoryByFileId(fileId: Long): HistoryEntity?
+
+    @Query("SELECT * FROM histories WHERE file_id = :fileId AND version_id = :versionId")
+    suspend fun getHistoryByVersionId(fileId: Long, versionId: String): HistoryEntity?
+
+    @Query("SELECT * FROM histories WHERE file_id = :fileId ORDER BY created_at DESC")
+    fun observeHistoriesByFileId(fileId: Long): Flow<List<HistoryEntity>>
+
+    @Query("UPDATE histories SET is_active = 0 WHERE file_id = :fileId")
+    suspend fun deactivateAllHistoriesForFile(fileId: Long)
+
+    @Query("UPDATE histories SET is_active = 1 WHERE row_id = :rowId")
+    suspend fun activateHistory(rowId: Long)
+
+    @Query("SELECT COUNT(*) FROM histories WHERE file_id = :fileId")
+    suspend fun getHistoryCountForFile(fileId: Long): Int
+
+    @Query("""
+        WITH RECURSIVE version_chain AS (
+            SELECT * FROM histories WHERE version_id = :versionId AND file_id = :fileId
+            UNION ALL
+            SELECT h.* FROM histories h INNER JOIN version_chain vc ON h.version_id = vc.parent_version_id
+        )
+        SELECT * FROM version_chain ORDER BY created_at ASC
+    """)
+    suspend fun getVersionChain(fileId: Long, versionId: String): List<HistoryEntity>
+
+    @Query("DELETE FROM histories")
+    suspend fun deleteAllHistories()
+}
+
+// ================================================================
+// FilterDao (desktop schema) - Filter CRUD
+// ================================================================
+
+@Dao
+interface FilterV2Dao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFilter(filter: FilterEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFilters(filters: List<FilterEntity>)
+
+    @Update
+    suspend fun updateFilter(filter: FilterEntity)
+
+    @Delete
+    suspend fun deleteFilter(filter: FilterEntity)
+
+    @Query("DELETE FROM filters WHERE filter_id = :filterId")
+    suspend fun deleteFilterById(filterId: Long)
+
+    @Query("SELECT * FROM filters WHERE filter_id = :filterId")
+    suspend fun getFilterById(filterId: Long): FilterEntity?
+
+    @Query("SELECT * FROM filters WHERE name = :name")
+    suspend fun getFilterByName(name: String): FilterEntity?
+
+    @Query("SELECT * FROM filters ORDER BY created_at DESC")
+    suspend fun getAllFilters(): List<FilterEntity>
+
+    @Query("SELECT * FROM filters ORDER BY created_at DESC")
+    fun observeAllFilters(): Flow<List<FilterEntity>>
+
+    @Query("SELECT COUNT(*) FROM filters")
+    suspend fun getFilterCount(): Int
+
+    @Query("DELETE FROM filters")
+    suspend fun deleteAllFilters()
+}
+
+// ================================================================
+// AiDescriptionDao - AI description CRUD
+// ================================================================
+
+@Dao
+interface AiDescriptionDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDescription(description: AiDescriptionEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDescriptions(descriptions: List<AiDescriptionEntity>)
+
+    @Update
+    suspend fun updateDescription(description: AiDescriptionEntity)
+
+    @Delete
+    suspend fun deleteDescription(description: AiDescriptionEntity)
+
+    @Query("DELETE FROM ai_descriptions WHERE row_id = :rowId")
+    suspend fun deleteDescriptionById(rowId: Long)
+
+    @Query("DELETE FROM ai_descriptions WHERE file_id = :fileId")
+    suspend fun deleteDescriptionsByFileId(fileId: Long)
+
+    @Query("SELECT * FROM ai_descriptions WHERE file_id = :fileId AND is_active = 1 ORDER BY row_id DESC LIMIT 1")
+    suspend fun getActiveDescriptionByFileId(fileId: Long): AiDescriptionEntity?
+
+    @Query("SELECT * FROM ai_descriptions WHERE file_id = :fileId ORDER BY row_id DESC")
+    suspend fun getDescriptionsByFileId(fileId: Long): List<AiDescriptionEntity>
+
+    @Query("SELECT * FROM ai_descriptions WHERE file_id = :fileId ORDER BY row_id DESC")
+    fun observeDescriptionsByFileId(fileId: Long): Flow<List<AiDescriptionEntity>>
+
+    @Query("SELECT * FROM ai_descriptions WHERE task_id = :taskId")
+    suspend fun getDescriptionsByTaskId(taskId: String): List<AiDescriptionEntity>
+
+    @Query("SELECT * FROM ai_descriptions WHERE provider_id = :providerId")
+    suspend fun getDescriptionsByProviderId(providerId: String): List<AiDescriptionEntity>
+
+    @Query("SELECT * FROM ai_descriptions WHERE model_id = :modelId")
+    suspend fun getDescriptionsByModelId(modelId: String): List<AiDescriptionEntity>
+
+    @Query("SELECT * FROM ai_descriptions WHERE confidence >= :minConfidence ORDER BY confidence DESC")
+    suspend fun getDescriptionsByMinConfidence(minConfidence: Float): List<AiDescriptionEntity>
+
+    @Query("UPDATE ai_descriptions SET is_active = 0 WHERE file_id = :fileId")
+    suspend fun deactivateAllDescriptionsForFile(fileId: Long)
+
+    @Query("UPDATE ai_descriptions SET is_active = 1 WHERE row_id = :rowId")
+    suspend fun activateDescription(rowId: Long)
+
+    @Query("SELECT COUNT(*) FROM ai_descriptions WHERE is_active = 1")
+    suspend fun getActiveDescriptionCount(): Int
+
+    @Query("DELETE FROM ai_descriptions")
+    suspend fun deleteAllDescriptions()
+}
+
+// ================================================================
+// AiRatingDao - AI rating CRUD
+// ================================================================
+
+@Dao
+interface AiRatingDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAiRating(rating: AiRatingEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAiRatings(ratings: List<AiRatingEntity>)
+
+    @Update
+    suspend fun updateAiRating(rating: AiRatingEntity)
+
+    @Delete
+    suspend fun deleteAiRating(rating: AiRatingEntity)
+
+    @Query("DELETE FROM ai_ratings WHERE row_id = :rowId")
+    suspend fun deleteAiRatingById(rowId: Long)
+
+    @Query("DELETE FROM ai_ratings WHERE file_id = :fileId")
+    suspend fun deleteAiRatingsByFileId(fileId: Long)
+
+    @Query("SELECT * FROM ai_ratings WHERE file_id = :fileId AND is_active = 1 ORDER BY row_id DESC LIMIT 1")
+    suspend fun getActiveAiRatingByFileId(fileId: Long): AiRatingEntity?
+
+    @Query("SELECT * FROM ai_ratings WHERE file_id = :fileId ORDER BY row_id DESC")
+    suspend fun getAiRatingsByFileId(fileId: Long): List<AiRatingEntity>
+
+    @Query("SELECT * FROM ai_ratings WHERE file_id = :fileId ORDER BY row_id DESC")
+    fun observeAiRatingsByFileId(fileId: Long): Flow<List<AiRatingEntity>>
+
+    @Query("SELECT * FROM ai_ratings WHERE task_id = :taskId")
+    suspend fun getAiRatingsByTaskId(taskId: String): List<AiRatingEntity>
+
+    @Query("SELECT * FROM ai_ratings WHERE provider_id = :providerId")
+    suspend fun getAiRatingsByProviderId(providerId: String): List<AiRatingEntity>
+
+    @Query("SELECT * FROM ai_ratings WHERE rating >= :minRating ORDER BY rating DESC")
+    suspend fun getAiRatingsByMinRating(minRating: Int): List<AiRatingEntity>
+
+    @Query("UPDATE ai_ratings SET is_active = 0 WHERE file_id = :fileId")
+    suspend fun deactivateAllAiRatingsForFile(fileId: Long)
+
+    @Query("UPDATE ai_ratings SET is_active = 1 WHERE row_id = :rowId")
+    suspend fun activateAiRating(rowId: Long)
+
+    @Query("SELECT AVG(rating) FROM ai_ratings WHERE is_active = 1")
+    suspend fun getAverageAiRating(): Float?
+
+    @Query("""
+        SELECT rating, COUNT(*) as cnt FROM ai_ratings 
+        WHERE is_active = 1
+        GROUP BY rating ORDER BY rating DESC
+    """)
+    suspend fun getAiRatingDistribution(): List<AiRatingDistributionResult>
+
+    @Query("DELETE FROM ai_ratings")
+    suspend fun deleteAllAiRatings()
+}
+
+// ================================================================
+// SemanticEmbeddingDao - Semantic embedding CRUD
+// ================================================================
+
+@Dao
+interface SemanticEmbeddingDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEmbedding(embedding: SemanticEmbeddingEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEmbeddings(embeddings: List<SemanticEmbeddingEntity>)
+
+    @Update
+    suspend fun updateEmbedding(embedding: SemanticEmbeddingEntity)
+
+    @Delete
+    suspend fun deleteEmbedding(embedding: SemanticEmbeddingEntity)
+
+    @Query("DELETE FROM semantic_embeddings WHERE row_id = :rowId")
+    suspend fun deleteEmbeddingById(rowId: Long)
+
+    @Query("DELETE FROM semantic_embeddings WHERE file_id = :fileId")
+    suspend fun deleteEmbeddingsByFileId(fileId: Long)
+
+    @Query("SELECT * FROM semantic_embeddings WHERE file_id = :fileId AND model_id = :modelId LIMIT 1")
+    suspend fun getEmbeddingByFileAndModel(fileId: Long, modelId: String): SemanticEmbeddingEntity?
+
+    @Query("SELECT * FROM semantic_embeddings WHERE file_id = :fileId ORDER BY created_at DESC")
+    suspend fun getEmbeddingsByFileId(fileId: Long): List<SemanticEmbeddingEntity>
+
+    @Query("SELECT * FROM semantic_embeddings WHERE model_id = :modelId")
+    suspend fun getEmbeddingsByModelId(modelId: String): List<SemanticEmbeddingEntity>
+
+    @Query("SELECT file_id FROM semantic_embeddings WHERE model_id = :modelId")
+    suspend fun getFileIdsWithEmbeddings(modelId: String): List<Long>
+
+    @Query("SELECT COUNT(*) FROM semantic_embeddings WHERE model_id = :modelId")
+    suspend fun getEmbeddingCountForModel(modelId: String): Int
+
+    @Query("SELECT COUNT(*) FROM semantic_embeddings")
+    suspend fun getTotalEmbeddingCount(): Int
+
+    @Query("DELETE FROM semantic_embeddings")
+    suspend fun deleteAllEmbeddings()
+}
+
+// ================================================================
+// SemanticLabelV2Dao - Desktop schema semantic label CRUD
+// ================================================================
+
+@Dao
+interface SemanticLabelV2Dao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLabel(label: SemanticLabelV2Entity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLabels(labels: List<SemanticLabelV2Entity>)
+
+    @Update
+    suspend fun updateLabel(label: SemanticLabelV2Entity)
+
+    @Delete
+    suspend fun deleteLabel(label: SemanticLabelV2Entity)
+
+    @Query("DELETE FROM semantic_labels_v2 WHERE row_id = :rowId")
+    suspend fun deleteLabelById(rowId: Long)
+
+    @Query("DELETE FROM semantic_labels_v2 WHERE file_id = :fileId")
+    suspend fun deleteLabelsByFileId(fileId: Long)
+
+    @Query("SELECT * FROM semantic_labels_v2 WHERE file_id = :fileId ORDER BY primary_confidence DESC")
+    suspend fun getLabelsByFileId(fileId: Long): List<SemanticLabelV2Entity>
+
+    @Query("SELECT * FROM semantic_labels_v2 WHERE file_id = :fileId ORDER BY primary_confidence DESC")
+    fun observeLabelsByFileId(fileId: Long): Flow<List<SemanticLabelV2Entity>>
+
+    @Query("SELECT * FROM semantic_labels_v2 WHERE primary_label = :label ORDER BY primary_confidence DESC")
+    suspend fun getFilesByPrimaryLabel(label: String): List<SemanticLabelV2Entity>
+
+    @Query("SELECT * FROM semantic_labels_v2 WHERE model_id = :modelId ORDER BY primary_confidence DESC")
+    suspend fun getLabelsByModelId(modelId: String): List<SemanticLabelV2Entity>
+
+    @Query("SELECT DISTINCT file_id FROM semantic_labels_v2 WHERE primary_label IN (:labels)")
+    suspend fun getFileIdsByLabels(labels: List<String>): List<Long>
+
+    @Query("""
+        SELECT primary_label, COUNT(*) as cnt FROM semantic_labels_v2 
+        GROUP BY primary_label ORDER BY cnt DESC LIMIT :limit
+    """)
+    suspend fun getLabelFrequency(limit: Int): List<LabelFrequencyResult>
+
+    @Query("SELECT COUNT(DISTINCT primary_label) FROM semantic_labels_v2")
+    suspend fun getDistinctLabelCount(): Int
+
+    @Query("DELETE FROM semantic_labels_v2")
+    suspend fun deleteAllLabels()
+}
+
+// ================================================================
+// CollectionV2Dao - Desktop schema collection CRUD
+// ================================================================
+
+@Dao
+interface CollectionV2Dao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCollection(collection: CollectionV2Entity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCollections(collections: List<CollectionV2Entity>)
+
+    @Update
+    suspend fun updateCollection(collection: CollectionV2Entity)
+
+    @Delete
+    suspend fun deleteCollection(collection: CollectionV2Entity)
+
+    @Query("DELETE FROM collections_v2 WHERE collection_id = :collectionId")
+    suspend fun deleteCollectionById(collectionId: Long)
+
+    @Query("SELECT * FROM collections_v2 WHERE collection_id = :collectionId")
+    suspend fun getCollectionById(collectionId: Long): CollectionV2Entity?
+
+    @Query("SELECT * FROM collections_v2 WHERE name = :name")
+    suspend fun getCollectionByName(name: String): CollectionV2Entity?
+
+    @Query("SELECT * FROM collections_v2 ORDER BY updated_at DESC")
+    suspend fun getAllCollections(): List<CollectionV2Entity>
+
+    @Query("SELECT * FROM collections_v2 ORDER BY updated_at DESC")
+    fun observeAllCollections(): Flow<List<CollectionV2Entity>>
+
+    @Query("UPDATE collections_v2 SET updated_at = :now WHERE collection_id = :collectionId")
+    suspend fun touchCollection(collectionId: Long, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE collections_v2 SET cover_file_id = :fileId WHERE collection_id = :collectionId")
+    suspend fun setCoverFile(collectionId: Long, fileId: Long?)
+
+    @Query("SELECT COUNT(*) FROM collections_v2")
+    suspend fun getCollectionCount(): Int
+
+    // Collection-File mapping
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addFileToCollection(mapping: CollectionImageV2Entity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addFilesToCollection(mappings: List<CollectionImageV2Entity>)
+
+    @Query("DELETE FROM collection_images_v2 WHERE collection_id = :collectionId AND file_id = :fileId")
+    suspend fun removeFileFromCollection(collectionId: Long, fileId: Long)
+
+    @Query("DELETE FROM collection_images_v2 WHERE collection_id = :collectionId")
+    suspend fun removeAllFilesFromCollection(collectionId: Long)
+
+    @Query("SELECT file_id FROM collection_images_v2 WHERE collection_id = :collectionId ORDER BY added_at DESC")
+    suspend fun getFileIdsInCollection(collectionId: Long): List<Long>
+
+    @Query("""
+        SELECT file_id FROM collection_images_v2 
+        WHERE collection_id = :collectionId 
+        ORDER BY added_at DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getFileIdsInCollectionPaginated(collectionId: Long, limit: Int, offset: Int): List<Long>
+
+    @Query("SELECT COUNT(*) FROM collection_images_v2 WHERE collection_id = :collectionId")
+    suspend fun getFileCountInCollection(collectionId: Long): Int
+
+    @Query("SELECT collection_id FROM collection_images_v2 WHERE file_id = :fileId")
+    suspend fun getCollectionIdsForFile(fileId: Long): List<Long>
+
+    @Query("SELECT COUNT(*) FROM collection_images_v2 WHERE collection_id = :collectionId AND file_id = :fileId")
+    suspend fun isFileInCollection(collectionId: Long, fileId: Long): Boolean
+
+    @Query("DELETE FROM collections_v2")
+    suspend fun deleteAllCollections()
+
+    @Query("DELETE FROM collection_images_v2")
+    suspend fun deleteAllCollectionMappings()
+}
+
+// ================================================================
+// AI Rating distribution result
+// ================================================================
+
+data class AiRatingDistributionResult(
+    @ColumnInfo(name = "rating") val rating: Int,
+    @ColumnInfo(name = "cnt") val count: Int
+)

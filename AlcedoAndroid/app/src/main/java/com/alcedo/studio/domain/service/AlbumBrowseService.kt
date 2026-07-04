@@ -27,10 +27,77 @@ enum class QuickAction {
     DELETE, EXPORT, COPY, MOVE
 }
 
+// ================================================================
+// Filter models for album browsing
+// ================================================================
+
+enum class FileCategory {
+    RAW, JPEG, PNG, TIFF, WEBP, BMP, HEIC, GIF, OTHER
+}
+
+data class FileTypeFilter(
+    val categories: Set<FileCategory> = emptySet()
+) {
+    fun matches(imageType: ImageType?): Boolean {
+        if (categories.isEmpty()) return true
+        if (imageType == null) return false
+        val category = imageTypeToFileCategory(imageType)
+        return category in categories
+    }
+
+    companion object {
+        fun imageTypeToFileCategory(type: ImageType): FileCategory = when (type) {
+            ImageType.ARW, ImageType.CR2, ImageType.CR3, ImageType.NEF, ImageType.DNG -> FileCategory.RAW
+            ImageType.JPEG -> FileCategory.JPEG
+            ImageType.PNG -> FileCategory.PNG
+            ImageType.TIFF -> FileCategory.TIFF
+            ImageType.WEBP -> FileCategory.WEBP
+            ImageType.BMP -> FileCategory.BMP
+            ImageType.HEIC, ImageType.HEIF -> FileCategory.HEIC
+            ImageType.GIF -> FileCategory.GIF
+            else -> FileCategory.OTHER
+        }
+    }
+}
+
+data class RatingFilter(
+    val minRating: Int = 0,
+    val maxRating: Int = 5
+) {
+    fun matches(rating: Int): Boolean {
+        return rating in minRating..maxRating
+    }
+}
+
+data class DateRangeFilter(
+    val startDate: Long = 0L,
+    val endDate: Long = Long.MAX_VALUE
+) {
+    fun matches(timestamp: Long): Boolean {
+        return timestamp in startDate..endDate
+    }
+}
+
+data class AlbumBrowseFilter(
+    val fileTypeFilter: FileTypeFilter = FileTypeFilter(),
+    val ratingFilter: RatingFilter = RatingFilter(),
+    val dateRangeFilter: DateRangeFilter = DateRangeFilter(),
+    val collectionId: Long? = null
+)
+
+data class PaginatedResult<T>(
+    val items: List<T>,
+    val totalCount: Int,
+    val offset: Int,
+    val limit: Int,
+    val hasMore: Boolean
+)
+
 data class AlbumState(
     val currentFolderId: Long = 0L,
     val folderPath: List<SleeveFolder> = emptyList(),
     val elements: List<AlbumElement> = emptyList(),
+    val filteredElements: List<AlbumElement> = emptyList(),
     val selectedIds: Set<Long> = emptySet(),
     val viewMode: ViewMode = ViewMode.GRID,
     val sortField: SortField = SortField.DATE,
@@ -40,7 +107,9 @@ data class AlbumState(
     val thumbnailGridColumns: Int = 3,
     val currentPage: Int = 0,
     val totalPages: Int = 1,
-    val pageSize: Int = 50
+    val pageSize: Int = 50,
+    val activeFilter: AlbumBrowseFilter = AlbumBrowseFilter(),
+    val collectionId: Long? = null
 )
 
 data class AlbumElement(
@@ -54,7 +123,9 @@ data class AlbumElement(
     val rating: Int = 0,
     val isSelected: Boolean = false,
     val addedTime: Instant = Instant.now(),
-    val fileSize: Long = 0L
+    val fileSize: Long = 0L,
+    val captureDate: Long = 0L,
+    val filePath: String = ""
 )
 
 class AlbumBrowseService(
@@ -73,7 +144,9 @@ class AlbumBrowseService(
 
     private var cachedElements = mutableMapOf<Long, List<AlbumElement>>()
 
-    // ── Folder Tree Navigation ──
+    // ================================================================
+    // Folder Tree Navigation
+    // ================================================================
 
     suspend fun navigateToFolder(folderId: Long) = withContext(Dispatchers.IO) {
         _albumState.value = _albumState.value.copy(isLoading = true)
@@ -83,17 +156,19 @@ class AlbumBrowseService(
             val folderPath = buildFolderPath(folderId)
             val children = sleeveRepository.getChildren(folderId)
             val elements = children.map { element ->
-                val albumElement = mapToAlbumElement(element)
-                albumElement
+                mapToAlbumElement(element)
             }.sortedWith(getSortComparator())
+
+            val filtered = applyFilters(elements)
 
             _albumState.value = _albumState.value.copy(
                 currentFolderId = folderId,
                 folderPath = folderPath,
                 elements = elements,
+                filteredElements = filtered,
                 isLoading = false,
                 currentPage = 0,
-                totalPages = maxOf(1, (elements.size + _albumState.value.pageSize - 1) / _albumState.value.pageSize)
+                totalPages = maxOf(1, (filtered.size + _albumState.value.pageSize - 1) / _albumState.value.pageSize)
             )
 
             cachedElements[folderId] = elements
@@ -117,24 +192,108 @@ class AlbumBrowseService(
 
     fun getFolderPath(): List<SleeveFolder> = _albumState.value.folderPath
 
-    // ── Thumbnail Grid with Pagination ──
+    // ================================================================
+    // Collection-based browsing
+    // ================================================================
 
+    /**
+     * Browse images in a specific collection.
+     */
+    suspend fun browseCollection(collectionId: Long) = withContext(Dispatchers.IO) {
+        _albumState.value = _albumState.value.copy(isLoading = true, collectionId = collectionId)
+
+        try {
+            val result = sleeveRepository.getImagesInCollection(collectionId, 0, Int.MAX_VALUE)
+            val elements = mutableListOf<AlbumElement>()
+
+            for (imageId in result.items) {
+                val metadata = imageRepository.getImageMetadata(imageId)
+                if (metadata != null) {
+                    elements.add(metadataToAlbumElement(metadata))
+                }
+            }
+
+            val filtered = applyFilters(elements)
+            _albumState.value = _albumState.value.copy(
+                elements = elements,
+                filteredElements = filtered,
+                isLoading = false,
+                currentPage = 0,
+                totalPages = maxOf(1, (filtered.size + _albumState.value.pageSize - 1) / _albumState.value.pageSize)
+            )
+        } catch (e: Exception) {
+            _albumState.value = _albumState.value.copy(isLoading = false)
+        }
+    }
+
+    /**
+     * Exit collection browsing and return to folder view.
+     */
+    suspend fun exitCollectionView() = withContext(Dispatchers.IO) {
+        _albumState.value = _albumState.value.copy(collectionId = null)
+        navigateToFolder(_albumState.value.currentFolderId)
+    }
+
+    // ================================================================
+    // Pagination with offset + limit
+    // ================================================================
+
+    /**
+     * Get a paginated result for the current filtered elements.
+     */
+    suspend fun getPaginatedElements(
+        offset: Int = 0,
+        limit: Int = _albumState.value.pageSize
+    ): PaginatedResult<AlbumElement> = withContext(Dispatchers.IO) {
+        val filtered = _albumState.value.filteredElements
+        val totalCount = filtered.size
+        val end = minOf(offset + limit, totalCount)
+        val items = if (offset < totalCount) filtered.subList(offset, end) else emptyList()
+
+        // Load thumbnails for the page
+        for (element in items) {
+            if (element.imageId != null && element.thumbnail == null) {
+                val imageIdLong = element.imageId.toLong()
+                val thumbnail = thumbnailService.loadThumbnail(imageIdLong)
+                if (thumbnail != null) {
+                    val updatedElements = _albumState.value.filteredElements.toMutableList()
+                    val index = updatedElements.indexOfFirst { it.elementId == element.elementId }
+                    if (index >= 0) {
+                        updatedElements[index] = element.copy(thumbnail = thumbnail)
+                        _albumState.value = _albumState.value.copy(filteredElements = updatedElements)
+                    }
+                }
+            }
+        }
+
+        PaginatedResult(
+            items = items,
+            totalCount = totalCount,
+            offset = offset,
+            limit = limit,
+            hasMore = end < totalCount
+        )
+    }
+
+    /**
+     * Load a specific page.
+     */
     suspend fun loadPage(page: Int) = withContext(Dispatchers.IO) {
         val state = _albumState.value
         val startIndex = page * state.pageSize
-        val endIndex = minOf(startIndex + state.pageSize, state.elements.size)
-        val pageElements = state.elements.subList(startIndex, endIndex)
+        val endIndex = minOf(startIndex + state.pageSize, state.filteredElements.size)
+        val pageElements = state.filteredElements.subList(startIndex, endIndex)
 
         // Load thumbnails for this page
         for (element in pageElements) {
             if (element.imageId != null && element.thumbnail == null) {
                 val thumbnail = thumbnailService.loadThumbnail(element.imageId)
                 if (thumbnail != null) {
-                    val updatedElements = state.elements.toMutableList()
+                    val updatedElements = state.filteredElements.toMutableList()
                     val index = updatedElements.indexOfFirst { it.elementId == element.elementId }
                     if (index >= 0) {
                         updatedElements[index] = element.copy(thumbnail = thumbnail)
-                        _albumState.value = state.copy(elements = updatedElements)
+                        _albumState.value = state.copy(filteredElements = updatedElements)
                     }
                 }
             }
@@ -152,11 +311,89 @@ class AlbumBrowseService(
 
     suspend fun refreshCurrentFolder() = withContext(Dispatchers.IO) {
         _albumState.value = _albumState.value.copy(isRefreshing = true)
-        navigateToFolder(_albumState.value.currentFolderId)
+        val collectionId = _albumState.value.collectionId
+        if (collectionId != null) {
+            browseCollection(collectionId)
+        } else {
+            navigateToFolder(_albumState.value.currentFolderId)
+        }
         _albumState.value = _albumState.value.copy(isRefreshing = false)
     }
 
-    // ── Image Selection (Single / Multi) ──
+    // ================================================================
+    // Filtering
+    // ================================================================
+
+    /**
+     * Apply a filter to the current album view.
+     */
+    suspend fun applyFilter(filter: AlbumBrowseFilter) = withContext(Dispatchers.IO) {
+        _albumState.value = _albumState.value.copy(activeFilter = filter)
+        reapplyFilters()
+    }
+
+    /**
+     * Filter by file type.
+     */
+    suspend fun filterByFileType(categories: Set<FileCategory>) = withContext(Dispatchers.IO) {
+        val currentFilter = _albumState.value.activeFilter
+        val newFilter = currentFilter.copy(fileTypeFilter = FileTypeFilter(categories))
+        applyFilter(newFilter)
+    }
+
+    /**
+     * Filter by rating range.
+     */
+    suspend fun filterByRating(minRating: Int, maxRating: Int = 5) = withContext(Dispatchers.IO) {
+        val currentFilter = _albumState.value.activeFilter
+        val newFilter = currentFilter.copy(ratingFilter = RatingFilter(minRating, maxRating))
+        applyFilter(newFilter)
+    }
+
+    /**
+     * Filter by date range.
+     */
+    suspend fun filterByDateRange(startDate: Long, endDate: Long) = withContext(Dispatchers.IO) {
+        val currentFilter = _albumState.value.activeFilter
+        val newFilter = currentFilter.copy(dateRangeFilter = DateRangeFilter(startDate, endDate))
+        applyFilter(newFilter)
+    }
+
+    /**
+     * Clear all filters.
+     */
+    suspend fun clearFilters() = withContext(Dispatchers.IO) {
+        applyFilter(AlbumBrowseFilter())
+    }
+
+    private fun applyFilters(elements: List<AlbumElement>): List<AlbumElement> {
+        val filter = _albumState.value.activeFilter
+        return elements.filter { element ->
+            // File type filter
+            if (!filter.fileTypeFilter.matches(element.imageType)) return@filter false
+            // Rating filter
+            if (!filter.ratingFilter.matches(element.rating)) return@filter false
+            // Date range filter
+            val timestamp = if (element.captureDate > 0) element.captureDate
+                else element.addedTime.toEpochMilli()
+            if (!filter.dateRangeFilter.matches(timestamp)) return@filter false
+            true
+        }
+    }
+
+    private suspend fun reapplyFilters() = withContext(Dispatchers.IO) {
+        val elements = _albumState.value.elements
+        val filtered = applyFilters(elements).sortedWith(getSortComparator())
+        _albumState.value = _albumState.value.copy(
+            filteredElements = filtered,
+            currentPage = 0,
+            totalPages = maxOf(1, (filtered.size + _albumState.value.pageSize - 1) / _albumState.value.pageSize)
+        )
+    }
+
+    // ================================================================
+    // Image Selection (Single / Multi)
+    // ================================================================
 
     fun selectElement(elementId: Long, multiSelect: Boolean = false) {
         val state = _albumState.value
@@ -174,32 +411,32 @@ class AlbumBrowseService(
             }
         }
 
-        val updatedElements = state.elements.map { element ->
+        val updatedElements = state.filteredElements.map { element ->
             element.copy(isSelected = element.elementId in newSelected)
         }
 
         _albumState.value = state.copy(
             selectedIds = newSelected,
-            elements = updatedElements
+            filteredElements = updatedElements
         )
     }
 
     fun selectAll() {
         val state = _albumState.value
-        val allIds = state.elements.filter { it.elementType == ElementType.FILE }
+        val allIds = state.filteredElements.filter { it.elementType == ElementType.FILE }
             .map { it.elementId }.toSet()
-        val updatedElements = state.elements.map { it.copy(isSelected = true) }
-        _albumState.value = state.copy(selectedIds = allIds, elements = updatedElements)
+        val updatedElements = state.filteredElements.map { it.copy(isSelected = true) }
+        _albumState.value = state.copy(selectedIds = allIds, filteredElements = updatedElements)
     }
 
     fun deselectAll() {
         val state = _albumState.value
-        val updatedElements = state.elements.map { it.copy(isSelected = false) }
-        _albumState.value = state.copy(selectedIds = emptySet(), elements = updatedElements)
+        val updatedElements = state.filteredElements.map { it.copy(isSelected = false) }
+        _albumState.value = state.copy(selectedIds = emptySet(), filteredElements = updatedElements)
     }
 
     fun getSelectedElements(): List<AlbumElement> {
-        return _albumState.value.elements.filter { it.isSelected }
+        return _albumState.value.filteredElements.filter { it.isSelected }
     }
 
     fun getSelectedImageIds(): List<Long> {
@@ -208,15 +445,17 @@ class AlbumBrowseService(
 
     fun getSelectionCount(): Int = _albumState.value.selectedIds.size
 
-    // ── Drag-and-Drop Reordering ──
+    // ================================================================
+    // Drag-and-Drop Reordering
+    // ================================================================
 
     suspend fun moveElement(elementId: Long, fromIndex: Int, toIndex: Int) = withContext(Dispatchers.IO) {
         val state = _albumState.value
-        val mutableElements = state.elements.toMutableList()
+        val mutableElements = state.filteredElements.toMutableList()
         if (fromIndex in mutableElements.indices && toIndex in mutableElements.indices) {
             val element = mutableElements.removeAt(fromIndex)
             mutableElements.add(toIndex, element)
-            _albumState.value = state.copy(elements = mutableElements)
+            _albumState.value = state.copy(filteredElements = mutableElements)
         }
     }
 
@@ -229,19 +468,19 @@ class AlbumBrowseService(
 
     fun reorderElements(newOrder: List<Long>) {
         val state = _albumState.value
-        val elementMap = state.elements.associateBy { it.elementId }
+        val elementMap = state.filteredElements.associateBy { it.elementId }
         val reordered = newOrder.mapNotNull { elementMap[it] }
-        _albumState.value = state.copy(elements = reordered)
+        _albumState.value = state.copy(filteredElements = reordered)
     }
 
-    // ── Sort Options ──
+    // ================================================================
+    // Sort Options
+    // ================================================================
 
     fun setSorting(field: SortField, order: SortOrder = SortOrder.ASCENDING) {
         _albumState.value = _albumState.value.copy(sortField = field, sortOrder = order)
         scope.launch {
-            val state = _albumState.value
-            val sorted = state.elements.sortedWith(getSortComparator())
-            _albumState.value = state.copy(elements = sorted)
+            reapplyFilters()
         }
     }
 
@@ -267,7 +506,9 @@ class AlbumBrowseService(
         return if (order == SortOrder.DESCENDING) comparator.reversed() else comparator
     }
 
-    // ── View Mode ──
+    // ================================================================
+    // View Mode
+    // ================================================================
 
     fun setViewMode(mode: ViewMode) {
         _albumState.value = _albumState.value.copy(viewMode = mode)
@@ -284,10 +525,12 @@ class AlbumBrowseService(
         )
     }
 
-    // ── Quick Actions ──
+    // ================================================================
+    // Quick Actions
+    // ================================================================
 
     suspend fun performQuickAction(elementId: Long, action: QuickAction): Boolean = withContext(Dispatchers.IO) {
-        val element = _albumState.value.elements.find { it.elementId == elementId } ?: return@withContext false
+        val element = _albumState.value.filteredElements.find { it.elementId == elementId } ?: return@withContext false
 
         when (action) {
             QuickAction.DELETE -> {
@@ -332,11 +575,11 @@ class AlbumBrowseService(
         if (rating !in 1..5) return@withContext false
 
         val state = _albumState.value
-        val updatedElements = state.elements.map { element ->
+        val updatedElements = state.filteredElements.map { element ->
             if (element.elementId == elementId) element.copy(rating = rating) else element
         }
 
-        _albumState.value = state.copy(elements = updatedElements)
+        _albumState.value = state.copy(filteredElements = updatedElements)
         true
     }
 
@@ -349,7 +592,9 @@ class AlbumBrowseService(
         else -> 0
     }
 
-    // ── Page Size Management ──
+    // ================================================================
+    // Page Size Management
+    // ================================================================
 
     fun setPageSize(size: Int) {
         _albumState.value = _albumState.value.copy(pageSize = size.coerceIn(10, 200))
@@ -357,7 +602,9 @@ class AlbumBrowseService(
 
     fun getPageSize(): Int = _albumState.value.pageSize
 
-    // ── Private Helpers ──
+    // ================================================================
+    // Private Helpers
+    // ================================================================
 
     private suspend fun buildFolderPath(folderId: Long): List<SleeveFolder> = withContext(Dispatchers.IO) {
         val path = mutableListOf<SleeveFolder>()
@@ -391,7 +638,16 @@ class AlbumBrowseService(
                     thumbnail = element.imageId?.toUInt()?.let { thumbnailService.loadThumbnail(it) },
                     exifDisplay = image?.exifDisplay,
                     addedTime = element.addedTime,
-                    fileSize = image?.imagePath?.let { java.io.File(it).length() } ?: 0L
+                    fileSize = image?.imagePath?.let { java.io.File(it).length() } ?: 0L,
+                    captureDate = image?.exifData?.let {
+                        try {
+                            it.dateTime?.let { dateStr ->
+                                val sdf = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US)
+                                sdf.parse(dateStr)?.time ?: 0L
+                            }
+                        } catch (_: Exception) { 0L }
+                    } ?: 0L,
+                    filePath = element.filePath
                 )
             }
             is SleeveFolder -> {
@@ -410,7 +666,24 @@ class AlbumBrowseService(
         }
     }
 
-    // ── Cleanup ──
+    private fun metadataToAlbumElement(metadata: ImageMetadataEntity): AlbumElement {
+        return AlbumElement(
+            elementId = metadata.imageId,
+            elementName = metadata.imageName,
+            elementType = ElementType.FILE,
+            imageId = metadata.imageId.toUInt(),
+            imageType = ImageType.entries.getOrElse(metadata.imageType) { ImageType.DEFAULT },
+            rating = metadata.rating,
+            addedTime = Instant.ofEpochMilli(metadata.importedAt),
+            fileSize = metadata.fileSize,
+            captureDate = metadata.captureDate,
+            filePath = metadata.imagePath
+        )
+    }
+
+    // ================================================================
+    // Cleanup
+    // ================================================================
 
     fun shutdown() {
         scope.cancel()

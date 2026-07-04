@@ -77,8 +77,8 @@ fun ToneCurvePanel(
                 ToneCurveView(
                     controlPoints = controlPoints,
                     onControlPointsChanged = { newPoints ->
-                        val newX = FloatArray(10) { if (it < newPoints.size) newPoints[it].x else 0f }
-                        val newY = FloatArray(10) { if (it < newPoints.size) newPoints[it].y else 0f }
+                        val newX = FloatArray(16) { if (it < newPoints.size) newPoints[it].x else 0f }
+                        val newY = FloatArray(16) { if (it < newPoints.size) newPoints[it].y else 0f }
                         onParamsChanged(
                             params.copy(
                                 toneCurveX = newX,

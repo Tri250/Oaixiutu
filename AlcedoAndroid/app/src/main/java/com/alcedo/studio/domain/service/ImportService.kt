@@ -8,7 +8,9 @@ import android.provider.OpenableColumns
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,12 +18,28 @@ import kotlinx.coroutines.withContext
 import java.io.*
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.min
 
 /**
- * Complete import service with file format detection, metadata extraction,
- * thumbnail generation, directory recursive import, duplicate detection,
- * and progress tracking.
+ * Two-phase import service with desktop-style import behavior:
+ *
+ * Phase A (Quick Scan): Fast file scanning and SleeveFile entry creation.
+ *   - Only reads file headers and basic info
+ *   - Creates DB entries immediately so UI can display imported items
+ *   - Keeps the UI responsive
+ *
+ * Phase B (Background Metadata): Full metadata extraction + thumbnail generation + DB update.
+ *   - Runs in background, updates DB entries progressively
+ *   - Does not block the UI
+ *
+ * Additional features:
+ * - Import sorting: none / filename / full path
+ * - Cancellation token support for cooperative cancellation
+ * - Detailed import progress with per-file logging
+ * - Import deduplication (skip already imported files by checksum)
  */
 class ImportService(
     private val context: Context,
@@ -29,6 +47,26 @@ class ImportService(
     private val sleeveService: SleeveService,
     private val thumbnailDiskCache: ThumbnailDiskCache
 ) {
+    // ================================================================
+    // Cancellation Token
+    // ================================================================
+
+    class CancellationToken {
+        private val cancelled = AtomicBoolean(false)
+        fun cancel() { cancelled.set(true) }
+        fun isCancelled(): Boolean = cancelled.get()
+    }
+
+    // ================================================================
+    // Import Sorting
+    // ================================================================
+
+    enum class ImportSortMode {
+        NONE,       // Import in discovery order
+        FILENAME,   // Sort by filename
+        FULL_PATH   // Sort by full path
+    }
+
     // ================================================================
     // Progress tracking
     // ================================================================
@@ -42,21 +80,33 @@ class ImportService(
     data class ImportProgress(
         val totalFiles: Int = 0,
         val processedFiles: Int = 0,
+        val phaseACompleted: Int = 0,
+        val phaseBCompleted: Int = 0,
         val currentFile: String = "",
+        val currentPhase: ImportPhase = ImportPhase.IDLE,
         val status: ImportStatus = ImportStatus.IDLE,
         val errors: List<String> = emptyList()
     )
+
+    enum class ImportPhase { IDLE, PHASE_A_SCANNING, PHASE_A_CREATING, PHASE_B_METADATA, PHASE_B_THUMBNAILS }
 
     enum class ImportStatus { IDLE, SCANNING, IMPORTING, GENERATING_THUMBNAILS, COMPLETED, CANCELLED, ERROR }
 
     data class ImportLogEntry(
         val filePath: String,
         val status: ImportLogStatus,
+        val phase: ImportPhase = ImportPhase.IDLE,
         val message: String = "",
         val timestamp: Long = System.currentTimeMillis()
     )
 
     enum class ImportLogStatus { SUCCESS, SKIPPED_DUPLICATE, SKIPPED_UNSUPPORTED, ERROR }
+
+    // ================================================================
+    // Deduplication: track imported checksums in-memory
+    // ================================================================
+
+    private val importedChecksums = ConcurrentHashMap<Long, String>()
 
     // ================================================================
     // Magic bytes for format detection
@@ -87,16 +137,367 @@ class ImportService(
     private val rawExtensions = setOf("arw", "cr2", "cr3", "nef", "dng")
 
     // ================================================================
-    // Single image import
+    // Phase A: Quick scan info (minimal data for fast import)
+    // ================================================================
+
+    data class ScannedFileInfo(
+        val uri: Uri,
+        val fileName: String,
+        val filePath: String,
+        val fileSize: Long,
+        val imageType: ImageType,
+        val checksum: Long
+    )
+
+    // ================================================================
+    // Two-Phase Import (main entry point)
+    // ================================================================
+
+    /**
+     * Two-phase import like the desktop version.
+     *
+     * Phase A: Quick scan and create SleeveFile entries (fast, UI responsive)
+     * Phase B: Background metadata extraction + DB update (slower)
+     *
+     * @param uris URIs to import
+     * @param parentFolderId Parent sleeve folder
+     * @param sortMode How to sort files before import
+     * @param checkDuplicates Whether to skip duplicates
+     * @param cancellationToken Optional token for cooperative cancellation
+     */
+    suspend fun importTwoPhase(
+        uris: List<Uri>,
+        parentFolderId: Long? = null,
+        sortMode: ImportSortMode = ImportSortMode.NONE,
+        checkDuplicates: Boolean = true,
+        cancellationToken: CancellationToken? = null
+    ): ImportDirectoryResult = withContext(Dispatchers.IO) {
+        try {
+            val results = mutableListOf<ImportResult>()
+            var successCount = 0
+            var duplicateCount = 0
+            var errorCount = 0
+
+            // ── Phase A: Quick scan ──
+            _importProgress.value = ImportProgress(
+                totalFiles = uris.size,
+                currentPhase = ImportPhase.PHASE_A_SCANNING,
+                status = ImportStatus.SCANNING
+            )
+
+            addLogEntry("[Phase A]", ImportLogStatus.SUCCESS, ImportPhase.PHASE_A_SCANNING,
+                "Starting quick scan of ${uris.size} files")
+
+            // Scan all files quickly
+            val scannedFiles = mutableListOf<ScannedFileInfo>()
+            for (uri in uris) {
+                if (cancellationToken?.isCancelled() == true) {
+                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                    addLogEntry("[Phase A]", ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING, "Cancelled")
+                    return@withContext buildCancelledResult(scannedFiles.size, successCount, duplicateCount, errorCount, results)
+                }
+
+                try {
+                    val info = quickScanFile(uri)
+                    if (info != null) {
+                        // Deduplication check
+                        if (checkDuplicates && info.checksum != 0L) {
+                            if (importedChecksums.containsKey(info.checksum)) {
+                                addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
+                                    ImportPhase.PHASE_A_SCANNING,
+                                    "Duplicate of ${importedChecksums[info.checksum]}")
+                                duplicateCount++
+                                results.add(ImportResult.Duplicate(-1, info.fileName))
+                                continue
+                            }
+                            // Also check DB
+                            val existing = metadataDao.getMetadataByChecksum(info.checksum)
+                            if (existing.isNotEmpty()) {
+                                importedChecksums[info.checksum] = existing.first().imageName
+                                addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
+                                    ImportPhase.PHASE_A_SCANNING,
+                                    "Duplicate of ${existing.first().imageName}")
+                                duplicateCount++
+                                results.add(ImportResult.Duplicate(existing.first().imageId, existing.first().imageName))
+                                continue
+                            }
+                        }
+
+                        if (info.imageType == ImageType.DEFAULT) {
+                            addLogEntry(info.filePath, ImportLogStatus.SKIPPED_UNSUPPORTED,
+                                ImportPhase.PHASE_A_SCANNING, "Unsupported format")
+                            errorCount++
+                            results.add(ImportResult.Error("Unsupported format: ${info.fileName}"))
+                            continue
+                        }
+
+                        scannedFiles.add(info)
+                    }
+                } catch (e: Exception) {
+                    addLogEntry(uri.toString(), ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING,
+                        e.message ?: "Scan error")
+                    errorCount++
+                    results.add(ImportResult.Error(e.message ?: "Scan failed"))
+                }
+
+                _importProgress.value = _importProgress.value.copy(
+                    phaseACompleted = scannedFiles.size
+                )
+            }
+
+            // Apply sort
+            val sortedFiles = when (sortMode) {
+                ImportSortMode.NONE -> scannedFiles
+                ImportSortMode.FILENAME -> scannedFiles.sortedBy { it.fileName.lowercase() }
+                ImportSortMode.FULL_PATH -> scannedFiles.sortedBy { it.filePath.lowercase() }
+            }
+
+            // ── Phase A: Create SleeveFile entries (fast) ──
+            _importProgress.value = _importProgress.value.copy(
+                currentPhase = ImportPhase.PHASE_A_CREATING,
+                status = ImportStatus.IMPORTING
+            )
+
+            val phaseAResults = mutableListOf<Pair<ScannedFileInfo, Long>>()
+            for ((index, info) in sortedFiles.withIndex()) {
+                if (cancellationToken?.isCancelled() == true) {
+                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                    return@withContext buildCancelledResult(sortedFiles.size, successCount, duplicateCount, errorCount, results)
+                }
+
+                try {
+                    val imageId = generateImageId()
+                    val mimeType = getMimeType(info.imageType)
+
+                    // Create minimal DB entry (fast, no EXIF parsing)
+                    val metadata = ImageMetadataEntity(
+                        imageId = imageId,
+                        imagePath = info.filePath,
+                        imageName = info.fileName.substringBeforeLast('.'),
+                        imageType = info.imageType.ordinal,
+                        fileSize = info.fileSize,
+                        width = 0,
+                        height = 0,
+                        checksum = info.checksum,
+                        mimeType = mimeType,
+                        thumbState = ThumbState.PENDING.ordinal,
+                        hasExif = false,
+                        hasExifDisplay = false,
+                        cameraMake = "",
+                        cameraModel = "",
+                        lensModel = "",
+                        focalLength = 0f,
+                        aperture = 0f,
+                        shutterSpeed = 0f,
+                        iso = 0,
+                        captureDate = 0L,
+                        imageSizeDisplay = "",
+                        fileSizeDisplay = formatFileSize(info.fileSize),
+                        exifJson = "",
+                        exifDisplayJson = ""
+                    )
+
+                    metadataDao.insertMetadata(metadata)
+                    val elementId = sleeveService.createElement(
+                        name = info.fileName.substringBeforeLast('.'),
+                        type = ElementType.FILE,
+                        parentId = parentFolderId,
+                        imageId = imageId,
+                        filePath = info.filePath
+                    )
+
+                    importedChecksums[info.checksum] = info.fileName
+                    phaseAResults.add(info to imageId)
+                    successCount++
+
+                    addLogEntry(info.filePath, ImportLogStatus.SUCCESS, ImportPhase.PHASE_A_CREATING,
+                        "Entry created (imageId=$imageId)")
+                } catch (e: Exception) {
+                    addLogEntry(info.filePath, ImportLogStatus.ERROR, ImportPhase.PHASE_A_CREATING,
+                        e.message ?: "Create error")
+                    errorCount++
+                    results.add(ImportResult.Error(e.message ?: "Phase A create failed"))
+                }
+
+                _importProgress.value = _importProgress.value.copy(
+                    phaseACompleted = index + 1,
+                    processedFiles = index + 1,
+                    currentFile = info.fileName
+                )
+
+                ensureActive()
+            }
+
+            addLogEntry("[Phase A]", ImportLogStatus.SUCCESS, ImportPhase.PHASE_A_CREATING,
+                "Completed: ${phaseAResults.size} entries created")
+
+            // ── Phase B: Background metadata extraction + thumbnail generation ──
+            _importProgress.value = _importProgress.value.copy(
+                currentPhase = ImportPhase.PHASE_B_METADATA,
+                status = ImportStatus.IMPORTING
+            )
+
+            addLogEntry("[Phase B]", ImportLogStatus.SUCCESS, ImportPhase.PHASE_B_METADATA,
+                "Starting metadata extraction for ${phaseAResults.size} files")
+
+            for ((index, pair) in phaseAResults.withIndex()) {
+                val (info, imageId) = pair
+
+                if (cancellationToken?.isCancelled() == true) {
+                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                    addLogEntry("[Phase B]", ImportLogStatus.ERROR, ImportPhase.PHASE_B_METADATA, "Cancelled")
+                    break
+                }
+
+                try {
+                    // Extract full EXIF metadata
+                    val exif = try {
+                        val parcelFd = context.contentResolver.openFileDescriptor(info.uri, "r")
+                        parcelFd?.let { ExifInterface(it.fileDescriptor) }
+                    } catch (_: Exception) { null }
+
+                    val exifDisplay = exif?.let { parseExifDisplay(it) } ?: ExifDisplayMetaData()
+                    val imageDimensions = getImageDimensions(info.uri)
+
+                    // Update DB with full metadata
+                    val existing = metadataDao.getMetadataById(imageId)
+                    if (existing != null) {
+                        metadataDao.updateMetadata(existing.copy(
+                            width = imageDimensions.first,
+                            height = imageDimensions.second,
+                            hasExif = exif != null,
+                            hasExifDisplay = exifDisplay.cameraMake.isNotEmpty(),
+                            cameraMake = exifDisplay.cameraMake,
+                            cameraModel = exifDisplay.cameraModel,
+                            lensModel = exifDisplay.lensModel,
+                            focalLength = exifDisplay.focalLength.toFloatOrNull() ?: 0f,
+                            aperture = exifDisplay.aperture.toFloatOrNull() ?: 0f,
+                            shutterSpeed = parseShutterSpeedValue(exifDisplay.shutterSpeed),
+                            iso = exifDisplay.iso.toIntOrNull() ?: 0,
+                            captureDate = parseCaptureDate(exifDisplay.captureDate),
+                            imageSizeDisplay = exifDisplay.imageSize,
+                            exifJson = exif?.let { serializeExif(it) } ?: ""
+                        ))
+                    }
+
+                    addLogEntry(info.filePath, ImportLogStatus.SUCCESS, ImportPhase.PHASE_B_METADATA,
+                        "Metadata extracted")
+                } catch (e: Exception) {
+                    addLogEntry(info.filePath, ImportLogStatus.ERROR, ImportPhase.PHASE_B_METADATA,
+                        e.message ?: "Metadata error")
+                }
+
+                _importProgress.value = _importProgress.value.copy(
+                    phaseBCompleted = index + 1,
+                    currentFile = info.fileName
+                )
+
+                ensureActive()
+            }
+
+            // ── Phase B: Thumbnail generation ──
+            _importProgress.value = _importProgress.value.copy(
+                currentPhase = ImportPhase.PHASE_B_THUMBNAILS,
+                status = ImportStatus.GENERATING_THUMBNAILS
+            )
+
+            for ((index, pair) in phaseAResults.withIndex()) {
+                val (info, imageId) = pair
+
+                if (cancellationToken?.isCancelled() == true) {
+                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                    break
+                }
+
+                try {
+                    generateAndCacheThumbnail(imageId, info.uri)
+                    val existing = metadataDao.getMetadataById(imageId)
+                    if (existing != null) {
+                        metadataDao.updateMetadata(existing.copy(
+                            thumbState = ThumbState.READY.ordinal,
+                            hasThumbnail = true
+                        ))
+                    }
+                } catch (_: Exception) {
+                    // Thumbnail failure is non-fatal
+                }
+
+                ensureActive()
+            }
+
+            _importProgress.value = _importProgress.value.copy(
+                status = ImportStatus.COMPLETED,
+                processedFiles = sortedFiles.size
+            )
+
+            addLogEntry("[Phase B]", ImportLogStatus.SUCCESS, ImportPhase.PHASE_B_THUMBNAILS,
+                "Import complete: $successCount imported, $duplicateCount duplicates, $errorCount errors")
+
+            ImportDirectoryResult(
+                totalFiles = uris.size,
+                successCount = successCount,
+                duplicateCount = duplicateCount,
+                errorCount = errorCount,
+                results = results
+            )
+        } catch (e: CancellationException) {
+            _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+            throw e
+        } catch (e: Exception) {
+            _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
+            ImportDirectoryResult(
+                totalFiles = 0, successCount = 0, duplicateCount = 0, errorCount = 0,
+                results = listOf(ImportResult.Error(e.message ?: "Import failed"))
+            )
+        }
+    }
+
+    // ================================================================
+    // Quick scan: minimal file info (Phase A)
+    // ================================================================
+
+    private fun quickScanFile(uri: Uri): ScannedFileInfo? {
+        val fileName = getFileNameFromUri(uri)
+        val filePath = getRealPathFromUri(uri)
+        val fileSize = getFileSizeFromUri(uri)
+
+        // Detect format
+        val imageType = try {
+            context.contentResolver.openInputStream(uri)?.use { detectImageType(it) }
+                ?: detectImageTypeByExtension(fileName)
+        } catch (_: Exception) {
+            detectImageTypeByExtension(fileName)
+        }
+
+        // Compute checksum (fast - just reads the file once)
+        val checksum = computeChecksum(uri)
+
+        return ScannedFileInfo(
+            uri = uri,
+            fileName = fileName,
+            filePath = filePath,
+            fileSize = fileSize,
+            imageType = imageType,
+            checksum = checksum
+        )
+    }
+
+    // ================================================================
+    // Single image import (legacy, still supported)
     // ================================================================
 
     suspend fun importImage(
         uri: Uri,
         parentFolderId: Long? = null,
         generateThumbnail: Boolean = true,
-        checkDuplicates: Boolean = true
+        checkDuplicates: Boolean = true,
+        cancellationToken: CancellationToken? = null
     ): ImportResult = withContext(Dispatchers.IO) {
         try {
+            if (cancellationToken?.isCancelled() == true) {
+                return@withContext ImportResult.Error("Cancelled")
+            }
+
             val path = getRealPathFromUri(uri)
             val fileName = getFileNameFromUri(uri)
             val fileSize = getFileSizeFromUri(uri)
@@ -112,7 +513,7 @@ class ImportService(
             val mimeType = getMimeType(imageType)
 
             if (imageType == ImageType.DEFAULT) {
-                addLogEntry(path, ImportLogStatus.SKIPPED_UNSUPPORTED, "Unsupported format")
+                addLogEntry(path, ImportLogStatus.SKIPPED_UNSUPPORTED, message = "Unsupported format")
                 return@withContext ImportResult.Error("Unsupported file format: $fileName")
             }
 
@@ -122,9 +523,18 @@ class ImportService(
             } else 0L
 
             if (checkDuplicates && checksum != 0L) {
+                // Check in-memory dedup cache first
+                if (importedChecksums.containsKey(checksum)) {
+                    addLogEntry(path, ImportLogStatus.SKIPPED_DUPLICATE,
+                        message = "Duplicate of ${importedChecksums[checksum]}")
+                    return@withContext ImportResult.Duplicate(-1, importedChecksums[checksum] ?: "")
+                }
+                // Then check DB
                 val existing = metadataDao.getMetadataByChecksum(checksum)
                 if (existing.isNotEmpty()) {
-                    addLogEntry(path, ImportLogStatus.SKIPPED_DUPLICATE, "Duplicate of ${existing.first().imageName}")
+                    importedChecksums[checksum] = existing.first().imageName
+                    addLogEntry(path, ImportLogStatus.SKIPPED_DUPLICATE,
+                        message = "Duplicate of ${existing.first().imageName}")
                     return@withContext ImportResult.Duplicate(existing.first().imageId, existing.first().imageName)
                 }
             }
@@ -178,6 +588,8 @@ class ImportService(
                 filePath = path
             )
 
+            importedChecksums[checksum] = fileName
+
             // Generate thumbnail
             if (generateThumbnail) {
                 _importProgress.value = _importProgress.value.copy(status = ImportStatus.GENERATING_THUMBNAILS)
@@ -191,21 +603,25 @@ class ImportService(
             )
 
             ImportResult.Success(imageId = imageId, elementId = elementId, metadata = metadata)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            addLogEntry(uri.toString(), ImportLogStatus.ERROR, e.message ?: "Unknown error")
+            addLogEntry(uri.toString(), ImportLogStatus.ERROR, message = e.message ?: "Unknown error")
             ImportResult.Error(e.message ?: "Import failed")
         }
     }
 
     // ================================================================
-    // Directory recursive import
+    // Directory recursive import (now uses two-phase)
     // ================================================================
 
     suspend fun importDirectory(
         dirUri: Uri,
         parentFolderId: Long? = null,
         recursive: Boolean = true,
-        checkDuplicates: Boolean = true
+        checkDuplicates: Boolean = true,
+        sortMode: ImportSortMode = ImportSortMode.NONE,
+        cancellationToken: CancellationToken? = null
     ): ImportDirectoryResult = withContext(Dispatchers.IO) {
         try {
             _importProgress.value = ImportProgress(status = ImportStatus.SCANNING)
@@ -217,43 +633,15 @@ class ImportService(
                 status = ImportStatus.IMPORTING
             )
 
-            val results = mutableListOf<ImportResult>()
-            var successCount = 0
-            var duplicateCount = 0
-            var errorCount = 0
-
-            for ((index, fileUri) in files.withIndex()) {
-                _importProgress.value = _importProgress.value.copy(
-                    processedFiles = index,
-                    currentFile = fileUri.toString()
-                )
-
-                when (val result = importImage(fileUri, parentFolderId, checkDuplicates = checkDuplicates)) {
-                    is ImportResult.Success -> { successCount++; results.add(result) }
-                    is ImportResult.Duplicate -> { duplicateCount++; results.add(result) }
-                    is ImportResult.Error -> { errorCount++; results.add(result) }
-                }
-            }
-
-            _importProgress.value = _importProgress.value.copy(
-                status = ImportStatus.COMPLETED,
-                processedFiles = files.size
-            )
-
-            ImportDirectoryResult(
-                totalFiles = files.size,
-                successCount = successCount,
-                duplicateCount = duplicateCount,
-                errorCount = errorCount,
-                results = results
-            )
+            // Delegate to two-phase import
+            importTwoPhase(files, parentFolderId, sortMode, checkDuplicates, cancellationToken)
+        } catch (e: CancellationException) {
+            _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+            ImportDirectoryResult(0, 0, 0, 0, emptyList())
         } catch (e: Exception) {
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             ImportDirectoryResult(
-                totalFiles = 0,
-                successCount = 0,
-                duplicateCount = 0,
-                errorCount = 0,
+                totalFiles = 0, successCount = 0, duplicateCount = 0, errorCount = 0,
                 results = listOf(ImportResult.Error(e.message ?: "Import failed"))
             )
         }
@@ -280,18 +668,14 @@ class ImportService(
                         if (ext in supportedExtensions) {
                             files.add(childUri)
                         } else if (recursive && ext.isEmpty()) {
-                            // Could be a directory - try to recurse
                             try {
                                 files.addAll(scanDirectory(childUri, recursive))
-                            } catch (_: Exception) {
-                                // Skip directories we can't read
-                            }
+                            } catch (_: Exception) {}
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            // Fallback: try regular file listing
             val path = getRealPathFromUri(dirUri)
             val dir = File(path)
             if (dir.exists() && dir.isDirectory) {
@@ -331,11 +715,6 @@ class ImportService(
 
             // Check DNG: TIFF + DNG tag
             if (header[0] == 0x49.toByte() && header[1] == 0x49.toByte() && header[2] == 0x2A.toByte() && header[3] == 0x00.toByte()) {
-                // Could be DNG - check for DNG marker
-                inputStream.skip(8) // skip TIFF header
-                val tagCount = ByteArray(2)
-                inputStream.read(tagCount)
-                // Simple heuristic: if it's TIFF but not CR2/NEF/ARW, assume DNG
                 return ImageType.DNG
             }
 
@@ -407,7 +786,6 @@ class ImportService(
                 }
             }
             val hash = digest.digest()
-            // Take first 8 bytes for Long checksum
             var result = 0L
             for (i in 0 until min(8, hash.size)) {
                 result = (result shl 8) or (hash[i].toLong() and 0xFF)
@@ -570,13 +948,31 @@ class ImportService(
         }
     }
 
-    private fun addLogEntry(path: String, status: ImportLogStatus, message: String = "") {
-        val entry = ImportLogEntry(filePath = path, status = status, message = message)
+    private fun addLogEntry(
+        path: String,
+        status: ImportLogStatus,
+        phase: ImportPhase = ImportPhase.IDLE,
+        message: String = ""
+    ) {
+        val entry = ImportLogEntry(filePath = path, status = status, phase = phase, message = message)
         _importLog.value = _importLog.value + entry
     }
 
     private fun generateImageId(): Long {
         return (System.nanoTime() / 1000) + (Math.random() * 1000).toLong()
+    }
+
+    private fun buildCancelledResult(
+        totalFiles: Int, successCount: Int, duplicateCount: Int, errorCount: Int,
+        results: MutableList<ImportResult>
+    ): ImportDirectoryResult {
+        return ImportDirectoryResult(
+            totalFiles = totalFiles,
+            successCount = successCount,
+            duplicateCount = duplicateCount,
+            errorCount = errorCount,
+            results = results
+        )
     }
 
     // ================================================================
@@ -590,6 +986,7 @@ class ImportService(
     fun resetProgress() {
         _importProgress.value = ImportProgress()
         _importLog.value = emptyList()
+        importedChecksums.clear()
     }
 
     // ================================================================

@@ -10,25 +10,43 @@ import java.io.*
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * DiskLRU-style thumbnail cache with multiple resolution tiers,
- * eviction policy, statistics, and async read/write.
+ * Enhanced disk LRU-style thumbnail cache with multiple resolution tiers,
+ * multiple formats (JPEG/WebP/BMP), configurable settings, namespace support,
+ * cache invalidation, and comprehensive statistics.
  *
  * Cache directory structure:
- *   cacheDir/
- *     thumb_[hash]_S   (128px)
- *     thumb_[hash]_M   (256px)
- *     thumb_[hash]_L   (512px)
- *     thumb_[hash]_XL  (1024px)
- *     journal          (cache journal for eviction tracking)
+ *   cacheRoot/
+ *     browse/                        (browse namespace - default)
+ *       thumb_[hash]_S.jpg           (128px JPEG)
+ *       thumb_[hash]_M.webp          (256px WebP)
+ *       thumb_[hash]_L.bmp           (512px BMP)
+ *       ...
+ *     analysis/                      (analysis namespace)
+ *       thumb_[hash]_XL.jpg
+ *       ...
+ *     project_[id]/                  (project-specific namespace)
+ *       ...
+ *     journal                        (cache journal for eviction tracking)
  */
 class ThumbnailDiskCache(
     private val cacheDir: File,
-    private val maxCacheSizeBytes: Long = 256L * 1024 * 1024, // 256MB default
+    private val maxCacheSizeBytes: Long = 256L * 1024 * 1024,
     private val memoryCacheMaxEntries: Int = 128
 ) {
+    // ================================================================
+    // Format support
+    // ================================================================
+
+    enum class CacheFormat(val extension: String, val mimeType: String) {
+        JPEG("jpg", "image/jpeg"),
+        WEBP("webp", "image/webp"),
+        BMP("bmp", "image/bmp")
+    }
+
     enum class ResolutionTier(val suffix: String, val maxDimension: Int) {
         SMALL("S", 128),
         MEDIUM("M", 256),
@@ -36,45 +54,99 @@ class ThumbnailDiskCache(
         XLARGE("XL", 1024)
     }
 
-    // ── In-memory LRU cache ──
+    // ================================================================
+    // Configurable cache settings
+    // ================================================================
+
+    data class CacheConfig(
+        val enabled: Boolean = true,
+        val cacheRootDir: File,
+        val maxEntries: Int = 5000,
+        val jpegQuality: Int = 85,
+        val webpQuality: Int = 80,
+        val defaultFormat: CacheFormat = CacheFormat.JPEG,
+        val namespace: String = NAMESPACE_BROWSE
+    ) {
+        companion object {
+            const val NAMESPACE_BROWSE = "browse"
+            const val NAMESPACE_ANALYSIS = "analysis"
+        }
+    }
+
+    private val config = AtomicReference(CacheConfig(
+        enabled = true,
+        cacheRootDir = cacheDir,
+        maxEntries = 5000,
+        jpegQuality = 85,
+        webpQuality = 80,
+        defaultFormat = CacheFormat.JPEG,
+        namespace = CacheConfig.NAMESPACE_BROWSE
+    ))
+
+    fun updateConfig(block: CacheConfig.() -> CacheConfig) {
+        config.set(config.get().block())
+    }
+
+    fun getConfig(): CacheConfig = config.get()
+
+    // ================================================================
+    // In-memory LRU cache
+    // ================================================================
+
     private val memoryCache = object : LruCache<String, Bitmap>(memoryCacheMaxEntries) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
         }
     }
 
-    // ── Journal for eviction tracking ──
+    // ================================================================
+    // Journal for eviction tracking
+    // ================================================================
+
+    data class JournalEntry(
+        val key: String,
+        val tier: ResolutionTier,
+        val format: CacheFormat,
+        val namespace: String,
+        val projectId: String?,
+        val size: Long,
+        var lastAccessTime: Long = System.currentTimeMillis(),
+        var accessCount: Int = 0,
+        var sourceLastModified: Long = 0L,
+        var pipelineHash: Int = 0
+    )
+
+    // ================================================================
+    // Enhanced Cache Statistics
+    // ================================================================
+
+    data class CacheStats(
+        val hits: Long,
+        val misses: Long,
+        val hitRate: Float,
+        val writes: Long,
+        val evictions: Long,
+        val totalEntries: Int,
+        val totalSizeBytes: Long,
+        val maxSizeBytes: Long,
+        val averageEntrySizeBytes: Long,
+        val memoryEntries: Int,
+        val byNamespace: Map<String, Int>,
+        val byFormat: Map<String, Int>
+    )
+
     private val journal = ConcurrentHashMap<String, JournalEntry>()
-    private val journalFile = File(cacheDir, "journal")
+    private val journalFile get() = File(config.get().cacheRootDir, "journal")
     private val journalMutex = Mutex()
     private val ioDispatcher = Dispatchers.IO
 
-    // ── Statistics ──
+    // ── Statistics counters ──
     private val totalHits = AtomicLong(0)
     private val totalMisses = AtomicLong(0)
     private val totalWrites = AtomicLong(0)
     private val totalEvictions = AtomicLong(0)
     private val currentCacheSize = AtomicLong(0)
-
-    data class JournalEntry(
-        val key: String,
-        val tier: ResolutionTier,
-        val size: Long,
-        var lastAccessTime: Long = System.currentTimeMillis(),
-        var accessCount: Int = 0
-    )
-
-    data class CacheStats(
-        val hits: Long,
-        val misses: Long,
-        val writes: Long,
-        val evictions: Long,
-        val hitRate: Float,
-        val currentSizeBytes: Long,
-        val maxSizeBytes: Long,
-        val entryCount: Int,
-        val memoryEntries: Int
-    )
+    private val currentEntryCount = AtomicInteger(0)
 
     init {
         if (!cacheDir.exists()) {
@@ -84,16 +156,23 @@ class ThumbnailDiskCache(
         calculateCurrentSize()
     }
 
-    // ============================================================
+    // ================================================================
     // Read operations
-    // ============================================================
+    // ================================================================
 
     /**
      * Get a thumbnail from cache (synchronous).
      * Checks memory cache first, then disk cache.
      */
-    fun get(imageId: String, tier: ResolutionTier = ResolutionTier.MEDIUM): Bitmap? {
-        val key = makeKey(imageId, tier)
+    fun get(
+        imageId: String,
+        tier: ResolutionTier = ResolutionTier.MEDIUM,
+        format: CacheFormat? = null
+    ): Bitmap? {
+        if (!config.get().enabled) return null
+
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val key = makeKey(imageId, tier, effectiveFormat)
 
         // Check memory cache
         memoryCache.get(key)?.let {
@@ -103,7 +182,7 @@ class ThumbnailDiskCache(
         }
 
         // Check disk cache
-        val file = getCacheFile(imageId, tier)
+        val file = getCacheFile(imageId, tier, effectiveFormat)
         if (file.exists()) {
             try {
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)
@@ -125,24 +204,54 @@ class ThumbnailDiskCache(
     /**
      * Get a thumbnail from cache (async).
      */
-    suspend fun getAsync(imageId: String, tier: ResolutionTier = ResolutionTier.MEDIUM): Bitmap? {
+    suspend fun getAsync(
+        imageId: String,
+        tier: ResolutionTier = ResolutionTier.MEDIUM,
+        format: CacheFormat? = null
+    ): Bitmap? {
         return withContext(ioDispatcher) {
-            get(imageId, tier)
+            get(imageId, tier, format)
         }
     }
 
     /**
      * Check if a thumbnail exists in cache.
      */
-    fun contains(imageId: String, tier: ResolutionTier = ResolutionTier.MEDIUM): Boolean {
-        val key = makeKey(imageId, tier)
+    fun contains(
+        imageId: String,
+        tier: ResolutionTier = ResolutionTier.MEDIUM,
+        format: CacheFormat? = null
+    ): Boolean {
+        if (!config.get().enabled) return false
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val key = makeKey(imageId, tier, effectiveFormat)
         if (memoryCache.get(key) != null) return true
-        return getCacheFile(imageId, tier).exists()
+        return getCacheFile(imageId, tier, effectiveFormat).exists()
     }
 
-    // ============================================================
+    // ================================================================
+    // Long-key overloads (for backward compatibility with ThumbnailService)
+    // ================================================================
+
+    fun get(imageId: Long, tier: ResolutionTier = ResolutionTier.MEDIUM): Bitmap? {
+        return get(imageId.toString(), tier)
+    }
+
+    fun put(imageId: Long, bitmap: Bitmap, tier: ResolutionTier = ResolutionTier.MEDIUM, quality: Int = 85) {
+        put(imageId.toString(), bitmap, tier, quality)
+    }
+
+    fun evict(imageId: Long, tier: ResolutionTier? = null) {
+        evict(imageId.toString(), tier)
+    }
+
+    fun contains(imageId: Long, tier: ResolutionTier = ResolutionTier.MEDIUM): Boolean {
+        return contains(imageId.toString(), tier)
+    }
+
+    // ================================================================
     // Write operations
-    // ============================================================
+    // ================================================================
 
     /**
      * Put a thumbnail into cache (synchronous).
@@ -151,25 +260,51 @@ class ThumbnailDiskCache(
         imageId: String,
         bitmap: Bitmap,
         tier: ResolutionTier = ResolutionTier.MEDIUM,
-        quality: Int = 85
+        quality: Int = 85,
+        format: CacheFormat? = null,
+        namespace: String? = null,
+        projectId: String? = null,
+        sourceLastModified: Long = 0L,
+        pipelineHash: Int = 0
     ) {
-        val key = makeKey(imageId, tier)
+        if (!config.get().enabled) return
+
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val effectiveNamespace = namespace ?: config.get().namespace
+        val effectiveQuality = when (effectiveFormat) {
+            CacheFormat.JPEG -> if (quality > 0) quality else config.get().jpegQuality
+            CacheFormat.WEBP -> if (quality > 0) quality else config.get().webpQuality
+            CacheFormat.BMP -> 100 // BMP is lossless, quality is ignored
+        }
+
+        val key = makeKey(imageId, tier, effectiveFormat, effectiveNamespace)
 
         // Put in memory cache
         memoryCache.put(key, bitmap)
 
-        // Write to disk asynchronously
-        val file = getCacheFile(imageId, tier)
+        // Write to disk
+        val file = getCacheFile(imageId, tier, effectiveFormat, effectiveNamespace)
         try {
+            file.parentFile?.mkdirs()
             file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
+                bitmap.compress(effectiveFormat.toBitmapCompressFormat(), effectiveQuality, out)
             }
             val fileSize = file.length()
             totalWrites.incrementAndGet()
             currentCacheSize.addAndGet(fileSize)
+            currentEntryCount.incrementAndGet()
 
             // Update journal
-            val entry = JournalEntry(key, tier, fileSize)
+            val entry = JournalEntry(
+                key = key,
+                tier = tier,
+                format = effectiveFormat,
+                namespace = effectiveNamespace,
+                projectId = projectId,
+                size = fileSize,
+                sourceLastModified = sourceLastModified,
+                pipelineHash = pipelineHash
+            )
             journal[key] = entry
 
             // Evict if needed
@@ -186,10 +321,11 @@ class ThumbnailDiskCache(
         imageId: String,
         bitmap: Bitmap,
         tier: ResolutionTier = ResolutionTier.MEDIUM,
-        quality: Int = 85
+        quality: Int = 85,
+        format: CacheFormat? = null
     ) {
         withContext(ioDispatcher) {
-            put(imageId, bitmap, tier, quality)
+            put(imageId, bitmap, tier, quality, format)
         }
     }
 
@@ -199,9 +335,16 @@ class ThumbnailDiskCache(
     fun putBytes(
         imageId: String,
         data: ByteArray,
-        tier: ResolutionTier = ResolutionTier.MEDIUM
+        tier: ResolutionTier = ResolutionTier.MEDIUM,
+        format: CacheFormat? = null,
+        namespace: String? = null,
+        projectId: String? = null
     ) {
-        val key = makeKey(imageId, tier)
+        if (!config.get().enabled) return
+
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val effectiveNamespace = namespace ?: config.get().namespace
+        val key = makeKey(imageId, tier, effectiveFormat, effectiveNamespace)
 
         // Try to decode as bitmap for memory cache
         try {
@@ -212,14 +355,23 @@ class ThumbnailDiskCache(
         } catch (_: Exception) {}
 
         // Write to disk
-        val file = getCacheFile(imageId, tier)
+        val file = getCacheFile(imageId, tier, effectiveFormat, effectiveNamespace)
         try {
+            file.parentFile?.mkdirs()
             file.writeBytes(data)
             val fileSize = file.length()
             totalWrites.incrementAndGet()
             currentCacheSize.addAndGet(fileSize)
+            currentEntryCount.incrementAndGet()
 
-            val entry = JournalEntry(key, tier, fileSize)
+            val entry = JournalEntry(
+                key = key,
+                tier = tier,
+                format = effectiveFormat,
+                namespace = effectiveNamespace,
+                projectId = projectId,
+                size = fileSize
+            )
             journal[key] = entry
             maybeEvict()
         } catch (e: Exception) {
@@ -227,51 +379,74 @@ class ThumbnailDiskCache(
         }
     }
 
-    // ============================================================
+    // ================================================================
     // Eviction
-    // ============================================================
+    // ================================================================
 
     /**
      * Evict a specific thumbnail from cache.
      */
-    fun evict(imageId: String, tier: ResolutionTier? = null) {
-        if (tier != null) {
-            val key = makeKey(imageId, tier)
-            memoryCache.remove(key)
-            val file = getCacheFile(imageId, tier)
-            if (file.exists()) {
-                val size = file.length()
-                file.delete()
-                currentCacheSize.addAndGet(-size)
-                journal.remove(key)
+    fun evict(imageId: String, tier: ResolutionTier? = null, format: CacheFormat? = null) {
+        if (tier != null && format != null) {
+            val key = makeKey(imageId, tier, format)
+            evictByKey(key)
+        } else if (tier != null) {
+            // Evict all formats for this tier
+            CacheFormat.entries.forEach { fmt ->
+                val key = makeKey(imageId, tier, fmt)
+                evictByKey(key)
             }
         } else {
-            // Evict all tiers
+            // Evict all tiers and formats
             ResolutionTier.entries.forEach { t ->
-                evict(imageId, t)
+                CacheFormat.entries.forEach { fmt ->
+                    val key = makeKey(imageId, t, fmt)
+                    evictByKey(key)
+                }
             }
         }
+    }
+
+    private fun evictByKey(key: String) {
+        memoryCache.remove(key)
+        val entry = journal[key] ?: return
+        val file = getCacheFileFromKey(key)
+        if (file.exists()) {
+            val size = file.length()
+            file.delete()
+            currentCacheSize.addAndGet(-size)
+            currentEntryCount.decrementAndGet()
+            totalEvictions.incrementAndGet()
+        }
+        journal.remove(key)
     }
 
     /**
      * Evict least recently used entries until cache is under limit.
      */
     private fun maybeEvict() {
+        val cfg = config.get()
+        // Evict by size
         while (currentCacheSize.get() > maxCacheSizeBytes) {
-            val oldest = journal.values
-                .minByOrNull { it.lastAccessTime }
-                ?: break
-
-            val file = getCacheFileFromKey(oldest.key)
-            if (file.exists()) {
-                val size = file.length()
-                file.delete()
-                currentCacheSize.addAndGet(-size)
-                totalEvictions.incrementAndGet()
-            }
-            journal.remove(oldest.key)
-            memoryCache.remove(oldest.key)
+            if (!evictOldest()) break
         }
+        // Evict by entry count
+        while (currentEntryCount.get() > cfg.maxEntries) {
+            if (!evictOldest()) break
+        }
+    }
+
+    /**
+     * Evict the oldest (least recently used) entry.
+     * @return true if an entry was evicted, false if no entries remain
+     */
+    fun evictOldest(): Boolean {
+        val oldest = journal.values
+            .minByOrNull { it.lastAccessTime }
+            ?: return false
+
+        evictByKey(oldest.key)
+        return true
     }
 
     /**
@@ -279,50 +454,180 @@ class ThumbnailDiskCache(
      */
     fun trimToSize(targetSizeBytes: Long) {
         while (currentCacheSize.get() > targetSizeBytes) {
-            val oldest = journal.values
-                .minByOrNull { it.lastAccessTime }
-                ?: break
+            if (!evictOldest()) break
+        }
+    }
 
-            val file = getCacheFileFromKey(oldest.key)
-            if (file.exists()) {
-                val size = file.length()
+    // ================================================================
+    // New cache management operations
+    // ================================================================
+
+    /**
+     * Clear entire cache (all namespaces, all formats).
+     */
+    fun clearAll() {
+        memoryCache.evictAll()
+        config.get().cacheRootDir.walkTopDown().forEach { file ->
+            if (file.isFile && file.name.startsWith("thumb_")) {
                 file.delete()
-                currentCacheSize.addAndGet(-size)
-                totalEvictions.incrementAndGet()
             }
-            journal.remove(oldest.key)
-            memoryCache.remove(oldest.key)
+        }
+        journal.clear()
+        currentCacheSize.set(0)
+        currentEntryCount.set(0)
+        calculateCurrentSize()
+    }
+
+    /**
+     * Clear project-specific cache entries.
+     */
+    fun clearProject(projectId: String) {
+        val toEvict = journal.values
+            .filter { it.projectId == projectId }
+            .map { it.key }
+            .toList()
+
+        toEvict.forEach { key -> evictByKey(key) }
+    }
+
+    /**
+     * Refresh metadata for a cache entry without regenerating the thumbnail.
+     * Updates lastAccessTime and accessCount.
+     */
+    fun refreshMetadata(key: String) {
+        touchJournal(key)
+    }
+
+    /**
+     * Refresh metadata using image ID and tier.
+     */
+    fun refreshMetadata(imageId: String, tier: ResolutionTier, format: CacheFormat? = null) {
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val key = makeKey(imageId, tier, effectiveFormat)
+        touchJournal(key)
+    }
+
+    // ================================================================
+    // Cache invalidation
+    // ================================================================
+
+    /**
+     * Invalidate cache entries when the source image has been modified.
+     * Compares sourceLastModified timestamp with the stored value.
+     */
+    fun invalidateIfSourceModified(imageId: String, sourceLastModified: Long) {
+        val keysToEvict = journal.values
+            .filter { it.key.contains(hash(imageId)) && it.sourceLastModified > 0 && it.sourceLastModified < sourceLastModified }
+            .map { it.key }
+            .toList()
+
+        keysToEvict.forEach { key -> evictByKey(key) }
+    }
+
+    /**
+     * Invalidate cache entries when pipeline parameters have changed.
+     * Compares pipelineHash with the stored value.
+     */
+    fun invalidateIfPipelineChanged(imageId: String, pipelineHash: Int) {
+        val keysToEvict = journal.values
+            .filter { it.key.contains(hash(imageId)) && it.pipelineHash != 0 && it.pipelineHash != pipelineHash }
+            .map { it.key }
+            .toList()
+
+        keysToEvict.forEach { key -> evictByKey(key) }
+    }
+
+    /**
+     * Invalidate all cache entries for a specific image (all tiers, all formats).
+     */
+    fun invalidateImage(imageId: String) {
+        evict(imageId)
+    }
+
+    /**
+     * Partial invalidation: invalidate only specific resolution levels.
+     */
+    fun invalidateTiers(imageId: String, tiers: Set<ResolutionTier>) {
+        tiers.forEach { tier ->
+            CacheFormat.entries.forEach { fmt ->
+                val key = makeKey(imageId, tier, fmt)
+                evictByKey(key)
+            }
         }
     }
 
     /**
-     * Clear all caches.
+     * Invalidate all entries in a specific namespace.
      */
-    fun clear() {
-        memoryCache.evictAll()
-        cacheDir.listFiles()?.forEach { it.delete() }
-        journal.clear()
-        currentCacheSize.set(0)
+    fun invalidateNamespace(namespace: String) {
+        val keysToEvict = journal.values
+            .filter { it.namespace == namespace }
+            .map { it.key }
+            .toList()
+
+        keysToEvict.forEach { key -> evictByKey(key) }
     }
 
-    // ============================================================
+    /**
+     * Invalidate cache when an editing session ends.
+     * Removes all entries that were created during the session for the given images.
+     */
+    fun invalidateSession(imageIds: List<String>) {
+        imageIds.forEach { imageId ->
+            invalidateImage(imageId)
+        }
+    }
+
+    /**
+     * Check if a cache entry is still valid by comparing source and pipeline metadata.
+     */
+    fun isValid(
+        imageId: String,
+        tier: ResolutionTier,
+        format: CacheFormat? = null,
+        sourceLastModified: Long = 0L,
+        pipelineHash: Int = 0
+    ): Boolean {
+        val effectiveFormat = format ?: config.get().defaultFormat
+        val key = makeKey(imageId, tier, effectiveFormat)
+        val entry = journal[key] ?: return false
+
+        if (sourceLastModified > 0 && entry.sourceLastModified > 0 && entry.sourceLastModified < sourceLastModified) {
+            return false
+        }
+        if (pipelineHash != 0 && entry.pipelineHash != 0 && entry.pipelineHash != pipelineHash) {
+            return false
+        }
+        return true
+    }
+
+    // ================================================================
     // Statistics
-    // ============================================================
+    // ================================================================
 
     fun getStats(): CacheStats {
         val hits = totalHits.get()
         val misses = totalMisses.get()
         val total = hits + misses
+        val entries = journal.size
+        val sizeBytes = currentCacheSize.get()
+
+        val byNamespace = journal.values.groupBy { it.namespace }.mapValues { it.value.size }
+        val byFormat = journal.values.groupBy { it.format.name }.mapValues { it.value.size }
+
         return CacheStats(
             hits = hits,
             misses = misses,
+            hitRate = if (total > 0) hits.toFloat() / total else 0f,
             writes = totalWrites.get(),
             evictions = totalEvictions.get(),
-            hitRate = if (total > 0) hits.toFloat() / total else 0f,
-            currentSizeBytes = currentCacheSize.get(),
+            totalEntries = entries,
+            totalSizeBytes = sizeBytes,
             maxSizeBytes = maxCacheSizeBytes,
-            entryCount = journal.size,
-            memoryEntries = memoryCache.size()
+            averageEntrySizeBytes = if (entries > 0) sizeBytes / entries else 0L,
+            memoryEntries = memoryCache.size(),
+            byNamespace = byNamespace,
+            byFormat = byFormat
         )
     }
 
@@ -334,21 +639,19 @@ class ThumbnailDiskCache(
     }
 
     fun getSize(): Long = currentCacheSize.get()
-    fun getCount(): Int = journal.size
+    fun getCount(): Int = currentEntryCount.get()
 
-    // ============================================================
+    // ================================================================
     // Bulk operations
-    // ============================================================
+    // ================================================================
 
     /**
      * Prefetch thumbnails for a list of image IDs.
-     * Useful for warming up the cache for visible items.
      */
     suspend fun prefetch(imageIds: List<String>, tier: ResolutionTier = ResolutionTier.MEDIUM) {
         withContext(ioDispatcher) {
             imageIds.forEach { id ->
                 if (!contains(id, tier)) {
-                    // Load from disk if available, otherwise skip
                     val file = getCacheFile(id, tier)
                     if (file.exists()) {
                         get(id, tier)
@@ -365,20 +668,48 @@ class ThumbnailDiskCache(
         imageIds.forEach { evict(it) }
     }
 
-    // ============================================================
-    // Helpers
-    // ============================================================
+    // ================================================================
+    // Legacy compatibility
+    // ================================================================
 
-    private fun makeKey(imageId: String, tier: ResolutionTier): String {
-        return "${hash(imageId)}_${tier.suffix}"
+    /**
+     * Clear all caches (legacy alias for clearAll).
+     */
+    fun clear() {
+        clearAll()
     }
 
-    private fun getCacheFile(imageId: String, tier: ResolutionTier): File {
-        return File(cacheDir, "thumb_${makeKey(imageId, tier)}")
+    fun size(): Long = currentCacheSize.get()
+
+    // ================================================================
+    // Helpers
+    // ================================================================
+
+    private fun makeKey(
+        imageId: String,
+        tier: ResolutionTier,
+        format: CacheFormat = config.get().defaultFormat,
+        namespace: String = config.get().namespace
+    ): String {
+        return "${namespace}_${hash(imageId)}_${tier.suffix}_${format.extension}"
+    }
+
+    private fun getCacheFile(
+        imageId: String,
+        tier: ResolutionTier,
+        format: CacheFormat = config.get().defaultFormat,
+        namespace: String = config.get().namespace
+    ): File {
+        val nsDir = File(config.get().cacheRootDir, namespace)
+        return File(nsDir, "thumb_${hash(imageId)}_${tier.suffix}.${format.extension}")
     }
 
     private fun getCacheFileFromKey(key: String): File {
-        return File(cacheDir, "thumb_$key")
+        // Key format: namespace_hash_tier_format
+        // Parse namespace from key to determine subdirectory
+        val namespace = key.substringBefore("_")
+        val nsDir = File(config.get().cacheRootDir, namespace)
+        return File(nsDir, "thumb_${key.substringAfter("_")}")
     }
 
     private fun hash(input: String): String {
@@ -394,24 +725,36 @@ class ThumbnailDiskCache(
         }
     }
 
-    // ============================================================
+    private fun CacheFormat.toBitmapCompressFormat(): Bitmap.CompressFormat = when (this) {
+        CacheFormat.JPEG -> Bitmap.CompressFormat.JPEG
+        CacheFormat.WEBP -> Bitmap.CompressFormat.WEBP
+        CacheFormat.BMP -> Bitmap.CompressFormat.JPEG // Android has no BMP CompressFormat; fall back to JPEG
+    }
+
+    // ================================================================
     // Journal persistence
-    // ============================================================
+    // ================================================================
 
     private fun loadJournal() {
         if (!journalFile.exists()) return
         try {
             journalFile.forEachLine { line ->
                 val parts = line.split(",")
-                if (parts.size >= 4) {
+                if (parts.size >= 5) {
                     try {
                         val tier = ResolutionTier.valueOf(parts[1])
+                        val format = CacheFormat.valueOf(parts[2])
                         val entry = JournalEntry(
                             key = parts[0],
                             tier = tier,
-                            size = parts[2].toLong(),
-                            lastAccessTime = parts[3].toLong(),
-                            accessCount = parts.getOrElse(4) { "0" }.toInt()
+                            format = format,
+                            namespace = parts[3],
+                            projectId = parts[4].takeIf { it != "null" },
+                            size = parts[5].toLong(),
+                            lastAccessTime = parts[6].toLong(),
+                            accessCount = parts.getOrElse(7) { "0" }.toInt(),
+                            sourceLastModified = parts.getOrElse(8) { "0" }.toLong(),
+                            pipelineHash = parts.getOrElse(9) { "0" }.toInt()
                         )
                         journal[entry.key] = entry
                     } catch (_: Exception) {}
@@ -424,11 +767,14 @@ class ThumbnailDiskCache(
         journalMutex.withLock {
             withContext(ioDispatcher) {
                 try {
+                    journalFile.parentFile?.mkdirs()
                     journalFile.printWriter().use { writer ->
                         journal.values.forEach { entry ->
                             writer.println(
-                                "${entry.key},${entry.tier.name},${entry.size}," +
-                                "${entry.lastAccessTime},${entry.accessCount}"
+                                "${entry.key},${entry.tier.name},${entry.format.name}," +
+                                "${entry.namespace},${entry.projectId ?: "null"},${entry.size}," +
+                                "${entry.lastAccessTime},${entry.accessCount}," +
+                                "${entry.sourceLastModified},${entry.pipelineHash}"
                             )
                         }
                     }
@@ -439,11 +785,14 @@ class ThumbnailDiskCache(
 
     private fun calculateCurrentSize() {
         var total = 0L
-        cacheDir.listFiles()?.forEach { file ->
+        var count = 0
+        config.get().cacheRootDir.walkTopDown().forEach { file ->
             if (file.isFile && file.name.startsWith("thumb_")) {
                 total += file.length()
+                count++
             }
         }
         currentCacheSize.set(total)
+        currentEntryCount.set(count)
     }
 }

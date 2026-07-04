@@ -10,45 +10,113 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = AlcedoPrimary,
-    secondary = AlcedoSecondary,
-    tertiary = AlcedoTertiary,
-    background = AlcedoBackgroundDark,
-    surface = AlcedoSurfaceDark,
-    onBackground = AlcedoOnBackgroundDark,
-    onSurface = AlcedoOnSurfaceDark
+fun AlcedoColorScheme.toMaterialColorScheme() = darkColorScheme(
+    primary = primary,
+    onPrimary = onPrimary,
+    primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer,
+    secondary = secondary,
+    onSecondary = onSecondary,
+    secondaryContainer = secondaryContainer,
+    onSecondaryContainer = onSecondaryContainer,
+    tertiary = tertiary,
+    onTertiary = onTertiary,
+    tertiaryContainer = tertiaryContainer,
+    onTertiaryContainer = onTertiaryContainer,
+    background = bgBase,
+    onBackground = onSurface,
+    surface = surface,
+    onSurface = onSurface,
+    surfaceVariant = surfaceVariant,
+    onSurfaceVariant = onSurfaceVariant,
+    surfaceContainerLowest = surfaceContainerLowest,
+    surfaceContainerLow = surfaceContainerLow,
+    surfaceContainer = surfaceContainer,
+    surfaceContainerHigh = surfaceContainerHigh,
+    surfaceContainerHighest = surfaceContainerHighest,
+    error = error,
+    onError = onError,
+    errorContainer = errorContainer,
+    onErrorContainer = onErrorContainer,
+    outline = outline,
+    outlineVariant = outlineVariant,
+    inverseSurface = inverseSurface,
+    inverseOnSurface = inverseOnSurface,
+    inversePrimary = inversePrimary,
+    scrim = scrim
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = AlcedoPrimary,
-    secondary = AlcedoSecondary,
-    tertiary = AlcedoTertiary,
-    background = AlcedoBackgroundLight,
-    surface = AlcedoSurfaceLight,
-    onBackground = AlcedoOnBackgroundLight,
-    onSurface = AlcedoOnSurfaceLight
+fun AlcedoColorScheme.toMaterialLightColorScheme() = lightColorScheme(
+    primary = primary,
+    onPrimary = onPrimary,
+    primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer,
+    secondary = secondary,
+    onSecondary = onSecondary,
+    secondaryContainer = secondaryContainer,
+    onSecondaryContainer = onSecondaryContainer,
+    tertiary = tertiary,
+    onTertiary = onTertiary,
+    tertiaryContainer = tertiaryContainer,
+    onTertiaryContainer = onTertiaryContainer,
+    background = bgBase,
+    onBackground = onSurface,
+    surface = surface,
+    onSurface = onSurface,
+    surfaceVariant = surfaceVariant,
+    onSurfaceVariant = onSurfaceVariant,
+    surfaceContainerLowest = surfaceContainerLowest,
+    surfaceContainerLow = surfaceContainerLow,
+    surfaceContainer = surfaceContainer,
+    surfaceContainerHigh = surfaceContainerHigh,
+    surfaceContainerHighest = surfaceContainerHighest,
+    error = error,
+    onError = onError,
+    errorContainer = errorContainer,
+    onErrorContainer = onErrorContainer,
+    outline = outline,
+    outlineVariant = outlineVariant,
+    inverseSurface = inverseSurface,
+    inverseOnSurface = inverseOnSurface,
+    inversePrimary = inversePrimary,
+    scrim = scrim
 )
 
 @Composable
 fun AlcedoTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val variant by ThemeManager.themeVariant.collectAsState()
+    val darkMode by ThemeManager.darkMode.collectAsState()
+
+    val darkTheme = when (darkMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+
+    val isDynamic = variant == AlcedoThemeVariant.DYNAMIC &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        isDynamic -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        else -> {
+            val alcedoColors = ThemeManager.getAlcedoColorScheme(variant, darkTheme)
+            if (darkTheme) alcedoColors.toMaterialColorScheme()
+            else alcedoColors.toMaterialLightColorScheme()
+        }
     }
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -60,7 +128,48 @@ fun AlcedoTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = AlcedoTypography,
+        shapes = AlcedoShapes,
+        content = content
+    )
+}
+
+// Keep the old function signature for backward compatibility
+@Composable
+fun AlcedoTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    val variant by ThemeManager.themeVariant.collectAsState()
+    val isDynamic = (dynamicColor || variant == AlcedoThemeVariant.DYNAMIC) &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    val colorScheme = when {
+        isDynamic -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        else -> {
+            val alcedoColors = ThemeManager.getAlcedoColorScheme(variant, darkTheme)
+            if (darkTheme) alcedoColors.toMaterialColorScheme()
+            else alcedoColors.toMaterialLightColorScheme()
+        }
+    }
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = AlcedoTypography,
+        shapes = AlcedoShapes,
         content = content
     )
 }

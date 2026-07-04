@@ -20,6 +20,10 @@ import kotlin.math.sqrt
  * HNSW vector index for fast nearest-neighbor search, semantic label generation,
  * vector embedding generation, and natural language query → vector → search pipeline.
  *
+ * Uses [ClipInferenceEngine] for real ONNX Runtime inference, with fallback to
+ * native NDK CLIP inference and deterministic hash-based embeddings when models
+ * are not available.
+ *
  * All heavy operations are cancellable and report progress through StateFlow.
  */
 class AiService(private val context: Context) {
@@ -32,10 +36,22 @@ class AiService(private val context: Context) {
         private const val MAX_LABELS_PER_IMAGE = 10
     }
 
+    // ── ONNX Runtime CLIP Engine ──
+
+    private val clipEngine = ClipInferenceEngine(context)
+
     // ── Model Catalog ──
 
     private val modelCatalog = ConcurrentHashMap<String, AiModelProfile>()
     private val modelCatalogFlow = MutableStateFlow<List<AiModelProfile>>(emptyList())
+
+    // ── Model Loading State ──
+
+    private val _modelLoadStatus = MutableStateFlow(ClipInferenceEngine.ModelStatus.NOT_LOADED)
+    val modelLoadStatus: StateFlow<ClipInferenceEngine.ModelStatus> = _modelLoadStatus.asStateFlow()
+
+    private val _embeddingDimension = MutableStateFlow(DEFAULT_EMBEDDING_DIM)
+    val embeddingDimension: StateFlow<Int> = _embeddingDimension.asStateFlow()
 
     // ── Vector Index ──
 
@@ -129,6 +145,14 @@ class AiService(private val context: Context) {
         }
         modelCatalog[modelId] = model.copy(isActive = true)
         modelCatalogFlow.value = modelCatalog.values.toList()
+
+        // Load the model into the CLIP inference engine
+        val loaded = clipEngine.loadModel(modelId)
+        _modelLoadStatus.value = clipEngine.modelStatus
+        _embeddingDimension.value = clipEngine.embeddingDim
+        if (!loaded) {
+            Log.w(TAG, "Failed to load ONNX model for $modelId, will use fallback embeddings")
+        }
     }
 
     suspend fun deactivateModel(modelId: String) = withContext(Dispatchers.IO) {
@@ -136,13 +160,53 @@ class AiService(private val context: Context) {
             modelCatalog[modelId] = model.copy(isActive = false)
             modelCatalogFlow.value = modelCatalog.values.toList()
         }
+        if (clipEngine.activeModelId == modelId) {
+            clipEngine.unloadModel()
+            _modelLoadStatus.value = ClipInferenceEngine.ModelStatus.NOT_LOADED
+        }
+    }
+
+    // ── CLIP Engine Access ──
+
+    /**
+     * Get the underlying CLIP inference engine for direct access.
+     */
+    fun getClipEngine(): ClipInferenceEngine = clipEngine
+
+    /**
+     * Check if the ONNX model is currently loaded and ready for inference.
+     */
+    fun isModelLoaded(): Boolean = clipEngine.isLoaded
+
+    /**
+     * Get the current model loading status.
+     */
+    fun getModelLoadStatus(): ClipInferenceEngine.ModelStatus = clipEngine.modelStatus
+
+    /**
+     * Manually load a model into the CLIP inference engine.
+     */
+    suspend fun loadModel(modelId: String): Boolean {
+        val result = clipEngine.loadModel(modelId)
+        _modelLoadStatus.value = clipEngine.modelStatus
+        _embeddingDimension.value = clipEngine.embeddingDim
+        return result
+    }
+
+    /**
+     * Unload the current model from the CLIP inference engine.
+     */
+    fun unloadModel() {
+        clipEngine.unloadModel()
+        _modelLoadStatus.value = ClipInferenceEngine.ModelStatus.NOT_LOADED
     }
 
     // ── Label Generation ──
 
     /**
      * Generate semantic labels for an image using the active AI model.
-     * Uses zero-shot classification to match the image against the label catalog.
+     * Uses zero-shot classification via [ClipInferenceEngine] when available,
+     * otherwise falls back to native NDK or deterministic embeddings.
      */
     suspend fun generateLabels(
         imageId: UInt,
@@ -156,6 +220,32 @@ class AiService(private val context: Context) {
 
         try {
             val activeModelId = modelId ?: getActiveModel()?.modelId ?: "mobileclip-s2"
+
+            setTaskProgress(taskId, 0.1f)
+
+            // Try real ONNX zero-shot classification first
+            if (clipEngine.isLoaded && clipEngine.activeModelId == activeModelId) {
+                val classificationResults = clipEngine.zeroShotClassify(bitmap, labelCatalog)
+                if (classificationResults.isNotEmpty()) {
+                    val labels = classificationResults
+                        .filter { it.second >= LABEL_CONFIDENCE_THRESHOLD }
+                        .take(MAX_LABELS_PER_IMAGE)
+                        .mapIndexed { idx, (label, score) ->
+                            SemanticLabel(
+                                labelId = "${imageId}-${idx}",
+                                imageId = imageId,
+                                label = label,
+                                confidence = score,
+                                modelId = activeModelId
+                            )
+                        }
+                    labelStore[imageId] = labels
+                    setTaskProgress(taskId, 1f)
+                    return@withContext labels
+                }
+            }
+
+            // Fallback: use embedding-based zero-shot classification
             val embeddingDim = getEmbeddingDim(activeModelId)
 
             setTaskProgress(taskId, 0.3f)
@@ -166,14 +256,12 @@ class AiService(private val context: Context) {
             setTaskProgress(taskId, 0.6f)
 
             // Use zero-shot classification: compare image embedding with text embeddings
-            // of each label in the catalog
             val results = mutableListOf<SemanticLabel>()
             val batchSize = 20
             val labelBatches = labelCatalog.chunked(batchSize)
 
             for ((batchIdx, batch) in labelBatches.withIndex()) {
                 for (label in batch) {
-                    // Generate a deterministic text embedding for the label
                     val textEmbedding = generateTextEmbedding(label, embeddingDim)
                     val similarity = cosineSimilarity(imageEmbedding, textEmbedding)
                     if (similarity >= LABEL_CONFIDENCE_THRESHOLD) {
@@ -210,7 +298,8 @@ class AiService(private val context: Context) {
 
     /**
      * Generate a vector embedding for an image.
-     * Uses the active CLIP/SigLIP model to encode the image into a normalized vector.
+     * Uses [ClipInferenceEngine] for real ONNX inference when the model is loaded,
+     * falls back to native NDK or deterministic hash-based embeddings.
      */
     suspend fun generateEmbedding(
         imageId: UInt,
@@ -222,7 +311,19 @@ class AiService(private val context: Context) {
         val activeModelId = modelId ?: getActiveModel()?.modelId ?: "mobileclip-s2"
         val dim = getEmbeddingDim(activeModelId)
 
-        // Preprocess bitmap: resize to model input size, extract RGB bytes
+        // Try real ONNX inference first
+        if (clipEngine.isLoaded && clipEngine.activeModelId == activeModelId) {
+            try {
+                val embedding = clipEngine.encodeImage(bitmap)
+                if (embedding.isNotEmpty() && !embedding.all { it == 0f }) {
+                    return@withContext embedding
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "ONNX image encoding failed, falling back: ${e.message}")
+            }
+        }
+
+        // Try native CLIP inference if a model is available
         val inputSize = getModelInputSize(activeModelId)
         val resized = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
         val rgbBytes = ByteArray(inputSize * inputSize * 3)
@@ -230,14 +331,13 @@ class AiService(private val context: Context) {
         resized.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
         for (i in pixels.indices) {
             val pixel = pixels[i]
-            rgbBytes[i * 3] = ((pixel shr 16) and 0xFF).toByte()     // R
-            rgbBytes[i * 3 + 1] = ((pixel shr 8) and 0xFF).toByte()  // G
-            rgbBytes[i * 3 + 2] = (pixel and 0xFF).toByte()          // B
+            rgbBytes[i * 3] = ((pixel shr 16) and 0xFF).toByte()
+            rgbBytes[i * 3 + 1] = ((pixel shr 8) and 0xFF).toByte()
+            rgbBytes[i * 3 + 2] = (pixel and 0xFF).toByte()
         }
 
         if (resized !== bitmap) resized.recycle()
 
-        // Try native CLIP inference if a model is available, otherwise use fallback
         val embedding = tryNativeClipInference(activeModelId, rgbBytes, inputSize, inputSize, dim)
             ?: generateFallbackEmbedding(imageId, dim)
 
@@ -248,24 +348,41 @@ class AiService(private val context: Context) {
 
     /**
      * Generate a text embedding for a query string.
+     * Uses [ClipInferenceEngine] for real ONNX text encoding when the model is loaded,
+     * falls back to deterministic hash-based embeddings.
      */
     suspend fun generateTextEmbedding(text: String, dim: Int = DEFAULT_EMBEDDING_DIM): FloatArray = withContext(Dispatchers.Default) {
-        // Use a deterministic hash-based approach to generate text embeddings
-        // In production, this would use the text encoder of the CLIP model
+        // Try real ONNX text encoding first
+        if (clipEngine.isLoaded) {
+            try {
+                val embedding = clipEngine.encodeText(text)
+                if (embedding.isNotEmpty() && !embedding.all { it == 0f }) {
+                    return@withContext embedding
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "ONNX text encoding failed, falling back: ${e.message}")
+            }
+        }
+
+        // Try native CLIP text encoding
+        val activeModelId = getActiveModel()?.modelId ?: "mobileclip-s2"
+        val nativeResult = tryNativeClipTextInference(activeModelId, text)
+        if (nativeResult != null) {
+            return@withContext nativeResult
+        }
+
+        // Fallback: deterministic hash-based embedding
         val embedding = FloatArray(dim)
         val bytes = text.toByteArray(Charsets.UTF_8)
 
-        // Deterministic seed from text
         var seed = 0L
         for (b in bytes) {
             seed = seed * 31 + b.toLong()
         }
 
-        // Generate pseudo-random but deterministic embedding
         for (i in embedding.indices) {
             seed = seed * 1103515245L + 12345L
             embedding[i] = ((seed.toDouble() / Long.MAX_VALUE.toDouble()).toFloat() * 2f - 1f) * 0.1f +
-                // Add a positional component based on character n-grams
                 (if (i < bytes.size) (bytes[i].toFloat() / 128f - 1f) * 0.5f else 0f)
         }
 
@@ -275,23 +392,15 @@ class AiService(private val context: Context) {
 
     // ── Image Indexing ──
 
-    /**
-     * Index an image embedding in the HNSW vector index for fast similarity search.
-     */
     suspend fun indexImage(imageId: UInt, embedding: FloatArray, modelId: String) = withContext(Dispatchers.IO) {
-        // Remove existing entry for this image+model
         vectorIndex.removeAll { it.imageId == imageId && it.modelId == modelId }
         vectorIndex.add(VectorIndexEntry(imageId, embedding, modelId))
 
-        // Also insert into native HNSW index
         if (hnswIndexHandle != 0L) {
             AiNdkBridge.hnswInsert(hnswIndexHandle, imageId.toLong(), embedding)
         }
     }
 
-    /**
-     * Remove an image from the vector index.
-     */
     suspend fun removeFromIndex(imageId: UInt) = withContext(Dispatchers.IO) {
         vectorIndex.removeAll { it.imageId == imageId }
         if (hnswIndexHandle != 0L) {
@@ -299,9 +408,6 @@ class AiService(private val context: Context) {
         }
     }
 
-    /**
-     * Get the number of indexed images.
-     */
     fun getIndexedCount(): Int {
         val nativeCount = if (hnswIndexHandle != 0L) {
             AiNdkBridge.hnswSize(hnswIndexHandle)
@@ -311,11 +417,6 @@ class AiService(private val context: Context) {
 
     // ── Semantic Search ──
 
-    /**
-     * Perform a natural language semantic search.
-     * Converts the query to a vector embedding and searches the HNSW index
-     * for the nearest neighbors, returning results sorted by similarity.
-     */
     suspend fun searchByText(
         query: String,
         topK: Int = DEFAULT_SEARCH_K,
@@ -326,7 +427,7 @@ class AiService(private val context: Context) {
         val activeModelId = modelId ?: getActiveModel()?.modelId ?: "mobileclip-s2"
         val dim = getEmbeddingDim(activeModelId)
 
-        // Generate query embedding
+        // Generate query embedding (uses real ONNX when available)
         val queryEmbedding = generateTextEmbedding(query, dim)
 
         // Try native HNSW search first
@@ -346,9 +447,6 @@ class AiService(private val context: Context) {
         }.sortedByDescending { it.score }.take(topK)
     }
 
-    /**
-     * Search by semantic label.
-     */
     suspend fun searchByLabel(label: String, topK: Int = DEFAULT_SEARCH_K): List<SearchResult> {
         val lowerLabel = label.lowercase().trim()
         return labelStore.entries
@@ -403,21 +501,15 @@ class AiService(private val context: Context) {
 
     // ── Rating (delegated to AiRatingService) ──
 
-    /**
-     * Quick rating stub. For full rating with mood levels and EXIF writing,
-     * use AiRatingService directly.
-     */
     suspend fun rateImage(imageId: UInt, bitmap: Bitmap?): Pair<Int, String> = withContext(Dispatchers.Default) {
         if (bitmap == null) return@withContext 3 to "No image data available"
 
-        // Simple heuristic-based rating based on image statistics
         val dim = 64
         val resized = Bitmap.createScaledBitmap(bitmap, dim, dim, true)
         val pixels = IntArray(dim * dim)
         resized.getPixels(pixels, 0, dim, 0, 0, dim, dim)
         if (resized !== bitmap) resized.recycle()
 
-        // Compute basic statistics
         var totalBrightness = 0.0
         var totalSaturation = 0.0
         val brightnesses = DoubleArray(pixels.size)
@@ -440,11 +532,9 @@ class AiService(private val context: Context) {
         val avgBrightness = totalBrightness / pixels.size
         val avgSaturation = totalSaturation / pixels.size
 
-        // Compute contrast (std dev of brightness)
         val variance = brightnesses.map { (it - avgBrightness) * (it - avgBrightness) }.average()
         val contrast = sqrt(variance)
 
-        // Heuristic scoring
         val exposureScore = if (avgBrightness in 0.3..0.7) 1.0 else
             if (avgBrightness in 0.2..0.8) 0.6 else 0.3
         val contrastScore = if (contrast in 0.15..0.35) 1.0 else
@@ -493,7 +583,6 @@ class AiService(private val context: Context) {
     }
 
     private fun generateFallbackEmbedding(imageId: UInt, dim: Int): FloatArray {
-        // Deterministic fallback based on imageId hash
         val embedding = FloatArray(dim)
         var seed = imageId.toLong()
         for (i in embedding.indices) {
@@ -511,8 +600,6 @@ class AiService(private val context: Context) {
         dim: Int
     ): FloatArray? {
         return try {
-            // Attempt native CLIP inference via NDK
-            // This requires a model to be loaded; if not available, falls back
             val modelPath = getModelPath(modelId)
             if (modelPath != null && File(modelPath).exists()) {
                 val sessionHandle = AiNdkBridge.clipCreateSession(
@@ -537,18 +624,42 @@ class AiService(private val context: Context) {
         }
     }
 
+    private fun tryNativeClipTextInference(modelId: String, text: String): FloatArray? {
+        return try {
+            val modelPath = getModelPath(modelId)
+            if (modelPath != null && File(modelPath).exists()) {
+                val sessionHandle = AiNdkBridge.clipCreateSession(
+                    modelPath = modelPath,
+                    imageSize = getModelInputSize(modelId),
+                    embeddingDim = getEmbeddingDim(modelId)
+                )
+                if (AiNdkBridge.clipIsLoaded(sessionHandle)) {
+                    val result = AiNdkBridge.clipEncodeText(sessionHandle, text)
+                    AiNdkBridge.clipDestroySession(sessionHandle)
+                    result
+                } else {
+                    AiNdkBridge.clipDestroySession(sessionHandle)
+                    null
+                }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Native CLIP text inference not available: ${e.message}")
+            null
+        }
+    }
+
     private fun getModelPath(modelId: String): String? {
         return context.filesDir.resolve("ai_models").resolve("$modelId.onnx").absolutePath
     }
 
     private fun parseNativeSearchResults(nativeResults: FloatArray): List<SearchResult> {
-        // Native results are interleaved: [id, distance, id, distance, ...]
         val results = mutableListOf<SearchResult>()
         var i = 0
         while (i + 1 < nativeResults.size) {
             val imageId = nativeResults[i].toLong().toUInt()
             val distance = nativeResults[i + 1]
-            // Convert distance (1 - cosine) back to similarity
             val score = (1.0f - distance).coerceIn(0f, 1f)
             results.add(SearchResult(imageId, score, ResultType.SEMANTIC))
             i += 2
