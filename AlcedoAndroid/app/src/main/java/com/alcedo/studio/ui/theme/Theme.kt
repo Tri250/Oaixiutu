@@ -89,6 +89,22 @@ fun AlcedoColorScheme.toMaterialLightColorScheme() = lightColorScheme(
     scrim = scrim
 )
 
+/**
+ * Retrieve the current [AlcedoColorScheme] from the active theme variant.
+ * Useful for accessing glass colors & accent outside MaterialTheme scope.
+ */
+@Composable
+fun LocalAlcedoColorScheme(): AlcedoColorScheme {
+    val variant by ThemeManager.themeVariant.collectAsState()
+    val darkMode by ThemeManager.darkMode.collectAsState()
+    val darkTheme = when (darkMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    return ThemeManager.getAlcedoColorScheme(variant, darkTheme)
+}
+
 @Composable
 fun AlcedoTheme(
     content: @Composable () -> Unit

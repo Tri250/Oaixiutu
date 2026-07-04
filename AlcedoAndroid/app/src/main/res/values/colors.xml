@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#1A1A1A</color>
-    <color name="ic_launcher_foreground">#6B8E6B</color>
+    <color name="ic_launcher_background">#18110C</color>
+    <color name="ic_launcher_foreground">#FF7A3D</color>
+    <!-- Hasselblad Orange palette -->
+    <color name="hasselblad_orange">#FFFF7A3D</color>
+    <color name="hasselblad_orange_light">#FFFB999</color>
+    <color name="hasselblad_orange_dark">#FF8B4E2C</color>
+    <color name="hasselblad_amber">#FFFF9100</color>
+    <color name="hasselblad_warm_gray">#FFA09286</color>
+    <!-- Legacy -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>

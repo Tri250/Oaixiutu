@@ -248,6 +248,105 @@ class PipelineService {
     }
 
     // ================================================================
+    // New Pipeline Operators: ColorTemp / CST / ODT / LMT / HLS / Curve / RawDecode
+    // ================================================================
+
+    /**
+     * Apply color temperature adjustment using Planckian locus lookup.
+     * @param cct Correlated color temperature in Kelvin (2000–15000).
+     * @param tint Green-magenta tint offset (±150).
+     * @param mode 0=AS_SHOT (use camera metadata), 1=CUSTOM.
+     */
+    suspend fun applyColorTemp(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        cct: Float, tint: Float, mode: Int = 1
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetColorTemp(floatPixels, width, height, channels, cct, tint, mode)
+    }
+
+    /**
+     * Apply Color Space Transform (CST) between named color spaces.
+     * @param transformType 0=TO_WORKING_SPACE, 1=TO_OUTPUT_SPACE.
+     * @param inputSpace Source color space name (e.g. "sRGB", "ACES AP1", "ACES AP0", "Display P3", "Rec2020").
+     * @param outputSpace Target color space name.
+     */
+    suspend fun applyCST(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        transformType: Int, inputSpace: String, outputSpace: String
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetCST(floatPixels, width, height, channels, transformType, inputSpace, outputSpace)
+    }
+
+    /**
+     * Apply Output Device Transform (ODT) for display rendering.
+     * @param method 0=ACES (RRT+ODT), 1=OPEN_DRT.
+     * @param outputSpace 0=sRGB, 1=Display P3, 2=Rec2020.
+     * @param peakLuminance Display peak luminance in nits (e.g. 100.0f for SDR).
+     */
+    suspend fun applyODT(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        method: Int, outputSpace: Int = 0, peakLuminance: Float = 100f
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetODT(floatPixels, width, height, channels, method, outputSpace, peakLuminance)
+    }
+
+    /**
+     * Apply Look Modify Transform (LMT) using a .cube LUT file.
+     * @param lutPath Absolute path to the .cube LUT file.
+     */
+    suspend fun applyLMT(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        lutPath: String
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeLoadLMT(floatPixels, width, height, channels, lutPath)
+    }
+
+    /**
+     * Apply HLS (Hue-Lightness-Saturation) per-profile color adjustment.
+     * Uses 8 hue profiles centered at 0°, 45°, 90°, …, 315°.
+     * @param profileIndex Hue profile index (0–7).
+     * @param hueShift Hue rotation in degrees (±180).
+     * @param lightness Lightness offset (±1.0).
+     * @param saturation Saturation scale offset (±1.0).
+     * @param hueRange Half-width of the hue selection range in degrees (1–180).
+     */
+    suspend fun applyHLS(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        profileIndex: Int, hueShift: Float, lightness: Float, saturation: Float,
+        hueRange: Float = 45f
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetHLS(floatPixels, width, height, channels, profileIndex, hueShift, lightness, saturation, hueRange)
+    }
+
+    /**
+     * Apply Hermite monotone spline curve adjustment to luminance.
+     * @param ctrlPts Flat control point array [x0,y0,x1,y1,…] with x,y in [0,1].
+     * @param count Number of control points.
+     */
+    suspend fun applyCurve(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        ctrlPts: FloatArray, count: Int
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetCurve(floatPixels, width, height, channels, ctrlPts, count)
+    }
+
+    /**
+     * Apply RAW decode control operator.
+     * Configures demosaic method, input color space, and white balance/highlight recovery preferences.
+     * @param demosaicMethod 0=AHD, 1=AMAZE, 2=RCD.
+     * @param inputSpace 0=AP0, 1=CAMERA (native camera space, CST will convert later).
+     * @param useCameraWB Use camera-recorded white balance multipliers.
+     * @param highlightRecovery Enable highlight reconstruction.
+     */
+    suspend fun applyRawDecode(
+        floatPixels: FloatArray, width: Int, height: Int, channels: Int,
+        demosaicMethod: Int, inputSpace: Int = 0, useCameraWB: Boolean = true,
+        highlightRecovery: Boolean = true
+    ): FloatArray = withContext(Dispatchers.Default) {
+        nativeBridge.nativeSetRawDecode(floatPixels, width, height, channels, demosaicMethod, inputSpace, useCameraWB, highlightRecovery)
+    }
+
+    // ================================================================
     // Helpers
     // ================================================================
 

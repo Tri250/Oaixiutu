@@ -70,6 +70,15 @@ add_library(
     core/edit/operators/highlight_op.cpp
     core/edit/operators/crop_rotate_op.cpp
     core/edit/operators/resize_op.cpp
+    core/edit/operators/color_temp_op.cpp
+    core/edit/operators/hls_op.cpp
+    core/edit/operators/oklab_cvt.cpp
+    core/edit/operators/curve_op.cpp
+    core/edit/operators/cst_op.cpp
+    core/edit/operators/odt_op.cpp
+    core/edit/operators/lmt_op.cpp
+    core/edit/operators/cv_cvt_op.cpp
+    core/edit/operators/raw_decode_op.cpp
     core/utils/hash.cpp
     core/utils/file_utils.cpp
     core/utils/id_generator.cpp

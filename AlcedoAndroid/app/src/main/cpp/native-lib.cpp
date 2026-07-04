@@ -23,6 +23,13 @@
 #include "core/edit/operators/highlight_op.h"
 #include "core/edit/operators/crop_rotate_op.h"
 #include "core/edit/operators/resize_op.h"
+#include "core/edit/operators/color_temp_op.h"
+#include "core/edit/operators/cst_op.h"
+#include "core/edit/operators/odt_op.h"
+#include "core/edit/operators/lmt_op.h"
+#include "core/edit/operators/hls_op.h"
+#include "core/edit/operators/curve_op.h"
+#include "core/edit/operators/raw_decode_op.h"
 #include "core/sleeve/sleeve_manager.h"
 #include "core/sleeve/sleeve_filesystem.h"
 #include "core/sleeve/path_resolver.h"
@@ -1861,6 +1868,217 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(
         return nullptr;
     }
     env->SetFloatArrayRegion(result, 0, resized.size(), resized.data());
+    return result;
+}
+
+// ============================================================
+// New Pipeline Operators: ColorTemp / CST / ODT / LMT / HLS / Curve / RawDecode
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetColorTemp(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloat cct, jfloat tint, jint mode) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    alcedo::ColorTempOp op(cct, tint, static_cast<alcedo::ColorTempOp::Mode>(mode));
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create ColorTempOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetCST(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint transformType, jstring inputSpace, jstring outputSpace) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    const char *cinput = env->GetStringUTFChars(inputSpace, nullptr);
+    const char *coutput = env->GetStringUTFChars(outputSpace, nullptr);
+    if (!cinput || !coutput) {
+        if (cinput) env->ReleaseStringUTFChars(inputSpace, cinput);
+        if (coutput) env->ReleaseStringUTFChars(outputSpace, coutput);
+        return nullptr;
+    }
+
+    alcedo::CSTOp op(static_cast<alcedo::CSTTransformType>(transformType), cinput, coutput);
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    env->ReleaseStringUTFChars(inputSpace, cinput);
+    env->ReleaseStringUTFChars(outputSpace, coutput);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create CSTOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetODT(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint method, jint outputSpace, jfloat peakLuminance) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    alcedo::ODTOp op(static_cast<alcedo::ODTMethod>(method), peakLuminance);
+    if (outputSpace == 1) op.SetOutputP3();
+    else if (outputSpace == 2) op.SetOutputRec2020();
+    else op.SetOutputSRGB();
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create ODTOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeLoadLMT(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jstring lutPath) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    const char *path = env->GetStringUTFChars(lutPath, nullptr);
+    if (!path) return nullptr;
+
+    alcedo::LMTOp op(path);
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    env->ReleaseStringUTFChars(lutPath, path);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create LMTOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetHLS(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint profileIndex, jfloat hueShift, jfloat lightness, jfloat saturation,
+        jfloat hueRange) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    alcedo::HLSOp op;
+    op.SetHueAdjustment(profileIndex, hueShift);
+    op.SetLightnessAdjustment(profileIndex, lightness);
+    op.SetSaturationAdjustment(profileIndex, saturation);
+    op.SetHueRange(profileIndex, hueRange);
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create HLSOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetCurve(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloatArray ctrlPts, jint count) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    jfloat *pts = env->GetFloatArrayElements(ctrlPts, nullptr);
+    if (!pts) return nullptr;
+
+    // ctrlPts is a flat array of [x0,y0,x1,y1,...] pairs
+    std::vector<alcedo::CurveOp::ControlPoint> cp_vec;
+    int num_pts = count;
+    for (int i = 0; i < num_pts; ++i) {
+        cp_vec.push_back({pts[i * 2], pts[i * 2 + 1]});
+    }
+    env->ReleaseFloatArrayElements(ctrlPts, pts, JNI_ABORT);
+
+    alcedo::CurveOp op(cp_vec);
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create CurveOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetRawDecode(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint demosaicMethod, jint inputSpace, jboolean useCameraWB,
+        jboolean highlightRecovery) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    alcedo::RawDecodeOp op(static_cast<alcedo::DemosaicMethod>(demosaicMethod),
+                           static_cast<alcedo::RawInputSpace>(inputSpace));
+    op.SetUseCameraWhiteBalance(useCameraWB);
+    op.SetHighlightRecovery(highlightRecovery);
+    op.Apply(float_pixels.data(), width, height, channels);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create RawDecodeOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
 
