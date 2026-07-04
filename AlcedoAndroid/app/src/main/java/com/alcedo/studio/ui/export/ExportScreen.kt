@@ -13,7 +13,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.domain.service.ExportResult
 import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.domain.service.ExportStatus
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ProgressBar
@@ -30,7 +32,7 @@ fun ExportScreen(
     val progress by viewModel.exportProgress.collectAsState()
     val lastResult by viewModel.lastExportResult.collectAsState()
     val batchProgress by viewModel.batchProgress.collectAsState()
-    val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
+    val isExporting = progress.status == ExportStatus.EXPORTING
 
     // Batch export toggle (local UI state)
     var showBatchExport by remember { mutableStateOf(false) }
@@ -41,12 +43,12 @@ fun ExportScreen(
 
     LaunchedEffect(lastResult) {
         when (lastResult) {
-            is ExportService.ExportResult.Success -> {
-                resultMessage = Strings.current.exportSuccess.format((lastResult as ExportService.ExportResult.Success).filePath)
+            is ExportResult.Success -> {
+                resultMessage = Strings.current.exportSuccess.format((lastResult as ExportResult.Success).filePath)
                 showResultSnack = true
             }
-            is ExportService.ExportResult.Error -> {
-                resultMessage = Strings.current.exportFailed.format((lastResult as ExportService.ExportResult.Error).message)
+            is ExportResult.Error -> {
+                resultMessage = Strings.current.exportFailed.format((lastResult as ExportResult.Error).message)
                 showResultSnack = true
             }
             null -> {}
@@ -249,9 +251,9 @@ fun ExportScreen(
             }
 
             // Export progress
-            if (isExporting || progress.status == ExportService.ExportStatus.COMPLETED ||
-                progress.status == ExportService.ExportStatus.ERROR ||
-                progress.status == ExportService.ExportStatus.CANCELLED
+            if (isExporting || progress.status == ExportStatus.COMPLETED ||
+                progress.status == ExportStatus.FAILED ||
+                progress.status == ExportStatus.CANCELLED
             ) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -315,7 +317,7 @@ fun ExportScreen(
 
                         // Status
                         when (progress.status) {
-                            ExportService.ExportStatus.COMPLETED -> {
+                            ExportStatus.COMPLETED -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     stringRes { exportCompleted },
@@ -323,7 +325,7 @@ fun ExportScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
-                            ExportService.ExportStatus.CANCELLED -> {
+                            ExportStatus.CANCELLED -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     stringRes { exportCancelled },
@@ -331,7 +333,7 @@ fun ExportScreen(
                                     color = MaterialTheme.colorScheme.error
                                 )
                             }
-                            ExportService.ExportStatus.ERROR -> {
+                            ExportStatus.FAILED -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     stringRes { exportError },
@@ -351,13 +353,11 @@ fun ExportScreen(
             Button(
                 onClick = {
                     viewModel.clearResult()
-                    // For single image export, use the imageId as source path
-                    // In production, resolve imageId to actual file path
-                    val sourcePath = imageId
+                    val id = imageId.toUIntOrNull() ?: return@Button
                     if (showBatchExport && viewModel.batchItems.value.isNotEmpty()) {
                         viewModel.exportBatch()
                     } else {
-                        viewModel.exportImage(sourcePath, PipelineParams())
+                        viewModel.exportImage(id, PipelineParams())
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

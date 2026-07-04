@@ -8,6 +8,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.domain.service.ExportBatchItem
+import com.alcedo.studio.domain.service.ExportProgress
+import com.alcedo.studio.domain.service.ExportResult
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
@@ -119,14 +122,14 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     // ── Export ──
 
-    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress.stateIn(
+    val exportProgress: StateFlow<ExportProgress> = exportService.exportProgress.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ExportService.ExportProgress()
+        initialValue = ExportProgress()
     )
 
-    private val _lastExportResult = MutableStateFlow<ExportService.ExportResult?>(null)
-    val lastExportResult: StateFlow<ExportService.ExportResult?> = _lastExportResult.asStateFlow()
+    private val _lastExportResult = MutableStateFlow<ExportResult?>(null)
+    val lastExportResult: StateFlow<ExportResult?> = _lastExportResult.asStateFlow()
 
     // ── Pipeline snapshot ──
 
@@ -774,19 +777,21 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val img = _imageModel.value ?: return@launch
             val finalBitmap = _previewBitmap.value ?: return@launch
             val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
-            val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
+            val result = exportService.exportImage(imageId.toUInt(), img.imagePath, settingsWithExif, finalBitmap)
             _lastExportResult.value = result
         }
     }
 
-    fun exportBatch(items: List<ExportService.ExportBatchItem>, settings: ExportSettings) {
+    fun exportBatch(items: List<ExportBatchItem>, settings: ExportSettings) {
         viewModelScope.launch {
             exportService.exportBatch(items, settings)
         }
     }
 
     fun cancelExport() {
-        exportService.cancelExport()
+        viewModelScope.launch {
+            exportService.cancelExport()
+        }
     }
 
     // ================================================================

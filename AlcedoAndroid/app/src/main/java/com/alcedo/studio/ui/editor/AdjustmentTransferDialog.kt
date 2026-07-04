@@ -27,12 +27,12 @@ fun AdjustmentTransferDialog(
 ) {
     var sourceImageId by remember { mutableStateOf<Long?>(null) }
     var transferMode by remember { mutableStateOf(TransferMode.PASTE) }
-    val selectedGroups: MutableSet<TransferParamGroup> = remember { mutableStateSetOf() }
+    val selectedGroups = remember { mutableStateOf(mutableSetOf<TransferParamGroup>()) }
 
     // Initialize with ALL selected
     LaunchedEffect(Unit) {
-        if (selectedGroups.isEmpty()) {
-            selectedGroups.add(TransferParamGroup.ALL)
+        if (selectedGroups.value.isEmpty()) {
+            selectedGroups.value.add(TransferParamGroup.ALL)
         }
     }
 
@@ -129,7 +129,7 @@ fun AdjustmentTransferDialog(
 
                 categoryItems.forEach { (group, label) ->
                     val isAllGroup = group == TransferParamGroup.ALL
-                    val isChecked = group in selectedGroups
+                    val isChecked = group in selectedGroups.value
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -140,17 +140,17 @@ fun AdjustmentTransferDialog(
                             onCheckedChange = { checked ->
                                 if (isAllGroup) {
                                     if (checked) {
-                                        selectedGroups.clear()
-                                        selectedGroups.add(TransferParamGroup.ALL)
+                                        selectedGroups.value.clear()
+                                        selectedGroups.value.add(TransferParamGroup.ALL)
                                     } else {
-                                        selectedGroups.remove(TransferParamGroup.ALL)
+                                        selectedGroups.value.remove(TransferParamGroup.ALL)
                                     }
                                 } else {
-                                    selectedGroups.remove(TransferParamGroup.ALL)
+                                    selectedGroups.value.remove(TransferParamGroup.ALL)
                                     if (checked) {
-                                        selectedGroups.add(group)
+                                        selectedGroups.value.add(group)
                                     } else {
-                                        selectedGroups.remove(group)
+                                        selectedGroups.value.remove(group)
                                     }
                                 }
                             }
@@ -175,20 +175,20 @@ fun AdjustmentTransferDialog(
                     )
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        if (selectedGroups.contains(TransferParamGroup.ALL)) {
+                        if (selectedGroups.value.contains(TransferParamGroup.ALL)) {
                             Text(
                                 "All adjustment categories will be transferred",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        } else if (selectedGroups.isEmpty()) {
+                        } else if (selectedGroups.value.isEmpty()) {
                             Text(
                                 "No categories selected",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            for (group in selectedGroups) {
+                            for (group in selectedGroups.value) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(vertical = 2.dp)
@@ -229,8 +229,8 @@ fun AdjustmentTransferDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onApply(transferMode, selectedGroups.toSet()) },
-                enabled = selectedGroups.isNotEmpty()
+                onClick = { onApply(transferMode, selectedGroups.value.toSet()) },
+                enabled = selectedGroups.value.isNotEmpty()
             ) {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))

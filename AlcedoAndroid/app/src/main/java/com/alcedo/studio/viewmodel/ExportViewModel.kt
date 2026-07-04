@@ -10,7 +10,12 @@ import com.alcedo.studio.data.model.ExportFormat
 import com.alcedo.studio.data.model.ExportSettings
 import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.domain.service.BatchExportProgress
+import com.alcedo.studio.domain.service.ExportBatchItem
+import com.alcedo.studio.domain.service.ExportProgress
+import com.alcedo.studio.domain.service.ExportResult
 import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.domain.service.ExportStatus
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,16 +37,16 @@ class ExportViewModel : ViewModel() {
 
     // ── Export progress ──
 
-    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress.stateIn(
+    val exportProgress: StateFlow<ExportProgress> = exportService.exportProgress.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ExportService.ExportProgress()
+        initialValue = ExportProgress()
     )
 
     // ── Export result ──
 
-    private val _lastExportResult = MutableStateFlow<ExportService.ExportResult?>(null)
-    val lastExportResult: StateFlow<ExportService.ExportResult?> = _lastExportResult.asStateFlow()
+    private val _lastExportResult = MutableStateFlow<ExportResult?>(null)
+    val lastExportResult: StateFlow<ExportResult?> = _lastExportResult.asStateFlow()
 
     // ── Batch export ──
 
@@ -215,16 +220,24 @@ class ExportViewModel : ViewModel() {
     // ================================================================
 
     fun exportImage(
-        imagePath: String,
+        imageId: UInt,
         params: PipelineParams,
         sourceExifPath: String? = null
     ) {
         viewModelScope.launch {
             _isExporting.value = true
 
+            val image = imageRepository.getImage(imageId.toLong())
+            val imagePath = image?.imagePath
+            if (imagePath == null) {
+                _lastExportResult.value = ExportResult.Error("Image not found")
+                _isExporting.value = false
+                return@launch
+            }
+
             val bitmap = BitmapFactory.decodeFile(imagePath)
             if (bitmap == null) {
-                _lastExportResult.value = ExportService.ExportResult.Error("Failed to decode image")
+                _lastExportResult.value = ExportResult.Error("Failed to decode image")
                 _isExporting.value = false
                 return@launch
             }
@@ -235,7 +248,7 @@ class ExportViewModel : ViewModel() {
                 sourceExifPath = sourceExifPath ?: imagePath
             )
 
-            val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
+            val result = exportService.exportImage(imageId, imagePath, exportSettings, processedBitmap)
             _lastExportResult.value = result
             _isExporting.value = false
 
@@ -247,6 +260,7 @@ class ExportViewModel : ViewModel() {
     }
 
     fun exportImageWithBitmap(
+        imageId: UInt,
         imagePath: String,
         processedBitmap: Bitmap
     ) {
@@ -257,7 +271,7 @@ class ExportViewModel : ViewModel() {
                 sourceExifPath = imagePath
             )
 
-            val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
+            val result = exportService.exportImage(imageId, imagePath, exportSettings, processedBitmap)
             _lastExportResult.value = result
             _isExporting.value = false
         }
@@ -304,7 +318,7 @@ class ExportViewModel : ViewModel() {
             )
 
             val items = _batchItems.value
-            val exportItems = mutableListOf<ExportService.ExportBatchItem>()
+            val exportItems = mutableListOf<ExportBatchItem>()
 
             for ((index, item) in items.withIndex()) {
                 val image = imageRepository.getImage(item.imageId)
@@ -313,7 +327,8 @@ class ExportViewModel : ViewModel() {
                     if (bitmap != null) {
                         val processed = pipelineService.applyPipeline(bitmap, item.params)
                         exportItems.add(
-                            ExportService.ExportBatchItem(
+                            ExportBatchItem(
+                                imageId = item.imageId,
                                 sourcePath = image.imagePath,
                                 processedBitmap = processed
                             )
@@ -338,7 +353,7 @@ class ExportViewModel : ViewModel() {
     // ================================================================
 
     fun cancelExport() {
-        exportService.cancelExport()
+        viewModelScope.launch { exportService.cancelExport("") }
         _isExporting.value = false
     }
 
@@ -403,15 +418,3 @@ data class BatchExportItem(
     val imageId: Long,
     val params: PipelineParams
 )
-
-data class BatchExportProgress(
-    val totalItems: Int = 0,
-    val completedItems: Int = 0,
-    val currentItem: Int = 0
-) {
-    val progressFraction: Float
-        get() = if (totalItems > 0) completedItems.toFloat() / totalItems else 0f
-
-    val isComplete: Boolean
-        get() = completedItems >= totalItems && totalItems > 0
-}

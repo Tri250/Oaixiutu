@@ -36,7 +36,6 @@ data class RecentProject(
     val thumbnailPath: String = ""
 )
 
-@Serializable
 data class ProjectPackage(
     val version: Int = Project.CURRENT_PACKAGE_VERSION,
     val project: Project,

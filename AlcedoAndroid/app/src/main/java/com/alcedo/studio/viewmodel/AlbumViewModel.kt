@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class AlbumViewModel : ViewModel() {
     private val sleeveRepository = AppModule.sleeveRepository
@@ -520,7 +521,7 @@ class AlbumViewModel : ViewModel() {
 
         if (filter.aiLabels.isNotEmpty()) {
             result = result.filter { img ->
-                val labels = aiService.getLabels(img.imageId.toUInt())
+                val labels = runBlocking { aiService.getLabels(img.imageId.toUInt()) }
                 filter.aiLabels.any { filterLabel ->
                     labels.any { it.label.contains(filterLabel, ignoreCase = true) }
                 }

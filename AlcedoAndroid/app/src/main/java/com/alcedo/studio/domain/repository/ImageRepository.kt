@@ -29,10 +29,12 @@ class ImageRepositoryImpl(
 
     override suspend fun addImage(image: ImageModel) = withContext(Dispatchers.IO) {
         metadataDao.insertMetadata(image.toMetadataEntity())
+        Unit
     }
 
     override suspend fun addImageMetadata(metadata: ImageMetadataEntity) = withContext(Dispatchers.IO) {
         metadataDao.insertMetadata(metadata)
+        Unit
     }
 
     override suspend fun getImage(id: Long): ImageModel? = withContext(Dispatchers.IO) {

@@ -145,6 +145,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
         writableDb.insert(
             "transactions", SQLiteDatabase.CONFLICT_REPLACE, values
         )
+        Unit
     }
 
     override suspend fun getTransactions(versionId: String): List<EditTransaction> = withContext(Dispatchers.IO) {
@@ -161,6 +162,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
 
     override suspend fun deleteTransactions(versionId: String) = withContext(Dispatchers.IO) {
         writableDb.delete("transactions", "version_id = ?", arrayOf<Any?>(versionId))
+        Unit
     }
 
     override suspend fun cloneHistory(

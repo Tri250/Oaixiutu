@@ -14,8 +14,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
-import com.alcedo.studio.data.model.AiModelProfile
-import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.i18n.Language
 import com.alcedo.studio.i18n.LanguageManager
 import com.alcedo.studio.i18n.Strings
@@ -172,16 +170,6 @@ fun SettingsScreen(navController: NavController) {
                     .padding(horizontal = 16.dp),
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) }
             )
-
-            HorizontalDivider()
-
-            // AI Models
-            SettingsSectionHeader(stringRes { settingsAiModels })
-            val aiService = remember { AppModule.aiService }
-            val models = remember { aiService.getModelCatalog() }
-            models.forEach { model ->
-                AiModelItem(model = model)
-            }
 
             HorizontalDivider()
 
@@ -594,48 +582,5 @@ private fun SettingsSectionHeader(title: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
-}
-
-@Composable
-private fun AiModelItem(model: AiModelProfile) {
-    ListItem(
-        headlineContent = { Text(model.modelName) },
-        supportingContent = { Text(model.description) },
-        leadingContent = {
-            Icon(
-                Icons.Default.ModelTraining,
-                contentDescription = null,
-                tint = if (model.isActive) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        trailingContent = {
-            when {
-                !model.isDownloaded -> {
-                    TextButton(onClick = { /* Download */ }) {
-                        Text(stringRes { download })
-                    }
-                }
-                model.isActive -> {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            stringRes { active },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                else -> {
-                    TextButton(onClick = { /* Activate */ }) {
-                        Text(stringRes { activate })
-                    }
-                }
-            }
-        }
     )
 }

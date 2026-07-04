@@ -7,6 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+data class RankedSearchResult(
+    val imageId: Long,
+    val score: Float = 0f
+)
+
 class SearchService(
     private val context: Context,
     private val aiService: AiService,
@@ -28,6 +33,12 @@ class SearchService(
     suspend fun keywordSearch(queryText: String, limit: Int = 50): List<UInt> = emptyList()
 
     suspend fun hybridSearch(queryText: String, limit: Int = 50): List<UInt> = emptyList()
+
+    suspend fun combinedSearch(
+        textQuery: String,
+        enableSemantic: Boolean = false,
+        maxResults: Int = 100
+    ): List<RankedSearchResult> = emptyList()
 
     fun getSearchResults(): List<UInt> = _searchResults.value
 

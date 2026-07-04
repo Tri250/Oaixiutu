@@ -48,6 +48,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
         writableDb.insert(
             "projects", SQLiteDatabase.CONFLICT_REPLACE, values
         )
+        Unit
     }
 
     override suspend fun getProject(projectId: String): Project? = withContext(Dispatchers.IO) {
@@ -98,6 +99,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
 
     override suspend fun deleteProject(projectId: String) = withContext(Dispatchers.IO) {
         writableDb.delete("projects", "project_id = ?", arrayOf<Any?>(projectId))
+        Unit
     }
 
     override suspend fun setProjectMetadata(
@@ -109,6 +111,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
             put("modified_at", Instant.now().toEpochMilli())
         }
         writableDb.update("projects", SQLiteDatabase.CONFLICT_REPLACE, values, "project_id = ?", arrayOf(projectId))
+        Unit
     }
 
     override suspend fun updateProjectModifiedTime(projectId: String) = withContext(Dispatchers.IO) {
@@ -116,6 +119,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
             put("modified_at", Instant.now().toEpochMilli())
         }
         writableDb.update("projects", SQLiteDatabase.CONFLICT_REPLACE, values, "project_id = ?", arrayOf(projectId))
+        Unit
     }
 
     override suspend fun getProjectCount(): Int = withContext(Dispatchers.IO) {

@@ -19,5 +19,9 @@ class ImportService(
 
     suspend fun importMultiple(uris: List<Uri>, targetDir: File): List<File> = emptyList()
 
+    suspend fun importImage(uri: Uri) {}
+
+    suspend fun importDirectory(uri: Uri) {}
+
     fun getSupportedFormats(): List<String> = listOf("jpg", "jpeg", "png", "tiff", "arw", "cr2", "cr3", "nef", "dng", "heic", "heif", "webp")
 }

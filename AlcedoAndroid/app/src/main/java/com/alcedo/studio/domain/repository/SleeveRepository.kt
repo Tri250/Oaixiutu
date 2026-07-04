@@ -35,7 +35,7 @@ class SleeveRepository(
     suspend fun addElement(element: SleeveElement, parentId: Long? = null): Long = withContext(Dispatchers.IO) {
         sleeveService.createElement(
             name = element.elementName,
-            type = element.type,
+            type = element.type.ordinal,
             parentId = parentId,
             imageId = if (element is SleeveFile) element.imageId else null,
             filePath = if (element is SleeveFile) element.filePath else null

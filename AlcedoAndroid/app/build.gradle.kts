@@ -78,8 +78,8 @@ android {
 
         release {
             isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
 
             // R8 full mode
             isProfileable = true

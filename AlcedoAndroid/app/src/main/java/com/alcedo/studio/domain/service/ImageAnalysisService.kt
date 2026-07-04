@@ -1,7 +1,11 @@
 package com.alcedo.studio.domain.service
 
 import android.graphics.Bitmap
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class ImageAnalysisTask { DESCRIBE, SCORE, ANALYZE }
 enum class ImageAnalysisStatus { PENDING, PROCESSING, COMPLETED, CANCELED, ERROR }
@@ -35,7 +39,7 @@ data class ImageAnalysisProgress(
 )
 
 class ImageAnalysisInFlightGate {
-    private val mutex = kotlinx.coroutines.sync.Mutex()
+    private val mutex = Mutex()
     suspend fun <T> runWithGate(block: suspend () -> T): T = mutex.withLock { block() }
     fun isLocked(): Boolean = mutex.isLocked
 }
@@ -49,7 +53,7 @@ class ImageAnalysisService(
         options: ImageAnalysisOptions,
         onProgress: (ImageAnalysisProgress) -> Unit = {},
         onFinished: (List<ImageAnalysisResult>) -> Unit = {}
-    ): Job = kotlinx.coroutines.GlobalScope.launch { }
+    ): Job = GlobalScope.launch { }
 
     fun registerCredentials(providerId: String, apiKey: String) {}
     fun shutdown() {}
