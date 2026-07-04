@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.domain.service.ExportService
@@ -27,7 +27,7 @@ import com.alcedo.studio.viewmodel.ExportViewModel
 fun ExportScreen(
     navController: NavController,
     imageId: String,
-    viewModel: ExportViewModel = viewModel()
+    viewModel: ExportViewModel = hiltViewModel()
 ) {
     // Collect progress from ViewModel
     val progress by viewModel.exportProgress.collectAsState()
@@ -76,7 +76,7 @@ fun ExportScreen(
                 showResultSnack = true
             }
             batchResult != null -> {
-                val br = batchResult!!
+                val br = batchResult ?: return@LaunchedEffect
                 resultMessage = Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
                 showResultSnack = true
             }

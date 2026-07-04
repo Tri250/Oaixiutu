@@ -150,7 +150,7 @@ fun AiModelManagerScreen(navController: NavController) {
                 TextButton(
                     onClick = {
                         scope.launch {
-                            modelDownloadService.deleteModel(modelToDelete!!)
+                            modelToDelete?.let { modelDownloadService.deleteModel(it) }
                             storageUsage.longValue = modelDownloadService.getStorageUsage()
                         }
                         showDeleteDialog = false

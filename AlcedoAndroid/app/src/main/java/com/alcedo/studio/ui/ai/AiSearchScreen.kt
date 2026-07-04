@@ -155,9 +155,7 @@ fun AiSearchScreen(navController: NavController) {
                     }
                 },
                 leadingIcon = {
-                    if (classifiedType != null) {
-                        QueryTypeBadge(classifiedType!!)
-                    }
+                    classifiedType?.let { QueryTypeBadge(it) }
                 }
             )
 

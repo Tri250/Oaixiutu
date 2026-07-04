@@ -32,7 +32,7 @@ fun HistoryPanel(
     var renameText by remember { mutableStateOf("") }
     var deleteConfirmId by remember { mutableStateOf<String?>(null) }
 
-    val versions = history?.versionStorage?.values?.toList() ?: emptyList()
+    val versions = (history?.versionStorage?.values?.toList() as? List<Version>) ?: emptyList()
     val activeVersionId = history?.activeVersionId ?: ""
     val versionOrder = history?.versionOrder ?: emptyList()
 
@@ -259,7 +259,7 @@ fun HistoryPanel(
             confirmButton = {
                 Button(
                     onClick = {
-                        onDeleteVersion(deleteConfirmId!!)
+                        deleteConfirmId?.let { onDeleteVersion(it) }
                         deleteConfirmId = null
                     },
                     colors = ButtonDefaults.buttonColors(

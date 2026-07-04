@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import android.graphics.Bitmap
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -21,7 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.viewmodel.EditorViewModel
@@ -39,14 +40,14 @@ enum class ScopeType(val label: String) {
 fun EditorScreen(
     navController: NavController,
     imageId: String,
-    viewModel: EditorViewModel = viewModel(factory = EditorViewModelFactory(imageId))
+    viewModel: EditorViewModel = hiltViewModel()
 ) {
     val image by viewModel.imageModel.collectAsState()
     val preview by viewModel.previewBitmap.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
-    val params by remember { viewModel.params }
+    val params by viewModel.params
     val history by viewModel.history.collectAsState()
-    val workingVersion by remember { viewModel.workingVersion }
+    val workingVersion by viewModel.workingVersion
 
     var selectedPanel by remember { mutableStateOf(EditorPanel.BASIC) }
     val isCompareMode by viewModel.isCompareMode.collectAsState()
@@ -59,7 +60,9 @@ fun EditorScreen(
     var gamutOverlay by remember { mutableStateOf(setOf(GamutOverlay.SRGB)) }
 
     val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
+    val isTablet by remember {
+        derivedStateOf { configuration.screenWidthDp >= 600 }
+    }
 
     // Zoom/Pan state
     val zoomableState = rememberZoomableState()
@@ -149,8 +152,8 @@ fun EditorScreen(
                             .fillMaxHeight(),
                         isProcessing = isProcessing,
                         isCompareMode = isCompareMode,
-                        previewBitmap = preview?.asImageBitmap(),
-                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        previewBitmap = preview,
+                        originalBitmap = originalBitmap,
                         zoomableState = zoomableState
                     )
 
@@ -184,8 +187,8 @@ fun EditorScreen(
                             .weight(0.45f),
                         isProcessing = isProcessing,
                         isCompareMode = isCompareMode,
-                        previewBitmap = preview?.asImageBitmap(),
-                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        previewBitmap = preview,
+                        originalBitmap = originalBitmap,
                         zoomableState = zoomableState
                     )
 
@@ -196,11 +199,13 @@ fun EditorScreen(
                         edgePadding = 0.dp
                     ) {
                         EditorPanel.entries.forEach { panel ->
-                            Tab(
-                                selected = selectedPanel == panel,
-                                onClick = { selectedPanel = panel },
-                                text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
-                            )
+                            key(panel) {
+                                Tab(
+                                    selected = selectedPanel == panel,
+                                    onClick = { selectedPanel = panel },
+                                    text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
                         }
                     }
 
@@ -516,10 +521,17 @@ private fun ImagePreviewArea(
     modifier: Modifier = Modifier,
     isProcessing: Boolean,
     isCompareMode: Boolean,
-    previewBitmap: ImageBitmap?,
-    originalBitmap: ImageBitmap?,
+    previewBitmap: Bitmap?,
+    originalBitmap: Bitmap?,
     zoomableState: ZoomableState
 ) {
+    val previewImageBitmap = remember(previewBitmap) {
+        previewBitmap?.asImageBitmap()
+    }
+    val originalImageBitmap = remember(originalBitmap) {
+        originalBitmap?.asImageBitmap()
+    }
+
     Box(
         modifier = modifier
             .background(Color(0xFF0D0D0D)),
@@ -527,21 +539,21 @@ private fun ImagePreviewArea(
     ) {
         if (isProcessing) {
             CircularProgressIndicator(color = Color.White)
-        } else if (isCompareMode && originalBitmap != null && previewBitmap != null) {
+        } else if (isCompareMode && originalImageBitmap != null && previewImageBitmap != null) {
             CompareView(
-                originalBitmap = originalBitmap,
-                editedBitmap = previewBitmap,
+                originalBitmap = originalImageBitmap,
+                editedBitmap = previewImageBitmap,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
             ZoomableImageView(
-                imageBitmap = previewBitmap,
+                imageBitmap = previewImageBitmap,
                 modifier = Modifier.fillMaxSize(),
                 zoomableState = zoomableState
             )
         }
 
-        if (previewBitmap == null && !isProcessing) {
+        if (previewImageBitmap == null && !isProcessing) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     Icons.Default.Image,
@@ -588,11 +600,13 @@ private fun EditorPanelColumn(
             edgePadding = 0.dp
         ) {
             EditorPanel.entries.forEach { panel ->
-                Tab(
-                    selected = selectedPanel == panel,
-                    onClick = { onPanelSelected(panel) },
-                    text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
-                )
+                key(panel) {
+                    Tab(
+                        selected = selectedPanel == panel,
+                        onClick = { onPanelSelected(panel) },
+                        text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
             }
         }
         Column(

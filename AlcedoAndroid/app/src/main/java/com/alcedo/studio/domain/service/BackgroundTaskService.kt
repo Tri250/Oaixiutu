@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -372,6 +373,7 @@ class BackgroundTaskService(private val context: Context) {
      * Start a foreground service notification with Android 14+ compliance.
      * Call this from an Android Service subclass when running as a foreground service.
      */
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun startForegroundNotification(service: Service, task: BackgroundTask) {
         val notification = buildNotification(task, task.progress)
 

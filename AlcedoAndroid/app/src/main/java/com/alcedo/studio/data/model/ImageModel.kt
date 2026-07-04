@@ -262,7 +262,7 @@ data class ImageBuffer(
     }
 
     fun clone(): ImageBuffer = copy(
-        cpuData = cpuData?.config?.let { cpuData!!.copy(it, false) }
+        cpuData = cpuData?.config?.let { cfg -> cpuData?.copy(cfg, false) }
     )
 }
 

@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
 import java.io.File
-import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -29,6 +28,9 @@ class DecodeService(
     private val metadataCache = ConcurrentHashMap<String, CachedMetadata>()
     private val thumbnailCache = ConcurrentHashMap<String, CachedThumbnail>()
     private val rawInfoCache = ConcurrentHashMap<String, CachedRawInfo>()
+
+    // Bitmap pool for recycling bitmaps during thumbnail generation
+    private val bitmapPool = ConcurrentHashMap<String, Bitmap>()
 
     // Progress tracking
     private val _decodeProgress = MutableStateFlow<DecodeProgress>(DecodeProgress.Idle)
@@ -296,19 +298,28 @@ class DecodeService(
     ): Bitmap? = withContext(Dispatchers.IO) {
         // Check in-memory cache
         thumbnailCache[filePath]?.let { cached ->
-            return@withContext BitmapFactory.decodeByteArray(cached.data, 0, cached.data.size)
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            return@withContext BitmapFactory.decodeByteArray(cached.data, 0, cached.data.size, options)
         }
 
+        var bitmap: Bitmap? = null
         try {
             val result = decodeBridge.nativeGenerateThumbnail(filePath, maxDimension, true)
             if (result != null && result.data.isNotEmpty()) {
                 thumbnailCache[filePath] = CachedThumbnail(result.data, result.width, result.height)
-                BitmapFactory.decodeByteArray(result.data, 0, result.data.size)
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }
+                bitmap = BitmapFactory.decodeByteArray(result.data, 0, result.data.size, options)
+                bitmap
             } else {
                 // Fallback: extract embedded preview via Android's built-in
                 generateFallbackThumbnail(filePath, maxDimension)
             }
         } catch (e: Exception) {
+            bitmap?.recycle()
             generateFallbackThumbnail(filePath, maxDimension)
         }
     }
@@ -332,12 +343,65 @@ class DecodeService(
                 inJustDecodeBounds = true
             }
             BitmapFactory.decodeFile(path, options)
-            val scale = maxOf(1, maxOf(options.outWidth / maxDimension, options.outHeight / maxDimension))
-            BitmapFactory.Options().apply {
-                inSampleSize = scale
-            }.let { BitmapFactory.decodeFile(path, it) }
+
+            // Calculate inSampleSize as the largest power of 2 that keeps
+            // both dimensions >= maxDimension
+            val inSampleSize = calculateInSampleSize(options, maxDimension, maxDimension)
+
+            // Check the bitmap pool for a reusable bitmap
+            val poolKey = "${maxDimension}x${maxDimension}"
+            val reusableBitmap = bitmapPool.remove(poolKey)
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = inSampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+                if (reusableBitmap != null && reusableBitmap.isMutable) {
+                    inBitmap = reusableBitmap
+                }
+            }
+
+            BitmapFactory.decodeFile(path, decodeOptions)
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Calculate a power-of-2 inSampleSize for efficient downsampling.
+     */
+    private fun calculateInSampleSize(
+        options: BitmapFactory.Options,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Int {
+        val (height, width) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+
+            while ((halfHeight / inSampleSize) >= reqHeight &&
+                   (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
+    /**
+     * Return a bitmap to the pool for potential reuse.
+     * Only pool mutable bitmaps that are a reasonable size for thumbnails.
+     */
+    fun recycleToPool(bitmap: Bitmap) {
+        if (bitmap.isMutable && !bitmap.isRecycled) {
+            val poolKey = "${bitmap.width}x${bitmap.height}"
+            // Limit pool size to avoid excessive memory usage
+            if (bitmapPool.size < 8) {
+                bitmapPool[poolKey] = bitmap
+            } else {
+                bitmap.recycle()
+            }
         }
     }
 
@@ -351,9 +415,9 @@ class DecodeService(
                 async {
                     path to extractMetadata(path)
                 }
-            }.mapNotNull { it.await() }
-                .filter { it.second != null }
-                .associate { it.first to it.second!! }
+            }.awaitAll()
+                .mapNotNull { (path, metadata) -> metadata?.let { path to it } }
+                .toMap()
         }
 
     suspend fun batchGenerateThumbnails(
@@ -396,6 +460,12 @@ class DecodeService(
         metadataCache.clear()
         thumbnailCache.clear()
         rawInfoCache.clear()
+        clearBitmapPool()
+    }
+
+    fun clearBitmapPool() {
+        bitmapPool.values.forEach { it.recycle() }
+        bitmapPool.clear()
     }
 
     fun evictFromCache(filePath: String) {

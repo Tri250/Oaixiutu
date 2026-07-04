@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
@@ -11,6 +12,8 @@ import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,8 +22,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import javax.inject.Inject
 
-class EditorViewModel(private val imageId: String) : ViewModel() {
+@HiltViewModel
+class EditorViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    private val imageId: String = savedStateHandle["imageId"] ?: ""
 
     companion object {
         private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
@@ -125,6 +134,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ── Pipeline snapshot ──
 
     private var snapshotHandle: Long = 0
+    private val activeJobs = mutableListOf<Job>()
 
     init {
         loadImage()
@@ -143,7 +153,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     }
 
     private fun loadImage() {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             val id = imageId.toLongOrNull() ?: return@launch
             val img = imageRepository.getImage(id)
             _imageModel.value = img
@@ -186,6 +196,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 loadPresets()
             }
         }
+        activeJobs.add(job)
     }
 
     // ================================================================
@@ -450,7 +461,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     fun regeneratePreview() {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             _isProcessing.value = true
             val source = _originalBitmap.value
             if (source != null) {
@@ -458,6 +469,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             }
             _isProcessing.value = false
         }
+        activeJobs.add(job)
     }
 
     // ================================================================
@@ -465,7 +477,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     fun applyAutoExposure() {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             val bitmap = _originalBitmap.value ?: return@launch
             val width = bitmap.width
             val height = bitmap.height
@@ -496,6 +508,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             recordTransaction(OperatorType.EXPOSURE, "autoExposure", ev)
             regeneratePreview()
         }
+        activeJobs.add(job)
     }
 
     // ================================================================
@@ -756,19 +769,21 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     fun export(settings: ExportSettings) {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             val img = _imageModel.value ?: return@launch
             val finalBitmap = _previewBitmap.value ?: return@launch
             val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
             val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
             _lastExportResult.value = result
         }
+        activeJobs.add(job)
     }
 
     fun exportBatch(items: List<ExportService.ExportBatchItem>, settings: ExportSettings) {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             exportService.exportBatch(items, settings)
         }
+        activeJobs.add(job)
     }
 
     fun cancelExport() {
@@ -780,7 +795,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     fun createPipelineSnapshot() {
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             val bitmap = _originalBitmap.value ?: return@launch
             val width = bitmap.width
             val height = bitmap.height
@@ -804,6 +819,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             snapshotHandle = pipelineService.createSnapshot(
                 floatPixels, width, height, 4, _params.value)
         }
+        activeJobs.add(job)
     }
 
     fun releasePipelineSnapshot() {
@@ -822,6 +838,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        activeJobs.forEach { it.cancel() }
+        activeJobs.clear()
         releasePipelineSnapshot()
         _originalBitmap.value?.recycle()
         _previewBitmap.value?.recycle()

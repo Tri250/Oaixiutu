@@ -18,12 +18,15 @@ import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.storage.SafHelper
 import com.alcedo.studio.ui.album.FilterState
 import com.alcedo.studio.ui.album.SortMode
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class AlbumViewModel : ViewModel() {
+@HiltViewModel
+class AlbumViewModel @Inject constructor() : ViewModel() {
     private val sleeveRepository = AppModule.sleeveRepository
     private val imageRepository = AppModule.imageRepository
     private val importService = AppModule.importService

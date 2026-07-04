@@ -238,6 +238,18 @@
 # ── Security Crypto ─────────────────────────────────────────────
 -keep class androidx.security.crypto.** { *; }
 
+# ── Security & Privacy Classes ──────────────────────────────────
+# Keep @Keep-annotated members from being obfuscated/stripped
+-keep class androidx.annotation.Keep
+-keepclassmembers class * {
+    @androidx.annotation.Keep *;
+}
+# Keep security check methods so anti-tampering logic isn't stripped
+-keep class com.alcedo.studio.security.SecurityChecker { *; }
+-keep class com.alcedo.studio.security.AlcedoCertificatePinner { *; }
+-keep class com.alcedo.studio.security.SecureHttpClient { *; }
+-keep class com.alcedo.studio.privacy.PrivacyManager { *; }
+
 # ── Application Class ───────────────────────────────────────────
 -keep class com.alcedo.studio.AlcedoApplication { *; }
 -keep class com.alcedo.studio.MainActivity { *; }

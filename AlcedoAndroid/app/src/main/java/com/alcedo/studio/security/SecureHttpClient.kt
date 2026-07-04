@@ -15,16 +15,22 @@ object SecureHttpClient {
     fun getClient(context: Context): OkHttpClient {
         return client ?: synchronized(this) {
             val builder = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(60, TimeUnit.SECONDS)
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
 
             // Apply certificate pinning
             builder.certificatePinner(AlcedoCertificatePinner.buildCertificatePinner())
 
-            // Apply TLS configuration - only TLS 1.2+ and 1.3
+            // Apply TLS configuration — enforce TLS 1.3 minimum in release builds
+            val tlsVersions = if (com.alcedo.studio.BuildConfig.DEBUG) {
+                arrayOf(TlsVersion.TLS_1_2, TlsVersion.TLS_1_3)
+            } else {
+                arrayOf(TlsVersion.TLS_1_3)
+            }
+
             val connectionSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-                .tlsVersions(TlsVersion.TLS_1_2, TlsVersion.TLS_1_3)
+                .tlsVersions(*tlsVersions)
                 .cipherSuites(
                     // Only allow strong cipher suites
                     CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
@@ -44,7 +50,9 @@ object SecureHttpClient {
                 try {
                     chain.proceed(chain.request())
                 } catch (e: javax.net.ssl.SSLPeerUnverifiedException) {
-                    Log.e("SecureHttp", "Certificate pinning failure: ${e.message}")
+                    if (com.alcedo.studio.BuildConfig.DEBUG) {
+                        Log.e("SecureHttp", "Certificate pinning failure: ${e.message}")
+                    }
                     throw e
                 }
             }

@@ -71,12 +71,14 @@ interface ImageDao {
     suspend fun insert(image: ImageEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Transaction
     suspend fun insertAll(images: List<ImageEntity>): List<Long>
 
     @Update
     suspend fun update(image: ImageEntity)
 
     @Update
+    @Transaction
     suspend fun updateAll(images: List<ImageEntity>)
 
     @Query("UPDATE images SET rating = :rating WHERE id = :id")

@@ -116,6 +116,11 @@ class ClipInferenceEngine(private val context: Context) {
             val singleModelFile = File(modelsDir, "$modelId.onnx")
 
             ortEnv = OrtEnvironment.getEnvironment()
+            val env = ortEnv ?: run {
+                Log.e(TAG, "Failed to create ORT environment")
+                status = ModelStatus.FAILED
+                return@withContext false
+            }
 
             val sessionOptions = OrtSession.SessionOptions()
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
@@ -125,8 +130,9 @@ class ClipInferenceEngine(private val context: Context) {
             if (modelConfig.useNnapi) {
                 try {
                     val nnapiOpts = NnapiDelegate.Options()
-                    nnapiDelegate = NnapiDelegate(nnapiOpts)
-                    sessionOptions.addDelegate(nnapiDelegate!!)
+                    val delegate = NnapiDelegate(nnapiOpts)
+                    nnapiDelegate = delegate
+                    sessionOptions.addDelegate(delegate)
                     Log.i(TAG, "NNAPI delegate added for $modelId")
                 } catch (e: Exception) {
                     Log.w(TAG, "NNAPI not available, falling back to CPU: ${e.message}")
@@ -136,12 +142,12 @@ class ClipInferenceEngine(private val context: Context) {
             // Load sessions
             if (visionModelFile != null && textModelFile != null) {
                 // Separate vision and text encoder files
-                visionSession = ortEnv!!.createSession(visionModelFile.absolutePath, sessionOptions)
-                textSession = ortEnv!!.createSession(textModelFile.absolutePath, sessionOptions)
+                visionSession = env.createSession(visionModelFile.absolutePath, sessionOptions)
+                textSession = env.createSession(textModelFile.absolutePath, sessionOptions)
                 Log.i(TAG, "Loaded separate vision/text encoders for $modelId")
             } else if (singleModelFile.exists()) {
                 // Single ONNX model file - use it for both sessions
-                visionSession = ortEnv!!.createSession(singleModelFile.absolutePath, sessionOptions)
+                visionSession = env.createSession(singleModelFile.absolutePath, sessionOptions)
                 textSession = visionSession // Same session for both
                 Log.i(TAG, "Loaded single ONNX model for $modelId")
             } else {
@@ -186,13 +192,24 @@ class ClipInferenceEngine(private val context: Context) {
             }
 
             try {
-                val config = activeModelConfig!!
+                val config = activeModelConfig ?: run {
+                    Log.e(TAG, "No active model config")
+                    return@withContext FloatArray(embeddingDim)
+                }
+                val session = visionSession ?: run {
+                    Log.e(TAG, "Vision session is null")
+                    return@withContext FloatArray(embeddingDim)
+                }
+                val env = ortEnv ?: run {
+                    Log.e(TAG, "ORT environment is null")
+                    return@withContext FloatArray(embeddingDim)
+                }
                 val inputTensor = preprocessImage(bitmap, config.imageSize)
 
-                val inputName = resolveVisionInputName(visionSession!!)
+                val inputName = resolveVisionInputName(session)
                 val inputMap = mapOf(inputName to inputTensor)
 
-                val output = visionSession!!.run(inputMap)
+                val output = session.run(inputMap)
                 val outputTensor = output[0].value as Array<FloatArray>
 
                 val embedding = outputTensor[0].copy()
@@ -218,6 +235,14 @@ class ClipInferenceEngine(private val context: Context) {
             }
 
             try {
+                val session = textSession ?: run {
+                    Log.e(TAG, "Text session is null")
+                    return@withContext FloatArray(embeddingDim)
+                }
+                val env = ortEnv ?: run {
+                    Log.e(TAG, "ORT environment is null")
+                    return@withContext FloatArray(embeddingDim)
+                }
                 val tokenIds = tokenizer.tokenize(text)
 
                 // Create attention mask: 1 for real tokens, 0 for padding
@@ -226,17 +251,17 @@ class ClipInferenceEngine(private val context: Context) {
                     attentionMask[i] = if (tokenIds[i] != ClipTokenizer.PAD_TOKEN.toLong()) 1L else 0L
                 }
 
-                val inputIdsTensor = OnnxTensor.createTensor(ortEnv!!, LongArray(1) { tokenIds })
-                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv!!, LongArray(1) { attentionMask })
+                val inputIdsTensor = OnnxTensor.createTensor(env, LongArray(1) { tokenIds })
+                val attentionMaskTensor = OnnxTensor.createTensor(env, LongArray(1) { attentionMask })
 
-                val inputNames = resolveTextInputNames(textSession!!)
+                val inputNames = resolveTextInputNames(session)
                 val inputMap = mutableMapOf<String, OnnxTensor>()
                 inputMap[inputNames.first] = inputIdsTensor
-                if (inputNames.second != null) {
-                    inputMap[inputNames.second!!] = attentionMaskTensor
+                inputNames.second?.let { name ->
+                    inputMap[name] = attentionMaskTensor
                 }
 
-                val output = textSession!!.run(inputMap)
+                val output = session.run(inputMap)
                 val outputTensor = output[0].value as Array<FloatArray>
 
                 val embedding = outputTensor[0].copy()
@@ -362,7 +387,8 @@ class ClipInferenceEngine(private val context: Context) {
         floatBuffer.rewind()
 
         val shape = longArrayOf(1, 3, imageSize.toLong(), imageSize.toLong())
-        return OnnxTensor.createTensor(ortEnv!!, floatBuffer, shape)
+        val env = ortEnv ?: throw IllegalStateException("ORT environment not initialized")
+        return OnnxTensor.createTensor(env, floatBuffer, shape)
     }
 
     // ── Normalization ──

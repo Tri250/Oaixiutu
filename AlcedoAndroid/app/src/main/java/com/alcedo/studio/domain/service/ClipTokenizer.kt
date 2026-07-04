@@ -106,7 +106,7 @@ class ClipTokenizer {
                 } else null
             }
             .filter { it.second != null }
-            .associate { it.first to it.second!! }
+            .associate { it.first to (it.second ?: 0) }
 
         decoderVocab = vocab.entries.associate { it.value to it.key }
         vocabLoaded = true
@@ -161,7 +161,7 @@ class ClipTokenizer {
         for (word in words) {
             // Encode word to byte-level representation
             val byteEncoded = word.toByteArray(Charsets.UTF_8)
-                .map { BYTE_ENCODER[it.toInt() and 0xFF]!! }
+                .mapNotNull { BYTE_ENCODER[it.toInt() and 0xFF] }
                 .joinToString("")
 
             // Apply BPE

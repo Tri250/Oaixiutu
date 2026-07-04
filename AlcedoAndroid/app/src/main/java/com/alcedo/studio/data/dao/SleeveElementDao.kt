@@ -62,12 +62,14 @@ interface SleeveElementDao {
     suspend fun insert(element: SleeveElementEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Transaction
     suspend fun insertAll(elements: List<SleeveElementEntity>): List<Long>
 
     @Update
     suspend fun update(element: SleeveElementEntity)
 
     @Update
+    @Transaction
     suspend fun updateAll(elements: List<SleeveElementEntity>)
 
     @Query("UPDATE sleeve_elements SET syncFlag = :syncFlag WHERE elementId = :elementId")

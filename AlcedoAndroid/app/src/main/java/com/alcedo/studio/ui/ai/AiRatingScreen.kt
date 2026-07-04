@@ -243,7 +243,7 @@ fun AiRatingScreen(navController: NavController) {
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                errorMessage!!,
+                                errorMessage ?: "",
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -263,7 +263,7 @@ fun AiRatingScreen(navController: NavController) {
                 }
 
                 item {
-                    RatingResultCard(currentRating!!)
+                    currentRating?.let { RatingResultCard(it) }
                 }
             }
 

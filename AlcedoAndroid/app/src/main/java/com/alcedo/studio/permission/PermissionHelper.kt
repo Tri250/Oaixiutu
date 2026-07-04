@@ -14,6 +14,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,8 +48,16 @@ object PermissionHelper {
 
     // Get the correct permissions based on API level
     fun getReadMediaPermissions(): List<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Use granular media permissions
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Request granular media permissions; user may grant partial access
+            // via READ_MEDIA_VISUAL_USER_SELECTED
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13: Use granular media permissions
             listOf(
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.READ_MEDIA_VIDEO
@@ -89,7 +98,24 @@ object PermissionHelper {
     }
 
     fun hasReadMediaAccess(context: Context): Boolean {
-        return hasAllPermissions(context, getReadMediaPermissions())
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Full access (READ_MEDIA_IMAGES) OR partial access (READ_MEDIA_VISUAL_USER_SELECTED)
+            hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ||
+                    hasPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        } else {
+            hasAllPermissions(context, getReadMediaPermissions())
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    fun hasPartialPhotoAccess(context: Context): Boolean {
+        return hasPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) &&
+                !hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    fun hasFullPhotoAccess(context: Context): Boolean {
+        return hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
     }
 
     fun hasWriteAccess(context: Context): Boolean {
@@ -121,12 +147,14 @@ object PermissionHelper {
     }
 
     // Check if we can use the Android 13+ Photo Picker
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun supportsPhotoPicker(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        return true
     }
 
     // Check if we need to use SAF for directory access
+    @RequiresApi(Build.VERSION_CODES.Q)
     fun needsSafForDirectoryAccess(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        return true
     }
 }

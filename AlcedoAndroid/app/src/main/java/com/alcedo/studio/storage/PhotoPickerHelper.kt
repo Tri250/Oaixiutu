@@ -1,6 +1,7 @@
 package com.alcedo.studio.storage
 
 import android.net.Uri
+import androidx.annotation.RequiresApi
 
 data class PhotoPickerResult(
     val uris: List<Uri>,
@@ -15,18 +16,20 @@ object PhotoPickerHelper {
     }
 
     // For devices without Photo Picker, fall back to gallery intent
+    @RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+    fun getPhotoPickerIntent(): android.content.Intent {
+        return android.provider.MediaStore.ACTION_PICK_IMAGES.let { action ->
+            android.content.Intent(action).apply {
+                type = "image/*"
+                putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, 50)
+            }
+        }
+    }
+
     fun getGalleryIntent(): android.content.Intent {
         return if (isAvailable()) {
-            // Use system photo picker
-            android.provider.MediaStore.ACTION_PICK_IMAGES.let { action ->
-                android.content.Intent(action).apply {
-                    type = "image/*"
-                    // Allow multiple selection
-                    putExtra(android.provider.MediaStore.EXTRA_PICK_IMAGES_MAX, 50)
-                }
-            }
+            getPhotoPickerIntent()
         } else {
-            // Fallback to ACTION_GET_CONTENT
             android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply {
                 type = "image/*"
                 putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true)

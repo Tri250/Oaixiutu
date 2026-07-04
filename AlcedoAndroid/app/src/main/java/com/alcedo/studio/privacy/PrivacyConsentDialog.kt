@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -17,6 +18,7 @@ fun PrivacyConsentDialog(
     var analyticsConsent by remember { mutableStateOf(false) }
     var crashReportsConsent by remember { mutableStateOf(false) }
     var aiProcessingConsent by remember { mutableStateOf(true) }
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = { /* Cannot dismiss - must make a choice */ },
@@ -77,12 +79,12 @@ fun PrivacyConsentDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                if (analyticsConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
-                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
-                if (crashReportsConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                if (aiProcessingConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
-                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                if (analyticsConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS, context)
+                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS, context)
+                if (crashReportsConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS, context)
+                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS, context)
+                if (aiProcessingConsent) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING, context)
+                else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING, context)
                 PrivacyManager.markFirstLaunchComplete()
                 onAccept(PrivacyManager.getConsentStatus())
             }) {

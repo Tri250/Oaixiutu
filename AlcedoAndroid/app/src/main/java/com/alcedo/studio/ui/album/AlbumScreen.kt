@@ -23,7 +23,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.ui.common.*
@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AlbumScreen(
     navController: NavController,
-    viewModel: AlbumViewModel = viewModel()
+    viewModel: AlbumViewModel = hiltViewModel()
 ) {
     val images by viewModel.images.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()

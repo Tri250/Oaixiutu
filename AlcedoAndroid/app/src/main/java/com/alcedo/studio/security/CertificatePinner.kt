@@ -8,38 +8,44 @@ import java.security.cert.X509Certificate
 object AlcedoCertificatePinner {
     private const val TAG = "CertPinner"
 
-    // SHA-256 pins for AI API endpoints
-    // These are the actual certificate hashes for the API providers
-    // IMPORTANT: Update these when certificates rotate
-    private val pins = mapOf(
-        // OpenAI - pin to their CA
-        "api.openai.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
-        ),
-        // Anthropic
-        "api.anthropic.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
-        ),
-        // Doubao (火山方舟)
-        "ark.cn-beijing.volces.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
+    // Production pins loaded from BuildConfig fields.
+    // Primary pins are the current certificate hashes; backup pins allow rotation.
+    // To rotate: promote backup to primary, add new backup, then update BuildConfig fields.
+    private val pins: Map<String, List<String>>
+        get() = mapOf(
+            "api.openai.com" to buildPinList(
+                com.alcedo.studio.BuildConfig.CERT_PIN_OPENAI_PRIMARY,
+                com.alcedo.studio.BuildConfig.CERT_PIN_OPENAI_BACKUP
+            ),
+            "api.anthropic.com" to buildPinList(
+                com.alcedo.studio.BuildConfig.CERT_PIN_ANTHROPIC_PRIMARY,
+                com.alcedo.studio.BuildConfig.CERT_PIN_ANTHROPIC_BACKUP
+            ),
+            "ark.cn-beijing.volces.com" to buildPinList(
+                com.alcedo.studio.BuildConfig.CERT_PIN_DOUBAO_PRIMARY,
+                com.alcedo.studio.BuildConfig.CERT_PIN_DOUBAO_BACKUP
+            )
         )
-    )
 
-    // For now, use backup pins (include intermediate CA + root CA)
-    // This provides security while allowing cert rotation
+    private fun buildPinList(primary: String, backup: String): List<String> {
+        val list = mutableListOf<String>()
+        if (primary.isNotEmpty()) list.add("sha256/$primary")
+        if (backup.isNotEmpty()) list.add("sha256/$backup")
+        return list
+    }
+
+    /**
+     * Build the OkHttp CertificatePinner with both primary and backup pins.
+     * Backup pins enable seamless certificate rotation without app updates.
+     */
     fun buildCertificatePinner(): CertificatePinner {
         val builder = CertificatePinner.Builder()
 
-        // OpenAI - Use their known certificate chain pins
-        builder.add("api.openai.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder - should be replaced with actual pins
-
-        builder.add("api.anthropic.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder
-
-        builder.add("ark.cn-beijing.volces.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder
+        pins.forEach { (domain, domainPins) ->
+            if (domainPins.isNotEmpty()) {
+                builder.add(domain, *domainPins.toTypedArray())
+            }
+        }
 
         return builder.build()
     }
@@ -56,7 +62,7 @@ object AlcedoCertificatePinner {
 
     /**
      * Verify that pinning is working correctly.
-     * Call this in debug builds to validate pins.
+     * Only logs in debug builds — never leak certificate details in production.
      */
     fun validatePins() {
         if (com.alcedo.studio.BuildConfig.DEBUG) {

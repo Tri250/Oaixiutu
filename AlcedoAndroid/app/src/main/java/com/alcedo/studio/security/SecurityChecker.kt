@@ -4,11 +4,15 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import androidx.annotation.Keep
 import java.io.File
 import java.security.MessageDigest
 
 object SecurityChecker {
     private const val TAG = "SecurityChecker"
+
+    // Expected SHA-256 hex of the release signing certificate (set before release)
+    private const val EXPECTED_SIGNATURE_HASH = ""
 
     // ── Debug Detection ──
 
@@ -41,6 +45,7 @@ object SecurityChecker {
     }
 
     // Check for su binary
+    @Keep
     private fun checkRootMethod1(): Boolean {
         val paths = arrayOf(
             "/system/bin/su", "/system/xbin/su", "/sbin/su",
@@ -52,6 +57,7 @@ object SecurityChecker {
     }
 
     // Check for root-related apps and data directories
+    @Keep
     private fun checkRootMethod2(): Boolean {
         // Check for root app data directories
         val rootDataDirs = arrayOf(
@@ -86,6 +92,7 @@ object SecurityChecker {
     }
 
     // Check for dangerous properties
+    @Keep
     private fun checkRootMethod3(): Boolean {
         try {
             val process = Runtime.getRuntime().exec(arrayOf("which", "su"))
@@ -98,6 +105,7 @@ object SecurityChecker {
     }
 
     // Check for additional root indicators: dangerous props, su daemon socket
+    @Keep
     private fun checkRootMethod4(): Boolean {
         // Check for dangerous system properties that indicate root
         try {
@@ -137,6 +145,7 @@ object SecurityChecker {
 
     // ── App Integrity Check ──
 
+    @Keep
     fun verifyAppSignature(context: Context): Boolean {
         return try {
             val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -167,12 +176,33 @@ object SecurityChecker {
             val hash = md.digest(signature.toByteArray())
             val hexHash = hash.joinToString("") { "%02x".format(it) }
 
-            // In production, compare with known good hash
-            // For now, just verify a signature exists
-            hexHash.isNotEmpty()
+            // In production, compare against expected signing certificate hash
+            if (EXPECTED_SIGNATURE_HASH.isNotEmpty()) {
+                hexHash.equals(EXPECTED_SIGNATURE_HASH, ignoreCase = true)
+            } else {
+                // Before EXPECTED_SIGNATURE_HASH is configured, just verify a signature exists
+                hexHash.isNotEmpty()
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to verify app signature", e)
+            if (com.alcedo.studio.BuildConfig.DEBUG) {
+                Log.e(TAG, "Failed to verify app signature", e)
+            }
             false
+        }
+    }
+
+    // ── Anti-Tampering: Check for repackaging ──
+
+    @Keep
+    fun checkInstallerValidity(context: Context): Boolean {
+        return try {
+            val installer = context.packageManager.getInstallerPackageName(context.packageName)
+            // In debug builds, allow null installer (side-loaded via IDE)
+            if (com.alcedo.studio.BuildConfig.DEBUG) return true
+            // In release, the installer should be a legitimate store
+            installer != null
+        } catch (_: Exception) {
+            !com.alcedo.studio.BuildConfig.DEBUG
         }
     }
 
@@ -184,17 +214,32 @@ object SecurityChecker {
         val isEmulator: Boolean,
         val isRooted: Boolean,
         val signatureValid: Boolean,
+        val installerValid: Boolean,
         val isSecure: Boolean
     )
 
+    @Keep
     fun checkSecurity(context: Context): SecurityStatus {
         val isDebuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val isDebuggerAttached = isDebuggerAttached()
         val isEmulator = isRunningOnEmulator()
         val isRooted = isDeviceRooted()
         val signatureValid = verifyAppSignature(context)
+        val installerValid = checkInstallerValidity(context)
 
-        val isSecure = !isDebuggable && !isDebuggerAttached && !isRooted && signatureValid
+        val isSecure = (!isDebuggable || com.alcedo.studio.BuildConfig.DEBUG) &&
+                       !isDebuggerAttached &&
+                       (!isEmulator || com.alcedo.studio.BuildConfig.DEBUG) &&
+                       !isRooted &&
+                       signatureValid &&
+                       installerValid
+
+        // Only log security status in debug builds — never expose in production
+        if (com.alcedo.studio.BuildConfig.DEBUG) {
+            Log.d(TAG, "Security check: debuggable=$isDebuggable, debugger=$isDebuggerAttached, " +
+                    "emulator=$isEmulator, rooted=$isRooted, sigValid=$signatureValid, " +
+                    "installerValid=$installerValid, secure=$isSecure")
+        }
 
         return SecurityStatus(
             isDebuggable = isDebuggable,
@@ -202,6 +247,7 @@ object SecurityChecker {
             isEmulator = isEmulator,
             isRooted = isRooted,
             signatureValid = signatureValid,
+            installerValid = installerValid,
             isSecure = isSecure
         )
     }

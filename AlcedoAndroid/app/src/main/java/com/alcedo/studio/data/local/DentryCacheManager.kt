@@ -125,11 +125,12 @@ class DentryCacheManager(
         while (currentId != null) {
             val element = elementDao.getElementById(currentId)
             if (element?.parentId != null) {
+                val pid = element.parentId
                 synchronized(lock) {
-                    cache.remove(element.parentId!!)
+                    cache.remove(pid)
                     invalidations.incrementAndGet()
                 }
-                currentId = element.parentId
+                currentId = pid
             } else {
                 currentId = null
             }

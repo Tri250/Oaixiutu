@@ -217,14 +217,17 @@ class SleeveRepository(
     }
 
     suspend fun updateImageRating(imageId: Long, rating: Int) {
+        val image = imageDao.getById(imageId) ?: return
         imageDao.updateRating(imageId, rating)
     }
 
     suspend fun updateImageColorLabel(imageId: Long, colorLabel: Int) {
+        val image = imageDao.getById(imageId) ?: return
         imageDao.updateColorLabel(imageId, colorLabel)
     }
 
     suspend fun updateImageThumbnail(imageId: Long, thumbnailPath: String) {
+        val image = imageDao.getById(imageId) ?: return
         imageDao.updateThumbnail(imageId, thumbnailPath)
     }
 
@@ -559,6 +562,7 @@ class SleeveRepository(
     // ==================== Helper Methods ====================
 
     private suspend fun findElementByImageId(imageId: Long): SleeveElementEntity? {
+        if (imageId <= 0) return null
         val allElements = sleeveElementDao.getAll()
         return allElements.find { it.imageId == imageId }
     }

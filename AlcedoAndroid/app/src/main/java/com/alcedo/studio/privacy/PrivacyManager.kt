@@ -17,6 +17,9 @@ import java.io.File
  * - Data export (right to portability)
  * - Data deletion (right to be forgotten)
  * - Data retention policies
+ *
+ * Analytics and crash reporting are only started after explicit user consent.
+ * Withdrawing consent immediately purges all collected data for that category.
  */
 object PrivacyManager {
     private const val TAG = "PrivacyManager"
@@ -59,7 +62,19 @@ object PrivacyManager {
         )
     }
 
-    fun grantConsent(type: ConsentType) {
+    /**
+     * Returns true only when the user has explicitly granted analytics consent.
+     * Use this to gate all analytics SDK initialization and event reporting.
+     */
+    fun isAnalyticsConsented(): Boolean = prefs.getBoolean(KEY_CONSENT_ANALYTICS, false)
+
+    /**
+     * Returns true only when the user has explicitly granted crash reporting consent.
+     * Use this to gate Crashlytics and similar SDK initialization.
+     */
+    fun isCrashReportingConsented(): Boolean = prefs.getBoolean(KEY_CONSENT_CRASH_REPORTS, false)
+
+    fun grantConsent(type: ConsentType, context: Context) {
         val key = when (type) {
             ConsentType.ANALYTICS -> KEY_CONSENT_ANALYTICS
             ConsentType.CRASH_REPORTS -> KEY_CONSENT_CRASH_REPORTS
@@ -71,7 +86,11 @@ object PrivacyManager {
             .apply()
     }
 
-    fun revokeConsent(type: ConsentType) {
+    /**
+     * Revoke consent for the given type and immediately purge all
+     * collected data associated with that consent category.
+     */
+    fun revokeConsent(type: ConsentType, context: Context) {
         val key = when (type) {
             ConsentType.ANALYTICS -> KEY_CONSENT_ANALYTICS
             ConsentType.CRASH_REPORTS -> KEY_CONSENT_CRASH_REPORTS
@@ -81,9 +100,12 @@ object PrivacyManager {
             .putBoolean(key, false)
             .putInt(KEY_CONSENT_VERSION, CURRENT_CONSENT_VERSION)
             .apply()
+
+        // Purge data associated with the revoked consent type
+        purgeDataForConsentType(type, context)
     }
 
-    fun grantAllConsent() {
+    fun grantAllConsent(context: Context) {
         prefs.edit()
             .putBoolean(KEY_CONSENT_ANALYTICS, true)
             .putBoolean(KEY_CONSENT_CRASH_REPORTS, true)
@@ -92,13 +114,54 @@ object PrivacyManager {
             .apply()
     }
 
-    fun revokeAllConsent() {
+    fun revokeAllConsent(context: Context) {
         prefs.edit()
             .putBoolean(KEY_CONSENT_ANALYTICS, false)
             .putBoolean(KEY_CONSENT_CRASH_REPORTS, false)
             .putBoolean(KEY_CONSENT_AI_PROCESSING, false)
             .putInt(KEY_CONSENT_VERSION, CURRENT_CONSENT_VERSION)
             .apply()
+
+        // Purge all data collected under each consent type
+        ConsentType.entries.forEach { purgeDataForConsentType(it, context) }
+    }
+
+    /**
+     * Purge all data collected under the given consent type.
+     * Called immediately upon consent withdrawal to honour the right to be forgotten.
+     */
+    private fun purgeDataForConsentType(type: ConsentType, context: Context) {
+        when (type) {
+            ConsentType.ANALYTICS -> {
+                // Clear analytics event queues and cached data
+                val analyticsDir = File(context.filesDir, "analytics")
+                analyticsDir.deleteRecursively()
+                // Also clear any analytics cache in shared prefs (non-consent prefs)
+                val analyticsPrefs = context.getSharedPreferences("alcedo_analytics", Context.MODE_PRIVATE)
+                analyticsPrefs.edit().clear().apply()
+                if (com.alcedo.studio.BuildConfig.DEBUG) {
+                    Log.d(TAG, "Purged analytics data after consent withdrawal")
+                }
+            }
+            ConsentType.CRASH_REPORTS -> {
+                // Clear stored crash reports
+                val crashDir = File(context.filesDir, "crash_reports")
+                crashDir.deleteRecursively()
+                if (com.alcedo.studio.BuildConfig.DEBUG) {
+                    Log.d(TAG, "Purged crash report data after consent withdrawal")
+                }
+            }
+            ConsentType.AI_PROCESSING -> {
+                // Clear AI model cache and generated data
+                val modelsDir = File(context.filesDir, "ai_models")
+                modelsDir.deleteRecursively()
+                val aiCacheDir = File(context.cacheDir, "ai_cache")
+                aiCacheDir.deleteRecursively()
+                if (com.alcedo.studio.BuildConfig.DEBUG) {
+                    Log.d(TAG, "Purged AI processing data after consent withdrawal")
+                }
+            }
+        }
     }
 
     fun isFirstLaunch(): Boolean = !prefs.contains(KEY_FIRST_LAUNCH)
@@ -197,10 +260,16 @@ object PrivacyManager {
             val modelsDir = File(context.filesDir, "ai_models")
             modelsDir.deleteRecursively()
 
-            // Revoke all consent
-            revokeAllConsent()
+            // Clear analytics data
+            val analyticsDir = File(context.filesDir, "analytics")
+            analyticsDir.deleteRecursively()
 
-            Log.i(TAG, "All user data deleted successfully")
+            // Revoke all consent and purge associated data
+            revokeAllConsent(context)
+
+            if (com.alcedo.studio.BuildConfig.DEBUG) {
+                Log.i(TAG, "All user data deleted successfully")
+            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete user data", e)
@@ -214,11 +283,13 @@ object PrivacyManager {
         val now = System.currentTimeMillis()
         val thirtyDaysMs = 30L * 24 * 60 * 60 * 1000
 
-        // Delete crash reports older than 30 days
-        val crashDir = File(context.filesDir, "crash_reports")
-        crashDir.listFiles()?.forEach { file ->
-            if (now - file.lastModified() > thirtyDaysMs) {
-                file.delete()
+        // Delete crash reports older than 30 days (only if consent was given)
+        if (isCrashReportingConsented()) {
+            val crashDir = File(context.filesDir, "crash_reports")
+            crashDir.listFiles()?.forEach { file ->
+                if (now - file.lastModified() > thirtyDaysMs) {
+                    file.delete()
+                }
             }
         }
 

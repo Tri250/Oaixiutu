@@ -9,7 +9,9 @@ import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
 import com.alcedo.studio.ui.theme.ThemeManager
+import dagger.hilt.android.HiltAndroidApp
 
+@HiltAndroidApp
 class AlcedoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
@@ -30,11 +32,8 @@ class AlcedoApplication : Application() {
 
         // Run security checks
         val securityStatus = SecurityChecker.checkSecurity(this)
-        if (securityStatus.isDebuggerAttached && !BuildConfig.DEBUG) {
-            Log.w("AlcedoApp", "Debugger detected in release build!")
-        }
-        if (securityStatus.isRooted) {
-            Log.i("AlcedoApp", "Device appears to be rooted")
+        if (!securityStatus.isSecure && !BuildConfig.DEBUG) {
+            Log.w("AlcedoApp", "Security check failed in release build")
         }
 
         try {

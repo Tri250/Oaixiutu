@@ -6,6 +6,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 import java.security.MessageDigest
 import java.time.Instant
@@ -21,6 +23,7 @@ class HistoryMgmtService(
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val historyMutex = Mutex()
     private val activeHistories = ConcurrentHashMap<UInt, EditHistory>()
     private val workingVersions = ConcurrentHashMap<UInt, WorkingVersion>()
 
@@ -39,14 +42,16 @@ class HistoryMgmtService(
     // ── Version Tree Management ──
 
     suspend fun loadHistory(imageId: UInt): EditHistory = withContext(Dispatchers.IO) {
-        activeHistories[imageId]?.let { return@withContext it }
+        historyMutex.withLock {
+            activeHistories[imageId]?.let { return@withContext it }
 
-        val history = editHistoryRepository.getHistory(imageId)
-            ?: EditHistory(boundImageId = imageId)
+            val history = editHistoryRepository.getHistory(imageId)
+                ?: EditHistory(boundImageId = imageId)
 
-        activeHistories[imageId] = history
-        updateHistoryState(imageId, history)
-        history
+            activeHistories[imageId] = history
+            updateHistoryState(imageId, history)
+            history
+        }
     }
 
     suspend fun createVersion(
@@ -210,7 +215,8 @@ class HistoryMgmtService(
             "Cloned from ${sourceVersion.displayName}"
         )
 
-        val clonedVersion = targetHistory.getVersion(clonedVersionId)!!
+        val clonedVersion = targetHistory.getVersion(clonedVersionId)
+            ?: throw IllegalStateException("Failed to create cloned version")
         clonedVersion.transactions.clear()
         clonedVersion.transactions.addAll(sourceVersion.transactions.map { it.copy() })
         clonedVersion.cursor = sourceVersion.cursor

@@ -196,8 +196,8 @@ fun SettingsScreen(navController: NavController) {
                         checked = aiProcessingConsent,
                         onCheckedChange = {
                             aiProcessingConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING, context)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING, context)
                         }
                     )
                 }
@@ -211,8 +211,8 @@ fun SettingsScreen(navController: NavController) {
                         checked = crashReportsConsent,
                         onCheckedChange = {
                             crashReportsConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS, context)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS, context)
                         }
                     )
                 }
@@ -226,8 +226,8 @@ fun SettingsScreen(navController: NavController) {
                         checked = analyticsConsent,
                         onCheckedChange = {
                             analyticsConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS, context)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS, context)
                         }
                     )
                 }

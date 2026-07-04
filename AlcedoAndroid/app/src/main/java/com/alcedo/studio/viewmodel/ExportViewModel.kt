@@ -13,12 +13,15 @@ import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class ExportViewModel : ViewModel() {
+@HiltViewModel
+class ExportViewModel @Inject constructor() : ViewModel() {
     private val exportService = AppModule.exportService
     private val pipelineService = AppModule.pipelineService
     private val imageRepository = AppModule.imageRepository

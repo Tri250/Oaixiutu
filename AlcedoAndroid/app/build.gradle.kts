@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp") version "2.0.0-1.0.22"
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -64,6 +65,14 @@ android {
             buildConfigField("boolean", "ENABLE_GPU_DEBUG", "true")
             buildConfigField("boolean", "ENABLE_AI_DEBUG", "true")
 
+            // Certificate pin placeholders for debug (no enforcement)
+            buildConfigField("String", "CERT_PIN_OPENAI_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_OPENAI_BACKUP", "\"\"")
+            buildConfigField("String", "CERT_PIN_ANTHROPIC_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_ANTHROPIC_BACKUP", "\"\"")
+            buildConfigField("String", "CERT_PIN_DOUBAO_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_DOUBAO_BACKUP", "\"\"")
+
             externalNativeBuild {
                 cmake {
                     cppFlags += "-g -DDEBUG -DALCEDO_DEBUG=1"
@@ -88,6 +97,15 @@ android {
             buildConfigField("boolean", "ENABLE_LOGGING", "false")
             buildConfigField("boolean", "ENABLE_GPU_DEBUG", "false")
             buildConfigField("boolean", "ENABLE_AI_DEBUG", "false")
+
+            // Production certificate pins — set these to actual base64 SHA-256 hashes
+            // before release. Backup pins enable rotation without an app update.
+            buildConfigField("String", "CERT_PIN_OPENAI_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_OPENAI_BACKUP", "\"\"")
+            buildConfigField("String", "CERT_PIN_ANTHROPIC_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_ANTHROPIC_BACKUP", "\"\"")
+            buildConfigField("String", "CERT_PIN_DOUBAO_PRIMARY", "\"\"")
+            buildConfigField("String", "CERT_PIN_DOUBAO_BACKUP", "\"\"")
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -138,6 +156,11 @@ android {
 }
 
 dependencies {
+    // ── Hilt ───────────────────────────────────────────────────────
+    implementation("com.google.dagger:hilt-android:2.51.1")
+    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
     // ── AndroidX Core ──────────────────────────────────────────────
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")

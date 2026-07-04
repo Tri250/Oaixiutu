@@ -5,7 +5,16 @@ import java.util.UUID
 
 // --- Entities ---
 
-@Entity(tableName = "sleeve_elements")
+@Entity(
+    tableName = "sleeve_elements",
+    indices = [
+        Index(value = ["parentId"]),
+        Index(value = ["elementType"]),
+        Index(value = ["imageId"]),
+        Index(value = ["syncFlag"]),
+        Index(value = ["elementName"])
+    ]
+)
 data class SleeveElementEntity(
     @PrimaryKey val elementId: Long,
     val elementName: String,
@@ -18,7 +27,22 @@ data class SleeveElementEntity(
     val currentVersionId: String = ""
 )
 
-@Entity(tableName = "images")
+@Entity(
+    tableName = "images",
+    indices = [
+        Index(value = ["filePath"], unique = true),
+        Index(value = ["dateAdded"]),
+        Index(value = ["dateModified"]),
+        Index(value = ["rating"]),
+        Index(value = ["colorLabel"]),
+        Index(value = ["isRaw"]),
+        Index(value = ["rawMake"]),
+        Index(value = ["rawModel"]),
+        Index(value = ["iso"]),
+        Index(value = ["focalLength"]),
+        Index(value = ["fileName"])
+    ]
+)
 data class ImageEntity(
     @PrimaryKey autoGenerate = true val id: Long = 0,
     val filePath: String,
@@ -42,7 +66,14 @@ data class ImageEntity(
     val colorLabel: Int = 0
 )
 
-@Entity(tableName = "edit_history")
+@Entity(
+    tableName = "edit_history",
+    indices = [
+        Index(value = ["imageId"]),
+        Index(value = ["versionId"]),
+        Index(value = ["parentId"])
+    ]
+)
 data class EditHistoryEntity(
     @PrimaryKey autoGenerate = true val id: Long = 0,
     val imageId: Long,
@@ -54,7 +85,13 @@ data class EditHistoryEntity(
     val paramsJson: String = "{}"
 )
 
-@Entity(tableName = "pipeline_presets")
+@Entity(
+    tableName = "pipeline_presets",
+    indices = [
+        Index(value = ["category"]),
+        Index(value = ["name"])
+    ]
+)
 data class PipelinePresetEntity(
     @PrimaryKey autoGenerate = true val id: Long = 0,
     val name: String,
@@ -64,7 +101,13 @@ data class PipelinePresetEntity(
     val isBuiltIn: Boolean = false
 )
 
-@Entity(tableName = "ai_embeddings")
+@Entity(
+    tableName = "ai_embeddings",
+    indices = [
+        Index(value = ["imageId"]),
+        Index(value = ["modelVersion"])
+    ]
+)
 data class AiEmbeddingEntity(
     @PrimaryKey autoGenerate = true val id: Long = 0,
     val imageId: Long,
