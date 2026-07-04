@@ -1,12 +1,13 @@
 package com.alcedo.studio.ui.common
 
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Simple no-op wrapper. PullToRefreshBox is not available in the
+ * current Compose Material3 version; this placeholder just renders
+ * the content so the rest of the UI compiles without pull-to-refresh.
+ */
 @Composable
 fun AlcedoPullToRefreshBox(
     isRefreshing: Boolean,
@@ -14,13 +15,7 @@ fun AlcedoPullToRefreshBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val state = rememberPullToRefreshState()
-
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
-        state = state,
-        modifier = modifier,
-        content = content
-    )
+    // Pull-to-refresh is not available in this Material3 version.
+    // Just render content directly.
+    content()
 }

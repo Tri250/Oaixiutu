@@ -1,5 +1,6 @@
 #pragma once
 #include "operator_base.h"
+#include <algorithm>
 
 namespace alcedo {
 

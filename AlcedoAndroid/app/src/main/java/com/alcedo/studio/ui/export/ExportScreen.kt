@@ -28,29 +28,38 @@ fun ExportScreen(
 ) {
     // Collect progress from ViewModel
     val progress by viewModel.exportProgress.collectAsState()
-    val lastResult by viewModel.lastResult.collectAsState()
-    val batchResult by viewModel.batchResult.collectAsState()
+    val lastResult by viewModel.lastExportResult.collectAsState()
+    val batchProgress by viewModel.batchProgress.collectAsState()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
+
+    // Batch export toggle (local UI state)
+    var showBatchExport by remember { mutableStateOf(false) }
 
     // Show result snackbar
     var showResultSnack by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf("") }
 
-    LaunchedEffect(lastResult, batchResult) {
-        when {
-            lastResult is ExportService.ExportResult.Success -> {
+    LaunchedEffect(lastResult) {
+        when (lastResult) {
+            is ExportService.ExportResult.Success -> {
                 resultMessage = Strings.current.exportSuccess.format((lastResult as ExportService.ExportResult.Success).filePath)
                 showResultSnack = true
             }
-            lastResult is ExportService.ExportResult.Error -> {
+            is ExportService.ExportResult.Error -> {
                 resultMessage = Strings.current.exportFailed.format((lastResult as ExportService.ExportResult.Error).message)
                 showResultSnack = true
             }
-            batchResult != null -> {
-                val br = batchResult!!
-                resultMessage = Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
-                showResultSnack = true
-            }
+            null -> {}
+        }
+    }
+
+    LaunchedEffect(batchProgress.isComplete) {
+        if (batchProgress.isComplete) {
+            resultMessage = Strings.current.exportBatchResult.format(
+                "${batchProgress.completedItems}",
+                "${batchProgress.totalItems - batchProgress.completedItems}"
+            )
+            showResultSnack = true
         }
     }
 
@@ -93,36 +102,36 @@ fun ExportScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExportFormat.entries.forEach { f ->
                     FilterChip(
-                        selected = viewModel.format == f,
-                        onClick = { viewModel.format = f },
+                        selected = viewModel.settings.value.format == f,
+                        onClick = { viewModel.updateFormat(f) },
                         label = { Text(f.name, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
 
             // Quality
-            if (viewModel.format == ExportFormat.JPEG || viewModel.format == ExportFormat.ULTRA_HDR) {
-                Text(stringRes { exportQuality }.format("${viewModel.quality}"), style = MaterialTheme.typography.labelLarge)
+            if (viewModel.settings.value.format == ExportFormat.JPEG || viewModel.settings.value.format == ExportFormat.ULTRA_HDR) {
+                Text(stringRes { exportQuality }.format("${viewModel.settings.value.quality}"), style = MaterialTheme.typography.labelLarge)
                 Slider(
-                    value = viewModel.quality.toFloat(),
-                    onValueChange = { viewModel.quality = it.toInt() },
+                    value = viewModel.settings.value.quality.toFloat(),
+                    onValueChange = { viewModel.updateQuality(it.toInt()) },
                     valueRange = 1f..100f,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
             // Bit depth
-            if (viewModel.format == ExportFormat.PNG || viewModel.format == ExportFormat.TIFF) {
+            if (viewModel.settings.value.format == ExportFormat.PNG || viewModel.settings.value.format == ExportFormat.TIFF) {
                 Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = viewModel.bitDepth == 8,
-                        onClick = { viewModel.bitDepth = 8 },
+                        selected = viewModel.settings.value.bitDepth == 8,
+                        onClick = { viewModel.updateBitDepth(8) },
                         label = { Text(stringRes { export8Bit }) }
                     )
                     FilterChip(
-                        selected = viewModel.bitDepth == 16,
-                        onClick = { viewModel.bitDepth = 16 },
+                        selected = viewModel.settings.value.bitDepth == 16,
+                        onClick = { viewModel.updateBitDepth(16) },
                         label = { Text(stringRes { export16Bit }) }
                     )
                 }
@@ -134,8 +143,8 @@ fun ExportScreen(
                 listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
                         FilterChip(
-                            selected = viewModel.colorSpace == cs,
-                            onClick = { viewModel.colorSpace = cs },
+                            selected = viewModel.settings.value.colorSpace == cs,
+                            onClick = { viewModel.updateColorSpace(cs) },
                             label = { Text(cs.name, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
@@ -143,24 +152,24 @@ fun ExportScreen(
 
             // Options
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = viewModel.embedIcc, onCheckedChange = { viewModel.embedIcc = it })
+                Checkbox(checked = viewModel.settings.value.embedIcc, onCheckedChange = { viewModel.updateEmbedIcc(it) })
                 Text(stringRes { exportEmbedIcc }, style = MaterialTheme.typography.bodyMedium)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = viewModel.includeMetadata, onCheckedChange = { viewModel.includeMetadata = it })
+                Checkbox(checked = viewModel.settings.value.includeMetadata, onCheckedChange = { viewModel.updateIncludeMetadata(it) })
                 Text(stringRes { exportIncludeMetadata }, style = MaterialTheme.typography.bodyMedium)
             }
-            if (viewModel.format == ExportFormat.ULTRA_HDR) {
+            if (viewModel.settings.value.format == ExportFormat.ULTRA_HDR) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = viewModel.isHdr, onCheckedChange = { viewModel.isHdr = it })
+                    Checkbox(checked = viewModel.settings.value.isHdr, onCheckedChange = { viewModel.updateHdr(it) })
                     Text(stringRes { exportHdrOutput }, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
             // Max dimension (unified)
             OutlinedTextField(
-                value = viewModel.maxDimension,
-                onValueChange = { viewModel.maxDimension = it.filter { c -> c.isDigit() } },
+                value = viewModel.settings.value.maxDimension?.toString() ?: "",
+                onValueChange = { viewModel.updateMaxDimension(it.filter { c -> c.isDigit() }.toIntOrNull()) },
                 label = { Text(stringRes { exportMaxDimension }) },
                 placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
@@ -170,8 +179,8 @@ fun ExportScreen(
 
             // Max width
             OutlinedTextField(
-                value = viewModel.maxWidth,
-                onValueChange = { viewModel.maxWidth = it.filter { c -> c.isDigit() } },
+                value = viewModel.settings.value.maxWidth?.toString() ?: "",
+                onValueChange = { viewModel.updateMaxWidth(it.filter { c -> c.isDigit() }.toIntOrNull()) },
                 label = { Text(stringRes { exportMaxWidth }) },
                 placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
@@ -181,8 +190,8 @@ fun ExportScreen(
 
             // Max height
             OutlinedTextField(
-                value = viewModel.maxHeight,
-                onValueChange = { viewModel.maxHeight = it.filter { c -> c.isDigit() } },
+                value = viewModel.settings.value.maxHeight?.toString() ?: "",
+                onValueChange = { viewModel.updateMaxHeight(it.filter { c -> c.isDigit() }.toIntOrNull()) },
                 label = { Text(stringRes { exportMaxHeight }) },
                 placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
@@ -192,8 +201,8 @@ fun ExportScreen(
 
             // Output path
             OutlinedTextField(
-                value = viewModel.outputPath,
-                onValueChange = { viewModel.outputPath = it },
+                value = viewModel.settings.value.outputPath,
+                onValueChange = { viewModel.updateOutputPath(it) },
                 label = { Text(stringRes { exportOutputPath }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -213,19 +222,19 @@ fun ExportScreen(
             ) {
                 Text(stringRes { exportBatchExport }, style = MaterialTheme.typography.labelLarge)
                 Switch(
-                    checked = viewModel.showBatchExport,
-                    onCheckedChange = { viewModel.showBatchExport = it }
+                    checked = showBatchExport,
+                    onCheckedChange = { showBatchExport = it }
                 )
             }
-            if (viewModel.showBatchExport) {
+            if (showBatchExport) {
                 Text(
                     stringRes { exportBatchSelectDesc },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (viewModel.batchImageIds.isNotEmpty()) {
+                if (viewModel.batchItems.value.isNotEmpty()) {
                     Text(
-                        stringRes { exportBatchSelected }.format("${viewModel.batchImageIds.size}"),
+                        stringRes { exportBatchSelected }.format("${viewModel.batchItems.value.size}"),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -341,17 +350,14 @@ fun ExportScreen(
             // Export button
             Button(
                 onClick = {
-                    viewModel.resetState()
+                    viewModel.clearResult()
                     // For single image export, use the imageId as source path
                     // In production, resolve imageId to actual file path
                     val sourcePath = imageId
-                    if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) {
-                        val items = viewModel.batchImageIds.map { id ->
-                            ExportService.ExportBatchItem(sourcePath = id)
-                        }
-                        viewModel.exportBatch(items)
+                    if (showBatchExport && viewModel.batchItems.value.isNotEmpty()) {
+                        viewModel.exportBatch()
                     } else {
-                        viewModel.exportSingle(sourcePath)
+                        viewModel.exportImage(sourcePath, PipelineParams())
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

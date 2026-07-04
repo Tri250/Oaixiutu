@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 enum class SearchTypeIndicator(val label: String, val icon: @Composable () -> Unit) {
     TRADITIONAL("Traditional", { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp)) }),
@@ -295,7 +296,7 @@ private fun SearchResultCard(
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
-                        fontSize = androidx.compose.ui.unit.sp(9)
+                        fontSize = 9.sp
                     )
                 }
             }
@@ -312,7 +313,7 @@ private fun SearchResultCard(
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = androidx.compose.ui.unit.sp(9)
+                fontSize = 9.sp
             )
         }
     }

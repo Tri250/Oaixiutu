@@ -2,6 +2,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 namespace alcedo {
 

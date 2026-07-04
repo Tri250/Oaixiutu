@@ -32,7 +32,7 @@ object AlcedoEasing {
     /** Emphasized decelerate – for entering elements */
     val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
     /** Standard – balanced curve */
-    val Standard = CubicBezierEasing(0.2f, 0.0f, 0.0, 1.0f)
+    val Standard = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
     /** Decelerate – quick entry */
     val Decelerate = CubicBezierEasing(0.0f, 0.0f, 0.0f, 1.0f)
     /** Accelerate – quick exit */

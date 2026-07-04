@@ -4,7 +4,7 @@ import androidx.room.*
 
 @Entity(tableName = "edit_history")
 data class EditHistoryEntity(
-    @PrimaryKey autoGenerate = true val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val imageId: Long,
     val versionId: String,
     val parentId: String = "",
@@ -16,7 +16,7 @@ data class EditHistoryEntity(
 
 @Entity(tableName = "pipeline_presets")
 data class PipelinePresetEntity(
-    @PrimaryKey autoGenerate = true val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val category: String = "",
     val paramsJson: String,
@@ -26,7 +26,7 @@ data class PipelinePresetEntity(
 
 @Entity(tableName = "ai_embeddings")
 data class AiEmbeddingEntity(
-    @PrimaryKey autoGenerate = true val id: Long = 0,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val imageId: Long,
     val embeddingData: ByteArray,  // serialized float array
     val modelVersion: String = "clip-vit-base-patch32",

@@ -1,7 +1,7 @@
 #include "filter_combo.h"
 
-#include <format>
 #include <sstream>
+#include <cstdio>
 #include <android/log.h>
 
 #define LOG_TAG "AlcedoFilterCombo"
@@ -75,7 +75,7 @@ std::string FilterSQLCompiler::CompareToSQL(CompareOp op) {
 // ============================================================
 // FilterSQLCompiler - GenerateConditionString
 // Produces a single SQL condition fragment from a FieldCondition.
-// Uses std::format (C++20) and parameterised value quoting.
+// Uses string concatenation and parameterised value quoting.
 // ============================================================
 std::string FilterSQLCompiler::GenerateConditionString(const FieldCondition& cond) {
     std::string column = FieldToColumn(cond.field_);
@@ -105,7 +105,11 @@ std::string FilterSQLCompiler::GenerateConditionString(const FieldCondition& con
             } else if constexpr (std::is_same_v<T, int64_t>) {
                 return std::to_string(arg);
             } else if constexpr (std::is_same_v<T, double>) {
-                return std::format("{}", arg);
+                {
+                    char buf[64];
+                    std::snprintf(buf, sizeof(buf), "%g", arg);
+                    return std::string(buf);
+                }
             } else if constexpr (std::is_same_v<T, bool>) {
                 return arg ? "1" : "0";
             } else if constexpr (std::is_same_v<T, std::string>) {
@@ -122,43 +126,43 @@ std::string FilterSQLCompiler::GenerateConditionString(const FieldCondition& con
         // value becomes LIKE pattern: '%value%'
         std::string pattern;
         if (std::holds_alternative<std::string>(cond.value_)) {
-            pattern = std::format("'{}{}{}'", "%", std::get<std::string>(cond.value_), "%");
+            pattern = "'" + std::string("%") + std::get<std::string>(cond.value_) + std::string("%") + "'";
         } else {
             pattern = format_value(cond.value_);
         }
-        return std::format("{} {} {}", column, op_sql, pattern);
+        return column + " " + op_sql + " " + pattern;
     }
     case CompareOp::STARTS_WITH: {
         std::string pattern;
         if (std::holds_alternative<std::string>(cond.value_)) {
-            pattern = std::format("'{}{}'", std::get<std::string>(cond.value_), "%");
+            pattern = "'" + std::get<std::string>(cond.value_) + std::string("%") + "'";
         } else {
             pattern = format_value(cond.value_);
         }
-        return std::format("{} LIKE {}", column, pattern);
+        return column + " LIKE " + pattern;
     }
     case CompareOp::ENDS_WITH: {
         std::string pattern;
         if (std::holds_alternative<std::string>(cond.value_)) {
-            pattern = std::format("'{}{}'", "%", std::get<std::string>(cond.value_));
+            pattern = "'" + std::string("%") + std::get<std::string>(cond.value_) + "'";
         } else {
             pattern = format_value(cond.value_);
         }
-        return std::format("{} LIKE {}", column, pattern);
+        return column + " LIKE " + pattern;
     }
     case CompareOp::BETWEEN: {
         std::string low = format_value(cond.value_);
         std::string high = cond.second_value_.has_value()
                                ? format_value(cond.second_value_.value())
                                : low;
-        return std::format("{} BETWEEN {} AND {}", column, low, high);
+        return column + " BETWEEN " + low + " AND " + high;
     }
     case CompareOp::REGEX: {
         std::string val = format_value(cond.value_);
-        return std::format("{} REGEXP {}", column, val);
+        return column + " REGEXP " + val;
     }
     default:
-        return std::format("{} {} {}", column, op_sql, format_value(cond.value_));
+        return column + " " + op_sql + " " + format_value(cond.value_);
     }
 }
 
@@ -184,7 +188,7 @@ std::string FilterSQLCompiler::CompileNode(const FilterNode& node) {
             if (i > 0) {
                 result += joiner;
             }
-            result += std::format("({})", CompileNode(node.children_[i]));
+            result += "(" + CompileNode(node.children_[i]) + ")";
         }
         return result;
     }
@@ -217,7 +221,7 @@ std::string FilterSQLCompiler::Compile(const FilterNode& node) {
 // ============================================================
 std::string FilterCombo::GenerateSQLOn(uint32_t parent_id) const {
     std::string where_clause = FilterSQLCompiler::Compile(root_);
-    return std::format(
+    return std::string(
         "SELECT se.element_id, se.element_name, se.element_type, "
         "se.parent_id, se.added_time, se.last_modified_time, "
         "se.ref_count, se.pinned, se.sync_flag, "
@@ -225,8 +229,7 @@ std::string FilterCombo::GenerateSQLOn(uint32_t parent_id) const {
         "sf.width, sf.height, sf.has_thumbnail, sf.has_full_image "
         "FROM sleeve_elements se "
         "LEFT JOIN sleeve_files sf ON se.element_id = sf.element_id "
-        "WHERE se.parent_id = {} AND ({})",
-        parent_id, where_clause);
+        "WHERE se.parent_id = ") + std::to_string(parent_id) + " AND (" + where_clause + ")";
 }
 
 // ============================================================
@@ -235,11 +238,10 @@ std::string FilterCombo::GenerateSQLOn(uint32_t parent_id) const {
 // ============================================================
 std::string FilterCombo::GenerateIdSQLOn(uint32_t parent_id) const {
     std::string where_clause = FilterSQLCompiler::Compile(root_);
-    return std::format(
+    return std::string(
         "SELECT se.element_id FROM sleeve_elements se "
         "LEFT JOIN sleeve_files sf ON se.element_id = sf.element_id "
-        "WHERE se.parent_id = {} AND ({})",
-        parent_id, where_clause);
+        "WHERE se.parent_id = ") + std::to_string(parent_id) + " AND (" + where_clause + ")";
 }
 
 } // namespace alcedo

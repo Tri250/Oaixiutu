@@ -120,6 +120,13 @@ public:
     static std::string detect_file_type(const uint8_t* buffer, size_t size);
 
 private:
+    // XMP parsing
+    static bool parse_xmp_packet(const std::string& xmp_data, ExifData& out_data);
+
+    // ICC parsing
+    static bool parse_icc_header(const uint8_t* data, size_t size, ExifData& out_data);
+
+public:
     // TIFF/EXIF internal parsing
     static bool parse_tiff_header(const uint8_t* data, size_t size, bool& little_endian, uint32_t& ifd0_offset);
     static bool parse_ifd_entry(const uint8_t* data, size_t size, bool little_endian,
@@ -127,12 +134,6 @@ private:
                                 uint16_t& tag, uint16_t& type, uint32_t& count, uint32_t& value_offset);
     static bool parse_ifd(const uint8_t* data, size_t size, bool little_endian,
                           uint32_t ifd_offset, ExifData& out_data);
-
-    // XMP parsing
-    static bool parse_xmp_packet(const std::string& xmp_data, ExifData& out_data);
-
-    // ICC parsing
-    static bool parse_icc_header(const uint8_t* data, size_t size, ExifData& out_data);
 
     // DNG specific
     static bool parse_dng_tags(const uint8_t* data, size_t size, bool little_endian,

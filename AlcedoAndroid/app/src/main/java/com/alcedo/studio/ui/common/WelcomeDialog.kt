@@ -2,6 +2,7 @@ package com.alcedo.studio.ui.common
 
 import android.content.Context
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -39,6 +40,7 @@ data class WelcomePage(
     val color: @Composable () -> androidx.compose.ui.graphics.Color = { MaterialTheme.colorScheme.primary }
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WelcomeDialog(
     onDismiss: () -> Unit,
@@ -46,9 +48,6 @@ fun WelcomeDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = {
-        pages.size + 1 // +1 for permissions page
-    })
 
     val pages = listOf(
         WelcomePage(
@@ -72,6 +71,10 @@ fun WelcomeDialog(
             description = "Every edit is non-destructive with full version history, undo/redo, and adjustment transfer between images."
         )
     )
+
+    val pagerState = rememberPagerState(pageCount = {
+        pages.size + 1 // +1 for permissions page
+    })
 
     AlertDialog(
         onDismissRequest = onDismiss,

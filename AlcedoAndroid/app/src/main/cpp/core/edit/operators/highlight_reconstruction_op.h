@@ -38,7 +38,6 @@ public:
         GBRG = 3
     };
 
-private:
     struct BayerInfo {
         int red_row, red_col;
         int green1_row, green1_col;

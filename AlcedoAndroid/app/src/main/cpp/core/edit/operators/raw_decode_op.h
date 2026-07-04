@@ -1,5 +1,6 @@
 #pragma once
 #include "operator_base.h"
+#include "core/image/raw_decoder.h"
 
 namespace alcedo {
 
@@ -7,7 +8,6 @@ namespace alcedo {
 // Ported from desktop raw_decode_op.cpp
 // Controls RAW processing parameters: demosaic method, white balance,
 // highlight recovery, color space, etc.
-enum class DemosaicMethod : int { AHD = 0, AMAZE = 1, RCD = 2 };
 enum class RawInputSpace : int { AP0 = 0, CAMERA = 1 };
 
 class RawDecodeOp : public OperatorBase<RawDecodeOp> {

@@ -133,7 +133,7 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun checkPermissions() {
-        val appContext = AppModule.applicationContext
+        val appContext = AppModule.context
         _hasMediaPermission.value = PermissionHelper.hasReadMediaAccess(appContext)
         _hasWritePermission.value = PermissionHelper.hasWriteAccess(appContext)
     }
@@ -160,7 +160,7 @@ class AlbumViewModel : ViewModel() {
             _isLoading.value = true
             try {
                 val mediaImages = MediaStoreHelper.queryImages(
-                    context = AppModule.applicationContext,
+                    context = AppModule.context,
                     limit = 500
                 )
                 // Convert MediaStore results to ImageModel via import service
@@ -184,7 +184,7 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val files = SafHelper.listDirectory(AppModule.applicationContext, treeUri)
+                val files = SafHelper.listDirectory(AppModule.context, treeUri)
                 val imageFiles = files.filter { !it.isDirectory }
                 for (file in imageFiles) {
                     importService.importImage(file.uri)
@@ -351,7 +351,7 @@ class AlbumViewModel : ViewModel() {
     fun importDirectory(path: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            importService.importDirectory(path)
+            importService.importDirectory(Uri.parse(path))
             loadImages()
             loadFolders()
             _isLoading.value = false
@@ -546,7 +546,12 @@ class AlbumViewModel : ViewModel() {
         _thumbnailsLoading.add(imageId)
         viewModelScope.launch {
             try {
-                val bitmap = thumbnailService.loadThumbnail(imageId)
+                val result = thumbnailService.loadThumbnail(imageId)
+                val bitmap = when (result) {
+                    is ThumbnailService.ThumbnailResult.Success -> result.bitmap
+                    is ThumbnailService.ThumbnailResult.Placeholder -> result.bitmap
+                    is ThumbnailService.ThumbnailResult.Error -> null
+                }
                 if (bitmap != null) {
                     val updated = _thumbnailCache.value.toMutableMap()
                     updated[imageId] = bitmap
@@ -653,8 +658,13 @@ class AlbumViewModel : ViewModel() {
     fun generateLabelsForImage(imageId: Long) {
         viewModelScope.launch {
             val image = imageRepository.getImage(imageId) ?: return@launch
-            val thumbnail = thumbnailService.loadThumbnail(imageId) ?: return@launch
-            aiService.generateLabels(imageId.toUInt(), thumbnail)
+            val result = thumbnailService.loadThumbnail(imageId)
+            val bitmap = when (result) {
+                is ThumbnailService.ThumbnailResult.Success -> result.bitmap
+                is ThumbnailService.ThumbnailResult.Placeholder -> result.bitmap
+                is ThumbnailService.ThumbnailResult.Error -> null
+            }
+            aiService.generateLabels(imageId.toUInt(), bitmap)
         }
     }
 

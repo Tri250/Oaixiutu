@@ -2,6 +2,9 @@ package com.alcedo.studio.di
 
 import android.content.Context
 import com.alcedo.studio.data.local.*
+import com.alcedo.studio.data.dao.EditHistoryDao
+import com.alcedo.studio.data.dao.PipelinePresetDao
+import com.alcedo.studio.data.dao.AiEmbeddingDao
 import com.alcedo.studio.domain.repository.*
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.service.RenderService
@@ -50,6 +53,11 @@ object AppModule {
     val semanticEmbeddingDao: SemanticEmbeddingDao by lazy { database.semanticEmbeddingDao() }
     val semanticLabelV2Dao: SemanticLabelV2Dao by lazy { database.semanticLabelV2Dao() }
     val collectionV2Dao: CollectionV2Dao by lazy { database.collectionV2Dao() }
+
+    // DAOs from data.dao package
+    val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }
+    val pipelinePresetDao: PipelinePresetDao by lazy { database.pipelinePresetDao() }
+    val aiEmbeddingDao: AiEmbeddingDao by lazy { database.aiEmbeddingDao() }
 
     // Cache
     val thumbnailDiskCache: ThumbnailDiskCache by lazy {
@@ -126,7 +134,7 @@ object AppModule {
     }
 
     val backgroundTaskService: BackgroundTaskService by lazy {
-        BackgroundTaskService()
+        BackgroundTaskService(this.context)
     }
 
     // AI Services
@@ -179,11 +187,18 @@ object AppModule {
 
     val sleeveRepository: SleeveRepository by lazy {
         SleeveRepository(
-            sleeveElementDao = elementDao,
-            imageDao = imageDao,
-            editHistoryDao = editHistoryDao,
-            pipelinePresetDao = pipelinePresetDao,
-            aiEmbeddingDao = aiEmbeddingDao
+            sleeveService = sleeveService,
+            filterService = sleeveFilterService,
+            elementDao = elementDao,
+            fileDao = fileDao,
+            folderDao = folderDao,
+            metadataDao = metadataDao,
+            collectionDao = collectionDao,
+            ratingDao = ratingDao,
+            labelDao = labelDao,
+            filterDao = filterDao,
+            pathResolver = pathResolver,
+            cacheManager = dentryCacheManager
         )
     }
 

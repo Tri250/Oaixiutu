@@ -342,6 +342,7 @@ fun SettingsScreen(navController: NavController) {
                                     AlcedoThemeVariant.GRAPHITE -> Icons.Default.Brush
                                     AlcedoThemeVariant.MIST -> Icons.Default.Cloud
                                     AlcedoThemeVariant.DYNAMIC -> Icons.Default.AutoAwesome
+                                    AlcedoThemeVariant.HASSELBLAD -> Icons.Default.CameraAlt
                                 },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -582,6 +583,7 @@ private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
         AlcedoThemeVariant.GRAPHITE -> stringRes { themeGraphite }
         AlcedoThemeVariant.MIST -> stringRes { themeMist }
         AlcedoThemeVariant.DYNAMIC -> stringRes { themeDynamic }
+        AlcedoThemeVariant.HASSELBLAD -> stringRes { themeHasselblad }
     }
 }
 

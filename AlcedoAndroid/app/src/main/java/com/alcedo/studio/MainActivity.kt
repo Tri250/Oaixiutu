@@ -120,10 +120,6 @@ class MainActivity : ComponentActivity() {
                             startDestination = "album",
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(
-                                    if (showBottomBar) Modifier.consumeWindowInsets(padding)
-                                    else Modifier
-                                )
                         ) {
                             composable("album") {
                                 AlbumScreen(navController = navController)
@@ -146,8 +142,7 @@ class MainActivity : ComponentActivity() {
                                 AiModelManagerScreen(navController = navController)
                             }
                             composable("ai_rating/{imageId}") { backStackEntry ->
-                                val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                                AiRatingScreen(navController = navController, imageId = imageId)
+                                AiRatingScreen(navController = navController)
                             }
                         }
                     }

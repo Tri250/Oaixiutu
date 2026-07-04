@@ -1,0 +1,3 @@
+/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/armeabi-v7a/CMakeFiles/alcedo.dir
+/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/armeabi-v7a/CMakeFiles/edit_cache.dir
+/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/armeabi-v7a/CMakeFiles/rebuild_cache.dir

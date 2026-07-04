@@ -17,6 +17,7 @@ enum class TransferMode(val label: String) {
     MERGE("Merge (Combine)")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdjustmentTransferDialog(
     onDismiss: () -> Unit,
@@ -26,7 +27,7 @@ fun AdjustmentTransferDialog(
 ) {
     var sourceImageId by remember { mutableStateOf<Long?>(null) }
     var transferMode by remember { mutableStateOf(TransferMode.PASTE) }
-    val selectedGroups = remember { mutableStateSetOf<TransferParamGroup>() }
+    val selectedGroups: MutableSet<TransferParamGroup> = remember { mutableStateSetOf() }
 
     // Initialize with ALL selected
     LaunchedEffect(Unit) {
@@ -187,7 +188,7 @@ fun AdjustmentTransferDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            selectedGroups.forEach { group ->
+                            for (group in selectedGroups) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(vertical = 2.dp)

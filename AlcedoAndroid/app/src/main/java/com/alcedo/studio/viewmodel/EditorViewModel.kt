@@ -12,8 +12,10 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -117,7 +119,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     // ── Export ──
 
-    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress
+    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ExportService.ExportProgress()
+    )
 
     private val _lastExportResult = MutableStateFlow<ExportService.ExportResult?>(null)
     val lastExportResult: StateFlow<ExportService.ExportResult?> = _lastExportResult.asStateFlow()
@@ -277,7 +283,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateLensCorrection(k1: Float, k2: Float, k3: Float, p1: Float, p2: Float) {
         _params.value = _params.value.copy(lensK1 = k1, lensK2 = k2, lensK3 = k3, lensP1 = p1, lensP2 = p2)
-        recordTransaction(OperatorType.LENS, "lensK1", k1)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK1", k1)
         regeneratePreview()
     }
 
@@ -608,7 +614,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _history.value?.let { hist ->
             val newVersionId = hist.createVersion(displayName)
             _history.value = hist
-            editHistoryRepository.saveHistory(hist)
+            viewModelScope.launch {
+                editHistoryRepository.saveHistory(hist)
+            }
             // Switch to new version
             switchVersion(newVersionId)
         }
@@ -623,7 +631,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     hist.activeVersionId = hist.defaultVersionId
                 }
                 _history.value = hist
-                editHistoryRepository.saveHistory(hist)
+                viewModelScope.launch {
+                    editHistoryRepository.saveHistory(hist)
+                }
             }
         }
     }
@@ -634,7 +644,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val updated = version.copy(displayName = newName)
                 hist.versionStorage[versionId] = updated
                 _history.value = hist
-                editHistoryRepository.saveHistory(hist)
+                viewModelScope.launch {
+                    editHistoryRepository.saveHistory(hist)
+                }
             }
         }
     }
@@ -643,7 +655,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _history.value?.let { hist ->
             val cloned = hist.cloneForFile(hist.boundImageId)
             _history.value = cloned
-            editHistoryRepository.saveHistory(cloned)
+            viewModelScope.launch {
+                editHistoryRepository.saveHistory(cloned)
+            }
         }
     }
 

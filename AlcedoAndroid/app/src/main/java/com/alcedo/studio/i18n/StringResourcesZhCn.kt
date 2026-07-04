@@ -403,6 +403,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val themeGraphite = "石墨"
     override val themeMist = "薄雾"
     override val themeDynamic = "动态 (Material You)"
+    override val themeHasselblad = "哈苏"
 
     // ── Language Names ──────────────────────────────────────────────────
     override val langEnglish = "English"

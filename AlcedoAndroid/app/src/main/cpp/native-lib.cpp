@@ -30,6 +30,9 @@
 #include "core/edit/operators/hls_op.h"
 #include "core/edit/operators/curve_op.h"
 #include "core/edit/operators/raw_decode_op.h"
+#include "core/edit/operators/auto_exposure_op.h"
+#include "core/edit/operators/ahd_demosaic_op.h"
+#include "core/edit/operators/amaze_demosaic_op.h"
 #include "core/sleeve/sleeve_manager.h"
 #include "core/sleeve/sleeve_filesystem.h"
 #include "core/sleeve/path_resolver.h"
@@ -1808,8 +1811,8 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyCrop(
         return nullptr;
     }
     std::vector<float> cropped(out_w * out_h * channels);
-    alcedo::CropRotateOperator::apply_crop(float_pixels.data(), width, height, channels,
-                                           left, top, right, bottom, cropped.data());
+    alcedo::CropRotateOperator::apply_crop(cropped.data(), float_pixels.data(), width, height, channels,
+                                           left, top, right, bottom);
     jfloatArray result = env->NewFloatArray(cropped.size());
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create crop result array");
@@ -1833,8 +1836,8 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyRotate(
     int out_w = width, out_h = height;
     if (angle == 90 || angle == 270) { out_w = height; out_h = width; }
     std::vector<float> rotated(out_w * out_h * channels);
-    alcedo::CropRotateOperator::apply_rotate(float_pixels.data(), width, height, channels,
-                                              angle, rotated.data());
+    alcedo::CropRotateOperator::apply_rotate(rotated.data(), float_pixels.data(), width, height, channels,
+                                              angle);
     jfloatArray result = env->NewFloatArray(rotated.size());
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create rotate result array");
@@ -1859,8 +1862,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(
     alcedo::ResizeOperator::resize(float_pixels.data(), width, height,
                                     resized.data(), dstWidth, dstHeight,
                                     channels,
-                                    method == 0 ? alcedo::ResizeMethod::NEAREST
-                                                : alcedo::ResizeMethod::BILINEAR);
+                                    method);
     jfloatArray result = env->NewFloatArray(resized.size());
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create resize result array");
@@ -2102,10 +2104,10 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFolder(
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     const char* cname = env->GetStringUTFChars(name, nullptr);
     auto fs = g_sleeve_manager->GetFilesystem();
-    auto element = fs->Create(alcedo::SleeveElementType::Folder, cpath, cname);
+    auto element = fs->Create(cpath, cname, alcedo::SleeveElement::TYPE_FOLDER);
     env->ReleaseStringUTFChars(path, cpath);
     env->ReleaseStringUTFChars(name, cname);
-    return element ? static_cast<jint>(element->id) : -1;
+    return element ? static_cast<jint>(element->element_id) : -1;
 }
 
 JNIEXPORT jint JNICALL
@@ -2115,10 +2117,10 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFile(
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     const char* cname = env->GetStringUTFChars(name, nullptr);
     auto fs = g_sleeve_manager->GetFilesystem();
-    auto element = fs->Create(alcedo::SleeveElementType::File, cpath, cname);
+    auto element = fs->Create(cpath, cname, alcedo::SleeveElement::TYPE_FILE);
     env->ReleaseStringUTFChars(path, cpath);
     env->ReleaseStringUTFChars(name, cname);
-    return element ? static_cast<jint>(element->id) : -1;
+    return element ? static_cast<jint>(element->element_id) : -1;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -2172,8 +2174,12 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    std::vector<jint> jint_ids(ids.begin(), ids.end());
-    env->SetIntArrayRegion(result, 0, ids.size(), jint_ids.data());
+    std::vector<jint> jint_ids;
+    jint_ids.reserve(ids.size());
+    for (const auto& entry : ids) {
+        jint_ids.push_back(static_cast<jint>(entry.element_id));
+    }
+    env->SetIntArrayRegion(result, 0, jint_ids.size(), jint_ids.data());
     return result;
 }
 
@@ -2189,7 +2195,7 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(
         char buf[512];
         snprintf(buf, sizeof(buf),
             "{\"id\":%u,\"name\":\"%s\",\"type\":%d,\"sync\":%d,\"pinned\":%s}",
-            elem->id, elem->name.c_str(), static_cast<int>(elem->type),
+            elem->element_id, elem->element_name.c_str(), static_cast<int>(elem->element_type),
             static_cast<int>(elem->sync_flag),
             elem->pinned ? "true" : "false");
         json = buf;
@@ -2204,7 +2210,7 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(
 
 JNIEXPORT jlong JNICALL
 Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGenerateId(JNIEnv *env, jobject thiz) {
-    return static_cast<jlong>(alcedo::IDGenerator::GenerateID());
+    return static_cast<jlong>(alcedo::IDGenerator().GenerateID());
 }
 
 JNIEXPORT jlong JNICALL
@@ -2219,7 +2225,7 @@ Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMicros(JNIEnv *env,
 
 JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeSetLogLevel(JNIEnv *env, jobject thiz, jint level) {
-    alcedo::set_log_level(static_cast<int>(level));
+    alcedo::set_log_level(static_cast<alcedo::LogLevel>(level));
 }
 
 // ── Security Check Functions ──

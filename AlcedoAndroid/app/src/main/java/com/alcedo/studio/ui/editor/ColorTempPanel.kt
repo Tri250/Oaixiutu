@@ -281,4 +281,4 @@ private fun tintToColor(tint: Float): Color {
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
-private fun Float.pow(exp: Float): Float = kotlin.math.pow(this.toDouble(), exp.toDouble()).toFloat()
+private fun Float.pow(exp: Float): Float = Math.pow(this.toDouble(), exp.toDouble()).toFloat()

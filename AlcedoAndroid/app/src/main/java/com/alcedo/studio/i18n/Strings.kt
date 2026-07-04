@@ -407,6 +407,7 @@ interface StringResources {
     val themeGraphite: String
     val themeMist: String
     val themeDynamic: String
+    val themeHasselblad: String
 
     // ── Language Names (native) ─────────────────────────────────────────
     val langEnglish: String

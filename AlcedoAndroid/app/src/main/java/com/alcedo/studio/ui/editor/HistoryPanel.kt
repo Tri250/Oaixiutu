@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.EditHistory
 import com.alcedo.studio.data.model.Version
 import com.alcedo.studio.data.model.generateHash128
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
@@ -204,7 +205,7 @@ fun HistoryPanel(
                         version.transactions.takeLast(5).reversed().forEach { tx ->
                             Text(
                                 text = "${tx.operatorType.name} · ${
-                                    tx.timestamp.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                                    tx.timestamp.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
                                 }",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

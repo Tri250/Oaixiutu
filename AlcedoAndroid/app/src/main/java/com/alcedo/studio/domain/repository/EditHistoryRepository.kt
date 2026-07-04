@@ -2,6 +2,7 @@ package com.alcedo.studio.domain.repository
 
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.SleeveDatabase
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.Dispatchers
@@ -45,9 +46,8 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
             put("import_pipeline_params_json", history.importPipelineParams.toString())
             put("active_pipeline_params_json", history.activePipelineParams?.toString())
         }
-        writableDb.insertWithOnConflict(
-            "edit_history", null, values,
-            SQLiteDatabase.CONFLICT_REPLACE
+        writableDb.insert(
+            "edit_history", SQLiteDatabase.CONFLICT_REPLACE, values
         )
 
         // Save all versions
@@ -58,8 +58,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
 
     override suspend fun getHistory(boundImageId: UInt): EditHistory? = withContext(Dispatchers.IO) {
         readableDb.query(
-            "edit_history", null, "bound_image_id = ?",
-            arrayOf(boundImageId.toString()), null, null, null
+            SimpleSQLiteQuery("SELECT * FROM edit_history WHERE bound_image_id = ?", arrayOf(boundImageId.toString()))
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 cursorToHistory(cursor)
@@ -69,8 +68,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
 
     override suspend fun getHistoryById(historyId: String): EditHistory? = withContext(Dispatchers.IO) {
         readableDb.query(
-            "edit_history", null, "history_id = ?",
-            arrayOf(historyId), null, null, null
+            SimpleSQLiteQuery("SELECT * FROM edit_history WHERE history_id = ?", arrayOf(historyId))
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 cursorToHistory(cursor)
@@ -84,8 +82,8 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
         for (version in getVersions(history.historyId)) {
             deleteTransactions(version.versionId)
         }
-        writableDb.delete("versions", "history_id = ?", arrayOf(history.historyId))
-        writableDb.delete("edit_history", "bound_image_id = ?", arrayOf(boundImageId.toString()))
+        writableDb.delete("versions", "history_id = ?", arrayOf<Any?>(history.historyId))
+        writableDb.delete("edit_history", "bound_image_id = ?", arrayOf<Any?>(boundImageId.toString()))
     }
 
     override suspend fun saveVersion(version: Version, historyId: String) = withContext(Dispatchers.IO) {
@@ -101,9 +99,8 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
             put("cursor", version.cursor)
             put("version_hash", version.versionHash)
         }
-        writableDb.insertWithOnConflict(
-            "versions", null, values,
-            SQLiteDatabase.CONFLICT_REPLACE
+        writableDb.insert(
+            "versions", SQLiteDatabase.CONFLICT_REPLACE, values
         )
 
         // Save transactions
@@ -115,8 +112,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
     override suspend fun getVersions(historyId: String): List<Version> = withContext(Dispatchers.IO) {
         val list = mutableListOf<Version>()
         readableDb.query(
-            "versions", null, "history_id = ?",
-            arrayOf(historyId), null, null, "added_time ASC"
+            SimpleSQLiteQuery("SELECT * FROM versions WHERE history_id = ? ORDER BY added_time ASC", arrayOf(historyId))
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(cursorToVersion(cursor))
@@ -127,8 +123,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
 
     override suspend fun getVersion(versionId: String): Version? = withContext(Dispatchers.IO) {
         readableDb.query(
-            "versions", null, "version_id = ?",
-            arrayOf(versionId), null, null, null
+            SimpleSQLiteQuery("SELECT * FROM versions WHERE version_id = ?", arrayOf(versionId))
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 cursorToVersion(cursor)
@@ -147,17 +142,15 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
             put("params_after_json", transaction.paramsAfter.toString())
             put("timestamp", transaction.timestamp.toEpochMilli())
         }
-        writableDb.insertWithOnConflict(
-            "transactions", null, values,
-            SQLiteDatabase.CONFLICT_REPLACE
+        writableDb.insert(
+            "transactions", SQLiteDatabase.CONFLICT_REPLACE, values
         )
     }
 
     override suspend fun getTransactions(versionId: String): List<EditTransaction> = withContext(Dispatchers.IO) {
         val list = mutableListOf<EditTransaction>()
         readableDb.query(
-            "transactions", null, "version_id = ?",
-            arrayOf(versionId), null, null, "transaction_id ASC"
+            SimpleSQLiteQuery("SELECT * FROM transactions WHERE version_id = ? ORDER BY transaction_id ASC", arrayOf(versionId))
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(cursorToTransaction(cursor))
@@ -167,7 +160,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
     }
 
     override suspend fun deleteTransactions(versionId: String) = withContext(Dispatchers.IO) {
-        writableDb.delete("transactions", "version_id = ?", arrayOf(versionId))
+        writableDb.delete("transactions", "version_id = ?", arrayOf<Any?>(versionId))
     }
 
     override suspend fun cloneHistory(

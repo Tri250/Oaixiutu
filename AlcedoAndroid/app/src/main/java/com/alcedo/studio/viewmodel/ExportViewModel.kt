@@ -14,8 +14,10 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class ExportViewModel : ViewModel() {
@@ -30,7 +32,11 @@ class ExportViewModel : ViewModel() {
 
     // ── Export progress ──
 
-    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress
+    val exportProgress: StateFlow<ExportService.ExportProgress> = exportService.exportProgress.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ExportService.ExportProgress()
+    )
 
     // ── Export result ──
 

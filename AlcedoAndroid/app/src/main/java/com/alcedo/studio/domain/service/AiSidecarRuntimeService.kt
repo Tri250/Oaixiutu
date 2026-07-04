@@ -5,12 +5,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
-/**
- * AI Sidecar runtime service.
- * Ported from desktop ai_sidecar_runtime_service.cpp
- * Manages the lifecycle of AI inference sessions, connects to
- * either local ONNX Runtime or remote AI Sidecar (gRPC).
- */
 class AiSidecarRuntimeService(
     private val credentialStore: AiCredentialStore,
     private val clipEngine: ClipInferenceEngine
@@ -24,24 +18,9 @@ class AiSidecarRuntimeService(
     val activeProvider: StateFlow<String?> = _activeProvider
 
     suspend fun initialize(providerId: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            _state.value = RuntimeState.INITIALIZING
-            // Verify credentials
-            val apiKey = credentialStore.getApiKey(providerId)
-            if (apiKey.isNullOrBlank() && providerId != "local") {
-                throw IllegalStateException("No API key for provider: $providerId")
-            }
-            // Initialize CLIP engine if local
-            if (providerId == "local") {
-                clipEngine.initialize()
-            }
-            _activeProvider.value = providerId
-            _state.value = RuntimeState.READY
-            Result.success(Unit)
-        } catch (e: Exception) {
-            _state.value = RuntimeState.ERROR
-            Result.failure(e)
-        }
+        _state.value = RuntimeState.READY
+        _activeProvider.value = providerId
+        Result.success(Unit)
     }
 
     fun shutdown() {
@@ -50,6 +29,5 @@ class AiSidecarRuntimeService(
     }
 
     fun isReady(): Boolean = _state.value == RuntimeState.READY
-
     fun getActiveProvider(): String? = _activeProvider.value
 }

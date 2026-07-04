@@ -2,6 +2,7 @@ package com.alcedo.studio.domain.repository
 
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.SleeveDatabase
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.Dispatchers
@@ -44,16 +45,14 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
             put("package_version", project.packageVersion)
             put("is_open", if (project.isOpen) 1 else 0)
         }
-        writableDb.insertWithOnConflict(
-            "projects", null, values,
-            SQLiteDatabase.CONFLICT_REPLACE
+        writableDb.insert(
+            "projects", SQLiteDatabase.CONFLICT_REPLACE, values
         )
     }
 
     override suspend fun getProject(projectId: String): Project? = withContext(Dispatchers.IO) {
         readableDb.query(
-            "projects", null, "project_id = ?",
-            arrayOf(projectId), null, null, null
+            SimpleSQLiteQuery("SELECT * FROM projects WHERE project_id = ?", arrayOf(projectId))
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 cursorToProject(cursor)
@@ -63,8 +62,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
 
     override suspend fun getProjectByPath(path: String): Project? = withContext(Dispatchers.IO) {
         readableDb.query(
-            "projects", null, "project_path = ?",
-            arrayOf(path), null, null, null
+            SimpleSQLiteQuery("SELECT * FROM projects WHERE project_path = ?", arrayOf(path))
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 cursorToProject(cursor)
@@ -75,7 +73,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
     override suspend fun getAllProjects(): List<Project> = withContext(Dispatchers.IO) {
         val list = mutableListOf<Project>()
         readableDb.query(
-            "projects", null, null, null, null, null, "modified_at DESC"
+            SimpleSQLiteQuery("SELECT * FROM projects ORDER BY modified_at DESC")
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(cursorToProject(cursor))
@@ -87,8 +85,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
     override suspend fun getRecentProjects(limit: Int): List<Project> = withContext(Dispatchers.IO) {
         val list = mutableListOf<Project>()
         readableDb.query(
-            "projects", null, null, null, null, null,
-            "modified_at DESC", limit.toString()
+            SimpleSQLiteQuery("SELECT * FROM projects ORDER BY modified_at DESC LIMIT $limit")
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(cursorToProject(cursor))
@@ -100,7 +97,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
     override suspend fun updateProject(project: Project) = createProject(project)
 
     override suspend fun deleteProject(projectId: String) = withContext(Dispatchers.IO) {
-        writableDb.delete("projects", "project_id = ?", arrayOf(projectId))
+        writableDb.delete("projects", "project_id = ?", arrayOf<Any?>(projectId))
     }
 
     override suspend fun setProjectMetadata(
@@ -111,18 +108,20 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
             put("metadata_json", metadata.toString())
             put("modified_at", Instant.now().toEpochMilli())
         }
-        writableDb.update("projects", values, "project_id = ?", arrayOf(projectId))
+        writableDb.update("projects", SQLiteDatabase.CONFLICT_REPLACE, values, "project_id = ?", arrayOf(projectId))
     }
 
     override suspend fun updateProjectModifiedTime(projectId: String) = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put("modified_at", Instant.now().toEpochMilli())
         }
-        writableDb.update("projects", values, "project_id = ?", arrayOf(projectId))
+        writableDb.update("projects", SQLiteDatabase.CONFLICT_REPLACE, values, "project_id = ?", arrayOf(projectId))
     }
 
     override suspend fun getProjectCount(): Int = withContext(Dispatchers.IO) {
-        readableDb.rawQuery("SELECT COUNT(*) FROM projects", null).use { cursor ->
+        readableDb.query(
+            SimpleSQLiteQuery("SELECT COUNT(*) FROM projects")
+        ).use { cursor ->
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
         }
     }

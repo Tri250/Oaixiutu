@@ -57,15 +57,15 @@ class ImageRepositoryImpl(
 
     override suspend fun deleteImage(id: Long) = withContext(Dispatchers.IO) {
         metadataDao.deleteMetadataByImageId(id)
-        thumbnailCache.evict(id)
+        thumbnailCache.evict(id.toString(), 0)
     }
 
     override suspend fun getThumbnail(id: Long): Bitmap? = withContext(Dispatchers.IO) {
-        thumbnailCache.get(id)
+        thumbnailCache.get(id.toString())
     }
 
     override suspend fun cacheThumbnail(id: Long, bitmap: Bitmap) = withContext(Dispatchers.IO) {
-        thumbnailCache.put(id, bitmap)
+        thumbnailCache.put(id.toString(), bitmap)
     }
 
     override suspend fun getMetadataByChecksum(checksum: Long): List<ImageMetadataEntity> = withContext(Dispatchers.IO) {

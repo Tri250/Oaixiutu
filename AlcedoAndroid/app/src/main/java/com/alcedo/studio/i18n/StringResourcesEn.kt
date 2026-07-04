@@ -403,6 +403,7 @@ class EnglishStrings : StringResources {
     override val themeGraphite = "Graphite"
     override val themeMist = "Mist"
     override val themeDynamic = "Dynamic (Material You)"
+    override val themeHasselblad = "Hasselblad"
 
     // ── Language Names ──────────────────────────────────────────────────
     override val langEnglish = "English"

@@ -98,20 +98,8 @@ interface SleeveElementDao {
     suspend fun getTotalFolderCount(): Int
 
     // FTS queries
-    @Query("""
-        SELECT sleeve_elements.* FROM sleeve_elements
-        INNER JOIN element_name_fts ON sleeve_elements.element_id = element_name_fts.docid
-        WHERE element_name_fts.element_name MATCH :query
-        ORDER BY element_name ASC
-    """)
+    @Query("SELECT * FROM sleeve_elements WHERE element_name LIKE '%' || :query || '%' ORDER BY element_name ASC")
     suspend fun ftsSearchElements(query: String): List<SleeveElementEntity>
-
-    // FTS insert/update/delete helpers
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFts(fts: ElementFts)
-
-    @Query("DELETE FROM element_fts WHERE element_id = :elementId")
-    suspend fun deleteFts(elementId: Long)
 
     @Query("DELETE FROM sleeve_elements")
     suspend fun deleteAllElements()
@@ -119,10 +107,9 @@ interface SleeveElementDao {
     // Hierarchy queries
     @Query("""
         WITH RECURSIVE ancestors AS (
-            SELECT element_id, parent_id, element_name, element_type FROM sleeve_elements WHERE element_id = :elementId
+            SELECT * FROM sleeve_elements WHERE element_id = :elementId
             UNION ALL
-            SELECT e.element_id, e.parent_id, e.element_name, e.element_type 
-            FROM sleeve_elements e INNER JOIN ancestors a ON e.element_id = a.parent_id
+            SELECT e.* FROM sleeve_elements e INNER JOIN ancestors a ON e.element_id = a.parent_id
         )
         SELECT * FROM ancestors WHERE element_id != :elementId
     """)
@@ -297,6 +284,7 @@ interface SleeveFolderDao {
         )
         SELECT * FROM folder_tree ORDER BY depth ASC, element_name ASC
     """)
+    @RewriteQueriesToDropUnusedColumns
     suspend fun getFolderTree(rootId: Long): List<SleeveFolderEntity>
 
     @Query("""
@@ -552,19 +540,10 @@ interface SemanticLabelDao {
     suspend fun getLabelFrequencyAll(): List<LabelFrequencyResult>
 
     // FTS label search
-    @Query("""
-        SELECT DISTINCT semantic_labels.* FROM semantic_labels
-        INNER JOIN label_fts ON semantic_labels.rowid = label_fts.docid
-        WHERE label_fts.label MATCH :query
-        ORDER BY confidence DESC
-    """)
+    @Query("SELECT * FROM semantic_labels WHERE label LIKE '%' || :query || '%' ORDER BY confidence DESC")
     suspend fun ftsSearchLabels(query: String): List<SemanticLabelEntity>
 
-    @Query("""
-        SELECT DISTINCT image_id FROM semantic_labels sl
-        INNER JOIN label_fts ON sl.rowid = label_fts.docid
-        WHERE label_fts.label MATCH :query
-    """)
+    @Query("SELECT DISTINCT image_id FROM semantic_labels WHERE label LIKE '%' || :query || '%'")
     suspend fun ftsSearchImageIdsByLabel(query: String): List<Long>
 
     @Query("SELECT COUNT(DISTINCT label) FROM semantic_labels")
@@ -1168,7 +1147,7 @@ interface SemanticLabelV2Dao {
     suspend fun getFileIdsByLabels(labels: List<String>): List<Long>
 
     @Query("""
-        SELECT primary_label, COUNT(*) as cnt FROM semantic_labels_v2 
+        SELECT primary_label AS label, COUNT(*) as cnt FROM semantic_labels_v2
         GROUP BY primary_label ORDER BY cnt DESC LIMIT :limit
     """)
     suspend fun getLabelFrequency(limit: Int): List<LabelFrequencyResult>

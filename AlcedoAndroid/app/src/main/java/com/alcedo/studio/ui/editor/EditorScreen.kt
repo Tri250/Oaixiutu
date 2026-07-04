@@ -124,7 +124,7 @@ fun EditorScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    IconButton(onClick = { viewModel.commitChanges() }) {
+                    IconButton(onClick = { viewModel.updateParams(params) }) {
                         Icon(Icons.Default.Save, contentDescription = "Save")
                     }
                     IconButton(onClick = { showExport = true }) {

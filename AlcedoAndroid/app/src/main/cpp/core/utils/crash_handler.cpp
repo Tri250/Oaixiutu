@@ -1,9 +1,13 @@
 #include "crash_handler.h"
 
-#include <execinfo.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <mutex>
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#include <dlfcn.h>
+#endif
 
 #define ALOGE(tag, fmt, ...) __android_log_print(ANDROID_LOG_ERROR, tag, fmt, ##__VA_ARGS__)
 #define ALOGI(tag, fmt, ...) __android_log_print(ANDROID_LOG_INFO, tag, fmt, ##__VA_ARGS__)
@@ -113,10 +117,14 @@ void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
     ALOGE("AlcedoCrash", "Signal code: %d", info->si_code);
 
     // Decode si_code for common signals
-    if (sig == SIGSEGV || sig == SIGBUS) {
+    if (sig == SIGSEGV) {
         switch (info->si_code) {
             case SEGV_MAPERR:  ALOGE("AlcedoCrash", "Reason: Address not mapped to object"); break;
             case SEGV_ACCERR:  ALOGE("AlcedoCrash", "Reason: Invalid permissions for mapped object"); break;
+            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+        }
+    } else if (sig == SIGBUS) {
+        switch (info->si_code) {
             case BUS_ADRALN:   ALOGE("AlcedoCrash", "Reason: Invalid address alignment"); break;
             case BUS_ADRERR:   ALOGE("AlcedoCrash", "Reason: Nonexistent physical address"); break;
             case BUS_OBJERR:   ALOGE("AlcedoCrash", "Reason: Object-specific hardware error"); break;
@@ -181,6 +189,11 @@ void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
 void CrashHandler::DumpCallstack() {
     ALOGE("AlcedoCrash", "--- Callstack ---");
 
+#ifdef __ANDROID__
+    // On Android, backtrace() from execinfo.h is not available.
+    // Use libcutils' callstack or just log a placeholder.
+    ALOGE("AlcedoCrash", "  (callstack dump not available on Android)");
+#else
     void* buffer[64];
     int size = backtrace(buffer, 64);
 
@@ -201,6 +214,7 @@ void CrashHandler::DumpCallstack() {
             ALOGE("AlcedoCrash", "  #%02d %p", i, buffer[i]);
         }
     }
+#endif
 }
 
 } // namespace alcedo

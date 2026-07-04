@@ -20,7 +20,7 @@ fun AlbumExportDialog(
     onExport: (List<Long>, ExportSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selectedIds = remember { mutableStateSetOf<Long>() }
+    val selectedIds = remember { mutableStateOf(mutableSetOf<Long>()) }
     var format by remember { mutableStateOf(ExportFormat.JPEG) }
     var quality by remember { mutableIntStateOf(95) }
     var colorSpace by remember { mutableStateOf(ColorSpace.SRGB) }
@@ -43,7 +43,7 @@ fun AlbumExportDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Image selection
-                Text("Select Images (${selectedIds.size}/${images.size})", style = MaterialTheme.typography.labelLarge)
+                Text("Select Images (${selectedIds.value.size}/${images.count()})", style = MaterialTheme.typography.labelLarge)
 
                 if (images.isEmpty()) {
                     Text(
@@ -55,13 +55,13 @@ fun AlbumExportDialog(
                     // Quick actions
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { selectedIds.clear(); selectedIds.addAll(images.map { it.imageId }) },
+                            onClick = { selectedIds.value = images.map { it.imageId }.toMutableSet() },
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Select All", style = MaterialTheme.typography.labelSmall)
                         }
                         OutlinedButton(
-                            onClick = { selectedIds.clear() },
+                            onClick = { selectedIds.value = mutableSetOf() },
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Clear", style = MaterialTheme.typography.labelSmall)
@@ -75,10 +75,10 @@ fun AlbumExportDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Checkbox(
-                                checked = image.imageId in selectedIds,
+                                checked = selectedIds.value.contains(image.imageId),
                                 onCheckedChange = {
-                                    if (it) selectedIds.add(image.imageId)
-                                    else selectedIds.remove(image.imageId)
+                                    if (it) selectedIds.value.add(image.imageId)
+                                    else selectedIds.value.remove(image.imageId)
                                 }
                             )
                             Text(
@@ -88,9 +88,9 @@ fun AlbumExportDialog(
                             )
                         }
                     }
-                    if (images.size > 10) {
+                    if (images.count() > 10) {
                         Text(
-                            "... and ${images.size - 10} more images",
+                            "... and ${images.count() - 10} more images",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -206,9 +206,9 @@ fun AlbumExportDialog(
                         includeMetadata = includeMetadata,
                         maxDimension = maxDimension.toIntOrNull()
                     )
-                    onExport(selectedIds.toList(), settings)
+                    onExport(selectedIds.value.toList(), settings)
                 },
-                enabled = selectedIds.isNotEmpty() && !isExporting
+                enabled = selectedIds.value.isNotEmpty() && !isExporting
             ) {
                 if (isExporting) {
                     CircularProgressIndicator(
@@ -218,7 +218,7 @@ fun AlbumExportDialog(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                 }
-                Text("Export ${selectedIds.size} Image${if (selectedIds.size != 1) "s" else ""}")
+                Text("Export ${selectedIds.value.count()} Image${if (selectedIds.value.count() != 1) "s" else ""}")
             }
         },
         dismissButton = {

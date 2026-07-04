@@ -120,7 +120,7 @@ uint64_t DecoderScheduler::submit_metadata(const std::string& file_path,
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (metadata_queue_.size() < max_queue_size_) {
-            metadata_queue_.push(task);
+            metadata_queue_.push(std::move(task));
         } else {
             LOGE("Metadata queue full, dropping task %llu", (unsigned long long)task.task_id);
             return 0;
@@ -146,7 +146,7 @@ uint64_t DecoderScheduler::submit_thumbnail(const std::string& file_path,
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (thumbnail_queue_.size() < max_queue_size_) {
-            thumbnail_queue_.push(task);
+            thumbnail_queue_.push(std::move(task));
         } else {
             LOGE("Thumbnail queue full, dropping task %llu", (unsigned long long)task.task_id);
             return 0;
@@ -172,7 +172,7 @@ uint64_t DecoderScheduler::submit_full_decode(const std::string& file_path,
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (full_decode_queue_.size() < max_queue_size_) {
-            full_decode_queue_.push(task);
+            full_decode_queue_.push(std::move(task));
         } else {
             LOGE("Full decode queue full, dropping task %llu", (unsigned long long)task.task_id);
             return 0;
@@ -198,7 +198,7 @@ uint64_t DecoderScheduler::submit_raw_preview(const std::string& file_path,
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (thumbnail_queue_.size() < max_queue_size_) {
-            thumbnail_queue_.push(task);
+            thumbnail_queue_.push(std::move(task));
         } else {
             return 0;
         }
@@ -224,7 +224,7 @@ uint64_t DecoderScheduler::submit_metadata_from_memory(const uint8_t* data, size
 
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
-        metadata_queue_.push(task);
+        metadata_queue_.push(std::move(task));
     }
 
     total_submitted_++;
@@ -247,7 +247,7 @@ uint64_t DecoderScheduler::submit_thumbnail_from_memory(const uint8_t* data, siz
 
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
-        thumbnail_queue_.push(task);
+        thumbnail_queue_.push(std::move(task));
     }
 
     total_submitted_++;
@@ -270,7 +270,7 @@ uint64_t DecoderScheduler::submit_full_decode_from_memory(const uint8_t* data, s
 
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
-        full_decode_queue_.push(task);
+        full_decode_queue_.push(std::move(task));
     }
 
     total_submitted_++;
@@ -394,28 +394,32 @@ std::vector<DecoderScheduler::TaskInfo> DecoderScheduler::get_queued_tasks() con
     std::vector<TaskInfo> result;
     std::lock_guard<std::mutex> lock(queue_mutex_);
 
-    // Note: priority_queue doesn't support iteration; we copy what we can
-    // In a production implementation, we'd store a separate list
-    auto add_from = [&](const std::priority_queue<DecodeTask>& q) {
-        auto copy = q;
-        while (!copy.empty()) {
-            const auto& t = copy.top();
+    // Access the underlying container of priority_queue via a helper struct
+    // std::priority_queue has a protected member 'c' which is the underlying container
+    struct QueueAccessor : std::priority_queue<DecodeTask> {
+        static const container_type& get_container(const std::priority_queue<DecodeTask>& q) {
+            return static_cast<const QueueAccessor&>(q).c;
+        }
+    };
+
+    auto addFrom = [&](const std::priority_queue<DecodeTask>& q) {
+        const auto& container = QueueAccessor::get_container(q);
+        for (const auto& t : container) {
             TaskInfo info;
             info.task_id = t.task_id;
             info.type = t.type;
             info.priority = t.priority;
             info.file_path = t.file_path;
-            info.progress = t.progress;
-            info.cancelled = t.cancelled;
+            info.progress = t.progress.load();
+            info.cancelled = t.cancelled.load();
             info.enqueue_time = t.enqueue_time;
             result.push_back(info);
-            copy.pop();
         }
     };
 
-    add_from(metadata_queue_);
-    add_from(thumbnail_queue_);
-    add_from(full_decode_queue_);
+    addFrom(metadata_queue_);
+    addFrom(thumbnail_queue_);
+    addFrom(full_decode_queue_);
     return result;
 }
 
@@ -497,41 +501,46 @@ void DecoderScheduler::worker_thread() {
 
         if (task.cancelled) continue;
 
+        // Save task info before moving into active map
+        uint64_t tid = task.task_id;
+
         // Register as active
         {
             std::lock_guard<std::mutex> lock(active_mutex_);
-            active_tasks_[task.task_id] = {task, std::make_shared<DecodeResult>()};
+            active_tasks_[tid] = {std::move(task), std::make_shared<DecodeResult>()};
         }
 
-        task.start_time = std::chrono::steady_clock::now();
+        // Reference the task from active_tasks_ (task was moved from)
+        DecodeTask& active_task = active_tasks_[tid].task;
+        active_task.start_time = std::chrono::steady_clock::now();
 
         // Process task
         DecodeResult result;
-        result.task_id = task.task_id;
-        result.file_path = task.file_path;
+        result.task_id = tid;
+        result.file_path = active_task.file_path;
 
         try {
-            process_task(task, result);
+            process_task(active_task, result);
         } catch (const std::exception& e) {
             result.success = false;
             result.error_message = std::string("Exception: ") + e.what();
-            LOGE("Task %llu failed: %s", (unsigned long long)task.task_id, e.what());
+            LOGE("Task %llu failed: %s", (unsigned long long)tid, e.what());
         }
 
-        task.end_time = std::chrono::steady_clock::now();
+        active_task.end_time = std::chrono::steady_clock::now();
         result.elapsed_ms = std::chrono::duration<double, std::milli>(
-            task.end_time - task.start_time).count();
+            active_task.end_time - active_task.start_time).count();
 
         // Store result
         {
             std::lock_guard<std::mutex> lock(results_mutex_);
-            completed_results_[task.task_id] = result;
+            completed_results_[tid] = result;
         }
 
         // Remove from active
         {
             std::lock_guard<std::mutex> lock(active_mutex_);
-            active_tasks_.erase(task.task_id);
+            active_tasks_.erase(tid);
         }
 
         if (result.success) total_completed_++;
@@ -540,8 +549,8 @@ void DecoderScheduler::worker_thread() {
         // Notify
         notify_complete(result);
 
-        if (task.on_complete) {
-            task.on_complete(result.success, result.error_message);
+        if (active_task.on_complete) {
+            active_task.on_complete(result.success, result.error_message);
         }
 
         // Wake waiters
@@ -556,17 +565,17 @@ bool DecoderScheduler::get_next_task(DecodeTask& task) {
 
     // Priority order: metadata > thumbnail > full_decode
     if (!metadata_queue_.empty()) {
-        task = metadata_queue_.top();
+        task = std::move(const_cast<DecodeTask&>(metadata_queue_.top()));
         metadata_queue_.pop();
         return true;
     }
     if (!thumbnail_queue_.empty()) {
-        task = thumbnail_queue_.top();
+        task = std::move(const_cast<DecodeTask&>(thumbnail_queue_.top()));
         thumbnail_queue_.pop();
         return true;
     }
     if (!full_decode_queue_.empty()) {
-        task = full_decode_queue_.top();
+        task = std::move(const_cast<DecodeTask&>(full_decode_queue_.top()));
         full_decode_queue_.pop();
         return true;
     }

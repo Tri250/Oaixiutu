@@ -5,7 +5,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
@@ -67,7 +70,6 @@ fun AlbumScreen(
                     FolderSidebar(
                         folders = folders,
                         onFolderSelected = { folderId ->
-                            viewModel.selectFolder(folderId)
                             scope.launch { drawerState.close() }
                         },
                         onClose = {
@@ -153,7 +155,7 @@ fun AlbumScreen(
         ImportDialog(
             onDismiss = { showImport = false },
             onImportFiles = { uris ->
-                uris.forEach { viewModel.importImage(it) }
+                viewModel.importFromStorage(uris)
                 showImport = false
             },
             onImportDirectory = { path ->
@@ -172,7 +174,7 @@ private fun AlbumContent(
     isLoading: Boolean,
     isRefreshing: Boolean,
     searchQuery: String,
-    selectedImages: List<UInt>,
+    selectedImages: List<Long>,
     showSearch: Boolean,
     semanticEnabled: Boolean,
     sortMode: SortMode,
@@ -180,7 +182,7 @@ private fun AlbumContent(
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onToggleSemantic: () -> Unit,
-    onToggleImageSelection: (UInt) -> Unit,
+    onToggleImageSelection: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onDeleteSelected: () -> Unit,
     onRefresh: () -> Unit,
@@ -289,12 +291,15 @@ private fun AlbumContent(
                     )
                 }
                 images.isEmpty() -> {
-                    EmptyState(
-                        icon = Icons.Default.PhotoLibrary,
-                        title = "No images yet",
-                        message = "Import photos to get started",
-                        modifier = Modifier.align(Alignment.Center),
-                        action = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyState(
+                            icon = Icons.Default.PhotoLibrary,
+                            title = "No images yet",
+                            message = "Import photos to get started",
+                            action = {
                             Button(onClick = onImport) {
                                 Icon(Icons.Default.AddPhotoAlternate, contentDescription = null,
                                     modifier = Modifier.size(16.dp))
@@ -302,7 +307,8 @@ private fun AlbumContent(
                                 Text("Import Photos")
                             }
                         }
-                    )
+                        )
+                    }
                 }
                 else -> {
                     Column {
@@ -489,7 +495,7 @@ private fun ThumbnailCard(
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
-                        fontSize = androidx.compose.ui.unit.sp(10)
+                        fontSize = 10.sp
                     )
                 }
             }
@@ -506,7 +512,7 @@ private fun ThumbnailCard(
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = androidx.compose.ui.unit.sp(10)
+                fontSize = 10.sp
             )
         }
     }
@@ -555,7 +561,7 @@ private fun FolderSidebar(
                         Icon(Icons.Default.Folder, contentDescription = null)
                     },
                     modifier = Modifier.clickable {
-                        onFolderSelected(folder.elementId)
+                        onFolderSelected(folder.elementId.toUInt())
                     }
                 )
             }

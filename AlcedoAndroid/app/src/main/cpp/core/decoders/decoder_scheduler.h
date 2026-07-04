@@ -61,6 +61,46 @@ struct DecodeTask {
     void* user_data = nullptr;
     std::map<std::string, std::string> options;
 
+    // Default constructor
+    DecodeTask() = default;
+
+    // Move constructor
+    DecodeTask(DecodeTask&& other) noexcept
+        : task_id(other.task_id), type(other.type), priority(other.priority),
+          file_path(std::move(other.file_path)), file_data(std::move(other.file_data)),
+          use_memory_data(other.use_memory_data),
+          progress(other.progress.load()), cancelled(other.cancelled.load()),
+          current_stage(std::move(other.current_stage)),
+          on_complete(std::move(other.on_complete)),
+          enqueue_time(other.enqueue_time), start_time(other.start_time), end_time(other.end_time),
+          user_data(other.user_data), options(std::move(other.options)) {}
+
+    // Move assignment
+    DecodeTask& operator=(DecodeTask&& other) noexcept {
+        if (this != &other) {
+            task_id = other.task_id;
+            type = other.type;
+            priority = other.priority;
+            file_path = std::move(other.file_path);
+            file_data = std::move(other.file_data);
+            use_memory_data = other.use_memory_data;
+            progress.store(other.progress.load());
+            cancelled.store(other.cancelled.load());
+            current_stage = std::move(other.current_stage);
+            on_complete = std::move(other.on_complete);
+            enqueue_time = other.enqueue_time;
+            start_time = other.start_time;
+            end_time = other.end_time;
+            user_data = other.user_data;
+            options = std::move(other.options);
+        }
+        return *this;
+    }
+
+    // Delete copy operations (atomics are not copyable)
+    DecodeTask(const DecodeTask&) = delete;
+    DecodeTask& operator=(const DecodeTask&) = delete;
+
     // Comparison for priority queue (higher priority = lower value)
     bool operator<(const DecodeTask& other) const {
         if (priority != other.priority)

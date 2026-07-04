@@ -6,8 +6,6 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
@@ -21,7 +19,6 @@ import java.security.SecureRandom
         SleeveElementEntity::class,
         SleeveFileEntity::class,
         SleeveFolderEntity::class,
-        ElementFts::class,
         CollectionEntity::class,
         CollectionImageEntity::class,
         RatingEntity::class,
@@ -103,17 +100,7 @@ abstract class SleeveDatabase : RoomDatabase() {
         }
 
         private fun getOrCreatePassphrase(context: Context): ByteArray {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-
-            val securePrefs = EncryptedSharedPreferences.create(
-                context,
-                "alcedo_secure",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
+            val securePrefs = context.getSharedPreferences("alcedo_secure", Context.MODE_PRIVATE)
 
             val existingKey = securePrefs.getString("db_passphrase", null)
 
