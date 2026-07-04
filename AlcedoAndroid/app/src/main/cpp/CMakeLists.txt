@@ -69,6 +69,7 @@ add_library(
     core/utils/thread_pool.cpp
     core/utils/time_provider.cpp
     core/utils/app_logging.cpp
+    core/utils/crash_handler.cpp
 )
 
 target_include_directories(alcedo_core PRIVATE

@@ -10,17 +10,24 @@ import com.alcedo.studio.service.ExportService as AppExportService
 import com.alcedo.studio.service.AiService as AppAiService
 
 object AppModule {
-    private lateinit var appContext: Context
+    private var _appContext: Context? = null
+    private var initialized = false
+
+    val context: Context
+        get() = _appContext ?: throw IllegalStateException("AppModule not initialized. Call initialize() first.")
+
+    val isInitialized: Boolean get() = initialized
 
     fun initialize(context: Context) {
-        appContext = context.applicationContext
+        _appContext = context.applicationContext
+        initialized = true
     }
 
-    val context: Context get() = appContext
+    fun getContextSafely(): Context? = _appContext
 
     // Database
     val database: SleeveDatabase by lazy {
-        SleeveDatabase.getInstance(appContext)
+        SleeveDatabase.getInstance(this.context)
     }
 
     // DAOs
@@ -46,7 +53,7 @@ object AppModule {
 
     // Cache
     val thumbnailDiskCache: ThumbnailDiskCache by lazy {
-        ThumbnailDiskCache(appContext.cacheDir.resolve("thumbnails"))
+        ThumbnailDiskCache(this.context.cacheDir.resolve("thumbnails"))
     }
 
     val dentryCacheManager: DentryCacheManager by lazy {
@@ -88,7 +95,7 @@ object AppModule {
 
     val importService: ImportService by lazy {
         ImportService(
-            context = appContext,
+            context = this.context,
             metadataDao = metadataDao,
             sleeveService = sleeveService,
             thumbnailDiskCache = thumbnailDiskCache
@@ -96,13 +103,13 @@ object AppModule {
     }
 
     val exportService: ExportService by lazy {
-        ExportService(appContext)
+        ExportService(this.context)
     }
 
     val thumbnailService: ThumbnailService by lazy {
         ThumbnailService(
             diskCache = thumbnailDiskCache,
-            cacheDir = appContext.cacheDir.resolve("thumbnails")
+            cacheDir = this.context.cacheDir.resolve("thumbnails")
         )
     }
 
@@ -111,11 +118,11 @@ object AppModule {
     }
 
     val aiService: AiService by lazy {
-        AiService(appContext)
+        AiService(this.context)
     }
 
     val searchService: SearchService by lazy {
-        SearchService(appContext, aiService, metadataDao, labelDao, elementDao)
+        SearchService(this.context, aiService, metadataDao, labelDao, elementDao)
     }
 
     val backgroundTaskService: BackgroundTaskService by lazy {
@@ -124,11 +131,11 @@ object AppModule {
 
     // AI Services
     val aiCredentialService: AiCredentialService by lazy {
-        AiCredentialService(appContext)
+        AiCredentialService(this.context)
     }
 
     val modelDownloadService: ModelDownloadService by lazy {
-        ModelDownloadService(appContext)
+        ModelDownloadService(this.context)
     }
 
     val searchQueryClassifier: SearchQueryClassifier by lazy {
@@ -136,11 +143,11 @@ object AppModule {
     }
 
     val aiRatingService: AiRatingService by lazy {
-        AiRatingService(appContext, aiCredentialService)
+        AiRatingService(this.context, aiCredentialService)
     }
 
     val semanticGenerationService: SemanticGenerationService by lazy {
-        SemanticGenerationService(appContext, aiService, metadataDao, modelDownloadService)
+        SemanticGenerationService(this.context, aiService, metadataDao, modelDownloadService)
     }
 
     // ── App Services (com.alcedo.studio.service) ──
@@ -161,11 +168,11 @@ object AppModule {
     }
 
     val appExportService: AppExportService by lazy {
-        AppExportService(appContext)
+        AppExportService(this.context)
     }
 
     val appAiService: AppAiService by lazy {
-        AppAiService(appContext)
+        AppAiService(this.context)
     }
 
     // ── Repositories ──

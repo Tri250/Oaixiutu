@@ -140,19 +140,22 @@ size_t ImagePoolManager::GetActiveCount() const {
 }
 
 bool ImagePoolManager::EvictOne() {
-    // Remove the least recently used unused buffer (back of the list).
-    for (auto it = pool_.rbegin(); it != pool_.rend(); ++it) {
+    // Find the last unused buffer (LRU eviction)
+    std::list<PooledBuffer>::iterator target = pool_.end();
+    for (auto it = pool_.begin(); it != pool_.end(); ++it) {
         if (!it->in_use) {
-            if (it->data) {
-                std::free(it->data);
-            }
-            total_allocated_ -= it->capacity;
-            // Convert reverse iterator to forward iterator for erase.
-            pool_.erase(std::next(it).base());
-            return true;
+            target = it;  // keep updating to get the last one (LRU)
         }
     }
-    return false; // No unused buffers to evict.
+    if (target != pool_.end()) {
+        if (target->data) {
+            std::free(target->data);
+        }
+        total_allocated_ -= target->capacity;
+        pool_.erase(target);
+        return true;
+    }
+    return false;
 }
 
 } // namespace alcedo

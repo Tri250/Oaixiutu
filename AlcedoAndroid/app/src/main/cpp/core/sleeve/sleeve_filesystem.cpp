@@ -1,4 +1,5 @@
 #include "sleeve_filesystem.h"
+#include <shared_mutex>
 
 namespace alcedo {
 
@@ -8,6 +9,7 @@ FileSystem::FileSystem(std::shared_ptr<SleeveBase> sleeve_base)
 FileSystem::~FileSystem() = default;
 
 std::shared_ptr<SleeveElement> FileSystem::Get(const std::string& path) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return nullptr;
     }
@@ -18,6 +20,7 @@ std::shared_ptr<SleeveElement> FileSystem::Create(
     const std::string& parent_path,
     const std::string& name,
     uint32_t type) {
+    std::unique_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return nullptr;
     }
@@ -25,6 +28,7 @@ std::shared_ptr<SleeveElement> FileSystem::Create(
 }
 
 bool FileSystem::Delete(const std::string& path) {
+    std::unique_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return false;
     }
@@ -32,6 +36,7 @@ bool FileSystem::Delete(const std::string& path) {
 }
 
 bool FileSystem::Copy(const std::string& src, const std::string& dest) {
+    std::unique_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return false;
     }
@@ -39,6 +44,7 @@ bool FileSystem::Copy(const std::string& src, const std::string& dest) {
 }
 
 bool FileSystem::Move(const std::string& src, const std::string& dest) {
+    std::unique_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return false;
     }
@@ -46,6 +52,7 @@ bool FileSystem::Move(const std::string& src, const std::string& dest) {
 }
 
 std::vector<FolderEntry> FileSystem::ListFolderContent(const std::string& path) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
     std::vector<FolderEntry> result;
     if (!sleeve_base_) {
         return result;
@@ -77,6 +84,7 @@ std::vector<FolderEntry> FileSystem::ListFolderContent(const std::string& path) 
 }
 
 SyncFlag FileSystem::GetSyncFlag(const std::string& path) {
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return SyncFlag::UNSYNC;
     }
@@ -88,6 +96,7 @@ SyncFlag FileSystem::GetSyncFlag(const std::string& path) {
 }
 
 bool FileSystem::SetSyncFlag(const std::string& path, SyncFlag flag) {
+    std::unique_lock<std::shared_mutex> lock(rw_mutex_);
     if (!sleeve_base_) {
         return false;
     }
@@ -100,16 +109,21 @@ bool FileSystem::SetSyncFlag(const std::string& path, SyncFlag flag) {
 }
 
 bool FileSystem::Exists(const std::string& path) {
-    return Get(path) != nullptr;
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
+    return sleeve_base_ && sleeve_base_->AccessElementByPath(path) != nullptr;
 }
 
 bool FileSystem::IsFile(const std::string& path) {
-    auto elem = Get(path);
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
+    if (!sleeve_base_) return false;
+    auto elem = sleeve_base_->AccessElementByPath(path);
     return elem != nullptr && elem->IsFile();
 }
 
 bool FileSystem::IsFolder(const std::string& path) {
-    auto elem = Get(path);
+    std::shared_lock<std::shared_mutex> lock(rw_mutex_);
+    if (!sleeve_base_) return false;
+    auto elem = sleeve_base_->AccessElementByPath(path);
     return elem != nullptr && elem->IsFolder();
 }
 

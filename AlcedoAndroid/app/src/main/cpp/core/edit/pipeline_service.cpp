@@ -30,11 +30,35 @@
 
 namespace alcedo {
 
+// ============================================================
+// NaN/Inf safety utilities (must match color_science.cpp definitions)
+// ============================================================
+
+static inline float clamp01_safe(float v) {
+    if (!std::isfinite(v)) return 0.0f;
+    return std::max(0.0f, std::min(1.0f, v));
+}
+
+// ============================================================
+// PipelineService Singleton
+// ============================================================
+
+std::once_flag PipelineService::init_flag_;
+std::unique_ptr<PipelineService> PipelineService::instance_;
+
+PipelineService& PipelineService::Instance() {
+    std::call_once(init_flag_, []() {
+        instance_ = std::make_unique<PipelineService>();
+    });
+    return *instance_;
+}
+
 // Helper: FilmGrainOperator (inline to avoid dependency issues)
 class FilmGrainOp {
 public:
     static void apply(float* pixels, int width, int height, float intensity) {
-        std::mt19937 gen(42);
+        std::random_device rd;
+        std::mt19937 gen(rd());
         std::normal_distribution<float> dist(0.0f, intensity * 0.05f);
         int total = width * height * 3;
         for (int i = 0; i < total; ++i) {
@@ -47,6 +71,11 @@ public:
 // ============================================================
 // PipelineService Implementation
 // ============================================================
+
+PipelineService& PipelineService::Instance() {
+    static PipelineService instance;
+    return instance;
+}
 
 PipelineService::PipelineService() {
     for (int i = 0; i < 15; ++i) stage_enabled_[i] = true;
@@ -90,7 +119,10 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         float scale = std::pow(2.0f, params.exposure);
         for (int i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
-            for (int c = 0; c < 3 && c < channels; ++c) pixels[idx + c] *= scale;
+            for (int c = 0; c < 3 && c < channels; ++c) {
+                pixels[idx + c] *= scale;
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
     }
 
@@ -100,6 +132,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         color_science::planckian_white_balance_bulk(pixels, pixel_count, channels,
                                                      params.white_balance_temp,
                                                      params.white_balance_tint);
+        for (int i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
     }
 
     // Stage: Contrast
@@ -111,7 +148,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             for (int c = 0; c < 3 && c < channels; ++c) {
                 float& v = pixels[idx + c];
                 v = v * scale + offset;
-                v = std::max(0.0f, std::min(1.0f, v));
+                v = clamp01_safe(v);
             }
         }
     }
@@ -122,6 +159,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         ToneRegionOperator::apply_rgb(pixels, width, height,
                                        params.shadows, params.midtones, params.highlights,
                                        params.shadow_boundary, params.highlight_boundary);
+        for (int i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
     }
 
     // Stage: Tone Curve
@@ -133,12 +175,12 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 const float* xs = params.tone_curve_x;
                 const float* ys = params.tone_curve_y;
                 int n = params.tone_curve_points;
-                if (x <= xs[0]) { pixels[idx + c] = ys[0]; continue; }
-                if (x >= xs[n - 1]) { pixels[idx + c] = ys[n - 1]; continue; }
+                if (x <= xs[0]) { pixels[idx + c] = clamp01_safe(ys[0]); continue; }
+                if (x >= xs[n - 1]) { pixels[idx + c] = clamp01_safe(ys[n - 1]); continue; }
                 for (int j = 0; j < n - 1; ++j) {
                     if (x >= xs[j] && x <= xs[j + 1]) {
                         float t = (x - xs[j]) / (xs[j + 1] - xs[j]);
-                        pixels[idx + c] = ys[j] + t * (ys[j + 1] - ys[j]);
+                        pixels[idx + c] = clamp01_safe(ys[j] + t * (ys[j + 1] - ys[j]));
                         break;
                     }
                 }
@@ -149,6 +191,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: Sigmoid contrast
     if (params.sigmoid_contrast != 0.0f) {
         color_science::sigmoid_contrast_bulk(pixels, pixel_count, channels, params.sigmoid_contrast);
+        for (int i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
     }
 
     // Stage: Color
@@ -161,15 +208,20 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 int idx = i * channels;
                 float r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
                 float lum = r * lumR + g * lumG + b * lumB;
-                pixels[idx]     = lum + (r - lum) * s;
-                pixels[idx + 1] = lum + (g - lum) * s;
-                pixels[idx + 2] = lum + (b - lum) * s;
+                pixels[idx]     = clamp01_safe(lum + (r - lum) * s);
+                pixels[idx + 1] = clamp01_safe(lum + (g - lum) * s);
+                pixels[idx + 2] = clamp01_safe(lum + (b - lum) * s);
             }
         }
 
         // Vibrance
         if (params.vibrance != 0.0f) {
             VibranceOperator::apply_rgb(pixels, width, height, params.vibrance);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
 
         // Tint
@@ -178,6 +230,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                      params.tint_highlight_hue, params.tint_highlight_strength,
                                      params.tint_shadow_hue, params.tint_shadow_strength,
                                      params.tint_balance);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
 
         // Color wheels
@@ -198,6 +255,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                            params.color_wheel_gain[0],
                                            params.color_wheel_gain[1],
                                            params.color_wheel_gain[2]);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
 
         // HSL
@@ -213,6 +275,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                    params.hsl_hue_shift,
                                    params.hsl_saturation_scale,
                                    params.hsl_luminance_scale);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
 
         // Channel mixer
@@ -227,6 +294,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             ChannelMixerOperator::apply_rgb(pixels, width, height,
                                              params.channel_mixer_matrix,
                                              params.channel_mixer_monochrome);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
     }
 
@@ -236,6 +308,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             ClarityOperator::apply_rgba(pixels, width, height, params.clarity, params.clarity_radius);
         else
             ClarityOperator::apply_rgb(pixels, width, height, params.clarity, params.clarity_radius);
+        for (int i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
     }
 
     // Stage: Sharpen
@@ -252,7 +329,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                             sum += copy[((y + ky) * width + (x + kx)) * channels + c] *
                                    kernel[(ky + 1) * 3 + (kx + 1)];
                     int center = (y * width + x) * channels + c;
-                    pixels[center] = copy[center] + (sum - copy[center]) * scale;
+                    pixels[center] = clamp01_safe(copy[center] + (sum - copy[center]) * scale);
                 }
             }
         }
@@ -261,12 +338,13 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: Effects
     if (en(PipelineStage::EFFECTS)) {
         if (params.film_grain > 0.0f) {
-            std::mt19937 gen(42);
+            std::random_device rd;
+            std::mt19937 gen(rd());
             std::normal_distribution<float> dist(0.0f, params.film_grain * 0.05f);
             int total = pixel_count * channels;
             for (int i = 0; i < total; ++i) {
                 pixels[i] += dist(gen);
-                pixels[i] = std::max(0.0f, std::min(1.0f, pixels[i]));
+                pixels[i] = clamp01_safe(pixels[i]);
             }
         }
 
@@ -279,6 +357,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 HalationOperator::apply_rgb(pixels, width, height,
                                              params.halation_intensity, params.halation_threshold,
                                              params.halation_spread, params.halation_red_bias);
+            for (int i = 0; i < pixel_count; ++i) {
+                int idx = i * channels;
+                for (int c = 0; c < 3 && c < channels; ++c)
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+            }
         }
 
         if (params.lut_enabled && !params.lut_path.empty()) {
@@ -290,6 +373,11 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 else
                     LutOperator::apply_rgb(pixels, width, height, lut_data, lut_size);
                 LutOperator::free_parsed_lut(lut_data);
+                for (int i = 0; i < pixel_count; ++i) {
+                    int idx = i * channels;
+                    for (int c = 0; c < 3 && c < channels; ++c)
+                        pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+                }
             }
         }
     }
@@ -328,6 +416,30 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
     LOGI("Pipeline completed: %dx%d %dch", width, height, channels);
     return true;
+}
+
+bool PipelineService::process_with_gpu_fallback(float* pixels, int width, int height, int channels,
+                                                  const PipelineParams& params) {
+    if (backend_ == BufferBackend::GPU_GLES || backend_ == BufferBackend::GPU_VK) {
+        // Try GPU path first
+        try {
+            bool gpu_result = process(pixels, width, height, channels, params);
+            if (gpu_result) return true;
+        } catch (...) {
+            LOGE("GPU pipeline failed, falling back to CPU");
+        }
+
+        // GPU failed - fall back to CPU
+        LOGI("Falling back to CPU pipeline");
+        BufferBackend saved = backend_;
+        backend_ = BufferBackend::CPU;
+        bool cpu_result = process(pixels, width, height, channels, params);
+        backend_ = saved; // restore for next attempt
+        return cpu_result;
+    }
+
+    // Already CPU backend
+    return process(pixels, width, height, channels, params);
 }
 
 bool PipelineService::process_raw(const uint16_t* raw_data, int raw_width, int raw_height,
@@ -443,7 +555,7 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
                 case 3: color_science::gamma_eotf_rgb(&r, &g, &b, 2.2f); break;
                 case 4: color_science::gamma_eotf_rgb(&r, &g, &b, 2.4f); break;
             }
-            pixels[idx]=r; pixels[idx+1]=g; pixels[idx+2]=b;
+            pixels[idx]=clamp01_safe(r); pixels[idx+1]=clamp01_safe(g); pixels[idx+2]=clamp01_safe(b);
         }
     } else if (transform.color_science == 0) { // ACES 2.0
         // sRGB → AP0 → RRT → display color space → peak luminance → EOTF
@@ -463,7 +575,7 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
                 case 3: color_science::gamma_eotf_rgb(&r, &g, &b, 2.2f); break;
                 case 4: color_science::gamma_eotf_rgb(&r, &g, &b, 2.4f); break;
             }
-            pixels[idx]=r; pixels[idx+1]=g; pixels[idx+2]=b;
+            pixels[idx]=clamp01_safe(r); pixels[idx+1]=clamp01_safe(g); pixels[idx+2]=clamp01_safe(b);
         }
     } else if (transform.color_science == 1) { // OpenDRT
         color_science::opendrt_tone_map_bulk(pixels, pixel_count, channels, channels);
@@ -478,7 +590,7 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
                 case 3: color_science::gamma_eotf_rgb(&r, &g, &b, 2.2f); break;
                 case 4: color_science::gamma_eotf_rgb(&r, &g, &b, 2.4f); break;
             }
-            pixels[idx]=r; pixels[idx+1]=g; pixels[idx+2]=b;
+            pixels[idx]=clamp01_safe(r); pixels[idx+1]=clamp01_safe(g); pixels[idx+2]=clamp01_safe(b);
         }
     }
 }
@@ -496,7 +608,10 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
             float scale = std::pow(2.0f, params.exposure);
             for (int i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
-                for (int c = 0; c < 3 && c < channels; ++c) pixels[idx + c] *= scale;
+                for (int c = 0; c < 3 && c < channels; ++c) {
+                    pixels[idx + c] *= scale;
+                    pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+                }
             }
             break;
         }
@@ -514,7 +629,7 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
                 for (int c = 0; c < 3 && c < channels; ++c) {
                     float& v = pixels[idx + c];
                     v = v * scale + offset;
-                    v = std::max(0.0f, std::min(1.0f, v));
+                    v = clamp01_safe(v);
                 }
             }
             break;
@@ -527,9 +642,9 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
                     int idx = i * channels;
                     float r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
                     float lum = r * lumR + g * lumG + b * lumB;
-                    pixels[idx] = lum + (r - lum) * s;
-                    pixels[idx + 1] = lum + (g - lum) * s;
-                    pixels[idx + 2] = lum + (b - lum) * s;
+                    pixels[idx]     = clamp01_safe(lum + (r - lum) * s);
+                    pixels[idx + 1] = clamp01_safe(lum + (g - lum) * s);
+                    pixels[idx + 2] = clamp01_safe(lum + (b - lum) * s);
                 }
             }
             break;
@@ -566,6 +681,7 @@ void PipelineService::apply_auto_exposure(float* pixels, int width, int height, 
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c) {
                 pixels[idx + c] *= scale;
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
             }
         }
     }

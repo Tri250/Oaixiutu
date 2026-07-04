@@ -29,10 +29,16 @@
 #include "core/utils/thread_pool.h"
 #include "core/utils/time_provider.h"
 #include "core/utils/app_logging.h"
+#include "core/utils/crash_handler.h"
 
 #define LOG_TAG "AlcedoCore"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+#define SAFE_PARAM(idx, val) do { \
+    if ((idx) < paramsLen) { val = params[(idx)]; } \
+    else { LOGE("Param index %d out of bounds (len=%d)", (idx), paramsLen); } \
+} while(0)
 
 using namespace alcedo;
 
@@ -60,52 +66,60 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     jfloat *params = env->GetFloatArrayElements(paramsArray, nullptr);
     if (!params) { env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT); return nullptr; }
 
+    jsize paramsLen = env->GetArrayLength(paramsArray);
+    if (paramsLen < 47) {  // minimum expected params count
+        LOGE("Params array too short: %d < 47", paramsLen);
+        env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
+        env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+        return nullptr;
+    }
+
     PipelineParams pipeline_params;
 
     // Parse params array (complex structure, simplified)
     int p_idx = 0;
-    pipeline_params.exposure = params[p_idx++];
-    pipeline_params.contrast = params[p_idx++];
-    pipeline_params.saturation = params[p_idx++];
-    pipeline_params.vibrance = params[p_idx++];
-    pipeline_params.highlights = params[p_idx++];
-    pipeline_params.shadows = params[p_idx++];
-    pipeline_params.midtones = params[p_idx++];
-    pipeline_params.white_balance_temp = params[p_idx++];
-    pipeline_params.white_balance_tint = params[p_idx++];
-    pipeline_params.sharpen = params[p_idx++];
-    pipeline_params.clarity = params[p_idx++];
-    pipeline_params.clarity_radius = params[p_idx++];
-    pipeline_params.film_grain = params[p_idx++];
-    pipeline_params.halation_intensity = params[p_idx++];
-    pipeline_params.halation_threshold = params[p_idx++];
-    pipeline_params.halation_spread = params[p_idx++];
-    pipeline_params.halation_red_bias = params[p_idx++];
-    pipeline_params.sigmoid_contrast = params[p_idx++];
+    SAFE_PARAM(p_idx++, pipeline_params.exposure);
+    SAFE_PARAM(p_idx++, pipeline_params.contrast);
+    SAFE_PARAM(p_idx++, pipeline_params.saturation);
+    SAFE_PARAM(p_idx++, pipeline_params.vibrance);
+    SAFE_PARAM(p_idx++, pipeline_params.highlights);
+    SAFE_PARAM(p_idx++, pipeline_params.shadows);
+    SAFE_PARAM(p_idx++, pipeline_params.midtones);
+    SAFE_PARAM(p_idx++, pipeline_params.white_balance_temp);
+    SAFE_PARAM(p_idx++, pipeline_params.white_balance_tint);
+    SAFE_PARAM(p_idx++, pipeline_params.sharpen);
+    SAFE_PARAM(p_idx++, pipeline_params.clarity);
+    SAFE_PARAM(p_idx++, pipeline_params.clarity_radius);
+    SAFE_PARAM(p_idx++, pipeline_params.film_grain);
+    SAFE_PARAM(p_idx++, pipeline_params.halation_intensity);
+    SAFE_PARAM(p_idx++, pipeline_params.halation_threshold);
+    SAFE_PARAM(p_idx++, pipeline_params.halation_spread);
+    SAFE_PARAM(p_idx++, pipeline_params.halation_red_bias);
+    SAFE_PARAM(p_idx++, pipeline_params.sigmoid_contrast);
 
     // Color wheels
-    pipeline_params.color_wheel_lift[0] = params[p_idx++];
-    pipeline_params.color_wheel_lift[1] = params[p_idx++];
-    pipeline_params.color_wheel_lift[2] = params[p_idx++];
-    pipeline_params.color_wheel_gamma[0] = params[p_idx++];
-    pipeline_params.color_wheel_gamma[1] = params[p_idx++];
-    pipeline_params.color_wheel_gamma[2] = params[p_idx++];
-    pipeline_params.color_wheel_gain[0] = params[p_idx++];
-    pipeline_params.color_wheel_gain[1] = params[p_idx++];
-    pipeline_params.color_wheel_gain[2] = params[p_idx++];
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_lift[0]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_lift[1]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_lift[2]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gamma[0]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gamma[1]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gamma[2]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gain[0]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gain[1]);
+    SAFE_PARAM(p_idx++, pipeline_params.color_wheel_gain[2]);
 
     // Tint
-    pipeline_params.tint_highlight_hue = params[p_idx++];
-    pipeline_params.tint_highlight_strength = params[p_idx++];
-    pipeline_params.tint_shadow_hue = params[p_idx++];
-    pipeline_params.tint_shadow_strength = params[p_idx++];
-    pipeline_params.tint_balance = params[p_idx++];
+    SAFE_PARAM(p_idx++, pipeline_params.tint_highlight_hue);
+    SAFE_PARAM(p_idx++, pipeline_params.tint_highlight_strength);
+    SAFE_PARAM(p_idx++, pipeline_params.tint_shadow_hue);
+    SAFE_PARAM(p_idx++, pipeline_params.tint_shadow_strength);
+    SAFE_PARAM(p_idx++, pipeline_params.tint_balance);
 
     // Display transform
-    pipeline_params.display_transform.color_science = static_cast<int>(params[p_idx++]);
-    pipeline_params.display_transform.eotf = static_cast<int>(params[p_idx++]);
-    pipeline_params.display_transform.peak_luminance = params[p_idx++];
-    pipeline_params.display_transform.display_color_space = static_cast<int>(params[p_idx++]);
+    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.color_science = static_cast<int>(tmp); }
+    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.eotf = static_cast<int>(tmp); }
+    SAFE_PARAM(p_idx++, pipeline_params.display_transform.peak_luminance);
+    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.display_color_space = static_cast<int>(tmp); }
 
     env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
 
@@ -114,11 +128,16 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
     // Run pipeline
-    PipelineService pipeline;
+    auto& pipeline = PipelineService::Instance();
     pipeline.process(float_pixels.data(), width, height, channels, pipeline_params);
 
     // Return result
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -169,12 +188,17 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipeline(
     params.white_balance_tint = tint;
     params.sharpen = sharpen;
 
-    PipelineService pipeline;
+    auto& pipeline = PipelineService::Instance();
     pipeline.process(float_pixels.data(), width, height, 4, params);
 
     // Convert back to int
     jintArray result = env->NewIntArray(len);
-    jint *outPixels = new jint[len];
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create int array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    std::vector<jint> outPixels(len);
     for (int i = 0; i < len; ++i) {
         int idx = i * 4;
         int a = static_cast<int>(std::max(0.0f, std::min(1.0f, float_pixels[idx + 3])) * 255.0f);
@@ -183,8 +207,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipeline(
         int b = static_cast<int>(std::max(0.0f, std::min(1.0f, float_pixels[idx + 2])) * 255.0f);
         outPixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
     }
-    env->SetIntArrayRegion(result, 0, len, outPixels);
-    delete[] outPixels;
+    env->SetIntArrayRegion(result, 0, len, outPixels.data());
     return result;
 }
 
@@ -218,7 +241,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
     raw_params.highlight_reconstruction = highlightReconstruction;
     raw_params.demosaic_algorithm = 0; // RCD
 
-    PipelineService pipeline;
+    auto& pipeline = PipelineService::Instance();
     pipeline.decode_raw(
         reinterpret_cast<const uint16_t*>(raw),
         rawWidth, rawHeight,
@@ -228,6 +251,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
     env->ReleaseShortArrayElements(rawData, raw, JNI_ABORT);
 
     jfloatArray result = env->NewFloatArray(output_size);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for raw decode result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, output_size, output_rgb.data());
     return result;
 }
@@ -242,10 +270,17 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
         jboolean highlightReconstruction
 ) {
     const char *path = env->GetStringUTFChars(rawPath, nullptr);
+    if (!path) {
+        LOGE("Failed to get raw path string");
+        jintArray empty = env->NewIntArray(0);
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return empty ? empty : env->NewIntArray(0);
+    }
     LOGI("Decoding RAW: %s (demosaic=%d)", path, demosaic);
 
     // Integer array placeholder - real implementation would use LibRaw
     jintArray result = env->NewIntArray(0);
+    if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
 
     env->ReleaseStringUTFChars(rawPath, path);
     return result;
@@ -283,6 +318,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAcesTransf
     }
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for ACES transform result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -313,6 +353,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyOpenDRTTra
     }
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for OpenDRT transform result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -337,6 +382,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeConvertColorSpa
     color_science::convert_color_space_bulk(float_pixels.data(), width * height, 3, srcSpace, dstSpace);
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for color space conversion result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -373,6 +423,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyEOTF(
     }
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for EOTF result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -461,6 +516,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSrgbToOklab(
     float L, a, bb;
     color_science::linear_srgb_to_oklab(r, g, b, &L, &a, &bb);
     jfloatArray result = env->NewFloatArray(3);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for OKLab result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float vals[3] = {L, a, bb};
     env->SetFloatArrayRegion(result, 0, 3, vals);
     return result;
@@ -475,6 +535,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeOklabToSrgb(
     float r, g, b;
     color_science::oklab_to_linear_srgb(L, a, bb, &r, &g, &b);
     jfloatArray result = env->NewFloatArray(3);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for OKLab-to-sRGB result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float vals[3] = {r, g, b};
     env->SetFloatArrayRegion(result, 0, 3, vals);
     return result;
@@ -505,6 +570,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplySigmoidCon
     color_science::sigmoid_contrast_bulk(float_pixels.data(), width * height, 3, contrast, pivot, shoulder);
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for sigmoid contrast result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -557,6 +627,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAutoExposu
                                  targetPercentile, targetLuminance);
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for auto exposure result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -634,6 +709,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeRenderSnapshot(
     if (!it->second->render(output.data(), width, height)) return nullptr;
 
     jfloatArray result = env->NewFloatArray(total);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for snapshot render result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, total, output.data());
     return result;
 }
@@ -680,6 +760,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativePlanckianWhiteB
                                                  temperature, tint);
 
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for planckian WB result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -693,6 +778,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeGetPlanckianMul
     float r, g, b;
     color_science::planckian_locus_rgb(temperature, &r, &g, &b);
     jfloatArray result = env->NewFloatArray(3);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for planckian multipliers result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float vals[3] = {r, g, b};
     env->SetFloatArrayRegion(result, 0, 3, vals);
     return result;
@@ -739,6 +829,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
     }
 
     jfloatArray result = env->NewFloatArray(outputSize);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for AHD demosaic result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
     return result;
 }
@@ -779,6 +874,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
     }
 
     jfloatArray result = env->NewFloatArray(outputSize);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for AMAZE demosaic result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
     return result;
 }
@@ -791,6 +891,12 @@ JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_AlcedoNdkBridge_stringFromJNI(JNIEnv *env, jobject thiz) {
     std::string hello = "Alcedo Studio Core v2.0-android (NDK: ACES 2.0, OpenDRT, RCD)";
     return env->NewStringUTF(hello.c_str());
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeInitialize(JNIEnv* env, jobject thiz) {
+    alcedo::CrashHandler::Install();
+    LOGI("Native crash handler installed");
 }
 
 // ============================================================
@@ -847,21 +953,46 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReadRawInfo(
     jstring jmodel = env->NewStringUTF(info.model.c_str());
 
     jfloatArray camMatrix = env->NewFloatArray(9);
+    if (!camMatrix || env->ExceptionCheck()) {
+        LOGE("Failed to create camMatrix array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(camMatrix, 0, 9, info.color_matrix);
 
     jfloatArray dayWb = env->NewFloatArray(3);
+    if (!dayWb || env->ExceptionCheck()) {
+        LOGE("Failed to create dayWb array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float dayWbArr[3] = {info.daylight_mult[0], info.daylight_mult[1], info.daylight_mult[2]};
     env->SetFloatArrayRegion(dayWb, 0, 3, dayWbArr);
 
     jfloatArray tungWb = env->NewFloatArray(3);
+    if (!tungWb || env->ExceptionCheck()) {
+        LOGE("Failed to create tungWb array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float tungWbArr[3] = {info.tungsten_mult[0], info.tungsten_mult[1], info.tungsten_mult[2]};
     env->SetFloatArrayRegion(tungWb, 0, 3, tungWbArr);
 
     jfloatArray camWb = env->NewFloatArray(3);
+    if (!camWb || env->ExceptionCheck()) {
+        LOGE("Failed to create camWb array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float camWbArr[3] = {info.camera_wb_mult[0], info.camera_wb_mult[1], info.camera_wb_mult[2]};
     env->SetFloatArrayRegion(camWb, 0, 3, camWbArr);
 
     jintArray cfaPattern = env->NewIntArray(4);
+    if (!cfaPattern || env->ExceptionCheck()) {
+        LOGE("Failed to create cfaPattern array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     jint cfaArr[4] = {0, 1, 1, 2}; // RGGB default
     env->SetIntArrayRegion(cfaPattern, 0, 4, cfaArr);
 
@@ -876,6 +1007,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReadRawInfo(
         camMatrix, dayWb, tungWb, camWb, cfaPattern,
         info.bits_per_sample, jcomp,
         info.is_nikon_he ? JNI_TRUE : JNI_FALSE);
+    if (env->ExceptionCheck()) {
+        LOGE("Exception during NewObject for raw info result");
+        env->ExceptionDescribe(); env->ExceptionClear();
+        return nullptr;
+    }
 
     env->DeleteLocalRef(jfmt);
     env->DeleteLocalRef(jmake);
@@ -932,6 +1068,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jfloatArray jrgb = nullptr;
     if (!result.float_rgb_data.empty()) {
         jrgb = env->NewFloatArray(result.float_rgb_data.size());
+        if (!jrgb || env->ExceptionCheck()) {
+            LOGE("Failed to create float RGB array");
+            if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+            return nullptr;
+        }
         env->SetFloatArrayRegion(jrgb, 0, result.float_rgb_data.size(), result.float_rgb_data.data());
     }
 
@@ -939,6 +1080,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jshortArray jrgbShort = nullptr;
     if (!result.rgb_data.empty()) {
         jrgbShort = env->NewShortArray(result.rgb_data.size());
+        if (!jrgbShort || env->ExceptionCheck()) {
+            LOGE("Failed to create short RGB array");
+            if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+            return nullptr;
+        }
         env->SetShortArrayRegion(jrgbShort, 0, result.rgb_data.size(),
                                  reinterpret_cast<const jshort*>(result.rgb_data.data()));
     }
@@ -947,6 +1093,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jshortArray jcfa = nullptr;
     if (!result.raw_cfa_data.empty()) {
         jcfa = env->NewShortArray(result.raw_cfa_data.size());
+        if (!jcfa || env->ExceptionCheck()) {
+            LOGE("Failed to create CFA array");
+            if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+            return nullptr;
+        }
         env->SetShortArrayRegion(jcfa, 0, result.raw_cfa_data.size(),
                                  reinterpret_cast<const jshort*>(result.raw_cfa_data.data()));
     }
@@ -955,6 +1106,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jbyteArray jthumb = nullptr;
     if (!result.jpeg_thumbnail.empty()) {
         jthumb = env->NewByteArray(result.jpeg_thumbnail.size());
+        if (!jthumb || env->ExceptionCheck()) {
+            LOGE("Failed to create thumbnail byte array");
+            if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+            return nullptr;
+        }
         env->SetByteArrayRegion(jthumb, 0, result.jpeg_thumbnail.size(),
                                 reinterpret_cast<const jbyte*>(result.jpeg_thumbnail.data()));
     }
@@ -963,6 +1119,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jbyteArray jpreview = nullptr;
     if (!result.jpeg_preview.empty()) {
         jpreview = env->NewByteArray(result.jpeg_preview.size());
+        if (!jpreview || env->ExceptionCheck()) {
+            LOGE("Failed to create preview byte array");
+            if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+            return nullptr;
+        }
         env->SetByteArrayRegion(jpreview, 0, result.jpeg_preview.size(),
                                 reinterpret_cast<const jbyte*>(result.jpeg_preview.data()));
     }
@@ -976,17 +1137,42 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     jstring jmake = env->NewStringUTF(result.image_info.make.c_str());
     jstring jmodel = env->NewStringUTF(result.image_info.model.c_str());
     jfloatArray jcamMat = env->NewFloatArray(9);
+    if (!jcamMat || env->ExceptionCheck()) {
+        LOGE("Failed to create camMat array in decode raw");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(jcamMat, 0, 9, result.image_info.color_matrix);
     jfloatArray jdayWb = env->NewFloatArray(3);
+    if (!jdayWb || env->ExceptionCheck()) {
+        LOGE("Failed to create dayWb array in decode raw");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float dayWb[3] = {result.image_info.daylight_mult[0], result.image_info.daylight_mult[1], result.image_info.daylight_mult[2]};
     env->SetFloatArrayRegion(jdayWb, 0, 3, dayWb);
     jfloatArray jtungWb = env->NewFloatArray(3);
+    if (!jtungWb || env->ExceptionCheck()) {
+        LOGE("Failed to create tungWb array in decode raw");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float tungWb[3] = {result.image_info.tungsten_mult[0], result.image_info.tungsten_mult[1], result.image_info.tungsten_mult[2]};
     env->SetFloatArrayRegion(jtungWb, 0, 3, tungWb);
     jfloatArray jcamWb = env->NewFloatArray(3);
+    if (!jcamWb || env->ExceptionCheck()) {
+        LOGE("Failed to create camWb array in decode raw");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float camWb[3] = {result.image_info.camera_wb_mult[0], result.image_info.camera_wb_mult[1], result.image_info.camera_wb_mult[2]};
     env->SetFloatArrayRegion(jcamWb, 0, 3, camWb);
     jintArray jcfaPat = env->NewIntArray(4);
+    if (!jcfaPat || env->ExceptionCheck()) {
+        LOGE("Failed to create cfaPat array in decode raw");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     jint cfaPat[4] = {0, 1, 1, 2};
     env->SetIntArrayRegion(jcfaPat, 0, 4, cfaPat);
     jstring jcomp = env->NewStringUTF(result.image_info.compression_type.c_str());
@@ -999,6 +1185,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
         jcamMat, jdayWb, jtungWb, jcamWb, jcfaPat,
         result.image_info.bits_per_sample, jcomp,
         result.image_info.is_nikon_he ? JNI_TRUE : JNI_FALSE);
+    if (env->ExceptionCheck()) {
+        LOGE("Exception during NewObject for RawImageInfo in decode raw");
+        env->ExceptionDescribe(); env->ExceptionClear();
+        return nullptr;
+    }
 
     jobject jresult = env->NewObject(cls, ctor,
         jrgb, jrgbShort, jcfa,
@@ -1006,6 +1197,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
         jinfo,
         jthumb, result.thumbnail_width, result.thumbnail_height,
         jpreview, result.preview_width, result.preview_height);
+    if (env->ExceptionCheck()) {
+        LOGE("Exception during NewObject for decode result");
+        env->ExceptionDescribe(); env->ExceptionClear();
+        return nullptr;
+    }
 
     // Cleanup
     env->DeleteLocalRef(jrgb); env->DeleteLocalRef(jrgbShort); env->DeleteLocalRef(jcfa);
@@ -1043,6 +1239,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
     if (!ok || !result.success) return nullptr;
 
     jfloatArray jrgb = env->NewFloatArray(result.float_rgb_data.size());
+    if (!jrgb || env->ExceptionCheck()) {
+        LOGE("Failed to create float RGB array in decode from memory");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(jrgb, 0, result.float_rgb_data.size(), result.float_rgb_data.data());
 
     // Simplified return - just the float RGB data
@@ -1052,6 +1253,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
     jobject jresult = env->NewObject(cls, ctor,
         jrgb, nullptr, nullptr, result.width, result.height, nullptr,
         nullptr, 0, 0, nullptr, 0, 0);
+    if (env->ExceptionCheck()) {
+        LOGE("Exception during NewObject for decode from memory result");
+        env->ExceptionDescribe(); env->ExceptionClear();
+        return nullptr;
+    }
     env->DeleteLocalRef(jrgb);
     return jresult;
 }
@@ -1132,6 +1338,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractIccProfile(
     if (!ok || meta.icc_profile.raw_data.empty()) return nullptr;
 
     jbyteArray result = env->NewByteArray(meta.icc_profile.raw_data.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create ICC profile byte array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetByteArrayRegion(result, 0, meta.icc_profile.raw_data.size(),
                             reinterpret_cast<const jbyte*>(meta.icc_profile.raw_data.data()));
     return result;
@@ -1151,6 +1362,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractDngColor(
 
     // Return color_matrix1 + forward_matrix1 + as_shot_neutral (9+9+4 = 22 floats)
     jfloatArray result = env->NewFloatArray(22);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create DNG color float array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     float data[22];
     memcpy(data, meta.dng_color.color_matrix1, 9 * sizeof(float));
     memcpy(data + 9, meta.dng_color.forward_matrix1, 9 * sizeof(float));
@@ -1185,11 +1401,21 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnail(
     jmethodID ctor = env->GetMethodID(cls, "<init>", "([BIIZ)V");
 
     jbyteArray jdata = env->NewByteArray(result.data.size());
+    if (!jdata || env->ExceptionCheck()) {
+        LOGE("Failed to create thumbnail byte array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetByteArrayRegion(jdata, 0, result.data.size(),
                             reinterpret_cast<const jbyte*>(result.data.data()));
 
     jobject jresult = env->NewObject(cls, ctor, jdata, result.width, result.height,
                                       result.is_embedded ? JNI_TRUE : JNI_FALSE);
+    if (env->ExceptionCheck()) {
+        LOGE("Exception during NewObject for thumbnail result");
+        env->ExceptionDescribe(); env->ExceptionClear();
+        return nullptr;
+    }
     env->DeleteLocalRef(jdata);
     return jresult;
 }
@@ -1206,6 +1432,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnailFromRGB(
     env->ReleaseFloatArrayElements(rgbData, rgb, JNI_ABORT);
 
     jbyteArray jdata = env->NewByteArray(result.data.size());
+    if (!jdata || env->ExceptionCheck()) {
+        LOGE("Failed to create thumbnail from RGB byte array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetByteArrayRegion(jdata, 0, result.data.size(),
                             reinterpret_cast<const jbyte*>(result.data.data()));
     return jdata;
@@ -1226,6 +1457,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedThumbnail(
     if (!ok || jpeg.empty()) return nullptr;
 
     jbyteArray result = env->NewByteArray(jpeg.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create embedded thumbnail byte array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetByteArrayRegion(result, 0, jpeg.size(), reinterpret_cast<const jbyte*>(jpeg.data()));
     return result;
 }
@@ -1245,6 +1481,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedPreview(
     if (!ok || jpeg.empty()) return nullptr;
 
     jbyteArray result = env->NewByteArray(jpeg.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create embedded preview byte array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetByteArrayRegion(result, 0, jpeg.size(), reinterpret_cast<const jbyte*>(jpeg.data()));
     return result;
 }
@@ -1277,6 +1518,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDemosaic(
     env->ReleaseShortArrayElements(rawCfaData, raw, JNI_ABORT);
 
     jfloatArray result = env->NewFloatArray(outputSize);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create demosaic result float array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
     return result;
 }
@@ -1461,6 +1707,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyBlackOp(
     alcedo::BlackOperator op(blackPoint);
     op.Apply(float_pixels.data(), width, height, channels);
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create BlackOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -1478,6 +1729,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyWhiteOp(
     alcedo::WhiteOperator op(whitePoint);
     op.Apply(float_pixels.data(), width, height, channels);
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create WhiteOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -1495,6 +1751,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyShadowOp(
     alcedo::ShadowOperator op(shadowAmount);
     op.Apply(float_pixels.data(), width, height, channels);
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create ShadowOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -1512,6 +1773,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyHighlightO
     alcedo::HighlightOperator op(highlightAmount);
     op.Apply(float_pixels.data(), width, height, channels);
     jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create HighlightOp result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
     return result;
 }
@@ -1537,6 +1803,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyCrop(
     alcedo::CropRotateOperator::apply_crop(float_pixels.data(), width, height, channels,
                                            left, top, right, bottom, cropped.data());
     jfloatArray result = env->NewFloatArray(cropped.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create crop result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, cropped.size(), cropped.data());
     return result;
 }
@@ -1557,6 +1828,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyRotate(
     alcedo::CropRotateOperator::apply_rotate(float_pixels.data(), width, height, channels,
                                               angle, rotated.data());
     jfloatArray result = env->NewFloatArray(rotated.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create rotate result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, rotated.size(), rotated.data());
     return result;
 }
@@ -1578,6 +1854,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(
                                     method == 0 ? alcedo::ResizeMethod::NEAREST
                                                 : alcedo::ResizeMethod::BILINEAR);
     jfloatArray result = env->NewFloatArray(resized.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create resize result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     env->SetFloatArrayRegion(result, 0, resized.size(), resized.data());
     return result;
 }
@@ -1667,6 +1948,11 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
     auto ids = fs->ListFolderContent(cpath);
     env->ReleaseStringUTFChars(path, cpath);
     jintArray result = env->NewIntArray(ids.size());
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create list folder int array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
     std::vector<jint> jint_ids(ids.begin(), ids.end());
     env->SetIntArrayRegion(result, 0, ids.size(), jint_ids.data());
     return result;

@@ -351,44 +351,80 @@ class ExportService(private val context: Context) {
     }
 
     // ================================================================
+    // Atomic file write
+    // ================================================================
+
+    private fun atomicWrite(targetFile: File, writeAction: (File) -> Boolean): Boolean {
+        val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
+        try {
+            val success = writeAction(tempFile)
+            if (success) {
+                if (targetFile.exists()) targetFile.delete()
+                if (!tempFile.renameTo(targetFile)) {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                }
+                return true
+            } else {
+                tempFile.delete()
+                return false
+            }
+        } catch (e: Exception) {
+            tempFile.delete()
+            return false
+        }
+    }
+
+    // ================================================================
     // Format-specific writers
     // ================================================================
 
     private fun writeImage(bitmap: Bitmap, file: File, config: ExportConfig): Boolean {
         return try {
-            when (config.format) {
-                OutputFormat.JPEG -> writeJpeg(bitmap, file, config)
-                OutputFormat.PNG -> writePng(bitmap, file, config)
-                OutputFormat.TIFF -> writeTiff(bitmap, file, config)
-                OutputFormat.DNG -> writeDng(bitmap, file, config)
+            atomicWrite(file) { tempFile ->
+                when (config.format) {
+                    OutputFormat.JPEG -> writeJpeg(bitmap, tempFile, config)
+                    OutputFormat.PNG -> writePng(bitmap, tempFile, config)
+                    OutputFormat.TIFF -> writeTiff(bitmap, tempFile, config)
+                    OutputFormat.DNG -> writeDng(bitmap, tempFile, config)
+                }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             false
         }
     }
 
     private fun writeJpeg(bitmap: Bitmap, file: File, config: ExportConfig): Boolean {
-        return FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, config.quality.coerceIn(1, 100), out)
+        return try {
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, config.quality.coerceIn(1, 100), out)
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 
     private fun writePng(bitmap: Bitmap, file: File, config: ExportConfig): Boolean {
-        val outputBitmap = if (config.bitDepth == 16) {
-            bitmap.copy(Bitmap.Config.RGBA_F16, false) ?: bitmap
-        } else {
-            bitmap
+        return try {
+            val outputBitmap = if (config.bitDepth == 16) {
+                bitmap.copy(Bitmap.Config.RGBA_F16, false) ?: bitmap
+            } else {
+                bitmap
+            }
+            val result = FileOutputStream(file).use { out ->
+                outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            if (outputBitmap !== bitmap) outputBitmap.recycle()
+            result
+        } catch (e: Exception) {
+            false
         }
-        val result = FileOutputStream(file).use { out ->
-            outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        }
-        if (outputBitmap !== bitmap) outputBitmap.recycle()
-        return result
     }
 
     private fun writeTiff(bitmap: Bitmap, file: File, config: ExportConfig): Boolean {
-        val width = bitmap.width
-        val height = bitmap.height
+        return try {
+            val width = bitmap.width
+            val height = bitmap.height
         val is16bit = config.bitDepth == 16
         val bps = if (is16bit) 16 else 8
         val pixels = IntArray(width * height)
@@ -457,21 +493,28 @@ class ExportService(private val context: Context) {
         }
 
         FileOutputStream(file).use { it.write(bos.toByteArray()) }
-        return true
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun writeDng(bitmap: Bitmap, file: File, config: ExportConfig): Boolean {
-        // DNG export: wrap TIFF data with DNG-specific tags
-        // Simplified DNG writer - writes as TIFF with DNG version tag
-        val tiffSuccess = writeTiff(bitmap, file, config)
-        if (!tiffSuccess) return false
+        return try {
+            // DNG export: wrap TIFF data with DNG-specific tags
+            // Simplified DNG writer - writes as TIFF with DNG version tag
+            val tiffSuccess = writeTiff(bitmap, file, config)
+            if (!tiffSuccess) return false
 
-        // In a full implementation, we would add DNG-specific IFD tags:
-        // - DNGVersion (0xC612)
-        // - DNGBackwardVersion (0xC613)
-        // - UniqueCameraModel (0xC614)
-        // - ColorMatrix1 (0xC621)
-        return true
+            // In a full implementation, we would add DNG-specific IFD tags:
+            // - DNGVersion (0xC612)
+            // - DNGBackwardVersion (0xC613)
+            // - UniqueCameraModel (0xC614)
+            // - ColorMatrix1 (0xC621)
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     // ================================================================

@@ -2,6 +2,7 @@ package com.alcedo.studio.viewmodel
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -20,6 +21,10 @@ import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 class EditorViewModel(private val imageId: String) : ViewModel() {
+
+    companion object {
+        private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
+    }
     private val imageRepository = AppModule.imageRepository
     private val editHistoryRepository = AppModule.editHistoryRepository
     private val pipelineService = AppModule.pipelineService
@@ -129,15 +134,48 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // Image loading
     // ================================================================
 
+    private fun calculateSampleSize(width: Int, height: Int): Int {
+        var sampleSize = 1
+        while ((width / sampleSize) * (height / sampleSize) > MAX_BITMAP_PIXELS) {
+            sampleSize *= 2
+        }
+        return sampleSize
+    }
+
     private fun loadImage() {
         viewModelScope.launch {
             val id = imageId.toLongOrNull() ?: return@launch
             val img = imageRepository.getImage(id)
             _imageModel.value = img
             img?.let {
-                val bitmap = BitmapFactory.decodeFile(it.imagePath)
-                _originalBitmap.value = bitmap
-                _previewBitmap.value = bitmap
+                try {
+                    // First decode bounds only
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeFile(it.imagePath, options)
+
+                    // Calculate sample size for large images
+                    val sampleSize = calculateSampleSize(options.outWidth, options.outHeight)
+
+                    // Load with sampling
+                    val decodeOptions = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val bitmap = BitmapFactory.decodeFile(it.imagePath, decodeOptions)
+                    _originalBitmap.value = bitmap
+                    _previewBitmap.value = bitmap
+                } catch (e: OutOfMemoryError) {
+                    Log.e("EditorVM", "OOM loading image, attempting recovery", e)
+                    System.gc()
+                    _originalBitmap.value = null
+                    _previewBitmap.value = null
+                } catch (e: Exception) {
+                    Log.e("EditorVM", "Failed to load image", e)
+                    _originalBitmap.value = null
+                    _previewBitmap.value = null
+                }
                 _history.value = editHistoryRepository.getHistory(id.toUInt())
                     ?: EditHistory(boundImageId = id.toUInt())
                 _workingVersion.value = WorkingVersion(
@@ -775,9 +813,20 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
+    fun clearBitmaps() {
+        _originalBitmap.value?.recycle()
+        _previewBitmap.value?.recycle()
+        _originalBitmap.value = null
+        _previewBitmap.value = null
+    }
+
     override fun onCleared() {
         super.onCleared()
         releasePipelineSnapshot()
+        _originalBitmap.value?.recycle()
+        _previewBitmap.value?.recycle()
+        _originalBitmap.value = null
+        _previewBitmap.value = null
     }
 }
 

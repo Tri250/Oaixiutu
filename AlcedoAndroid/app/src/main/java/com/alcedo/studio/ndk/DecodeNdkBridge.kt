@@ -1,8 +1,21 @@
 package com.alcedo.studio.ndk
 
+import android.util.Log
+
 object DecodeNdkBridge {
+    private const val TAG = "DecodeNdkBridge"
+
+    var isAvailable = false
+        private set
+
     init {
-        System.loadLibrary("alcedo")
+        try {
+            System.loadLibrary("alcedo")
+            isAvailable = true
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Failed to load native library", e)
+            isAvailable = false
+        }
     }
 
     external fun nativeDecodeRaw(
@@ -21,11 +34,28 @@ object DecodeNdkBridge {
         bayerPattern: Int = 0, whiteLevel: Int = 16384, blackLevel: Int = 0,
         highlightReconstruction: Boolean = true, demosaicAlgorithm: Int = 0
     ): Boolean {
-        return nativeDecodeRaw(
-            rawData, rawWidth, rawHeight,
-            outputRgb, outputWidth, outputHeight,
-            bayerPattern, whiteLevel, blackLevel,
-            highlightReconstruction, demosaicAlgorithm
-        )
+        if (!isAvailable) return false
+        return NdkSafeCall.executeBoolean("decodeRaw") {
+            nativeDecodeRaw(
+                rawData, rawWidth, rawHeight,
+                outputRgb, outputWidth, outputHeight,
+                bayerPattern, whiteLevel, blackLevel,
+                highlightReconstruction, demosaicAlgorithm
+            )
+        }
+    }
+
+    fun extractMetadata(filePath: String): String? {
+        if (!isAvailable) return null
+        return NdkSafeCall.execute("extractMetadata") {
+            nativeExtractMetadata(filePath)
+        }
+    }
+
+    fun generateThumbnail(filePath: String, maxWidth: Int, maxHeight: Int): ByteArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.execute("generateThumbnail") {
+            nativeGenerateThumbnail(filePath, maxWidth, maxHeight)
+        }
     }
 }

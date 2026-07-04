@@ -33,6 +33,7 @@ private:
     bool createPbufferSurface();
     bool queryDeviceInfo();
     bool chooseConfig();
+    bool tryInitFallback(void* nativeWindow);
 
     EGLDisplay display_ = EGL_NO_DISPLAY;
     EGLContext context_ = EGL_NO_CONTEXT;

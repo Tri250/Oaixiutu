@@ -1,5 +1,6 @@
 package com.alcedo.studio.utils
 
+import android.util.Log
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -31,6 +32,9 @@ object ThreadPool {
         override fun newThread(r: Runnable): Thread {
             return Thread(r, "$prefix-${counter.incrementAndGet()}").apply {
                 isDaemon = true
+                setUncaughtExceptionHandler { thread, throwable ->
+                    Log.e("ThreadPool", "Uncaught exception in ${thread.name}", throwable)
+                }
             }
         }
     }

@@ -1,8 +1,21 @@
 package com.alcedo.studio.ndk
 
+import android.util.Log
+
 object AlcedoNdkBridge {
+    private const val TAG = "AlcedoNdkBridge"
+
+    var isAvailable = false
+        private set
+
     init {
-        System.loadLibrary("alcedo")
+        try {
+            System.loadLibrary("alcedo")
+            isAvailable = true
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Failed to load native library", e)
+            isAvailable = false
+        }
     }
 
     // Pipeline processing
@@ -90,29 +103,119 @@ object AlcedoNdkBridge {
         autoExposureTargetPercentile: Float = 0.5f,
         autoExposureTargetLuminance: Float = 0.18f
     ): Boolean {
-        return nativeProcessPipeline(
-            pixels, width, height, channels,
-            exposure, contrast, highlights, shadows, midtones,
-            shadowBoundary, highlightBoundary,
-            whiteBalanceTemp, whiteBalanceTint,
-            saturation, vibrance, clarity, clarityRadius,
-            sharpen, filmGrain, halationIntensity,
-            halationThreshold, halationSpread, halationRedBias,
-            sigmoidContrast,
-            toneCurveX.size, toneCurveX, toneCurveY,
-            tintHighlightHue, tintHighlightStrength,
-            tintShadowHue, tintShadowStrength, tintBalance,
-            colorWheelLift, colorWheelGamma, colorWheelGain,
-            hslHueRanges, hslHueWidth,
-            hslHueShift, hslSaturationScale, hslLuminanceScale,
-            channelMixerMatrix, channelMixerMonochrome,
-            lutEnabled, lutPath,
-            lensK1, lensK2, lensK3,
-            lensP1, lensP2, lensCx, lensCy, lensFocalRatio,
-            lensVignetteStrength,
-            displayTransformColorScience, displayTransformEotf,
-            displayTransformPeakLuminance, displayTransformDisplayColorSpace,
-            autoExposureEnabled, autoExposureTargetPercentile, autoExposureTargetLuminance
-        )
+        if (!isAvailable) return false
+        return NdkSafeCall.executeBoolean("processPipeline") {
+            nativeProcessPipeline(
+                pixels, width, height, channels,
+                exposure, contrast, highlights, shadows, midtones,
+                shadowBoundary, highlightBoundary,
+                whiteBalanceTemp, whiteBalanceTint,
+                saturation, vibrance, clarity, clarityRadius,
+                sharpen, filmGrain, halationIntensity,
+                halationThreshold, halationSpread, halationRedBias,
+                sigmoidContrast,
+                toneCurveX.size, toneCurveX, toneCurveY,
+                tintHighlightHue, tintHighlightStrength,
+                tintShadowHue, tintShadowStrength, tintBalance,
+                colorWheelLift, colorWheelGamma, colorWheelGain,
+                hslHueRanges, hslHueWidth,
+                hslHueShift, hslSaturationScale, hslLuminanceScale,
+                channelMixerMatrix, channelMixerMonochrome,
+                lutEnabled, lutPath,
+                lensK1, lensK2, lensK3,
+                lensP1, lensP2, lensCx, lensCy, lensFocalRatio,
+                lensVignetteStrength,
+                displayTransformColorScience, displayTransformEotf,
+                displayTransformPeakLuminance, displayTransformDisplayColorSpace,
+                autoExposureEnabled, autoExposureTargetPercentile, autoExposureTargetLuminance
+            )
+        }
+    }
+
+    fun getPipelineInfo(): String? {
+        if (!isAvailable) return null
+        return NdkSafeCall.execute("getPipelineInfo") {
+            nativeGetPipelineInfo()
+        }
+    }
+
+    fun setBackend(backend: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("setBackend") {
+            nativeSetBackend(backend)
+        }
+    }
+
+    fun setWorkingColorSpace(space: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("setWorkingColorSpace") {
+            nativeSetWorkingColorSpace(space)
+        }
+    }
+
+    fun enableStage(stage: Int, enable: Boolean) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("enableStage") {
+            nativeEnableStage(stage, enable)
+        }
+    }
+
+    fun convertColorSpace(pixels: FloatArray, count: Int, channels: Int, srcSpace: Int, dstSpace: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("convertColorSpace") {
+            nativeConvertColorSpace(pixels, count, channels, srcSpace, dstSpace)
+        }
+    }
+
+    fun acesRrt(pixels: FloatArray, count: Int, channels: Int, stride: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("acesRrt") {
+            nativeAcesRrt(pixels, count, channels, stride)
+        }
+    }
+
+    fun opendrtToneMap(pixels: FloatArray, count: Int, channels: Int, stride: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("opendrtToneMap") {
+            nativeOpendrtToneMap(pixels, count, channels, stride)
+        }
+    }
+
+    fun srgbEotf(r: FloatArray, g: FloatArray, b: FloatArray, count: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("srgbEotf") {
+            nativeSrgbEotf(r, g, b, count)
+        }
+    }
+
+    fun pqEotf(r: FloatArray, g: FloatArray, b: FloatArray, count: Int, peakLuminance: Float) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("pqEotf") {
+            nativePqEotf(r, g, b, count, peakLuminance)
+        }
+    }
+
+    fun hlgOetf(r: FloatArray, g: FloatArray, b: FloatArray, count: Int) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("hlgOetf") {
+            nativeHlgOetf(r, g, b, count)
+        }
+    }
+
+    fun sigmoidContrast(pixels: FloatArray, count: Int, channels: Int, amount: Float) {
+        if (!isAvailable) return
+        NdkSafeCall.execute("sigmoidContrast") {
+            nativeSigmoidContrast(pixels, count, channels, amount)
+        }
+    }
+
+    fun computeAutoExposure(
+        pixels: FloatArray, width: Int, height: Int, channels: Int,
+        targetPercentile: Float, targetLuminance: Float
+    ): Float {
+        if (!isAvailable) return 0f
+        return NdkSafeCall.executeFloat("computeAutoExposure") {
+            nativeComputeAutoExposure(pixels, width, height, channels, targetPercentile, targetLuminance)
+        }
     }
 }

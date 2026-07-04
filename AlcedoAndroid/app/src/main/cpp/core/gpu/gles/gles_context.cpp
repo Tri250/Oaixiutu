@@ -38,8 +38,8 @@ bool GlesContext::init(void* nativeWindow) {
 
     context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttribs);
     if (context_ == EGL_NO_CONTEXT) {
-        GPU_LOGE("Failed to create EGL context: 0x%x", eglGetError());
-        return false;
+        GPU_LOGE("Failed to create GLES 3.0 context: 0x%x, attempting fallback", eglGetError());
+        return tryInitFallback(nativeWindow);
     }
 
     if (nativeWindow) {
@@ -60,13 +60,20 @@ bool GlesContext::init(void* nativeWindow) {
 
     if (!eglMakeCurrent(display_, surface_, surface_, context_)) {
         GPU_LOGE("Failed to make EGL context current: 0x%x", eglGetError());
-        return false;
+        return tryInitFallback(nativeWindow);
+    }
+
+    // Check for GL errors after making context current
+    GLenum glErr = glGetError();
+    if (glErr != GL_NO_ERROR) {
+        GPU_LOGW("GL error after eglMakeCurrent: 0x%x, attempting fallback", glErr);
+        return tryInitFallback(nativeWindow);
     }
 
     // Query extensions
     const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
-    hasEglImage_ = (strstr(extensions, "GL_OES_EGL_image") != nullptr);
-    hasComputeShaders_ = (strstr(extensions, "GL_KHR_shader_subgroup") != nullptr);
+    hasEglImage_ = (extensions != nullptr && strstr(extensions, "GL_OES_EGL_image") != nullptr);
+    hasComputeShaders_ = (extensions != nullptr && strstr(extensions, "GL_KHR_shader_subgroup") != nullptr);
 
     // Check for compute shader support via GL version
     const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
@@ -210,6 +217,64 @@ bool GlesContext::queryDeviceInfo() {
              deviceInfo_.maxWorkGroupSize[2],
              deviceInfo_.supportsComputeShaders ? "YES" : "NO");
 
+    return true;
+}
+
+bool GlesContext::tryInitFallback(void* nativeWindow) {
+    // Clean up any partial state from the failed 3.0 attempt
+    if (surface_ != EGL_NO_SURFACE) {
+        eglDestroySurface(display_, surface_);
+        surface_ = EGL_NO_SURFACE;
+    }
+    if (context_ != EGL_NO_CONTEXT) {
+        eglDestroyContext(display_, context_);
+        context_ = EGL_NO_CONTEXT;
+    }
+
+    GPU_LOGI("Attempting GLES 2.0 fallback context");
+
+    const EGLint fallbackAttribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE
+    };
+
+    context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, fallbackAttribs);
+    if (context_ == EGL_NO_CONTEXT) {
+        GPU_LOGE("Failed to create GLES 2.0 fallback context: 0x%x", eglGetError());
+        return false;
+    }
+
+    // Recreate surface
+    if (nativeWindow) {
+        surface_ = eglCreateWindowSurface(display_, config_,
+                                          static_cast<EGLNativeWindowType>(nativeWindow),
+                                          nullptr);
+        if (surface_ == EGL_NO_SURFACE) {
+            GPU_LOGW("Fallback: failed to create window surface, trying pbuffer: 0x%x", eglGetError());
+            if (!createPbufferSurface()) {
+                return false;
+            }
+        }
+    } else {
+        if (!createPbufferSurface()) {
+            return false;
+        }
+    }
+
+    if (!eglMakeCurrent(display_, surface_, surface_, context_)) {
+        GPU_LOGE("Failed to make fallback EGL context current: 0x%x", eglGetError());
+        return false;
+    }
+
+    // Query extensions with null check
+    const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    hasEglImage_ = (extensions != nullptr && strstr(extensions, "GL_OES_EGL_image") != nullptr);
+    hasComputeShaders_ = false; // No compute shaders on GLES 2.0
+
+    queryDeviceInfo();
+
+    initialized_ = true;
+    GPU_LOGI("GLES 2.0 fallback context created: %s", deviceInfo_.renderer.c_str());
     return true;
 }
 

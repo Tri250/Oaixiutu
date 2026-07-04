@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include <map>
+#include <shared_mutex>
 
 namespace alcedo {
 
@@ -44,6 +45,7 @@ public:
 
 private:
     std::shared_ptr<SleeveBase> sleeve_base_;
+    std::shared_mutex rw_mutex_;
 };
 
 } // namespace alcedo

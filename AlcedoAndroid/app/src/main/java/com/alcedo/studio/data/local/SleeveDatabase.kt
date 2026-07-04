@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.data.dao.*
 
@@ -37,6 +38,13 @@ abstract class SleeveDatabase : RoomDatabase() {
                     "alcedo_sleeve.db"
                 )
                 .fallbackToDestructiveMigration()
+                .setJournalMode(JournalMode.AUTOMATIC)
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onOpen(db: SupportSQLiteDatabase) {
+                        super.onOpen(db)
+                        db.execSQL("PRAGMA journal_mode=WAL")
+                    }
+                })
                 .build()
                 INSTANCE = instance
                 instance

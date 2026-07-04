@@ -10,6 +10,29 @@ namespace alcedo {
 namespace color_science {
 
 // ============================================================
+// Safety utilities for NaN/Inf protection
+// ============================================================
+
+static inline float safe_div(float a, float b) {
+    if (std::fabs(b) < 1e-10f) return 0.0f;
+    float result = a / b;
+    if (!std::isfinite(result)) return 0.0f;
+    return result;
+}
+
+static inline float safe_pow(float base, float exp) {
+    if (base < 0.0f && exp != std::floor(exp)) return 0.0f;
+    float result = std::pow(base, exp);
+    if (!std::isfinite(result)) return 0.0f;
+    return result;
+}
+
+static inline float clamp01(float v) {
+    if (!std::isfinite(v)) return 0.0f;
+    return std::max(0.0f, std::min(1.0f, v));
+}
+
+// ============================================================
 // Utility functions
 // ============================================================
 

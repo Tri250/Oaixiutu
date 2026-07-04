@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <memory>
+#include <mutex>
 
 namespace alcedo {
 
@@ -263,6 +265,8 @@ enum class PipelineStage {
 
 class PipelineService {
 public:
+    static PipelineService& Instance();
+
     PipelineService();
     ~PipelineService();
 
@@ -277,6 +281,10 @@ public:
     // The pipeline processes in-place.
     bool process(float* pixels, int width, int height, int channels,
                  const PipelineParams& params);
+
+    // Process with GPU fallback to CPU on failure
+    bool process_with_gpu_fallback(float* pixels, int width, int height, int channels,
+                                   const PipelineParams& params);
 
     // Process with RAW input
     bool process_raw(const uint16_t* raw_data, int raw_width, int raw_height,
@@ -308,6 +316,9 @@ private:
     BufferBackend backend_ = BufferBackend::CPU;
     int working_color_space_ = 0; // sRGB linear
     bool stage_enabled_[15] = {true}; // All enabled by default
+
+    static std::once_flag init_flag_;
+    static std::unique_ptr<PipelineService> instance_;
 
     // Internal helpers
     void apply_auto_exposure(float* pixels, int width, int height, int channels, PipelineParams& params);
