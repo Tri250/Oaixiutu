@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.22.1)
+project("alcedo_core")
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Android NDK specifics
+find_library(android-log-lib log)
+find_library(android-lib android)
+find_library(egl-lib EGL)
+find_library(gles-lib GLESv3)
+
+# Core library
+add_library(
+    alcedo_core
+    SHARED
+    native-lib.cpp
+    core/sleeve/sleeve_element.cpp
+    core/sleeve/sleeve_file.cpp
+    core/sleeve/sleeve_folder.cpp
+    core/image/image_buffer.cpp
+    core/image/raw_decoder.cpp
+    core/edit/pipeline_service.cpp
+    core/edit/color_matrix.cpp
+    core/edit/operators/exposure_op.cpp
+    core/edit/operators/contrast_op.cpp
+    core/edit/operators/saturation_op.cpp
+    core/edit/operators/white_balance_op.cpp
+    core/edit/operators/tone_curve_op.cpp
+    core/edit/operators/sharpen_op.cpp
+    core/edit/operators/film_grain_op.cpp
+    core/utils/hash.cpp
+    core/utils/file_utils.cpp
+)
+
+target_include_directories(alcedo_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(alcedo_core
+    ${android-log-lib}
+    ${android-lib}
+    ${egl-lib}
+    ${gles-lib}
+)
+
+# Compiler flags for Android
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(alcedo_core PRIVATE -g -O0)
+else()
+    target_compile_options(alcedo_core PRIVATE -O3 -DNDEBUG)
+endif()
+
+target_compile_options(alcedo_core PRIVATE
+    -Wall
+    -Wextra
+    -fexceptions
+    -frtti
+)
