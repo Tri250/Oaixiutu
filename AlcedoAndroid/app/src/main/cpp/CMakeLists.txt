@@ -79,6 +79,12 @@ add_library(
     core/edit/operators/lmt_op.cpp
     core/edit/operators/cv_cvt_op.cpp
     core/edit/operators/raw_decode_op.cpp
+    core/edit/scope/scope_analyzer.cpp
+    core/ai/clip_inference.cpp
+    core/ai/embedding_utils.cpp
+    core/ai/hnsw_index.cpp
+    core/ai/ai_description.cpp
+    core/ai/ai_rating.cpp
     core/utils/hash.cpp
     core/utils/file_utils.cpp
     core/utils/id_generator.cpp

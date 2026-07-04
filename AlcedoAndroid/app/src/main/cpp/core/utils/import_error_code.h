@@ -1,0 +1,22 @@
+// Ported from AlcedoStudio desktop: utils/import/import_error_code.hpp
+// SPDX-License-Identifier: GPL-3.0-only
+
+#pragma once
+
+#include <cstdint>
+
+namespace alcedo {
+
+enum class ImportErrorCode : uint8_t {
+    UNKNOWN = 0,
+    FILE_NOT_FOUND,
+    UNSUPPORTED_FORMAT,
+    READ_FAILED,
+    METADATA_EXTRACTION_FAILED,
+    SLEEVE_CREATE_FAILED,
+    DB_WRITE_FAILED,
+    CANCELED,
+    UNSUPPORTED_NIKON_HE_RAW,
+};
+
+}  // namespace alcedo
