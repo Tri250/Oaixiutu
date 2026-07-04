@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -24,6 +26,10 @@ import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 
+enum class NavigationType {
+    BOTTOM_NAVIGATION, NAVIGATION_RAIL, PERMANENT_NAVIGATION_DRAWER
+}
+
 enum class MainDestination(
     val route: String,
     val labelKey: StringResources.() -> String,
@@ -34,23 +40,28 @@ enum class MainDestination(
     SETTINGS("settings", { navSettings }, { Icon(Icons.Default.Settings, contentDescription = stringRes { navSettings }) })
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun MainScreen(
     navController: NavHostController = androidx.navigation.compose.rememberNavController(),
+    windowSizeClass: WindowSizeClass,
     projectName: String = "Alcedo Studio"
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
+
+    val navigationType = when (windowSizeClass.widthSizeClass) {
+        WindowWidthSizeClass.Compact -> NavigationType.BOTTOM_NAVIGATION
+        WindowWidthSizeClass.Medium -> NavigationType.NAVIGATION_RAIL
+        else -> NavigationType.PERMANENT_NAVIGATION_DRAWER
+    }
 
     val bottomBarDestinations = MainDestination.entries
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar && !isTablet) {
+            if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
                 NavigationBar {
                     bottomBarDestinations.forEach { destination ->
                         val selected = currentRoute == destination.route
@@ -79,112 +90,135 @@ fun MainScreen(
                 }
             }
         }
-    } { padding ->
-        if (isTablet) {
-            // Tablet: NavigationRail layout
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                NavigationRail {
-                    Spacer(modifier = Modifier.weight(1f))
-                    bottomBarDestinations.forEach { destination ->
-                        val selected = currentRoute == destination.route
-                        NavigationRailItem(
-                            selected = selected,
-                            onClick = {
-                                if (currentRoute != destination.route) {
-                                    navController.navigate(destination.route) {
-                                        popUpTo(MainDestination.ALBUM.route) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            icon = destination.icon,
-                            label = {
-                                Text(
-                                    stringRes(destination.labelKey),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-
+    ) { padding ->
+        when (navigationType) {
+            NavigationType.BOTTOM_NAVIGATION -> {
                 NavHost(
                     navController = navController,
                     startDestination = MainDestination.ALBUM.route,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
                 ) {
-                    composable(MainDestination.ALBUM.route) {
-                        AlbumScreen(navController = navController)
+                    alcedoNavGraph(navController)
+                }
+            }
+            NavigationType.NAVIGATION_RAIL -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    NavigationRail {
+                        Spacer(modifier = Modifier.weight(1f))
+                        bottomBarDestinations.forEach { destination ->
+                            val selected = currentRoute == destination.route
+                            NavigationRailItem(
+                                selected = selected,
+                                onClick = {
+                                    if (currentRoute != destination.route) {
+                                        navController.navigate(destination.route) {
+                                            popUpTo(MainDestination.ALBUM.route) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                },
+                                icon = destination.icon,
+                                label = {
+                                    Text(
+                                        stringRes(destination.labelKey),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                     }
-                    composable(MainDestination.AI_SEARCH.route) {
-                        AiSearchScreen(navController = navController)
-                    }
-                    composable(MainDestination.SETTINGS.route) {
-                        SettingsScreen(navController = navController)
-                    }
-                    composable("editor/{imageId}") { backStackEntry ->
-                        val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                        EditorScreen(navController = navController, imageId = imageId)
-                    }
-                    composable("export/{imageId}") { backStackEntry ->
-                        val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                        ExportScreen(navController = navController, imageId = imageId)
-                    }
-                    composable("ai_models") {
-                        AiModelManagerScreen(navController = navController)
-                    }
-                    composable("about") {
-                        AboutPage(navController = navController)
-                    }
-                    composable("stats") {
-                        StatsView(navController = navController)
+
+                    NavHost(
+                        navController = navController,
+                        startDestination = MainDestination.ALBUM.route,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        alcedoNavGraph(navController)
                     }
                 }
             }
-        } else {
-            // Phone: BottomNavigation layout
-            NavHost(
-                navController = navController,
-                startDestination = MainDestination.ALBUM.route,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                composable(MainDestination.ALBUM.route) {
-                    AlbumScreen(navController = navController)
-                }
-                composable(MainDestination.AI_SEARCH.route) {
-                    AiSearchScreen(navController = navController)
-                }
-                composable(MainDestination.SETTINGS.route) {
-                    SettingsScreen(navController = navController)
-                }
-                composable("editor/{imageId}") { backStackEntry ->
-                    val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                    EditorScreen(navController = navController, imageId = imageId)
-                }
-                composable("export/{imageId}") { backStackEntry ->
-                    val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                    ExportScreen(navController = navController, imageId = imageId)
-                }
-                composable("ai_models") {
-                    AiModelManagerScreen(navController = navController)
-                }
-                composable("about") {
-                    AboutPage(navController = navController)
-                }
-                composable("stats") {
-                    StatsView(navController = navController)
+            NavigationType.PERMANENT_NAVIGATION_DRAWER -> {
+                PermanentNavigationDrawer(
+                    drawerContent = {
+                        PermanentDrawerSheet(
+                            modifier = Modifier.width(240.dp)
+                        ) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            bottomBarDestinations.forEach { destination ->
+                                val selected = currentRoute == destination.route
+                                NavigationDrawerItem(
+                                    selected = selected,
+                                    onClick = {
+                                        if (currentRoute != destination.route) {
+                                            navController.navigate(destination.route) {
+                                                popUpTo(MainDestination.ALBUM.route) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    },
+                                    icon = destination.icon,
+                                    label = {
+                                        Text(stringRes(destination.labelKey))
+                                    },
+                                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = MainDestination.ALBUM.route,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
+                        alcedoNavGraph(navController)
+                    }
                 }
             }
         }
+    }
+}
+
+private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
+    composable(MainDestination.ALBUM.route) {
+        AlbumScreen(navController = navController)
+    }
+    composable(MainDestination.AI_SEARCH.route) {
+        AiSearchScreen(navController = navController)
+    }
+    composable(MainDestination.SETTINGS.route) {
+        SettingsScreen(navController = navController)
+    }
+    composable("editor/{imageId}") { backStackEntry ->
+        val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
+        EditorScreen(navController = navController, imageId = imageId)
+    }
+    composable("export/{imageId}") { backStackEntry ->
+        val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
+        ExportScreen(navController = navController, imageId = imageId)
+    }
+    composable("ai_models") {
+        AiModelManagerScreen(navController = navController)
+    }
+    composable("about") {
+        AboutPage(navController = navController)
+    }
+    composable("stats") {
+        StatsView(navController = navController)
     }
 }

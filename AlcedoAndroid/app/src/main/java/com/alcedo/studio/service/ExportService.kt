@@ -5,10 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.storage.MediaStoreHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -565,9 +567,33 @@ class ExportService(private val context: Context) {
     // Output file management
     // ================================================================
 
+    private fun saveExportedFile(
+        context: Context,
+        fileName: String,
+        mimeType: String,
+        data: ByteArray
+    ): Uri? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Use MediaStore on Android 10+
+            MediaStoreHelper.saveImage(context, fileName, mimeType) { outputStream ->
+                outputStream.write(data)
+                true
+            }
+        } else {
+            // Legacy: write directly to external storage
+            val dir = MediaStoreHelper.getExportDirectory(context)
+            val file = File(dir, fileName)
+            file.writeBytes(data)
+            Uri.fromFile(file)
+        }
+    }
+
     private fun createOutputFile(config: ExportConfig): File {
         val outputDir = if (config.outputPath.isNotEmpty()) {
             File(config.outputPath)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Use app-specific external directory on Android 10+ (no permission needed)
+            File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "AlcedoStudio")
         } else {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
                 .resolve("AlcedoStudio")

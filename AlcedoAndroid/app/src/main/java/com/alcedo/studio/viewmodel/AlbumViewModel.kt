@@ -1,7 +1,9 @@
 package com.alcedo.studio.viewmodel
 
+import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -10,6 +12,10 @@ import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.ndk.AiNdkBridge
+import com.alcedo.studio.permission.PermissionHelper
+import com.alcedo.studio.storage.MediaStoreHelper
+import com.alcedo.studio.storage.PhotoPickerHelper
+import com.alcedo.studio.storage.SafHelper
 import com.alcedo.studio.ui.album.FilterState
 import com.alcedo.studio.ui.album.SortMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,10 +110,125 @@ class AlbumViewModel : ViewModel() {
     private val _totalSize = MutableStateFlow(0L)
     val totalSize: StateFlow<Long> = _totalSize
 
+    // ── Permission state ──
+
+    private val _hasMediaPermission = MutableStateFlow(false)
+    val hasMediaPermission: StateFlow<Boolean> = _hasMediaPermission
+
+    private val _hasWritePermission = MutableStateFlow(false)
+    val hasWritePermission: StateFlow<Boolean> = _hasWritePermission
+
+    private val _permissionRationale = MutableStateFlow<String?>(null)
+    val permissionRationale: StateFlow<String?> = _permissionRationale
+
     init {
+        checkPermissions()
         loadImages()
         loadFolders()
         loadCollections()
+    }
+
+    // ================================================================
+    // Permission handling
+    // ================================================================
+
+    fun checkPermissions() {
+        val appContext = AppModule.applicationContext
+        _hasMediaPermission.value = PermissionHelper.hasReadMediaAccess(appContext)
+        _hasWritePermission.value = PermissionHelper.hasWriteAccess(appContext)
+    }
+
+    fun onPermissionResult(results: Map<String, Boolean>) {
+        checkPermissions()
+        val allGranted = results.values.all { it }
+        if (allGranted) {
+            _permissionRationale.value = null
+            loadImages()
+        } else {
+            val denied = results.filterValues { !it }.keys
+            _permissionRationale.value = "Permission denied: ${denied.joinToString()}"
+        }
+    }
+
+    // ================================================================
+    // MediaStore-based image loading (Scoped Storage)
+    // ================================================================
+
+    fun loadImagesFromMediaStore() {
+        viewModelScope.launch {
+            if (!_hasMediaPermission.value) return@launch
+            _isLoading.value = true
+            try {
+                val mediaImages = MediaStoreHelper.queryImages(
+                    context = AppModule.applicationContext,
+                    limit = 500
+                )
+                // Convert MediaStore results to ImageModel via import service
+                for (media in mediaImages) {
+                    importService.importImage(media.contentUri)
+                }
+                loadImages()
+            } catch (_: Exception) {
+                // Fallback to existing repository-based loading
+                loadImages()
+            }
+            _isLoading.value = false
+        }
+    }
+
+    // ================================================================
+    // SAF directory import (Android 10+)
+    // ================================================================
+
+    fun importFromSafDirectory(treeUri: Uri) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val files = SafHelper.listDirectory(AppModule.applicationContext, treeUri)
+                val imageFiles = files.filter { !it.isDirectory }
+                for (file in imageFiles) {
+                    importService.importImage(file.uri)
+                }
+                loadImages()
+                loadFolders()
+            } catch (_: Exception) {
+                // SAF import failure
+            }
+            _isLoading.value = false
+        }
+    }
+
+    // ================================================================
+    // Photo Picker import
+    // ================================================================
+
+    fun importFromPhotoPicker(uris: List<Uri>) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            for (uri in uris) {
+                importService.importImage(uri)
+            }
+            loadImages()
+            loadFolders()
+            _isLoading.value = false
+        }
+    }
+
+    // ================================================================
+    // Scoped Storage-aware directory import
+    // ================================================================
+
+    fun importDirectoryScoped(path: String? = null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // On Android 10+, use SAF instead of direct file path
+            _permissionRationale.value = "Please select a directory using the system picker"
+            // The UI should launch SAF picker and call importFromSafDirectory() with the result
+        } else {
+            // Legacy: direct file path access
+            if (path != null) {
+                importDirectory(path)
+            }
+        }
     }
 
     // ================================================================

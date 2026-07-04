@@ -29,6 +29,8 @@ public:
     EGLSurface getSurface() const { return surface_; }
     EGLConfig getConfig() const { return config_; }
 
+    bool supportsCompute() const { return hasComputeShaders_; }
+
 private:
     bool createPbufferSurface();
     bool queryDeviceInfo();

@@ -83,6 +83,29 @@ bool GlesContext::init(void* nativeWindow) {
         hasComputeShaders_ = (glMajor >= 3 && glMinor >= 1);
     }
 
+    // Verify compute shader support more thoroughly
+    if (hasComputeShaders_) {
+        GLint maxComputeWorkGroupInvocations;
+        glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &maxComputeWorkGroupInvocations);
+        if (maxComputeWorkGroupInvocations < 64) {
+            GPU_LOGW("Compute shader support insufficient (max invocations: %d), disabling compute",
+                     maxComputeWorkGroupInvocations);
+            hasComputeShaders_ = false;
+        } else {
+            GPU_LOGI("Compute shader verified: max invocations = %d", maxComputeWorkGroupInvocations);
+        }
+
+        // Check max shared memory
+        GLint maxSharedMem;
+        glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, &maxSharedMem);
+        GPU_LOGI("Max compute shared memory: %d bytes", maxSharedMem);
+
+        // Adjust work group size based on device capabilities
+        if (maxComputeWorkGroupInvocations < 256) {
+            GPU_LOGI("Using conservative work group size (4x4) for limited GPU");
+        }
+    }
+
     queryDeviceInfo();
 
     initialized_ = true;

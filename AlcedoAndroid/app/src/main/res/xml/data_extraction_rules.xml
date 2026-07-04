@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="sharedpref" path="."/>
+        <include domain="sharedpref" path="alcedo_"/>
+        <exclude domain="sharedpref" path="alcedo_language_prefs.xml"/>
         <exclude domain="database" path="alcedo_sleeve.db"/>
+        <exclude domain="file" path="crash_reports/"/>
         <exclude domain="file" path="thumbnails/"/>
     </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="alcedo_"/>
+        <exclude domain="database" path="alcedo_sleeve.db"/>
+        <exclude domain="file" path="crash_reports/"/>
+        <exclude domain="file" path="thumbnails/"/>
+    </device-transfer>
 </data-extraction-rules>

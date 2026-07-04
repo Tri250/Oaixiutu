@@ -3,8 +3,10 @@ package com.alcedo.studio.domain.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -364,6 +366,25 @@ class BackgroundTaskService(private val context: Context) {
         val notificationId = getNotificationId(task.taskId)
         val notification = buildNotification(task, task.progress)
         notificationManager.notify(notificationId, notification)
+    }
+
+    /**
+     * Start a foreground service notification with Android 14+ compliance.
+     * Call this from an Android Service subclass when running as a foreground service.
+     */
+    fun startForegroundNotification(service: Service, task: BackgroundTask) {
+        val notification = buildNotification(task, task.progress)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Must specify foreground service type
+            service.startForeground(
+                NOTIFICATION_ID_BASE,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            service.startForeground(NOTIFICATION_ID_BASE, notification)
+        }
     }
 
     private fun updateNotification(task: BackgroundTask) {
