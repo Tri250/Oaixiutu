@@ -25,11 +25,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     companion object {
         private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
     }
-    private val imageRepository = AppModule.imageRepository
-    private val editHistoryRepository = AppModule.editHistoryRepository
-    private val pipelineService = AppModule.pipelineService
-    private val exportService = AppModule.exportService
-    private val thumbnailService = AppModule.thumbnailService
+    private val imageRepository by lazy { AppModule.imageRepository }
+    private val editHistoryRepository by lazy { AppModule.editHistoryRepository }
+    private val pipelineService by lazy { AppModule.pipelineService }
+    private val exportService by lazy { AppModule.exportService }
+    private val thumbnailService by lazy { AppModule.thumbnailService }
 
     // ── Image state ──
 

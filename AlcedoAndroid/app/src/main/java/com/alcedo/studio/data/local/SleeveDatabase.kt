@@ -12,7 +12,9 @@ import com.alcedo.studio.data.model.*
 import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.dao.AiEmbeddingDao
+import android.util.Log
 import net.sqlcipher.database.SupportFactory
+import java.io.File
 import java.security.SecureRandom
 
 @Database(
@@ -45,7 +47,7 @@ import java.security.SecureRandom
         PipelinePresetEntity::class,
         AiEmbeddingEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SleeveDatabase : RoomDatabase() {
@@ -74,31 +76,77 @@ abstract class SleeveDatabase : RoomDatabase() {
     abstract fun aiEmbeddingDao(): AiEmbeddingDao
 
     companion object {
+        private const val TAG = "SleeveDatabase"
+
         @Volatile
         private var INSTANCE: SleeveDatabase? = null
 
         fun getInstance(context: Context): SleeveDatabase {
             return INSTANCE ?: synchronized(this) {
-                val passphrase = getOrCreatePassphrase(context)
-                val factory = SupportFactory(passphrase)
+                val appContext = context.applicationContext
+                try {
+                    val passphrase = getOrCreatePassphrase(appContext)
+                    val factory = SupportFactory(passphrase)
+                    val instance = Room.databaseBuilder(
+                        appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
+                    )
+                    .openHelperFactory(factory)
+                    .fallbackToDestructiveMigration()
+                    .setJournalMode(JournalMode.AUTOMATIC)
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            db.execSQL("PRAGMA journal_mode=WAL")
+                        }
+                    })
+                    .build()
+                    INSTANCE = instance
+                    instance
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to open database, attempting recovery", e)
+                    deleteDatabaseFiles(appContext)
+                    resetPassphrase(appContext)
+                    val newPassphrase = getOrCreatePassphrase(appContext)
+                    val newFactory = SupportFactory(newPassphrase)
+                    val instance = Room.databaseBuilder(
+                        appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
+                    )
+                    .openHelperFactory(newFactory)
+                    .fallbackToDestructiveMigration()
+                    .setJournalMode(JournalMode.AUTOMATIC)
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            db.execSQL("PRAGMA journal_mode=WAL")
+                        }
+                    })
+                    .build()
+                    INSTANCE = instance
+                    instance
+                }
+            }
+        }
 
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    SleeveDatabase::class.java,
-                    "alcedo_sleeve.db"
+        private fun deleteDatabaseFiles(context: Context) {
+            val dbFile = context.getDatabasePath("alcedo_sleeve.db")
+            listOf(dbFile, File(dbFile.path + "-wal"), File(dbFile.path + "-shm")).forEach {
+                if (it.exists()) it.delete()
+            }
+        }
+
+        private fun resetPassphrase(context: Context) {
+            try {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                val securePrefs = EncryptedSharedPreferences.create(
+                    context, "alcedo_secure", masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                 )
-                .openHelperFactory(factory)
-                .fallbackToDestructiveMigration()
-                .setJournalMode(JournalMode.AUTOMATIC)
-                .addCallback(object : RoomDatabase.Callback() {
-                    override fun onOpen(db: SupportSQLiteDatabase) {
-                        super.onOpen(db)
-                        db.execSQL("PRAGMA journal_mode=WAL")
-                    }
-                })
-                .build()
-                INSTANCE = instance
-                instance
+                securePrefs.edit().remove("db_passphrase").apply()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to reset passphrase in encrypted prefs", e)
             }
         }
 
@@ -118,9 +166,18 @@ abstract class SleeveDatabase : RoomDatabase() {
             val existingKey = securePrefs.getString("db_passphrase", null)
 
             if (existingKey != null) {
-                return Base64.decode(existingKey, Base64.NO_WRAP)
+                return try {
+                    Base64.decode(existingKey, Base64.NO_WRAP)
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "Failed to decode existing passphrase, generating new one", e)
+                    generateAndSavePassphrase(securePrefs)
+                }
             }
 
+            return generateAndSavePassphrase(securePrefs)
+        }
+
+        private fun generateAndSavePassphrase(securePrefs: android.content.SharedPreferences): ByteArray {
             val key = ByteArray(32)
             SecureRandom().nextBytes(key)
             securePrefs.edit()

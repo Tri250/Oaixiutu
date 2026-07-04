@@ -24,12 +24,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AlbumViewModel : ViewModel() {
-    private val sleeveRepository = AppModule.sleeveRepository
-    private val imageRepository = AppModule.imageRepository
-    private val importService = AppModule.importService
-    private val thumbnailService = AppModule.thumbnailService
-    private val searchService = AppModule.searchService
-    private val aiService = AppModule.aiService
+    private val sleeveRepository by lazy { AppModule.sleeveRepository }
+    private val imageRepository by lazy { AppModule.imageRepository }
+    private val importService by lazy { AppModule.importService }
+    private val thumbnailService by lazy { AppModule.thumbnailService }
+    private val searchService by lazy { AppModule.searchService }
+    private val aiService by lazy { AppModule.aiService }
 
     // ── Image list state ──
 

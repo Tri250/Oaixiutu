@@ -19,9 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ExportViewModel : ViewModel() {
-    private val exportService = AppModule.exportService
-    private val pipelineService = AppModule.pipelineService
-    private val imageRepository = AppModule.imageRepository
+    private val exportService by lazy { AppModule.exportService }
+    private val pipelineService by lazy { AppModule.pipelineService }
+    private val imageRepository by lazy { AppModule.imageRepository }
 
     // ── Export settings state ──
 

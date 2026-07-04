@@ -14,8 +14,8 @@ android {
         applicationId = "com.alcedo.studio"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.6-android"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

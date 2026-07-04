@@ -252,8 +252,21 @@ class NativePipelineBridge {
     ): FloatArray
 
     companion object {
+        private var libraryLoaded = false
+
+        fun ensureLibraryLoaded() {
+            if (!libraryLoaded) {
+                try {
+                    System.loadLibrary("alcedo")
+                    libraryLoaded = true
+                } catch (e: UnsatisfiedLinkError) {
+                    android.util.Log.e("NativePipelineBridge", "Failed to load native library", e)
+                }
+            }
+        }
+
         init {
-            System.loadLibrary("alcedo")
+            ensureLibraryLoaded()
         }
     }
 }
