@@ -1,5 +1,7 @@
 #include "clip_inference.h"
+#ifdef HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
+#endif
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -26,6 +28,7 @@ bool ClipInference::loadModel() {
         return false;
     }
 
+#ifdef HAS_ONNXRUNTIME
     try {
         // Create ORT environment (one per process; safe to recreate on reload)
         env_ = Ort::Env{ORT_LOGGING_LEVEL_WARNING, "AlcedoClip"};
@@ -57,13 +60,19 @@ bool ClipInference::loadModel() {
         loaded_ = false;
         return false;
     }
+#else
+    // ONNX Runtime C++ API not available; inference is handled by the Kotlin layer
+    return false;
+#endif
 }
 
 void ClipInference::unloadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
+#ifdef HAS_ONNXRUNTIME
     session_.reset();
     sessionOptions_ = Ort::SessionOptions{};
     env_ = Ort::Env{nullptr};
+#endif
     loaded_ = false;
 }
 
@@ -190,6 +199,7 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 
 // ── Inference ──
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
+#ifdef HAS_ONNXRUNTIME
     if (!session_) {
         throw std::runtime_error("ONNX Runtime session is not initialized");
     }
@@ -265,6 +275,11 @@ std::vector<float> ClipInference::runInference(const std::vector<float>& input, 
     normalize(output);
 
     return output;
+#else
+    (void)input;
+    (void)inputName;
+    throw std::runtime_error("ONNX Runtime C++ API not available; inference is handled by the Kotlin layer");
+#endif
 }
 
 ClipInferenceResult ClipInference::encodeImage(const uint8_t* rgbData, int width, int height) {

@@ -116,6 +116,220 @@ data class AiEmbeddingEntity(
     val createdTime: Long
 )
 
+@Entity(
+    tableName = "sleeve_files",
+    indices = [
+        Index(value = ["path"], unique = true),
+        Index(value = ["fileHash"]),
+        Index(value = ["mimeType"])
+    ]
+)
+data class FileEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val path: String,
+    val size: Long,
+    val mimeType: String,
+    val fileHash: String = ""
+)
+
+@Entity(
+    tableName = "sleeve_folders",
+    indices = [
+        Index(value = ["parentId"]),
+        Index(value = ["folderName"])
+    ]
+)
+data class FolderEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val parentId: Long,
+    val folderName: String,
+    val sortOrder: Int = 0
+)
+
+@Entity(
+    tableName = "image_metadata",
+    indices = [
+        Index(value = ["imageId"], unique = true),
+        Index(value = ["cameraMake"]),
+        Index(value = ["cameraModel"]),
+        Index(value = ["lensModel"])
+    ]
+)
+data class ImageMetadataEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val cameraMake: String = "",
+    val cameraModel: String = "",
+    val lensModel: String = "",
+    val focalLength: Double = 0.0,
+    val aperture: Double = 0.0,
+    val exposureTime: Double = 0.0,
+    val iso: Int = 0,
+    val whiteBalance: Int = 0,
+    val flashFired: Boolean = false,
+    val gpsLatitude: Double = 0.0,
+    val gpsLongitude: Double = 0.0,
+    val gpsAltitude: Double = 0.0,
+    val orientation: Int = 0,
+    val dateTaken: Long = 0,
+    val software: String = "",
+    val exifJson: String = "{}"
+)
+
+@Entity(
+    tableName = "ratings",
+    indices = [
+        Index(value = ["imageId"], unique = true),
+        Index(value = ["rating"]),
+        Index(value = ["ratingSource"])
+    ]
+)
+data class RatingEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val rating: Int = 0,
+    val ratingSource: String = "user"
+)
+
+@Entity(
+    tableName = "semantic_labels",
+    indices = [
+        Index(value = ["imageId"]),
+        Index(value = ["label"]),
+        Index(value = ["source"]),
+        Index(value = ["confidence"])
+    ]
+)
+data class SemanticLabelEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val label: String,
+    val confidence: Float = 0.0f,
+    val source: String = "ai"
+)
+
+@Entity(
+    tableName = "collections",
+    indices = [
+        Index(value = ["name"], unique = true),
+        Index(value = ["sortOrder"])
+    ]
+)
+data class CollectionEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val name: String,
+    val coverImageId: Long = 0,
+    val sortOrder: Int = 0
+)
+
+@Entity(
+    tableName = "filters",
+    indices = [
+        Index(value = ["category"]),
+        Index(value = ["name"])
+    ]
+)
+data class FilterEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val name: String,
+    val category: String = "",
+    val paramsJson: String = "{}"
+)
+
+@Entity(
+    tableName = "pipeline_state",
+    indices = [
+        Index(value = ["imageId"], unique = true),
+        Index(value = ["createdTime"])
+    ]
+)
+data class PipelineEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val paramsJson: String = "{}",
+    val createdTime: Long
+)
+
+@Entity(
+    tableName = "filters_v2",
+    indices = [
+        Index(value = ["category"]),
+        Index(value = ["name"]),
+        Index(value = ["previewPath"])
+    ]
+)
+data class FilterV2Entity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val name: String,
+    val category: String = "",
+    val paramsJson: String = "{}",
+    val previewPath: String = ""
+)
+
+@Entity(
+    tableName = "ai_descriptions",
+    indices = [
+        Index(value = ["imageId"], unique = true),
+        Index(value = ["model"])
+    ]
+)
+data class AiDescriptionEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val descriptionText: String = "",
+    val model: String = ""
+)
+
+@Entity(
+    tableName = "ai_ratings",
+    indices = [
+        Index(value = ["imageId"], unique = true),
+        Index(value = ["qualityScore"]),
+        Index(value = ["aestheticScore"])
+    ]
+)
+data class AiRatingEntity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val qualityScore: Float = 0.0f,
+    val aestheticScore: Float = 0.0f,
+    val technicalScore: Float = 0.0f
+)
+
+@Entity(
+    tableName = "semantic_labels_v2",
+    indices = [
+        Index(value = ["imageId"]),
+        Index(value = ["label"]),
+        Index(value = ["category"]),
+        Index(value = ["source"]),
+        Index(value = ["confidence"])
+    ]
+)
+data class SemanticLabelV2Entity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val imageId: Long,
+    val label: String,
+    val confidence: Float = 0.0f,
+    val category: String = "",
+    val source: String = "ai"
+)
+
+@Entity(
+    tableName = "collections_v2",
+    indices = [
+        Index(value = ["name"], unique = true),
+        Index(value = ["isSmart"])
+    ]
+)
+data class CollectionV2Entity(
+    @PrimaryKey autoGenerate = true val id: Long = 0,
+    val name: String,
+    val query: String = "",
+    val isSmart: Boolean = false,
+    val coverImageId: Long = 0
+)
+
 // --- Utility functions ---
 
 fun generateHash128(): String {

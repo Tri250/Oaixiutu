@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp") version "2.0.0-1.0.22"
     id("com.google.dagger.hilt.android")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -49,6 +51,14 @@ android {
             storePassword = keystorePassword ?: System.getenv("ALCEDO_KEYSTORE_PASSWORD")
             this.keyAlias = keyAlias ?: System.getenv("ALCEDO_KEY_ALIAS")
             keyPassword = keyPassword ?: System.getenv("ALCEDO_KEY_PASSWORD")
+
+            // Fallback to debug signing if release keys not configured
+            if (storeFile == null || !storeFile!!.exists()) {
+                storeFile = signingConfigs.getByName("debug").storeFile
+                storePassword = signingConfigs.getByName("debug").storePassword
+                keyAlias = signingConfigs.getByName("debug").keyAlias
+                keyPassword = signingConfigs.getByName("debug").keyPassword
+            }
         }
     }
 
@@ -100,6 +110,9 @@ android {
 
             // Production certificate pins — set these to actual base64 SHA-256 hashes
             // before release. Backup pins enable rotation without an app update.
+            // TODO: Replace empty certificate pin hashes with actual SHA-256 pin hashes
+            // before production release. Empty strings effectively disable certificate
+            // pinning, leaving the app vulnerable to MITM attacks.
             buildConfigField("String", "CERT_PIN_OPENAI_PRIMARY", "\"\"")
             buildConfigField("String", "CERT_PIN_OPENAI_BACKUP", "\"\"")
             buildConfigField("String", "CERT_PIN_ANTHROPIC_PRIMARY", "\"\"")
@@ -153,6 +166,10 @@ android {
     // ── R8 Full Mode Configuration ────────────────────────────────
     // Enable R8 full mode for aggressive optimization
     // (enabled by default when isMinifyEnabled = true)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

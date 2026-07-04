@@ -6,7 +6,9 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#ifdef HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
+#endif
 
 namespace alcedo::ai {
 
@@ -95,10 +97,12 @@ private:
     static void normalizePixels(std::vector<float>& pixels, int size);
 
     // ── ONNX Runtime members ──
+#ifdef HAS_ONNXRUNTIME
     Ort::Env env_{nullptr};
     std::unique_ptr<Ort::Session> session_;
     Ort::SessionOptions sessionOptions_;
     Ort::AllocatorWithDefaultOptions allocator_;
+#endif
 };
 
 } // namespace alcedo::ai

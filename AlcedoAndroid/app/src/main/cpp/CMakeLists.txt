@@ -100,6 +100,9 @@ add_library(
     core/ai/hnsw_index.cpp
     core/gpu/gpu_buffer.cpp
     core/gpu/gpu_pipeline.cpp
+    core/gpu/vulkan/vulkan_context.cpp
+    core/gpu/gles/gles_context.cpp
+    core/gpu/gles/gles_program_library.cpp
 )
 
 target_include_directories(alcedo_core PRIVATE
