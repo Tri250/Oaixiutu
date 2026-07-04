@@ -17,15 +17,21 @@
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Custom signature permission for internal service binding -->
+    <permission
+        android:name="${applicationId}.permission.BIND_TASK_SERVICE"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="${applicationId}.permission.BIND_TASK_SERVICE" />
+
     <!-- Foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".AlcedoApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -50,7 +56,8 @@
         <service
             android:name=".domain.service.BackgroundTaskService"
             android:foregroundServiceType="dataSync"
-            android:exported="false" />
+            android:exported="false"
+            android:permission="${applicationId}.permission.BIND_TASK_SERVICE" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -172,6 +172,10 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // ── Database Encryption (SQLCipher) ────────────────────────────
+    implementation("net.zetetic:android-database-sqlcipher:4.5.6")
+    implementation("androidx.sqlite:sqlite-ktx:2.4.0")
+
     // ── Serialization ──────────────────────────────────────────────
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 

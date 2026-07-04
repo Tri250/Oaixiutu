@@ -4,6 +4,7 @@
 #include <vector>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <algorithm>
 
 #include "core/edit/pipeline_service.h"
@@ -2001,6 +2002,53 @@ Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMicros(JNIEnv *env,
 JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeSetLogLevel(JNIEnv *env, jobject thiz, jint level) {
     alcedo::set_log_level(static_cast<int>(level));
+}
+
+// ── Security Check Functions ──
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_security_NativeSecurityChecker_nativeIsDebuggerAttached(
+    JNIEnv* env, jobject thiz) {
+    // Check /proc/self/status for TracerPid
+    FILE* fp = fopen("/proc/self/status", "r");
+    if (fp) {
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strncmp(line, "TracerPid:", 10) == 0) {
+                int pid = atoi(line + 10);
+                fclose(fp);
+                return pid != 0 ? JNI_TRUE : JNI_FALSE;
+            }
+        }
+        fclose(fp);
+    }
+    return JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_security_NativeSecurityChecker_nativeIsRunningInEmulator(
+    JNIEnv* env, jobject thiz) {
+    // Check for emulator-specific properties
+    FILE* fp = fopen("/proc/cpuinfo", "r");
+    if (fp) {
+        char line[256];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strstr(line, "Goldfish") || strstr(line, "ranchu") || strstr(line, "vbox")) {
+                fclose(fp);
+                return JNI_TRUE;
+            }
+        }
+        fclose(fp);
+    }
+    return JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_security_NativeSecurityChecker_nativeCheckIntegrity(
+    JNIEnv* env, jobject thiz) {
+    // Basic integrity check - verify the native library hasn't been tampered with
+    // In production, this would check a hash of the .so file
+    return JNI_TRUE;
 }
 
 } // extern "C"

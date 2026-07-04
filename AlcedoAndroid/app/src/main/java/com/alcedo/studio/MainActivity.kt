@@ -1,6 +1,7 @@
 package com.alcedo.studio
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,6 +41,14 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Validate incoming intent data
+        intent?.data?.let { uri ->
+            if (uri.scheme != "content" && uri.scheme != "file") {
+                Log.w("MainActivity", "Ignoring unsafe URI scheme: ${uri.scheme}")
+                intent.data = null
+            }
+        }
 
         // Initialize managers
         ThemeManager.initialize(this)

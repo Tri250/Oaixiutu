@@ -7,6 +7,7 @@ import android.util.Log
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
+import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +54,13 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val crashFile = File(crashDir, "crash_${timestamp}.log")
 
+        // Convert stack trace to string, then sanitize PII
+        val stringWriter = StringWriter()
+        PrintWriter(stringWriter).use { pw ->
+            throwable.printStackTrace(pw)
+        }
+        val sanitizedTrace = sanitizeStackTrace(stringWriter.toString())
+
         FileWriter(crashFile, true).use { writer ->
             PrintWriter(writer).use { pw ->
                 pw.println("=== Alcedo Crash Report ===")
@@ -61,7 +69,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 pw.println("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
                 pw.println("Thread: ${Thread.currentThread().name}")
                 pw.println()
-                throwable.printStackTrace(pw)
+                pw.println(sanitizedTrace)
                 pw.println()
 
                 // Also log recent native crashes if available
@@ -75,6 +83,21 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 }
             }
         }
+    }
+
+    private fun sanitizeStackTrace(trace: String): String {
+        var sanitized = trace
+        // Remove file paths that might contain usernames
+        sanitized = sanitized.replace(Regex("/data/data/[^/]+/"), "/data/data/[REDACTED]/")
+        sanitized = sanitized.replace(Regex("/storage/emulated/\\d+/"), "/storage/[REDACTED]/")
+        sanitized = sanitized.replace(Regex("/sdcard/"), "/[REDACTED]/")
+        // Remove potential API keys or tokens
+        sanitized = sanitized.replace(Regex("(api[_-]?key|token|secret|password|credential)\\s*[=:]\\s*\\S+", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
+        // Remove email addresses
+        sanitized = sanitized.replace(Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"), "[EMAIL_REDACTED]")
+        // Remove IP addresses
+        sanitized = sanitized.replace(Regex("\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b"), "[IP_REDACTED]")
+        return sanitized
     }
 
     fun getCrashReports(): List<File> {

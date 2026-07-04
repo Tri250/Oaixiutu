@@ -173,12 +173,28 @@ object MediaStoreHelper {
 
     fun copyToTempFile(context: Context, uri: Uri, suffix: String = ".tmp"): File? {
         return try {
+            // Validate URI scheme
+            if (uri.scheme != "content") {
+                Log.e(TAG, "Rejecting unsafe URI scheme: ${uri.scheme}")
+                return null
+            }
+
             val tempFile = File.createTempFile("alcedo_", suffix, context.cacheDir)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(tempFile).use { output ->
                     input.copyTo(output)
                 }
             }
+
+            // Validate that the temp file is within the app's cache directory
+            val canonicalCache = context.cacheDir.canonicalPath
+            val canonicalTemp = tempFile.canonicalPath
+            if (!canonicalTemp.startsWith(canonicalCache)) {
+                Log.e(TAG, "Temp file escape detected: $canonicalTemp")
+                tempFile.delete()
+                return null
+            }
+
             tempFile
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy URI to temp file", e)

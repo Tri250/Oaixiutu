@@ -4,6 +4,9 @@ import android.app.Application
 import android.util.Log
 import com.alcedo.studio.crash.CrashHandler
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.privacy.PrivacyManager
+import com.alcedo.studio.security.TempFileManager
+import com.alcedo.studio.security.SecurityChecker
 
 class AlcedoApplication : Application() {
     override fun onCreate() {
@@ -11,6 +14,22 @@ class AlcedoApplication : Application() {
 
         // Install crash handler first
         CrashHandler.initialize(this)
+
+        // Initialize privacy manager and apply retention policy
+        PrivacyManager.initialize(this)
+        PrivacyManager.applyRetentionPolicy(this)
+
+        // Clean up old temp files
+        TempFileManager.cleanupOldFiles(this)
+
+        // Run security checks
+        val securityStatus = SecurityChecker.checkSecurity(this)
+        if (securityStatus.isDebuggerAttached && !BuildConfig.DEBUG) {
+            Log.w("AlcedoApp", "Debugger detected in release build!")
+        }
+        if (securityStatus.isRooted) {
+            Log.i("AlcedoApp", "Device appears to be rooted")
+        }
 
         try {
             AppModule.initialize(this)

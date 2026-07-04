@@ -95,13 +95,37 @@ object SafHelper {
 
     // Create a new file in a SAF directory
     fun createFile(context: Context, treeUri: Uri, fileName: String, mimeType: String): Uri? {
+        if (!isPathSafe(fileName)) {
+            Log.e(TAG, "Unsafe file name rejected: $fileName")
+            return null
+        }
         return try {
             val docId = DocumentsContract.getDocumentId(treeUri)
             val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-            DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, fileName)
+            DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, sanitizeFileName(fileName))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create file via SAF", e)
             null
         }
+    }
+
+    // ── Path Validation ──
+
+    fun isPathSafe(path: String): Boolean {
+        // Prevent path traversal attacks
+        if (path.contains("..")) return false
+        if (path.contains("//")) return false
+        if (path.startsWith("/")) return false // Relative paths only
+        return true
+    }
+
+    fun sanitizeFileName(name: String): String {
+        // Remove any path separators or dangerous characters
+        return name.replace("/", "_")
+            .replace("\\", "_")
+            .replace("..", "_")
+            .replace(":", "_")
+            .replace("|", "_")
+            .trim()
     }
 }

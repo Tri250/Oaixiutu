@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import kotlinx.coroutines.launch
 import com.alcedo.studio.data.model.AiModelProfile
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.i18n.Language
@@ -23,6 +24,7 @@ import com.alcedo.studio.i18n.strings
 import com.alcedo.studio.ui.common.ConfirmDialog
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
+import com.alcedo.studio.privacy.PrivacyManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +58,13 @@ fun SettingsScreen(navController: NavController) {
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showColorScienceDialog by remember { mutableStateOf(false) }
     var showGpuDialog by remember { mutableStateOf(false) }
+    var showDeleteDataDialog by remember { mutableStateOf(false) }
+    var showExportProgressDialog by remember { mutableStateOf(false) }
+    val consentStatus by remember { mutableStateOf(PrivacyManager.getConsentStatus()) }
+    var analyticsConsent by remember { mutableStateOf(consentStatus.analytics) }
+    var crashReportsConsent by remember { mutableStateOf(consentStatus.crashReports) }
+    var aiProcessingConsent by remember { mutableStateOf(consentStatus.aiProcessing) }
+    val scope = rememberCoroutineScope()
     var exportCachePath by remember { mutableStateOf("/sdcard/Pictures/Alcedo") }
     val cacheSize = remember { "1.2 GB" }
 
@@ -173,6 +182,73 @@ fun SettingsScreen(navController: NavController) {
             models.forEach { model ->
                 AiModelItem(model = model)
             }
+
+            HorizontalDivider()
+
+            // Privacy
+            SettingsSectionHeader("Privacy")
+            ListItem(
+                headlineContent = { Text("On-Device AI Processing") },
+                supportingContent = { Text("CLIP image search & AI suggestions. All processing is local.") },
+                leadingContent = { Icon(Icons.Default.Psychology, contentDescription = null) },
+                trailingContent = {
+                    Switch(
+                        checked = aiProcessingConsent,
+                        onCheckedChange = {
+                            aiProcessingConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                        }
+                    )
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Crash Reports") },
+                supportingContent = { Text("Anonymous crash reports. No personal data included.") },
+                leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
+                trailingContent = {
+                    Switch(
+                        checked = crashReportsConsent,
+                        onCheckedChange = {
+                            crashReportsConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                        }
+                    )
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Usage Analytics") },
+                supportingContent = { Text("Anonymous usage statistics. No personal data collected.") },
+                leadingContent = { Icon(Icons.Default.Analytics, contentDescription = null) },
+                trailingContent = {
+                    Switch(
+                        checked = analyticsConsent,
+                        onCheckedChange = {
+                            analyticsConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
+                        }
+                    )
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Export My Data") },
+                supportingContent = { Text("Download a copy of your data (right to portability)") },
+                leadingContent = { Icon(Icons.Default.Download, contentDescription = null) },
+                modifier = Modifier.clickable { showExportProgressDialog = true }
+            )
+            ListItem(
+                headlineContent = { Text("Delete All Data") },
+                supportingContent = { Text("Permanently erase all your data (right to be forgotten)") },
+                leadingContent = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
+                modifier = Modifier.clickable { showDeleteDataDialog = true }
+            )
+            ListItem(
+                headlineContent = { Text("Data Retention") },
+                supportingContent = { Text("Crash reports: 30 days · Temp files: 7 days") },
+                leadingContent = { Icon(Icons.Default.Schedule, contentDescription = null) }
+            )
 
             HorizontalDivider()
 
@@ -441,6 +517,58 @@ fun SettingsScreen(navController: NavController) {
             },
             onDismiss = { showClearModelsDialog = false },
             isDestructive = true
+        )
+    }
+
+    if (showDeleteDataDialog) {
+        ConfirmDialog(
+            title = "Delete All Data",
+            message = "This will permanently delete all your data including images metadata, ratings, collections, edit history, and cached files. This action cannot be undone.",
+            confirmText = "Delete Everything",
+            onConfirm = {
+                showDeleteDataDialog = false
+                scope.launch {
+                    PrivacyManager.deleteAllUserData(context)
+                }
+            },
+            onDismiss = { showDeleteDataDialog = false },
+            isDestructive = true
+        )
+    }
+
+    if (showExportProgressDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportProgressDialog = false },
+            title = { Text("Export Your Data") },
+            text = {
+                Column {
+                    Text("Your data will be exported to:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "/sdcard/AlcedoExport/alcedo_data_export/",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("File paths and personal information are excluded from the export for your privacy.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportProgressDialog = false
+                    scope.launch {
+                        val outputDir = java.io.File("/sdcard/AlcedoExport")
+                        PrivacyManager.exportUserData(context, outputDir)
+                    }
+                }) {
+                    Text("Export")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportProgressDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

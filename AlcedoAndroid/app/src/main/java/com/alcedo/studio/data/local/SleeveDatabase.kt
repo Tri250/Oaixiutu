@@ -1,12 +1,17 @@
 package com.alcedo.studio.data.local
 
 import android.content.Context
+import android.util.Base64
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.data.dao.*
+import net.sqlcipher.database.SupportFactory
+import java.security.SecureRandom
 
 @Database(
     entities = [
@@ -32,11 +37,15 @@ abstract class SleeveDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): SleeveDatabase {
             return INSTANCE ?: synchronized(this) {
+                val passphrase = getOrCreatePassphrase(context)
+                val factory = SupportFactory(passphrase)
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     SleeveDatabase::class.java,
                     "alcedo_sleeve.db"
                 )
+                .openHelperFactory(factory)
                 .fallbackToDestructiveMigration()
                 .setJournalMode(JournalMode.AUTOMATIC)
                 .addCallback(object : RoomDatabase.Callback() {
@@ -49,6 +58,33 @@ abstract class SleeveDatabase : RoomDatabase() {
                 INSTANCE = instance
                 instance
             }
+        }
+
+        private fun getOrCreatePassphrase(context: Context): ByteArray {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            val securePrefs = EncryptedSharedPreferences.create(
+                context,
+                "alcedo_secure",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+
+            val existingKey = securePrefs.getString("db_passphrase", null)
+
+            if (existingKey != null) {
+                return Base64.decode(existingKey, Base64.NO_WRAP)
+            }
+
+            val key = ByteArray(32)
+            SecureRandom().nextBytes(key)
+            securePrefs.edit()
+                .putString("db_passphrase", Base64.encodeToString(key, Base64.NO_WRAP))
+                .apply()
+            return key
         }
     }
 }
