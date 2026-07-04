@@ -1,0 +1,96 @@
+// Tone curve compute shader (parametric + point curve)
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform vec2  imageSize;
+uniform vec4  blacks;        // shadows, darks, lights, highlights
+uniform float curveStrength; // 0.0 to 1.0
+uniform vec4  pointCurve[5]; // 5 control points (x, y, tangentIn, tangentOut)
+
+// Parametric tone curve
+float parametric_curve(float x, vec4 params) {
+    float shadows   = params.x;
+    float darks     = params.y;
+    float lights    = params.z;
+    float highlights = params.w;
+
+    // Shadows
+    float s = -shadows;
+    float t = x * 2.0 - 1.0;
+    float curve = (t < 0.0)
+        ? (t * (1.0 - s)) / (t - s)
+        : (t * (1.0 + highlights)) / (t + highlights);
+
+    curve = (curve + 1.0) * 0.5;
+
+    // Darks and Lights
+    curve = mix(curve, pow(x, 1.0 / (1.0 + darks)), 0.3);
+    curve = mix(curve, pow(x, 1.0 + lights), 0.3);
+
+    return curve;
+}
+
+// Point-based curve using cubic Hermite interpolation
+float point_curve_eval(float x) {
+    // Find bounding control points
+    int i = 0;
+    for (int j = 0; j < 4; j++) {
+        if (x >= pointCurve[j].x && x <= pointCurve[j + 1].x) {
+            i = j;
+            break;
+        }
+    }
+
+    float t = (x - pointCurve[i].x) / max(pointCurve[i + 1].x - pointCurve[i].x, 0.0001);
+
+    float p0 = pointCurve[i].y;
+    float p1 = pointCurve[i + 1].y;
+    float m0 = pointCurve[i].w;
+    float m1 = pointCurve[i + 1].z;
+
+    float t2 = t * t;
+    float t3 = t2 * t;
+
+    return (2.0 * t3 - 3.0 * t2 + 1.0) * p0 +
+           (t3 - 2.0 * t2 + t) * m0 +
+           (-2.0 * t3 + 3.0 * t2) * p1 +
+           (t3 - t2) * m1;
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Convert to 0-1 range
+    vec3 rgb = color.rgb / 255.0;
+
+    // Apply parametric curve
+    vec3 parametric = vec3(
+        parametric_curve(rgb.r, blacks),
+        parametric_curve(rgb.g, blacks),
+        parametric_curve(rgb.b, blacks)
+    );
+
+    // Apply point curve
+    vec3 pointCurved = vec3(
+        point_curve_eval(rgb.r),
+        point_curve_eval(rgb.g),
+        point_curve_eval(rgb.b)
+    );
+
+    // Mix between parametric and point curve
+    vec3 result = mix(parametric, pointCurved, 0.5);
+
+    // Blend with original based on curve strength
+    result = mix(rgb, result, curveStrength);
+
+    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

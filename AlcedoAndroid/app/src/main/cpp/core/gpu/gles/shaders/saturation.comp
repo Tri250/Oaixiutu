@@ -1,0 +1,34 @@
+// Saturation adjustment compute shader
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform float saturation;
+uniform vec2  imageSize;
+uniform vec3  luminanceWeights;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Convert to linear
+    vec3 linear = color.rgb / 255.0;
+
+    // Compute luminance
+    float lum = dot(linear, luminanceWeights);
+
+    // Apply saturation
+    // saturation: 0 = desaturated, 1 = original, >1 = boost
+    float sat = saturation + 1.0;
+    vec3 saturated = lum + (linear - lum) * sat;
+
+    // Back to 8-bit
+    color.rgb = clamp(saturated * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

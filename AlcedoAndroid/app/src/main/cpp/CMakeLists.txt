@@ -21,7 +21,12 @@ add_library(
     core/sleeve/sleeve_folder.cpp
     core/image/image_buffer.cpp
     core/image/raw_decoder.cpp
+    core/image/metadata_decoder.cpp
+    core/image/thumbnail_decoder.cpp
+    core/image/metadata_extractor.cpp
+    core/decoders/decoder_scheduler.cpp
     core/edit/pipeline_service.cpp
+    core/edit/color_science.cpp
     core/edit/color_matrix.cpp
     core/edit/operators/exposure_op.cpp
     core/edit/operators/contrast_op.cpp
@@ -30,11 +35,25 @@ add_library(
     core/edit/operators/tone_curve_op.cpp
     core/edit/operators/sharpen_op.cpp
     core/edit/operators/film_grain_op.cpp
+    core/edit/operators/vibrance_op.cpp
+    core/edit/operators/tint_op.cpp
+    core/edit/operators/clarity_op.cpp
+    core/edit/operators/tone_region_op.cpp
+    core/edit/operators/hsl_op.cpp
+    core/edit/operators/color_wheel_op.cpp
+    core/edit/operators/channel_mixer_op.cpp
+    core/edit/operators/halation_op.cpp
+    core/edit/operators/lut_op.cpp
+    core/edit/operators/highlight_reconstruction_op.cpp
+    core/edit/operators/rcd_demosaic_op.cpp
+    core/edit/operators/lens_correction_op.cpp
+    core/edit/operators/geometry_op.cpp
     core/utils/hash.cpp
     core/utils/file_utils.cpp
 )
 
 target_include_directories(alcedo_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -59,3 +78,31 @@ target_compile_options(alcedo_core PRIVATE
     -fexceptions
     -frtti
 )
+
+# ============================================================
+# Optional: LibRaw integration (native RAW decoding)
+# ============================================================
+# To enable LibRaw, compile LibRaw for Android separately and set:
+#   -DLIBRAW_INCLUDE_DIR=/path/to/libraw/include
+#   -DLIBRAW_LIB_DIR=/path/to/libraw/libs
+# if(DEFINED LIBRAW_INCLUDE_DIR AND DEFINED LIBRAW_LIB_DIR)
+#     target_include_directories(alcedo_core PRIVATE ${LIBRAW_INCLUDE_DIR})
+#     target_link_libraries(alcedo_core ${LIBRAW_LIB_DIR}/libraw.a)
+#     target_compile_definitions(alcedo_core PRIVATE HAS_LIBRAW=1)
+# endif()
+
+# ============================================================
+# Optional: Exiv2 integration (native metadata extraction)
+# ============================================================
+# To enable Exiv2, compile Exiv2 for Android separately and set:
+#   -DEXIV2_INCLUDE_DIR=/path/to/exiv2/include
+#   -DEXIV2_LIB_DIR=/path/to/exiv2/libs
+# if(DEFINED EXIV2_INCLUDE_DIR AND DEFINED EXIV2_LIB_DIR)
+#     target_include_directories(alcedo_core PRIVATE ${EXIV2_INCLUDE_DIR})
+#     target_link_libraries(alcedo_core
+#         ${EXIV2_LIB_DIR}/libexiv2.a
+#         ${EXIV2_LIB_DIR}/libexpat.a
+#         z
+#     )
+#     target_compile_definitions(alcedo_core PRIVATE HAS_EXIV2=1)
+# endif()

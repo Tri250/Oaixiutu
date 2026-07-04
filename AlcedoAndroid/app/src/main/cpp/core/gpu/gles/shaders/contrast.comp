@@ -1,0 +1,34 @@
+// Contrast adjustment compute shader
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform float contrast;
+uniform vec2  imageSize;
+uniform vec3  luminanceWeights;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Convert to linear space for contrast
+    vec3 linear = color.rgb / 255.0;
+
+    // Compute luminance
+    float lum = dot(linear, luminanceWeights);
+
+    // Apply contrast
+    // contrast > 0: increase contrast, contrast < 0: decrease
+    float contrastFactor = tan((contrast + 1.0) * 0.785398); // tan((contrast+1)*PI/4)
+    vec3 contrasted = lum + (linear - lum) * contrastFactor;
+
+    // Back to 8-bit
+    color.rgb = clamp(contrasted * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

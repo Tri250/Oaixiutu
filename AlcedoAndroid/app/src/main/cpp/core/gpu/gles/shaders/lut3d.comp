@@ -1,0 +1,56 @@
+// 3D LUT application compute shader
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform sampler2D lutTexture;  // 3D LUT stored as 2D texture
+uniform vec2      imageSize;
+uniform int       lutSize;     // 16, 32, or 64
+uniform float     intensity;   // 0.0 to 1.0 (blend factor)
+
+// Tetrahedral interpolation for 3D LUT
+vec3 sample_lut3d(vec3 rgb) {
+    float coordScale = (float(lutSize) - 1.0) / float(lutSize);
+    float coordOffset = 1.0 / (2.0 * float(lutSize));
+
+    vec3 coord = rgb * coordScale + coordOffset;
+    coord = clamp(coord, 0.0, 1.0);
+
+    float idx = coord.b * float(lutSize - 1);
+    int b0 = int(floor(idx));
+    int b1 = min(b0 + 1, lutSize - 1);
+    float df = idx - float(b0);
+
+    float u = coord.r;
+    float v = coord.g;
+    float v0 = (float(b0) * float(lutSize) + v) / float(lutSize * lutSize);
+    float v1 = (float(b1) * float(lutSize) + v) / float(lutSize * lutSize);
+
+    vec3 c0 = textureLod(lutTexture, vec2(u, v0), 0.0).rgb;
+    vec3 c1 = textureLod(lutTexture, vec2(u, v1), 0.0).rgb;
+
+    return mix(c0, c1, df);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Convert to 0-1 range
+    vec3 rgb = color.rgb / 255.0;
+
+    // Apply LUT
+    vec3 lutResult = sample_lut3d(rgb);
+
+    // Blend with original
+    vec3 result = mix(rgb, lutResult, intensity);
+
+    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

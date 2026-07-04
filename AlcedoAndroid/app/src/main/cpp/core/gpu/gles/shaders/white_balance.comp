@@ -1,0 +1,59 @@
+// White balance compute shader (temperature + tint)
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform float temperature;  // Kelvin
+uniform float tint;         // magenta-green shift
+uniform vec2  imageSize;
+
+// Convert Kelvin temperature to RGB multipliers
+vec3 temperature_to_rgb(float kelvin) {
+    float temp = clamp(kelvin, 2000.0, 50000.0) / 100.0;
+    vec3 rgb;
+
+    if (temp <= 66.0) {
+        rgb.r = 255.0;
+        rgb.g = 99.4708025861 * log(temp) - 161.1195681661;
+        if (temp <= 19.0) {
+            rgb.b = 0.0;
+        } else {
+            rgb.b = 138.5177312231 * log(temp - 10.0) - 305.0447927307;
+        }
+    } else {
+        rgb.r = 329.698727446 * pow(temp - 60.0, -0.1332047592);
+        rgb.g = 288.1221695283 * pow(temp - 60.0, -0.0755148492);
+        rgb.b = 255.0;
+    }
+
+    return clamp(rgb / 255.0, 0.0, 1.0);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Get white balance multipliers
+    vec3 wb = temperature_to_rgb(temperature);
+
+    // Apply tint: shift green/magenta
+    // Positive tint = green, negative tint = magenta
+    wb.g *= 1.0 + tint * 0.5;
+    wb.r *= 1.0 - tint * 0.25;
+    wb.b *= 1.0 - tint * 0.25;
+
+    // Normalize to preserve luminance
+    float lumScale = dot(wb, vec3(0.2126, 0.7152, 0.0722));
+    if (lumScale > 0.001) {
+        wb /= lumScale;
+    }
+
+    color.rgb = clamp(color.rgb * wb * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

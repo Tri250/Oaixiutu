@@ -1,0 +1,57 @@
+// Color wheel adjustment compute shader (color grading)
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform vec2  imageSize;
+
+// Lift (shadows), Gamma (midtones), Gain (highlights) - RGB
+uniform vec3 lift;
+uniform vec3 gamma;
+uniform vec3 gain;
+
+// Color wheel: shadows, midtones, highlights
+uniform vec3 shadowColor;
+uniform vec3 midtoneColor;
+uniform vec3 highlightColor;
+
+uniform float shadowRange;    // 0.0 to 0.5
+uniform float highlightRange; // 0.0 to 0.5
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+    vec3 rgb = color.rgb / 255.0;
+
+    // Lift/Gamma/Gain
+    vec3 corrected = (rgb * (gain - lift) + lift);
+    corrected = pow(max(corrected, 0.0), gamma);
+
+    // Compute luminance for shadow/midtone/highlight blending
+    float lum = dot(corrected, vec3(0.2126, 0.7152, 0.0722));
+
+    // Shadow blend
+    float shadowWeight = smoothstep(0.0, shadowRange, lum);
+    shadowWeight = 1.0 - shadowWeight;
+
+    // Highlight blend
+    float highlightWeight = smoothstep(1.0 - highlightRange, 1.0, lum);
+
+    // Midtone blend
+    float midtoneWeight = 1.0 - shadowWeight - highlightWeight;
+
+    // Apply color wheel adjustments
+    vec3 result = corrected;
+    result += shadowColor     * shadowWeight;
+    result += midtoneColor    * midtoneWeight;
+    result += highlightColor  * highlightWeight;
+
+    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

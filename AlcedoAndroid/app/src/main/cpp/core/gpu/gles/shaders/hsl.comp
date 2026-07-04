@@ -1,0 +1,83 @@
+// HSL adjustment compute shader (Hue, Saturation, Lightness)
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform vec2  imageSize;
+uniform float hueShift;        // -180 to 180 degrees
+uniform float saturationAdj;   // -1.0 to 1.0
+uniform float lightnessAdj;    // -1.0 to 1.0
+
+// RGB to HSL
+vec3 rgb_to_hsl(vec3 c) {
+    float minC = min(min(c.r, c.g), c.b);
+    float maxC = max(max(c.r, c.g), c.b);
+    float delta = maxC - minC;
+    float l = (maxC + minC) * 0.5;
+    float s = 0.0;
+    float h = 0.0;
+
+    if (delta > 0.0001) {
+        s = l < 0.5 ? delta / (maxC + minC) : delta / (2.0 - maxC - minC);
+        float delR = (((maxC - c.r) / 6.0) + (delta / 2.0)) / delta;
+        float delG = (((maxC - c.g) / 6.0) + (delta / 2.0)) / delta;
+        float delB = (((maxC - c.b) / 6.0) + (delta / 2.0)) / delta;
+
+        if (c.r == maxC)      h = delB - delG;
+        else if (c.g == maxC) h = (1.0 / 3.0) + delR - delB;
+        else if (c.b == maxC) h = (2.0 / 3.0) + delG - delR;
+
+        if (h < 0.0) h += 1.0;
+        if (h > 1.0) h -= 1.0;
+    }
+    return vec3(h, s, l);
+}
+
+float hue_to_rgb(float v1, float v2, float h) {
+    if (h < 0.0) h += 1.0;
+    if (h > 1.0) h -= 1.0;
+    if (6.0 * h < 1.0) return v1 + (v2 - v1) * 6.0 * h;
+    if (2.0 * h < 1.0) return v2;
+    if (3.0 * h < 2.0) return v1 + (v2 - v1) * ((2.0 / 3.0) - h) * 6.0;
+    return v1;
+}
+
+vec3 hsl_to_rgb(vec3 hsl) {
+    if (hsl.y < 0.0001) return vec3(hsl.z);
+    float v2 = hsl.z < 0.5 ? hsl.z * (1.0 + hsl.y) : hsl.z + hsl.y - hsl.z * hsl.y;
+    float v1 = 2.0 * hsl.z - v2;
+    return vec3(
+        hue_to_rgb(v1, v2, hsl.x + 1.0 / 3.0),
+        hue_to_rgb(v1, v2, hsl.x),
+        hue_to_rgb(v1, v2, hsl.x - 1.0 / 3.0)
+    );
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Convert to HSL
+    vec3 hsl = rgb_to_hsl(color.rgb / 255.0);
+
+    // Apply hue shift (in degrees, convert to 0-1)
+    hsl.x = fract(hsl.x + hueShift / 360.0);
+
+    // Apply saturation
+    hsl.y = clamp(hsl.y + saturationAdj, 0.0, 1.0);
+
+    // Apply lightness
+    hsl.z = clamp(hsl.z + lightnessAdj, 0.0, 1.0);
+
+    // Convert back to RGB
+    vec3 adjusted = hsl_to_rgb(hsl);
+
+    color.rgb = clamp(adjusted * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}

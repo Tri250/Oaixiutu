@@ -1,0 +1,71 @@
+// Geometry transform compute shader (crop, rotate, scale, flip)
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform vec2  inputSize;
+uniform vec2  outputSize;
+uniform float rotation;   // degrees
+uniform float scale;      // uniform scale factor
+uniform vec2  offset;     // pixel offset
+uniform int   flipH;      // 0 or 1
+uniform int   flipV;      // 0 or 1
+
+mat2 rotation_matrix(float degrees) {
+    float rad = radians(degrees);
+    float c = cos(rad);
+    float s = sin(rad);
+    return mat2(c, s, -s, c);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(outputSize.x) || coord.y >= int(outputSize.y)) return;
+
+    // Map output pixel to input pixel (inverse transform)
+    vec2 outUV = (vec2(coord) + 0.5) / outputSize;
+
+    // Flip
+    if (flipH != 0) outUV.x = 1.0 - outUV.x;
+    if (flipV != 0) outUV.y = 1.0 - outUV.y;
+
+    // Center offset
+    vec2 center = vec2(0.5);
+    vec2 pos = (outUV - center) * outputSize / scale;
+
+    // Rotate
+    mat2 rot = rotation_matrix(-rotation);
+    pos = rot * pos;
+
+    // Map back to input pixel coordinates
+    vec2 inUV = (pos / inputSize) + center;
+    inUV.x += offset.x / inputSize.x;
+    inUV.y += offset.y / inputSize.y;
+
+    // Bilinear sample
+    vec2 inCoord = inUV * inputSize - 0.5;
+    ivec2 i0 = ivec2(floor(inCoord));
+    ivec2 i1 = i0 + ivec2(1, 0);
+    ivec2 i2 = i0 + ivec2(0, 1);
+    ivec2 i3 = i0 + ivec2(1, 1);
+
+    vec2 f = fract(inCoord);
+
+    // Clamp to valid range
+    i0 = clamp(i0, ivec2(0), ivec2(inputSize) - 1);
+    i1 = clamp(i1, ivec2(0), ivec2(inputSize) - 1);
+    i2 = clamp(i2, ivec2(0), ivec2(inputSize) - 1);
+    i3 = clamp(i3, ivec2(0), ivec2(inputSize) - 1);
+
+    vec4 c0 = imageLoad(inputImage, i0);
+    vec4 c1 = imageLoad(inputImage, i1);
+    vec4 c2 = imageLoad(inputImage, i2);
+    vec4 c3 = imageLoad(inputImage, i3);
+
+    vec4 result = mix(mix(c0, c1, f.x), mix(c2, c3, f.x), f.y);
+
+    imageStore(outputImage, coord, result);
+}

@@ -1,0 +1,23 @@
+// Exposure adjustment compute shader
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform float exposureStops;
+uniform vec2  imageSize;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    // Apply exposure: multiply by 2^stops
+    float scale = exp2(exposureStops);
+    color.rgb *= scale;
+
+    imageStore(outputImage, coord, color);
+}

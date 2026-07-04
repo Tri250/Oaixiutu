@@ -1,0 +1,80 @@
+// Film grain compute shader
+// GLSL ES 3.1
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+
+uniform vec2  imageSize;
+uniform float amount;        // 0.0 to 1.0
+uniform float size;          // grain size (1.0 to 10.0)
+uniform float roughness;     // 0.0 to 1.0
+uniform float seed;          // random seed
+
+// Hash function
+float hash(vec2 p) {
+    float h = dot(p, vec2(127.1, 311.7));
+    return fract(sin(h) * 43758.5453);
+}
+
+// Value noise
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float a = hash(i + vec2(0.0, 0.0));
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Fractal noise
+float fbm(vec2 p) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+
+    for (int i = 0; i < 4; i++) {
+        value += amplitude * noise(p * frequency);
+        frequency *= 2.0;
+        amplitude *= roughness;
+    }
+
+    return value;
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+
+    vec4 color = imageLoad(inputImage, coord);
+
+    if (amount < 0.001) {
+        imageStore(outputImage, coord, color);
+        return;
+    }
+
+    // Generate grain noise
+    vec2 uv = vec2(coord) / max(size, 0.01);
+    vec2 uvOffset = vec2(seed, seed * 1.37);
+    float grain = fbm(uv + uvOffset) * 2.0 - 1.0;
+
+    // Apply grain - blend in linear space
+    vec3 linear = color.rgb / 255.0;
+    grain *= amount * 0.15;
+
+    // Grain is applied differently based on luminance
+    float lum = dot(linear, vec3(0.2126, 0.7152, 0.0722));
+    float grainStrength = grain * (1.0 - lum * 0.5); // less grain on bright areas
+
+    vec3 result = linear + grainStrength;
+
+    // Back to 8-bit
+    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+
+    imageStore(outputImage, coord, color);
+}
