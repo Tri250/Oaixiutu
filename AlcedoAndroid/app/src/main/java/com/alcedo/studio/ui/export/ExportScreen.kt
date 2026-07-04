@@ -14,6 +14,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ProgressBar
 import com.alcedo.studio.viewmodel.ExportViewModel
 
@@ -37,16 +39,16 @@ fun ExportScreen(
     LaunchedEffect(lastResult, batchResult) {
         when {
             lastResult is ExportService.ExportResult.Success -> {
-                resultMessage = "导出成功：${(lastResult as ExportService.ExportResult.Success).filePath}"
+                resultMessage = Strings.current.exportSuccess.format((lastResult as ExportService.ExportResult.Success).filePath)
                 showResultSnack = true
             }
             lastResult is ExportService.ExportResult.Error -> {
-                resultMessage = "导出失败：${(lastResult as ExportService.ExportResult.Error).message}"
+                resultMessage = Strings.current.exportFailed.format((lastResult as ExportService.ExportResult.Error).message)
                 showResultSnack = true
             }
             batchResult != null -> {
                 val br = batchResult!!
-                resultMessage = "批量导出完成：成功 ${br.successCount}，失败 ${br.errorCount}"
+                resultMessage = Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
                 showResultSnack = true
             }
         }
@@ -55,10 +57,10 @@ fun ExportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Export") },
+                title = { Text(stringRes { exportTitle }) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 }
             )
@@ -87,7 +89,7 @@ fun ExportScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Format
-            Text("Format", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportFormat }, style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 ExportFormat.entries.forEach { f ->
                     FilterChip(
@@ -100,7 +102,7 @@ fun ExportScreen(
 
             // Quality
             if (viewModel.format == ExportFormat.JPEG || viewModel.format == ExportFormat.ULTRA_HDR) {
-                Text("Quality: ${viewModel.quality}%", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportQuality }.format("${viewModel.quality}"), style = MaterialTheme.typography.labelLarge)
                 Slider(
                     value = viewModel.quality.toFloat(),
                     onValueChange = { viewModel.quality = it.toInt() },
@@ -111,23 +113,23 @@ fun ExportScreen(
 
             // Bit depth
             if (viewModel.format == ExportFormat.PNG || viewModel.format == ExportFormat.TIFF) {
-                Text("Bit Depth", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = viewModel.bitDepth == 8,
                         onClick = { viewModel.bitDepth = 8 },
-                        label = { Text("8-bit") }
+                        label = { Text(stringRes { export8Bit }) }
                     )
                     FilterChip(
                         selected = viewModel.bitDepth == 16,
                         onClick = { viewModel.bitDepth = 16 },
-                        label = { Text("16-bit") }
+                        label = { Text(stringRes { export16Bit }) }
                     )
                 }
             }
 
             // Color Space
-            Text("Color Space", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
@@ -142,16 +144,16 @@ fun ExportScreen(
             // Options
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = viewModel.embedIcc, onCheckedChange = { viewModel.embedIcc = it })
-                Text("Embed ICC Profile", style = MaterialTheme.typography.bodyMedium)
+                Text(stringRes { exportEmbedIcc }, style = MaterialTheme.typography.bodyMedium)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = viewModel.includeMetadata, onCheckedChange = { viewModel.includeMetadata = it })
-                Text("Include Metadata", style = MaterialTheme.typography.bodyMedium)
+                Text(stringRes { exportIncludeMetadata }, style = MaterialTheme.typography.bodyMedium)
             }
             if (viewModel.format == ExportFormat.ULTRA_HDR) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = viewModel.isHdr, onCheckedChange = { viewModel.isHdr = it })
-                    Text("HDR Output", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringRes { exportHdrOutput }, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
@@ -159,8 +161,8 @@ fun ExportScreen(
             OutlinedTextField(
                 value = viewModel.maxDimension,
                 onValueChange = { viewModel.maxDimension = it.filter { c -> c.isDigit() } },
-                label = { Text("Max dimension (px)") },
-                placeholder = { Text("No limit") },
+                label = { Text(stringRes { exportMaxDimension }) },
+                placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.AspectRatio, contentDescription = null) }
@@ -170,8 +172,8 @@ fun ExportScreen(
             OutlinedTextField(
                 value = viewModel.maxWidth,
                 onValueChange = { viewModel.maxWidth = it.filter { c -> c.isDigit() } },
-                label = { Text("Max width (px)") },
-                placeholder = { Text("No limit") },
+                label = { Text(stringRes { exportMaxWidth }) },
+                placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Crop, contentDescription = null) }
@@ -181,8 +183,8 @@ fun ExportScreen(
             OutlinedTextField(
                 value = viewModel.maxHeight,
                 onValueChange = { viewModel.maxHeight = it.filter { c -> c.isDigit() } },
-                label = { Text("Max height (px)") },
-                placeholder = { Text("No limit") },
+                label = { Text(stringRes { exportMaxHeight }) },
+                placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Crop, contentDescription = null) }
@@ -192,13 +194,13 @@ fun ExportScreen(
             OutlinedTextField(
                 value = viewModel.outputPath,
                 onValueChange = { viewModel.outputPath = it },
-                label = { Text("Output path") },
+                label = { Text(stringRes { exportOutputPath }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
                 trailingIcon = {
                     IconButton(onClick = { /* Open directory picker */ }) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = "Browse")
+                        Icon(Icons.Default.FolderOpen, contentDescription = stringRes { browse })
                     }
                 }
             )
@@ -209,7 +211,7 @@ fun ExportScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Batch Export", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportBatchExport }, style = MaterialTheme.typography.labelLarge)
                 Switch(
                     checked = viewModel.showBatchExport,
                     onCheckedChange = { viewModel.showBatchExport = it }
@@ -217,13 +219,13 @@ fun ExportScreen(
             }
             if (viewModel.showBatchExport) {
                 Text(
-                    "Select images from album to batch export",
+                    stringRes { exportBatchSelectDesc },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (viewModel.batchImageIds.isNotEmpty()) {
                     Text(
-                        "${viewModel.batchImageIds.size} images selected",
+                        stringRes { exportBatchSelected }.format("${viewModel.batchImageIds.size}"),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -233,7 +235,7 @@ fun ExportScreen(
                 ) {
                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Add Images")
+                    Text(stringRes { exportAddImages })
                 }
             }
 
@@ -253,9 +255,9 @@ fun ExportScreen(
                         ProgressBar(
                             progress = progress.overallProgress,
                             label = if (progress.totalItems > 1) {
-                                "Overall: ${progress.completedItems}/${progress.totalItems}"
+                                stringRes { exportOverall }.format("${progress.completedItems}", "${progress.totalItems}")
                             } else {
-                                "Exporting..."
+                                stringRes { exportExporting }
                             },
                             showPercentage = true,
                             onCancel = if (isExporting) ({ viewModel.cancelExport() }) else null
@@ -266,7 +268,7 @@ fun ExportScreen(
                         // Per-item progress
                         if (progress.currentItemName.isNotEmpty()) {
                             Text(
-                                "Current: ${progress.currentItemName}",
+                                stringRes { exportCurrent }.format(progress.currentItemName),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -307,7 +309,7 @@ fun ExportScreen(
                             ExportService.ExportStatus.COMPLETED -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "导出完成",
+                                    stringRes { exportCompleted },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -315,7 +317,7 @@ fun ExportScreen(
                             ExportService.ExportStatus.CANCELLED -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "已取消",
+                                    stringRes { exportCancelled },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -323,7 +325,7 @@ fun ExportScreen(
                             ExportService.ExportStatus.ERROR -> {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "导出出错",
+                                    stringRes { exportError },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -365,7 +367,7 @@ fun ExportScreen(
                 }
                 Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Export ${if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) "${viewModel.batchImageIds.size} " else ""}Image${if (viewModel.showBatchExport && viewModel.batchImageIds.size != 1) "s" else ""}")
+                Text(stringRes { exportImage })
             }
         }
     }

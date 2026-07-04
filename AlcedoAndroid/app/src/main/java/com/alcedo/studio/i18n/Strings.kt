@@ -263,6 +263,32 @@ interface StringResources {
     val exportFailed: String // "Export failed: {message}"
     val exportBatchResult: String // "Batch complete: {success} succeeded, {failed} failed"
 
+    // ── Additional Export / UX ──────────────────────────────────────────
+    val compareBefore: String
+    val compareAfter: String
+    val loadingImages: String
+    val noImagesFound: String
+    val permissionRequired: String
+    val permissionDenied: String
+    val grantPermission: String
+    val openSettings: String
+    val lowStorageWarning: String
+    val exportProgress: String
+    val exportEta: String
+    val cancelExport: String
+    val confirmCancel: String
+    val confirmDelete: String
+    val confirmDeleteMessage: String
+    val resetAll: String
+    val resetAllConfirm: String
+    val doubleTapReset: String
+    val pinchToZoom: String
+    val dragToCompare: String
+    val editorReady: String
+    val processingImage: String
+    val storageFull: String
+    val networkError: String
+
     // ── AI ──────────────────────────────────────────────────────────────
     val aiSearchTitle: String
     val aiSearchHint: String

@@ -1,6 +1,7 @@
 package com.alcedo.studio.ui.album
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -192,26 +194,32 @@ private fun AlbumContent(
         topBar = {
             if (selectedImages.isNotEmpty()) {
                 // Selection mode top bar
-                TopAppBar(
-                    title = { Text("${selectedImages.size} selected") },
-                    navigationIcon = {
-                        IconButton(onClick = onClearSelection) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = onDeleteSelected) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error)
-                        }
-                        IconButton(onClick = { /* Share */ }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                AnimatedVisibility(
+                    visible = selectedImages.isNotEmpty(),
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                ) {
+                    TopAppBar(
+                        title = { Text("${selectedImages.size} selected") },
+                        navigationIcon = {
+                            IconButton(onClick = onClearSelection) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = onDeleteSelected) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error)
+                            }
+                            IconButton(onClick = { /* Share */ }) {
+                                Icon(Icons.Default.Share, contentDescription = "Share")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     )
-                )
+                }
             } else {
                 TopAppBar(
                     title = {
@@ -265,16 +273,18 @@ private fun AlbumContent(
             }
         }
     ) { padding ->
-        Box(
+        AlcedoPullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
             when {
                 isLoading -> {
-                    ShimmerEffect(
-                        count = 12,
+                    SkeletonAlbumGrid(
                         columns = columns,
+                        itemCount = 12,
                         modifier = Modifier.padding(8.dp)
                     )
                 }
@@ -377,8 +387,13 @@ private fun ThumbnailCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 0.9f else 1f,
+        label = "selectScale"
+    )
     Card(
         modifier = Modifier
+            .graphicsLayer(scaleX = scale, scaleY = scale)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick

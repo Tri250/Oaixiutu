@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -47,8 +49,7 @@ fun EditorScreen(
     val workingVersion by remember { viewModel.workingVersion }
 
     var selectedPanel by remember { mutableStateOf(EditorPanel.BASIC) }
-    var isCompareMode by remember { mutableStateOf(false) }
-    var comparePosition by remember { mutableFloatStateOf(0.5f) }
+    val isCompareMode by viewModel.isCompareMode.collectAsState()
     var showExport by remember { mutableStateOf(false) }
     var showScope by remember { mutableStateOf(false) }
     var selectedScopeType by remember { mutableStateOf(ScopeType.HISTOGRAM) }
@@ -61,8 +62,8 @@ fun EditorScreen(
     val isTablet = configuration.screenWidthDp >= 600
 
     // Zoom/Pan state
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    val zoomableState = rememberZoomableState()
+    val originalBitmap by viewModel.originalBitmap.collectAsState()
 
     // Scope data
     var histogramData by remember { mutableStateOf(HistogramData()) }
@@ -107,7 +108,7 @@ fun EditorScreen(
                     IconButton(onClick = { viewModel.redo() }) {
                         Icon(Icons.Default.Redo, contentDescription = "Redo")
                     }
-                    IconButton(onClick = { isCompareMode = !isCompareMode }) {
+                    IconButton(onClick = { viewModel.toggleCompareMode() }) {
                         Icon(
                             Icons.Default.Compare,
                             contentDescription = "Compare",
@@ -148,12 +149,9 @@ fun EditorScreen(
                             .fillMaxHeight(),
                         isProcessing = isProcessing,
                         isCompareMode = isCompareMode,
-                        comparePosition = comparePosition,
-                        scale = scale,
-                        offset = offset,
-                        onScaleChange = { scale = it },
-                        onOffsetChange = { offset = it },
-                        imagePath = image?.imagePath ?: ""
+                        previewBitmap = preview?.asImageBitmap(),
+                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        zoomableState = zoomableState
                     )
 
                     // Editor panels
@@ -186,12 +184,9 @@ fun EditorScreen(
                             .weight(0.45f),
                         isProcessing = isProcessing,
                         isCompareMode = isCompareMode,
-                        comparePosition = comparePosition,
-                        scale = scale,
-                        offset = offset,
-                        onScaleChange = { scale = it },
-                        onOffsetChange = { offset = it },
-                        imagePath = image?.imagePath ?: ""
+                        previewBitmap = preview?.asImageBitmap(),
+                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        zoomableState = zoomableState
                     )
 
                     // Panel tabs
@@ -521,150 +516,45 @@ private fun ImagePreviewArea(
     modifier: Modifier = Modifier,
     isProcessing: Boolean,
     isCompareMode: Boolean,
-    comparePosition: Float,
-    scale: Float,
-    offset: Offset,
-    onScaleChange: (Float) -> Unit,
-    onOffsetChange: (Offset) -> Unit,
-    imagePath: String
+    previewBitmap: ImageBitmap?,
+    originalBitmap: ImageBitmap?,
+    zoomableState: ZoomableState
 ) {
     Box(
         modifier = modifier
-            .background(Color(0xFF0D0D0D))
-            .pointerInput(Unit) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(0.5f, 5f)
-                    onScaleChange(newScale)
-                    onOffsetChange(Offset(
-                        offset.x + pan.x,
-                        offset.y + pan.y
-                    ))
-                }
-            }
+            .background(Color(0xFF0D0D0D)),
+        contentAlignment = Alignment.Center
     ) {
-        // Image preview
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offset.x
-                    translationY = offset.y
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            if (isProcessing) {
-                CircularProgressIndicator(color = Color.White)
-            } else {
-                // Placeholder for image
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize(0.85f)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(Color(0xFF2A2A2A)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (imagePath.isNotEmpty()) {
-                        Text(
-                            "Image Preview",
-                            color = Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.Image,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = Color.White.copy(alpha = 0.3f)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "No image",
-                                color = Color.White.copy(alpha = 0.3f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
-            }
+        if (isProcessing) {
+            CircularProgressIndicator(color = Color.White)
+        } else if (isCompareMode && originalBitmap != null && previewBitmap != null) {
+            CompareView(
+                originalBitmap = originalBitmap,
+                editedBitmap = previewBitmap,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            ZoomableImageView(
+                imageBitmap = previewBitmap,
+                modifier = Modifier.fillMaxSize(),
+                zoomableState = zoomableState
+            )
         }
 
-        // Compare mode slider
-        if (isCompareMode) {
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Before half (left)
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(comparePosition)
-                        .background(Color.Transparent)
+        if (previewBitmap == null && !isProcessing) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.Image,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color.White.copy(alpha = 0.3f)
                 )
-                // Divider
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(2.dp)
-                        .align(Alignment.CenterStart)
-                        .offset(x = (comparePosition * 10000).dp)
-                        .background(Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "No image",
+                    color = Color.White.copy(alpha = 0.3f),
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                // Compare handle
-                Surface(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .align(Alignment.CenterStart)
-                        .offset(
-                            x = (comparePosition * 10000).dp - 16.dp
-                        ),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = Color.White,
-                    shadowElevation = 4.dp
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.UnfoldMore,
-                            contentDescription = "Drag to compare",
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.Black
-                        )
-                    }
-                }
-            }
-
-            // Labels
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .align(Alignment.TopCenter),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.6f),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        "Before",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-                Surface(
-                    color = Color.Black.copy(alpha = 0.6f),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        "After",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
             }
         }
     }

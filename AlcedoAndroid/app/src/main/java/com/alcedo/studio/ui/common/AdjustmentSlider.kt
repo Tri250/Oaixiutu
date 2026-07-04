@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -30,6 +31,7 @@ fun AdjustmentSlider(
 ) {
     var showResetAnimation by remember { mutableStateOf(false) }
     val isAtDefault = remember(value) { value == defaultValue }
+    val view = LocalView.current
 
     LaunchedEffect(showResetAnimation) {
         if (showResetAnimation) {
@@ -58,6 +60,7 @@ fun AdjustmentSlider(
                             if (showReset && !isAtDefault) {
                                 onValueChange(defaultValue)
                                 showResetAnimation = true
+                                HapticFeedback.click(view)
                             }
                         }
                     )
@@ -90,7 +93,16 @@ fun AdjustmentSlider(
         }
         Slider(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = { newValue ->
+                val wasAtMin = value == range.start
+                val wasAtMax = value == range.endInclusive
+                onValueChange(newValue)
+                if (newValue == range.start && !wasAtMin) {
+                    HapticFeedback.sliderStop(view)
+                } else if (newValue == range.endInclusive && !wasAtMax) {
+                    HapticFeedback.sliderStop(view)
+                }
+            },
             valueRange = range,
             modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
