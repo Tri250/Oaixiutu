@@ -72,11 +72,6 @@ public:
 // PipelineService Implementation
 // ============================================================
 
-PipelineService& PipelineService::Instance() {
-    static PipelineService instance;
-    return instance;
-}
-
 PipelineService::PipelineService() {
     for (int i = 0; i < 15; ++i) stage_enabled_[i] = true;
     LOGI("PipelineService created");

@@ -30,12 +30,20 @@ add_library(
     core/sleeve/dentry_cache_manager.cpp
     core/sleeve/storage_service.cpp
     core/sleeve/sleeve_filter.cpp
+    core/sleeve/sleeve_element_factory.cpp
+    core/sleeve/sleeve_view.cpp
+    core/sleeve/filter_combo.cpp
+    core/image/image.cpp
     core/image/image_buffer.cpp
     core/image/image_pool.cpp
     core/image/raw_decoder.cpp
     core/image/metadata_decoder.cpp
     core/image/thumbnail_decoder.cpp
     core/image/metadata_extractor.cpp
+    core/io/image_loader.cpp
+    core/io/image_writer.cpp
+    core/io/export_icc_profile_resolver.cpp
+    core/io/ultra_hdr_writer.cpp
     core/decoders/decoder_scheduler.cpp
     core/edit/pipeline_service.cpp
     core/edit/color_science.cpp
@@ -80,6 +88,7 @@ add_library(
     core/edit/operators/cv_cvt_op.cpp
     core/edit/operators/raw_decode_op.cpp
     core/edit/scope/scope_analyzer.cpp
+    core/renderer/pipeline_scheduler.cpp
     core/ai/clip_inference.cpp
     core/ai/embedding_utils.cpp
     core/ai/hnsw_index.cpp
