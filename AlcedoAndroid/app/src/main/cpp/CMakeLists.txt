@@ -16,9 +16,12 @@ add_library(
     alcedo_core
     SHARED
     native-lib.cpp
-    core/sleeve/sleeve_element.cpp
-    core/sleeve/sleeve_file.cpp
-    core/sleeve/sleeve_folder.cpp
+    core/sleeve/sleeve_base.cpp
+    core/sleeve/sleeve_manager.cpp
+    core/sleeve/sleeve_filesystem.cpp
+    core/sleeve/path_resolver.cpp
+    core/sleeve/dentry_cache_manager.cpp
+    core/sleeve/storage_service.cpp
     core/image/image_buffer.cpp
     core/image/raw_decoder.cpp
     core/image/metadata_decoder.cpp
@@ -48,8 +51,19 @@ add_library(
     core/edit/operators/rcd_demosaic_op.cpp
     core/edit/operators/lens_correction_op.cpp
     core/edit/operators/geometry_op.cpp
+    core/edit/operators/operator_factory.cpp
+    core/edit/operators/black_op.cpp
+    core/edit/operators/white_op.cpp
+    core/edit/operators/shadow_op.cpp
+    core/edit/operators/highlight_op.cpp
+    core/edit/operators/crop_rotate_op.cpp
+    core/edit/operators/resize_op.cpp
     core/utils/hash.cpp
     core/utils/file_utils.cpp
+    core/utils/id_generator.cpp
+    core/utils/thread_pool.cpp
+    core/utils/time_provider.cpp
+    core/utils/app_logging.cpp
 )
 
 target_include_directories(alcedo_core PRIVATE

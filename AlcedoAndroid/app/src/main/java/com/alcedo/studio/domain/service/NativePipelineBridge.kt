@@ -106,6 +106,50 @@ class NativePipelineBridge {
         shoulder: Float
     ): FloatArray
 
+    // ── New operators (ported from desktop) ──
+
+    /** Black level adjustment: map values below black_point to 0. */
+    external fun nativeApplyBlackOp(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        blackPoint: Float
+    ): FloatArray
+
+    /** White level adjustment: map values above white_point to 1. */
+    external fun nativeApplyWhiteOp(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        whitePoint: Float
+    ): FloatArray
+
+    /** Independent shadow adjustment: affects only dark regions (luminance < 0.25). */
+    external fun nativeApplyShadowOp(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        shadowAmount: Float
+    ): FloatArray
+
+    /** Independent highlight adjustment: affects only bright regions (luminance > 0.75). */
+    external fun nativeApplyHighlightOp(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        highlightAmount: Float
+    ): FloatArray
+
+    /** Crop a region [left, top, right, bottom) from the image. */
+    external fun nativeApplyCrop(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        left: Int, top: Int, right: Int, bottom: Int
+    ): FloatArray
+
+    /** Rotate image clockwise by angle (90, 180, 270). */
+    external fun nativeApplyRotate(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        angle: Int
+    ): FloatArray
+
+    /** Resize image using nearest (0) or bilinear (1) interpolation. */
+    external fun nativeApplyResize(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        dstWidth: Int, dstHeight: Int, method: Int
+    ): FloatArray
+
     companion object {
         init {
             System.loadLibrary("alcedo_core")

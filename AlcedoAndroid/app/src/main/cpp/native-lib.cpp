@@ -15,6 +15,20 @@
 #include "core/decoders/decoder_scheduler.h"
 #include "core/edit/color_science.h"
 #include "core/edit/operators/lut_op.h"
+#include "core/edit/operators/operator_factory.h"
+#include "core/edit/operators/black_op.h"
+#include "core/edit/operators/white_op.h"
+#include "core/edit/operators/shadow_op.h"
+#include "core/edit/operators/highlight_op.h"
+#include "core/edit/operators/crop_rotate_op.h"
+#include "core/edit/operators/resize_op.h"
+#include "core/sleeve/sleeve_manager.h"
+#include "core/sleeve/sleeve_filesystem.h"
+#include "core/sleeve/path_resolver.h"
+#include "core/utils/id_generator.h"
+#include "core/utils/thread_pool.h"
+#include "core/utils/time_provider.h"
+#include "core/utils/app_logging.h"
 
 #define LOG_TAG "AlcedoCore"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -1154,6 +1168,279 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
 
         if (attached) jvm->DetachCurrentThread();
     });
+}
+
+// ============================================================
+// Operator Factory - Individual Operator Application
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyBlackOp(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloat blackPoint) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    alcedo::BlackOperator op(blackPoint);
+    op.Apply(float_pixels.data(), width, height, channels);
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyWhiteOp(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloat whitePoint) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    alcedo::WhiteOperator op(whitePoint);
+    op.Apply(float_pixels.data(), width, height, channels);
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyShadowOp(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloat shadowAmount) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    alcedo::ShadowOperator op(shadowAmount);
+    op.Apply(float_pixels.data(), width, height, channels);
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyHighlightOp(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloat highlightAmount) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    alcedo::HighlightOperator op(highlightAmount);
+    op.Apply(float_pixels.data(), width, height, channels);
+    jfloatArray result = env->NewFloatArray(len);
+    env->SetFloatArrayRegion(result, 0, len, float_pixels.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyCrop(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint left, jint top, jint right, jint bottom) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    int out_w = right - left;
+    int out_h = bottom - top;
+    if (out_w <= 0 || out_h <= 0 || left < 0 || top < 0 || right > width || bottom > height) {
+        LOGE("Invalid crop region: left=%d top=%d right=%d bottom=%d width=%d height=%d",
+             left, top, right, bottom, width, height);
+        return nullptr;
+    }
+    std::vector<float> cropped(out_w * out_h * channels);
+    alcedo::CropRotateOperator::apply_crop(float_pixels.data(), width, height, channels,
+                                           left, top, right, bottom, cropped.data());
+    jfloatArray result = env->NewFloatArray(cropped.size());
+    env->SetFloatArrayRegion(result, 0, cropped.size(), cropped.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyRotate(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint angle) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    int out_w = width, out_h = height;
+    if (angle == 90 || angle == 270) { out_w = height; out_h = width; }
+    std::vector<float> rotated(out_w * out_h * channels);
+    alcedo::CropRotateOperator::apply_rotate(float_pixels.data(), width, height, channels,
+                                              angle, rotated.data());
+    jfloatArray result = env->NewFloatArray(rotated.size());
+    env->SetFloatArrayRegion(result, 0, rotated.size(), rotated.data());
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jint dstWidth, jint dstHeight, jint method) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+    std::vector<float> resized(dstWidth * dstHeight * channels);
+    alcedo::ResizeOperator::resize(float_pixels.data(), width, height,
+                                    resized.data(), dstWidth, dstHeight,
+                                    channels,
+                                    method == 0 ? alcedo::ResizeMethod::NEAREST
+                                                : alcedo::ResizeMethod::BILINEAR);
+    jfloatArray result = env->NewFloatArray(resized.size());
+    env->SetFloatArrayRegion(result, 0, resized.size(), resized.data());
+    return result;
+}
+
+// ============================================================
+// Sleeve System JNI Bridge
+// ============================================================
+
+static std::shared_ptr<alcedo::SleeveManager> g_sleeve_manager;
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeInitializeSleeve(JNIEnv *env, jobject thiz) {
+    g_sleeve_manager = std::make_shared<alcedo::SleeveManager>();
+    g_sleeve_manager->Initialize();
+    LOGI("SleeveManager initialized");
+}
+
+JNIEXPORT jint JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFolder(
+        JNIEnv *env, jobject thiz, jstring path, jstring name) {
+    if (!g_sleeve_manager) return -1;
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+    const char* cname = env->GetStringUTFChars(name, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    auto element = fs->Create(alcedo::SleeveElementType::Folder, cpath, cname);
+    env->ReleaseStringUTFChars(path, cpath);
+    env->ReleaseStringUTFChars(name, cname);
+    return element ? static_cast<jint>(element->id) : -1;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFile(
+        JNIEnv *env, jobject thiz, jstring path, jstring name) {
+    if (!g_sleeve_manager) return -1;
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+    const char* cname = env->GetStringUTFChars(name, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    auto element = fs->Create(alcedo::SleeveElementType::File, cpath, cname);
+    env->ReleaseStringUTFChars(path, cpath);
+    env->ReleaseStringUTFChars(name, cname);
+    return element ? static_cast<jint>(element->id) : -1;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeDeleteElement(
+        JNIEnv *env, jobject thiz, jstring path) {
+    if (!g_sleeve_manager) return JNI_FALSE;
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    bool ok = fs->Delete(cpath);
+    env->ReleaseStringUTFChars(path, cpath);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeMoveElement(
+        JNIEnv *env, jobject thiz, jstring src, jstring dst) {
+    if (!g_sleeve_manager) return JNI_FALSE;
+    const char* csrc = env->GetStringUTFChars(src, nullptr);
+    const char* cdst = env->GetStringUTFChars(dst, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    bool ok = fs->Move(csrc, cdst);
+    env->ReleaseStringUTFChars(src, csrc);
+    env->ReleaseStringUTFChars(dst, cdst);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCopyElement(
+        JNIEnv *env, jobject thiz, jstring src, jstring dst) {
+    if (!g_sleeve_manager) return JNI_FALSE;
+    const char* csrc = env->GetStringUTFChars(src, nullptr);
+    const char* cdst = env->GetStringUTFChars(dst, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    bool ok = fs->Copy(csrc, cdst);
+    env->ReleaseStringUTFChars(src, csrc);
+    env->ReleaseStringUTFChars(dst, cdst);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
+        JNIEnv *env, jobject thiz, jstring path) {
+    if (!g_sleeve_manager) return nullptr;
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    auto ids = fs->ListFolderContent(cpath);
+    env->ReleaseStringUTFChars(path, cpath);
+    jintArray result = env->NewIntArray(ids.size());
+    std::vector<jint> jint_ids(ids.begin(), ids.end());
+    env->SetIntArrayRegion(result, 0, ids.size(), jint_ids.data());
+    return result;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(
+        JNIEnv *env, jobject thiz, jstring path) {
+    if (!g_sleeve_manager) return env->NewStringUTF("");
+    const char* cpath = env->GetStringUTFChars(path, nullptr);
+    auto fs = g_sleeve_manager->GetFilesystem();
+    auto elem = fs->Get(cpath);
+    std::string json = "{}";
+    if (elem) {
+        char buf[512];
+        snprintf(buf, sizeof(buf),
+            "{\"id\":%u,\"name\":\"%s\",\"type\":%d,\"sync\":%d,\"pinned\":%s}",
+            elem->id, elem->name.c_str(), static_cast<int>(elem->type),
+            static_cast<int>(elem->sync_flag),
+            elem->pinned ? "true" : "false");
+        json = buf;
+    }
+    env->ReleaseStringUTFChars(path, cpath);
+    return env->NewStringUTF(json.c_str());
+}
+
+// ============================================================
+// Infrastructure JNI Bridge
+// ============================================================
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGenerateId(JNIEnv *env, jobject thiz) {
+    return static_cast<jlong>(alcedo::IDGenerator::GenerateID());
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMillis(JNIEnv *env, jobject thiz) {
+    return static_cast<jlong>(alcedo::TimeProvider::NowMillis());
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMicros(JNIEnv *env, jobject thiz) {
+    return static_cast<jlong>(alcedo::TimeProvider::NowMicros());
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeSetLogLevel(JNIEnv *env, jobject thiz, jint level) {
+    alcedo::set_log_level(static_cast<int>(level));
 }
 
 } // extern "C"
