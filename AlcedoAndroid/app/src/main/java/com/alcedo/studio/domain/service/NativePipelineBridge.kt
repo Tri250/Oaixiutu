@@ -205,6 +205,52 @@ class NativePipelineBridge {
         bayerPattern: Int, whiteLevel: Int, blackLevel: Int
     ): FloatArray
 
+    // ── New Pipeline Operators: ColorTemp / CST / ODT / LMT / HLS / Curve / RawDecode ──
+
+    /** Color temperature adjustment using Planckian locus. mode: 0=AS_SHOT, 1=CUSTOM. */
+    external fun nativeSetColorTemp(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        cct: Float, tint: Float, mode: Int
+    ): FloatArray
+
+    /** Color Space Transform (CST). transformType: 0=TO_WORKING_SPACE, 1=TO_OUTPUT_SPACE. */
+    external fun nativeSetCST(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        transformType: Int, inputSpace: String, outputSpace: String
+    ): FloatArray
+
+    /** Output Device Transform (ODT). method: 0=ACES, 1=OPEN_DRT; outputSpace: 0=sRGB, 1=P3, 2=Rec2020. */
+    external fun nativeSetODT(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        method: Int, outputSpace: Int, peakLuminance: Float
+    ): FloatArray
+
+    /** Look Modify Transform (LMT) - apply a .cube LUT file. */
+    external fun nativeLoadLMT(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        lutPath: String
+    ): FloatArray
+
+    /** HLS per-profile color adjustment. profileIndex: 0-7 (8 hue profiles). */
+    external fun nativeSetHLS(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        profileIndex: Int, hueShift: Float, lightness: Float, saturation: Float,
+        hueRange: Float
+    ): FloatArray
+
+    /** Hermite monotone spline curve adjustment. ctrlPts is flat [x0,y0,x1,y1,...]. */
+    external fun nativeSetCurve(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        ctrlPts: FloatArray, count: Int
+    ): FloatArray
+
+    /** RAW decode control operator. demosaicMethod: 0=AHD, 1=AMAZE, 2=RCD; inputSpace: 0=AP0, 1=CAMERA. */
+    external fun nativeSetRawDecode(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        demosaicMethod: Int, inputSpace: Int, useCameraWB: Boolean,
+        highlightRecovery: Boolean
+    ): FloatArray
+
     companion object {
         init {
             System.loadLibrary("alcedo_core")

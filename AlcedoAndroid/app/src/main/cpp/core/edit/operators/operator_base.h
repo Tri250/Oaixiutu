@@ -35,16 +35,21 @@ enum class OperatorType {
     DEMOSAIC,
     AUTO_EXPOSURE,
     TONE_REGION,
+    COLOR_TEMP,
+    ODT,
+    LMT,
+    CV_CVT,
     UNKNOWN
 };
 
 enum class PipelineStageName {
-    INPUT,
-    DEMOSAIC,
-    COLOR_CORRECTION,
-    TONE_MAPPING,
-    COLOR_GRADING,
-    OUTPUT
+    Image_Loading = 0,
+    Geometry_Adjustment = 1,
+    To_WorkingSpace = 2,
+    Basic_Adjustment = 3,
+    Color_Adjustment = 4,
+    Detail_Adjustment = 5,
+    Output_Transform = 6
 };
 
 class IOperatorBase {
