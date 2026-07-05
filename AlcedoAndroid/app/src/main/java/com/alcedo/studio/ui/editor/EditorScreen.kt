@@ -44,9 +44,6 @@ fun EditorScreen(
     val image by viewModel.imageModel.collectAsState()
     val preview by viewModel.previewBitmap.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
-    val params by remember { viewModel.params }
-    val history by viewModel.history.collectAsState()
-    val workingVersion by remember { viewModel.workingVersion }
 
     var selectedPanel by remember { mutableStateOf(EditorPanel.BASIC) }
     val isCompareMode by viewModel.isCompareMode.collectAsState()
@@ -161,17 +158,7 @@ fun EditorScreen(
                             .fillMaxHeight(),
                         selectedPanel = selectedPanel,
                         onPanelSelected = { selectedPanel = it },
-                        params = params,
-                        onParamsChanged = { viewModel.updateParams(it) },
-                        history = history,
-                        workingVersion = workingVersion,
-                        onSwitchVersion = { viewModel.switchVersion(it) },
-                        onCreateVersion = { viewModel.createVersion(it) },
-                        onDeleteVersion = { viewModel.deleteVersion(it) },
-                        onRenameVersion = { id, name -> viewModel.renameVersion(id, name) },
-                        onCloneHistory = { viewModel.cloneHistory() },
-                        onUndo = { viewModel.undo() },
-                        onRedo = { viewModel.redo() }
+                        viewModel = viewModel
                     )
                 }
             } else {
@@ -217,44 +204,14 @@ fun EditorScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         when (selectedPanel) {
-                            EditorPanel.BASIC -> BasicPanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.TONE_CURVE -> ToneCurvePanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.COLOR -> ColorPanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.HSL -> ColorPanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.GEOMETRY -> GeometryPanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.EFFECTS -> EffectsPanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.RAW -> RawDecodePanel(
-                                params = params,
-                                onParamsChanged = { viewModel.updateParams(it) }
-                            )
-                            EditorPanel.HISTORY -> HistoryPanel(
-                                history = history,
-                                onSwitchVersion = { viewModel.switchVersion(it) },
-                                onCreateVersion = { viewModel.createVersion(it) },
-                                onDeleteVersion = { viewModel.deleteVersion(it) },
-                                onRenameVersion = { id, name -> viewModel.renameVersion(id, name) },
-                                onCloneHistory = { viewModel.cloneHistory() },
-                                onUndo = { viewModel.undo() },
-                                onRedo = { viewModel.redo() }
-                            )
+                            EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
+                            EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
+                            EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
+                            EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
+                            EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
+                            EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
+                            EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
+                            EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
                         }
                     }
                 }
@@ -570,17 +527,7 @@ private fun EditorPanelColumn(
     modifier: Modifier = Modifier,
     selectedPanel: EditorPanel,
     onPanelSelected: (EditorPanel) -> Unit,
-    params: PipelineParams,
-    onParamsChanged: (PipelineParams) -> Unit,
-    history: EditHistory?,
-    workingVersion: WorkingVersion,
-    onSwitchVersion: (String) -> Unit,
-    onCreateVersion: (String) -> Unit,
-    onDeleteVersion: (String) -> Unit,
-    onRenameVersion: (String, String) -> Unit,
-    onCloneHistory: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit
+    viewModel: EditorViewModel
 ) {
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.surface)
@@ -606,44 +553,14 @@ private fun EditorPanelColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when (selectedPanel) {
-                EditorPanel.BASIC -> BasicPanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.TONE_CURVE -> ToneCurvePanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.COLOR -> ColorPanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.HSL -> ColorPanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.GEOMETRY -> GeometryPanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.EFFECTS -> EffectsPanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.RAW -> RawDecodePanel(
-                    params = params,
-                    onParamsChanged = onParamsChanged
-                )
-                EditorPanel.HISTORY -> HistoryPanel(
-                    history = history,
-                    onSwitchVersion = onSwitchVersion,
-                    onCreateVersion = onCreateVersion,
-                    onDeleteVersion = onDeleteVersion,
-                    onRenameVersion = onRenameVersion,
-                    onCloneHistory = onCloneHistory,
-                    onUndo = onUndo,
-                    onRedo = onRedo
-                )
+                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
+                EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
+                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
+                EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
+                EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
+                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
+                EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
+                EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
             }
         }
     }
@@ -651,9 +568,10 @@ private fun EditorPanelColumn(
 
 @Composable
 private fun RawDecodePanel(
-    params: PipelineParams,
-    onParamsChanged: (PipelineParams) -> Unit
+    viewModel: EditorViewModel
 ) {
+    val params by remember { viewModel.params }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Demosaic Algorithm", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -661,7 +579,7 @@ private fun RawDecodePanel(
                 FilterChip(
                     selected = params.rawDecodeParams.demosaicAlgorithm == algo,
                     onClick = {
-                        onParamsChanged(
+                        viewModel.updateParams(
                             params.copy(
                                 rawDecodeParams = params.rawDecodeParams.copy(
                                     demosaicAlgorithm = algo
@@ -678,7 +596,7 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.highlightReconstruction,
                 onCheckedChange = {
-                    onParamsChanged(
+                    viewModel.updateParams(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 highlightReconstruction = it
@@ -694,7 +612,7 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.autoBrightness,
                 onCheckedChange = {
-                    onParamsChanged(
+                    viewModel.updateParams(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 autoBrightness = it
@@ -710,7 +628,7 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.useCameraMatrix,
                 onCheckedChange = {
-                    onParamsChanged(
+                    viewModel.updateParams(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 useCameraMatrix = it

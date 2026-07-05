@@ -591,26 +591,28 @@ private fun ThumbnailCard(
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
                 exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeOut()
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                )
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
                         modifier = Modifier
-                            .size(18.dp)
-                            .padding(2.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
+                            .matchParentSize()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                     )
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .padding(2.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
             }
 
