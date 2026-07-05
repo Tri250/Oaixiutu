@@ -39,7 +39,7 @@ fun AlbumScreen(
     navController: NavController,
     viewModel: AlbumViewModel = viewModel()
 ) {
-    val images by viewModel.images.collectAsState()
+    val images by viewModel.filteredImages.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedImages = viewModel.selectedImages

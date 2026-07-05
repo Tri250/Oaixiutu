@@ -184,8 +184,9 @@ class AlbumViewModel : ViewModel() {
             } catch (_: Exception) {
                 // Fallback to existing repository-based loading
                 loadImages()
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
         }
     }
 
@@ -206,8 +207,9 @@ class AlbumViewModel : ViewModel() {
                 loadFolders()
             } catch (_: Exception) {
                 // SAF import failure
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
         }
     }
 
@@ -217,16 +219,17 @@ class AlbumViewModel : ViewModel() {
 
     fun importFromPhotoPicker(uris: List<Uri>) {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 for (uri in uris) {
                     importService.importImage(uri)
                 }
                 loadImages()
                 loadFolders()
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
@@ -254,32 +257,36 @@ class AlbumViewModel : ViewModel() {
 
     fun loadImages() {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 val allImages = imageRepository.getAllImages()
                 _images.value = allImages
                 _imageCount.value = allImages.size
                 _totalSize.value = allImages.sumOf { it.fileSize }
                 applyCurrentSortAndFilter(allImages)
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "loadImages failed", e)
+                _images.value = emptyList()
+                _filteredImages.value = emptyList()
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
     fun refresh() {
         viewModelScope.launch {
+            _isRefreshing.value = true
             try {
-                _isRefreshing.value = true
                 val allImages = imageRepository.getAllImages()
                 _images.value = allImages
                 _imageCount.value = allImages.size
                 _totalSize.value = allImages.sumOf { it.fileSize }
                 applyCurrentSortAndFilter(allImages)
-                _isRefreshing.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "refresh failed", e)
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
@@ -302,8 +309,8 @@ class AlbumViewModel : ViewModel() {
     fun navigateToFolder(folderId: Long?) {
         _currentFolderId.value = folderId
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 if (folderId == null) {
                     _currentFolderPath.value = "/"
                     _folderBreadcrumbs.value = emptyList()
@@ -327,9 +334,10 @@ class AlbumViewModel : ViewModel() {
                         _folderBreadcrumbs.value = currentBreadcrumbs
                     }
                 }
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "navigateToFolder failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
@@ -365,44 +373,47 @@ class AlbumViewModel : ViewModel() {
 
     fun importFromGallery(uri: Uri) {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 importService.importImage(uri)
                 loadImages()
                 loadFolders()
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "importFromGallery failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
     fun importFromStorage(uris: List<Uri>) {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 for (uri in uris) {
                     importService.importImage(uri)
                 }
                 loadImages()
                 loadFolders()
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "importFromStorage failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
     fun importDirectory(path: String) {
         viewModelScope.launch {
+            _isLoading.value = true
             try {
-                _isLoading.value = true
                 importService.importDirectory(Uri.fromFile(java.io.File(path)))
                 loadImages()
                 loadFolders()
-                _isLoading.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                android.util.Log.e("AlbumVM", "importDirectory failed", e)
+            } finally {
+                _isLoading.value = false
             }
         }
     }
