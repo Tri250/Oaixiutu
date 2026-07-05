@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -216,13 +217,17 @@ class AlbumViewModel : ViewModel() {
 
     fun importFromPhotoPicker(uris: List<Uri>) {
         viewModelScope.launch {
-            _isLoading.value = true
-            for (uri in uris) {
-                importService.importImage(uri)
+            try {
+                _isLoading.value = true
+                for (uri in uris) {
+                    importService.importImage(uri)
+                }
+                loadImages()
+                loadFolders()
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
-            loadImages()
-            loadFolders()
-            _isLoading.value = false
         }
     }
 
@@ -249,25 +254,33 @@ class AlbumViewModel : ViewModel() {
 
     fun loadImages() {
         viewModelScope.launch {
-            _isLoading.value = true
-            val allImages = imageRepository.getAllImages()
-            _images.value = allImages
-            _imageCount.value = allImages.size
-            _totalSize.value = allImages.sumOf { it.fileSize }
-            applyCurrentSortAndFilter(allImages)
-            _isLoading.value = false
+            try {
+                _isLoading.value = true
+                val allImages = imageRepository.getAllImages()
+                _images.value = allImages
+                _imageCount.value = allImages.size
+                _totalSize.value = allImages.sumOf { it.fileSize }
+                applyCurrentSortAndFilter(allImages)
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _isRefreshing.value = true
-            val allImages = imageRepository.getAllImages()
-            _images.value = allImages
-            _imageCount.value = allImages.size
-            _totalSize.value = allImages.sumOf { it.fileSize }
-            applyCurrentSortAndFilter(allImages)
-            _isRefreshing.value = false
+            try {
+                _isRefreshing.value = true
+                val allImages = imageRepository.getAllImages()
+                _images.value = allImages
+                _imageCount.value = allImages.size
+                _totalSize.value = allImages.sumOf { it.fileSize }
+                applyCurrentSortAndFilter(allImages)
+                _isRefreshing.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -277,39 +290,47 @@ class AlbumViewModel : ViewModel() {
 
     fun loadFolders() {
         viewModelScope.launch {
-            _folders.value = sleeveRepository.getRootElements()
-                .filterIsInstance<SleeveFolder>()
+            try {
+                _folders.value = sleeveRepository.getRootElements()
+                    .filterIsInstance<SleeveFolder>()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun navigateToFolder(folderId: Long?) {
         _currentFolderId.value = folderId
         viewModelScope.launch {
-            _isLoading.value = true
-            if (folderId == null) {
-                _currentFolderPath.value = "/"
-                _folderBreadcrumbs.value = emptyList()
-                loadImages()
-            } else {
-                val path = sleeveRepository.getFolderPath(folderId)
-                _currentFolderPath.value = path
-                val children = sleeveRepository.getChildren(folderId)
-                val fileChildren = children.filterIsInstance<SleeveFile>()
-                val imagesInFolder = fileChildren.mapNotNull { file ->
-                    imageRepository.getImage(file.imageId)
-                }
-                _images.value = imagesInFolder
-                applyCurrentSortAndFilter(imagesInFolder)
+            try {
+                _isLoading.value = true
+                if (folderId == null) {
+                    _currentFolderPath.value = "/"
+                    _folderBreadcrumbs.value = emptyList()
+                    loadImages()
+                } else {
+                    val path = sleeveRepository.getFolderPath(folderId)
+                    _currentFolderPath.value = path
+                    val children = sleeveRepository.getChildren(folderId)
+                    val fileChildren = children.filterIsInstance<SleeveFile>()
+                    val imagesInFolder = fileChildren.mapNotNull { file ->
+                        imageRepository.getImage(file.imageId)
+                    }
+                    _images.value = imagesInFolder
+                    applyCurrentSortAndFilter(imagesInFolder)
 
-                // Update breadcrumbs
-                val folder = sleeveRepository.getElement(folderId) as? SleeveFolder
-                val currentBreadcrumbs = _folderBreadcrumbs.value.toMutableList()
-                if (currentBreadcrumbs.none { it.folderId == folderId }) {
-                    currentBreadcrumbs.add(FolderBreadcrumb(folderId, folder?.elementName ?: "Folder"))
-                    _folderBreadcrumbs.value = currentBreadcrumbs
+                    // Update breadcrumbs
+                    val folder = sleeveRepository.getElement(folderId) as? SleeveFolder
+                    val currentBreadcrumbs = _folderBreadcrumbs.value.toMutableList()
+                    if (currentBreadcrumbs.none { it.folderId == folderId }) {
+                        currentBreadcrumbs.add(FolderBreadcrumb(folderId, folder?.elementName ?: "Folder"))
+                        _folderBreadcrumbs.value = currentBreadcrumbs
+                    }
                 }
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
-            _isLoading.value = false
         }
     }
 
@@ -325,11 +346,15 @@ class AlbumViewModel : ViewModel() {
 
     fun createFolder(name: String) {
         viewModelScope.launch {
-            val parentId = _currentFolderId.value
-            sleeveRepository.createFolder(name, parentId)
-            loadFolders()
-            if (parentId != null) {
-                navigateToFolder(parentId)
+            try {
+                val parentId = _currentFolderId.value
+                sleeveRepository.createFolder(name, parentId)
+                loadFolders()
+                if (parentId != null) {
+                    navigateToFolder(parentId)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
         }
     }
@@ -340,33 +365,45 @@ class AlbumViewModel : ViewModel() {
 
     fun importFromGallery(uri: Uri) {
         viewModelScope.launch {
-            _isLoading.value = true
-            importService.importImage(uri)
-            loadImages()
-            loadFolders()
-            _isLoading.value = false
+            try {
+                _isLoading.value = true
+                importService.importImage(uri)
+                loadImages()
+                loadFolders()
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun importFromStorage(uris: List<Uri>) {
         viewModelScope.launch {
-            _isLoading.value = true
-            for (uri in uris) {
-                importService.importImage(uri)
+            try {
+                _isLoading.value = true
+                for (uri in uris) {
+                    importService.importImage(uri)
+                }
+                loadImages()
+                loadFolders()
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
-            loadImages()
-            loadFolders()
-            _isLoading.value = false
         }
     }
 
     fun importDirectory(path: String) {
         viewModelScope.launch {
-            _isLoading.value = true
-            importService.importDirectory(Uri.fromFile(java.io.File(path)))
-            loadImages()
-            loadFolders()
-            _isLoading.value = false
+            try {
+                _isLoading.value = true
+                importService.importDirectory(Uri.fromFile(java.io.File(path)))
+                loadImages()
+                loadFolders()
+                _isLoading.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -601,25 +638,37 @@ class AlbumViewModel : ViewModel() {
 
     fun deleteSelected() {
         viewModelScope.launch {
-            _selectedImages.forEach { imageRepository.deleteImage(it) }
-            clearSelection()
-            loadImages()
-            loadFolders()
+            try {
+                _selectedImages.forEach { imageRepository.deleteImage(it) }
+                clearSelection()
+                loadImages()
+                loadFolders()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun rateSelected(rating: Int) {
         viewModelScope.launch {
-            for (imageId in _selectedImages) {
-                sleeveRepository.setRating(imageId, rating)
+            try {
+                for (imageId in _selectedImages) {
+                    sleeveRepository.setRating(imageId, rating)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
         }
     }
 
     fun addSelectedToCollection(collectionId: Long) {
         viewModelScope.launch {
-            for (imageId in _selectedImages) {
-                sleeveRepository.addImageToCollection(collectionId, imageId)
+            try {
+                for (imageId in _selectedImages) {
+                    sleeveRepository.addImageToCollection(collectionId, imageId)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
         }
     }
@@ -630,21 +679,33 @@ class AlbumViewModel : ViewModel() {
 
     fun loadCollections() {
         viewModelScope.launch {
-            _collections.value = sleeveRepository.getAllCollections()
+            try {
+                _collections.value = sleeveRepository.getAllCollections()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun createCollection(name: String, description: String = "") {
         viewModelScope.launch {
-            sleeveRepository.createCollection(name, description)
-            loadCollections()
+            try {
+                sleeveRepository.createCollection(name, description)
+                loadCollections()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun deleteCollection(collectionId: Long) {
         viewModelScope.launch {
-            sleeveRepository.deleteCollection(collectionId)
-            loadCollections()
+            try {
+                sleeveRepository.deleteCollection(collectionId)
+                loadCollections()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -654,7 +715,11 @@ class AlbumViewModel : ViewModel() {
 
     fun setRating(imageId: Long, rating: Int) {
         viewModelScope.launch {
-            sleeveRepository.setRating(imageId, rating)
+            try {
+                sleeveRepository.setRating(imageId, rating)
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -664,10 +729,14 @@ class AlbumViewModel : ViewModel() {
 
     fun generateLabelsForImage(imageId: Long) {
         viewModelScope.launch {
-            val image = imageRepository.getImage(imageId) ?: return@launch
-            val result = thumbnailService.loadThumbnail(imageId)
-            if (result is ThumbnailService.ThumbnailResult.Success) {
-                aiService.generateLabels(imageId.toUInt(), result.bitmap)
+            try {
+                val image = imageRepository.getImage(imageId) ?: return@launch
+                val result = thumbnailService.loadThumbnail(imageId)
+                if (result is ThumbnailService.ThumbnailResult.Success) {
+                    aiService.generateLabels(imageId.toUInt(), result.bitmap)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
         }
     }

@@ -455,12 +455,16 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun regeneratePreview() {
         viewModelScope.launch {
-            _isProcessing.value = true
-            val source = _originalBitmap.value
-            if (source != null) {
-                _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
+            try {
+                _isProcessing.value = true
+                val source = _originalBitmap.value
+                if (source != null) {
+                    _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
+                }
+                _isProcessing.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
-            _isProcessing.value = false
         }
     }
 
@@ -470,35 +474,39 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun applyAutoExposure() {
         viewModelScope.launch {
-            val bitmap = _originalBitmap.value ?: return@launch
-            val width = bitmap.width
-            val height = bitmap.height
-            val pixelCount = width * height
+            try {
+                val bitmap = _originalBitmap.value ?: return@launch
+                val width = bitmap.width
+                val height = bitmap.height
+                val pixelCount = width * height
 
-            val pixels = IntArray(pixelCount)
-            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-            val floatPixels = FloatArray(pixelCount * 4)
-            for (i in 0 until pixelCount) {
-                val pixel = pixels[i]
-                floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
-                floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
-                floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
-                floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+                val pixels = IntArray(pixelCount)
+                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                val floatPixels = FloatArray(pixelCount * 4)
+                for (i in 0 until pixelCount) {
+                    val pixel = pixels[i]
+                    floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+                }
+
+                val ev = pipelineService.computeAutoExposure(
+                    floatPixels, width, height, 4,
+                    _params.value.autoExposureTargetPercentile,
+                    _params.value.autoExposureTargetLuminance
+                )
+
+                _params.value = _params.value.copy(
+                    autoExposureEnabled = true,
+                    autoExposureValue = ev,
+                    exposure = ev
+                )
+                recordTransaction(OperatorType.EXPOSURE, "autoExposure", ev)
+                regeneratePreview()
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
-
-            val ev = pipelineService.computeAutoExposure(
-                floatPixels, width, height, 4,
-                _params.value.autoExposureTargetPercentile,
-                _params.value.autoExposureTargetLuminance
-            )
-
-            _params.value = _params.value.copy(
-                autoExposureEnabled = true,
-                autoExposureValue = ev,
-                exposure = ev
-            )
-            recordTransaction(OperatorType.EXPOSURE, "autoExposure", ev)
-            regeneratePreview()
         }
     }
 
@@ -613,7 +621,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val newVersionId = hist.createVersion(displayName)
             _history.value = hist
             viewModelScope.launch {
-                editHistoryRepository.saveHistory(hist)
+                try {
+                    editHistoryRepository.saveHistory(hist)
+                } catch (e: Throwable) {
+                    android.util.Log.e("EditorVM", "Coroutine failed", e)
+                }
             }
             // Switch to new version
             switchVersion(newVersionId)
@@ -630,7 +642,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 }
                 _history.value = hist
                 viewModelScope.launch {
-                    editHistoryRepository.saveHistory(hist)
+                    try {
+                        editHistoryRepository.saveHistory(hist)
+                    } catch (e: Throwable) {
+                        android.util.Log.e("EditorVM", "Coroutine failed", e)
+                    }
                 }
             }
         }
@@ -643,7 +659,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 hist.versionStorage[versionId] = updated
                 _history.value = hist
                 viewModelScope.launch {
-                    editHistoryRepository.saveHistory(hist)
+                    try {
+                        editHistoryRepository.saveHistory(hist)
+                    } catch (e: Throwable) {
+                        android.util.Log.e("EditorVM", "Coroutine failed", e)
+                    }
                 }
             }
         }
@@ -654,7 +674,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val cloned = hist.cloneForFile(hist.boundImageId)
             _history.value = cloned
             viewModelScope.launch {
-                editHistoryRepository.saveHistory(cloned)
+                try {
+                    editHistoryRepository.saveHistory(cloned)
+                } catch (e: Throwable) {
+                    android.util.Log.e("EditorVM", "Coroutine failed", e)
+                }
             }
         }
     }
@@ -664,7 +688,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val updated = hist.copy(lastModifiedTime = java.time.Instant.now())
             _history.value = updated
             viewModelScope.launch {
-                editHistoryRepository.saveHistory(updated)
+                try {
+                    editHistoryRepository.saveHistory(updated)
+                } catch (e: Throwable) {
+                    android.util.Log.e("EditorVM", "Coroutine failed", e)
+                }
             }
         }
     }
@@ -779,17 +807,25 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun export(settings: ExportSettings) {
         viewModelScope.launch {
-            val img = _imageModel.value ?: return@launch
-            val finalBitmap = _previewBitmap.value ?: return@launch
-            val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
-            val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
-            _lastExportResult.value = result
+            try {
+                val img = _imageModel.value ?: return@launch
+                val finalBitmap = _previewBitmap.value ?: return@launch
+                val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
+                val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
+                _lastExportResult.value = result
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "Coroutine failed", e)
+            }
         }
     }
 
     fun exportBatch(items: List<ExportService.ExportBatchItem>, settings: ExportSettings) {
         viewModelScope.launch {
-            exportService.exportBatch(items, settings)
+            try {
+                exportService.exportBatch(items, settings)
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -803,28 +839,32 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun createPipelineSnapshot() {
         viewModelScope.launch {
-            val bitmap = _originalBitmap.value ?: return@launch
-            val width = bitmap.width
-            val height = bitmap.height
-            val pixelCount = width * height
+            try {
+                val bitmap = _originalBitmap.value ?: return@launch
+                val width = bitmap.width
+                val height = bitmap.height
+                val pixelCount = width * height
 
-            val pixels = IntArray(pixelCount)
-            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-            val floatPixels = FloatArray(pixelCount * 4)
-            for (i in 0 until pixelCount) {
-                val pixel = pixels[i]
-                floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
-                floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
-                floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
-                floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+                val pixels = IntArray(pixelCount)
+                bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                val floatPixels = FloatArray(pixelCount * 4)
+                for (i in 0 until pixelCount) {
+                    val pixel = pixels[i]
+                    floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
+                    floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+                }
+
+                if (snapshotHandle != 0L) {
+                    pipelineService.releaseSnapshot(snapshotHandle)
+                }
+
+                snapshotHandle = pipelineService.createSnapshot(
+                    floatPixels, width, height, 4, _params.value)
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
-
-            if (snapshotHandle != 0L) {
-                pipelineService.releaseSnapshot(snapshotHandle)
-            }
-
-            snapshotHandle = pipelineService.createSnapshot(
-                floatPixels, width, height, 4, _params.value)
         }
     }
 

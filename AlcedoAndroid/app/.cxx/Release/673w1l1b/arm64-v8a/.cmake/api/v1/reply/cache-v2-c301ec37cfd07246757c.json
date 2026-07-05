@@ -11,7 +11,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "x86_64"
+			"value" : "arm64-v8a"
 		},
 		{
 			"name" : "ANDROID_CPP_FEATURES",
@@ -87,7 +87,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "x86_64"
+			"value" : "arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_ANDROID_NDK",
@@ -175,7 +175,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/x86_64"
+			"value" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_CACHE_MAJOR_VERSION",
@@ -731,7 +731,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "/workspace/AlcedoAndroid/app/build/intermediates/cxx/Release/673w1l1b/obj/x86_64"
+			"value" : "/workspace/AlcedoAndroid/app/build/intermediates/cxx/Release/673w1l1b/obj/arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_LINKER",
@@ -1003,7 +1003,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "/workspace/AlcedoAndroid/app/build/intermediates/cxx/Release/673w1l1b/obj/x86_64"
+			"value" : "/workspace/AlcedoAndroid/app/build/intermediates/cxx/Release/673w1l1b/obj/arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_SHARED_LINKER_FLAGS",
@@ -1243,10 +1243,10 @@
 			[
 				{
 					"name" : "HELPSTRING",
-					"value" : "The CMake toolchain file"
+					"value" : "No help, variable specified on the command line."
 				}
 			],
-			"type" : "FILEPATH",
+			"type" : "UNINITIALIZED",
 			"value" : "/opt/android-sdk/ndk/26.3.11579264/build/cmake/android.toolchain.cmake"
 		},
 		{
@@ -1287,7 +1287,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/x86_64"
+			"value" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/arm64-v8a"
 		},
 		{
 			"name" : "alcedo_core_IS_TOP_LEVEL",
@@ -1323,7 +1323,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/28/libandroid.so"
+			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/libandroid.so"
 		},
 		{
 			"name" : "android-log-lib",
@@ -1335,7 +1335,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/28/liblog.so"
+			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/liblog.so"
 		},
 		{
 			"name" : "egl-lib",
@@ -1347,7 +1347,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/28/libEGL.so"
+			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/libEGL.so"
 		},
 		{
 			"name" : "gles-lib",
@@ -1359,7 +1359,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/28/libGLESv3.so"
+			"value" : "/opt/android-sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/28/libGLESv3.so"
 		}
 	],
 	"kind" : "cache",

@@ -2,6 +2,7 @@ package com.alcedo.studio.viewmodel
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -270,28 +271,32 @@ class ExportViewModel : ViewModel() {
         sourceExifPath: String? = null
     ) {
         viewModelScope.launch {
-            _isExporting.value = true
+            try {
+                _isExporting.value = true
 
-            val bitmap = BitmapFactory.decodeFile(imagePath)
-            if (bitmap == null) {
-                _lastExportResult.value = ExportService.ExportResult.Error("Failed to decode image")
+                val bitmap = BitmapFactory.decodeFile(imagePath)
+                if (bitmap == null) {
+                    _lastExportResult.value = ExportService.ExportResult.Error("Failed to decode image")
+                    _isExporting.value = false
+                    return@launch
+                }
+
+                val processedBitmap = pipelineService.applyPipeline(bitmap, params)
+
+                val exportSettings = _settings.value.copy(
+                    sourceExifPath = sourceExifPath ?: imagePath
+                )
+
+                val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
+                _lastExportResult.value = result
                 _isExporting.value = false
-                return@launch
-            }
 
-            val processedBitmap = pipelineService.applyPipeline(bitmap, params)
-
-            val exportSettings = _settings.value.copy(
-                sourceExifPath = sourceExifPath ?: imagePath
-            )
-
-            val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
-            _lastExportResult.value = result
-            _isExporting.value = false
-
-            processedBitmap.recycle()
-            if (processedBitmap !== bitmap) {
-                bitmap.recycle()
+                processedBitmap.recycle()
+                if (processedBitmap !== bitmap) {
+                    bitmap.recycle()
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("ExportVM", "Coroutine failed", e)
             }
         }
     }
@@ -301,15 +306,19 @@ class ExportViewModel : ViewModel() {
         processedBitmap: Bitmap
     ) {
         viewModelScope.launch {
-            _isExporting.value = true
+            try {
+                _isExporting.value = true
 
-            val exportSettings = _settings.value.copy(
-                sourceExifPath = imagePath
-            )
+                val exportSettings = _settings.value.copy(
+                    sourceExifPath = imagePath
+                )
 
-            val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
-            _lastExportResult.value = result
-            _isExporting.value = false
+                val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
+                _lastExportResult.value = result
+                _isExporting.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("ExportVM", "Coroutine failed", e)
+            }
         }
     }
 
@@ -346,40 +355,44 @@ class ExportViewModel : ViewModel() {
 
     fun exportBatch() {
         viewModelScope.launch {
-            _isExporting.value = true
-            _batchProgress.value = BatchExportProgress(
-                totalItems = _batchItems.value.size,
-                completedItems = 0,
-                currentItem = 0
-            )
-
-            val items = _batchItems.value
-            val exportItems = mutableListOf<ExportService.ExportBatchItem>()
-
-            for ((index, item) in items.withIndex()) {
-                val image = imageRepository.getImage(item.imageId)
-                if (image != null) {
-                    val bitmap = BitmapFactory.decodeFile(image.imagePath)
-                    if (bitmap != null) {
-                        val processed = pipelineService.applyPipeline(bitmap, item.params)
-                        exportItems.add(
-                            ExportService.ExportBatchItem(
-                                sourcePath = image.imagePath,
-                                processedBitmap = processed
-                            )
-                        )
-                    }
-                }
-                _batchProgress.value = _batchProgress.value.copy(
-                    currentItem = index + 1
+            try {
+                _isExporting.value = true
+                _batchProgress.value = BatchExportProgress(
+                    totalItems = _batchItems.value.size,
+                    completedItems = 0,
+                    currentItem = 0
                 )
+
+                val items = _batchItems.value
+                val exportItems = mutableListOf<ExportService.ExportBatchItem>()
+
+                for ((index, item) in items.withIndex()) {
+                    val image = imageRepository.getImage(item.imageId)
+                    if (image != null) {
+                        val bitmap = BitmapFactory.decodeFile(image.imagePath)
+                        if (bitmap != null) {
+                            val processed = pipelineService.applyPipeline(bitmap, item.params)
+                            exportItems.add(
+                                ExportService.ExportBatchItem(
+                                    sourcePath = image.imagePath,
+                                    processedBitmap = processed
+                                )
+                            )
+                        }
+                    }
+                    _batchProgress.value = _batchProgress.value.copy(
+                        currentItem = index + 1
+                    )
+                }
+
+                val exportSettings = _settings.value
+                exportService.exportBatch(exportItems, exportSettings)
+
+                _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
+                _isExporting.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("ExportVM", "Coroutine failed", e)
             }
-
-            val exportSettings = _settings.value
-            exportService.exportBatch(exportItems, exportSettings)
-
-            _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
-            _isExporting.value = false
         }
     }
 
@@ -398,17 +411,21 @@ class ExportViewModel : ViewModel() {
 
     fun exportBatch(items: List<ExportService.ExportBatchItem>) {
         viewModelScope.launch {
-            _isExporting.value = true
-            _batchProgress.value = _batchProgress.value.copy(
-                totalItems = items.size,
-                completedItems = 0,
-                currentItem = 0
-            )
-            val exportSettings = _settings.value
-            val result = exportService.exportBatch(items, exportSettings)
-            _batchResult.value = result
-            _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
-            _isExporting.value = false
+            try {
+                _isExporting.value = true
+                _batchProgress.value = _batchProgress.value.copy(
+                    totalItems = items.size,
+                    completedItems = 0,
+                    currentItem = 0
+                )
+                val exportSettings = _settings.value
+                val result = exportService.exportBatch(items, exportSettings)
+                _batchResult.value = result
+                _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
+                _isExporting.value = false
+            } catch (e: Throwable) {
+                android.util.Log.e("ExportVM", "Coroutine failed", e)
+            }
         }
     }
 

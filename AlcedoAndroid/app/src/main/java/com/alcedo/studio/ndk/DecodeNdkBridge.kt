@@ -15,7 +15,7 @@ object DecodeNdkBridge {
         try {
             System.loadLibrary("alcedo")
             isAvailable = true
-        } catch (e: UnsatisfiedLinkError) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Failed to load native library", e)
             isAvailable = false
         }
