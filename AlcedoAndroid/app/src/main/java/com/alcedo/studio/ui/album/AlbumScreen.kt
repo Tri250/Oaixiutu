@@ -1,13 +1,19 @@
 package com.alcedo.studio.ui.album
 
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,11 +23,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.data.model.SleeveFolder
+import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.ui.common.*
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import kotlinx.coroutines.launch
@@ -48,10 +59,12 @@ fun AlbumScreen(
     val folders by viewModel.folders.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val thumbnailCache by viewModel.thumbnailCache.collectAsState()
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var showFolderSidebar by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(false) }
+    var contextMenuImage by remember { mutableStateOf<ImageModel?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -60,6 +73,33 @@ fun AlbumScreen(
         configuration.screenWidthDp >= 840 -> 5
         configuration.screenWidthDp >= 600 -> 4
         else -> 3
+    }
+
+    // ── Photo Picker launcher ──────────────────────────────────────
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(50)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.importFromPhotoPicker(uris)
+        }
+    }
+
+    // ── SAF directory picker launcher ──────────────────────────────
+    val safDirLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        treeUri?.let {
+            viewModel.importFromSafDirectory(it)
+        }
+    }
+
+    // ── Legacy file picker launcher (fallback) ─────────────────────
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.importFromPhotoPicker(uris)
+        }
     }
 
     if (showFolderSidebar) {
@@ -92,6 +132,7 @@ fun AlbumScreen(
                 semanticEnabled = semanticEnabled,
                 sortMode = sortMode,
                 columns = columns,
+                thumbnailCache = thumbnailCache,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
                 onToggleSearch = viewModel::toggleSearch,
                 onToggleSemantic = viewModel::toggleSemanticSearch,
@@ -106,7 +147,9 @@ fun AlbumScreen(
                     scope.launch { drawerState.open() }
                 },
                 onImport = { showImport = true },
-                onSettings = { navController.navigate("settings") }
+                onSettings = { navController.navigate("settings") },
+                onImageContextMenu = { contextMenuImage = it },
+                onLoadThumbnail = viewModel::loadThumbnail
             )
         }
     } else {
@@ -121,6 +164,7 @@ fun AlbumScreen(
             semanticEnabled = semanticEnabled,
             sortMode = sortMode,
             columns = columns,
+            thumbnailCache = thumbnailCache,
             onSearchQueryChange = viewModel::onSearchQueryChange,
             onToggleSearch = viewModel::toggleSearch,
             onToggleSemantic = viewModel::toggleSemanticSearch,
@@ -132,13 +176,15 @@ fun AlbumScreen(
             onOpenFilter = { showFilterSheet = true },
             onOpenFolderSidebar = { showFolderSidebar = true },
             onImport = { showImport = true },
-            onSettings = { navController.navigate("settings") }
+            onSettings = { navController.navigate("settings") },
+            onImageContextMenu = { contextMenuImage = it },
+            onLoadThumbnail = viewModel::loadThumbnail
         )
     }
 
     // Filter bottom sheet
     if (showFilterSheet) {
-        FilterSheet(
+        FilterBottomSheet(
             onDismiss = { showFilterSheet = false },
             onApply = { filter ->
                 viewModel.applyFilter(filter)
@@ -155,13 +201,47 @@ fun AlbumScreen(
     if (showImport) {
         ImportDialog(
             onDismiss = { showImport = false },
-            onImportFiles = { uris ->
-                viewModel.importFromPhotoPicker(uris)
+            onSelectFiles = {
                 showImport = false
+                if (PhotoPickerHelper.isAvailable()) {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                } else {
+                    filePickerLauncher.launch(arrayOf("image/*"))
+                }
             },
-            onImportDirectory = { path ->
-                viewModel.importDirectory(path)
+            onSelectDirectory = {
                 showImport = false
+                safDirLauncher.launch(null)
+            }
+        )
+    }
+
+    // Image context menu
+    contextMenuImage?.let { image ->
+        ImageContextMenu(
+            imageName = image.imageName,
+            onDismiss = { contextMenuImage = null },
+            onEdit = {
+                contextMenuImage = null
+                navController.navigate("editor/${image.imageId}")
+            },
+            onRate = {
+                contextMenuImage = null
+                viewModel.setRating(image.imageId, 3)
+            },
+            onExport = {
+                contextMenuImage = null
+                navController.navigate("export/${image.imageId}")
+            },
+            onDelete = {
+                contextMenuImage = null
+                viewModel.toggleImageSelection(image.imageId)
+            },
+            onAnalyzeAi = {
+                contextMenuImage = null
+                viewModel.generateLabelsForImage(image.imageId)
             }
         )
     }
@@ -180,6 +260,7 @@ private fun AlbumContent(
     semanticEnabled: Boolean,
     sortMode: SortMode,
     columns: Int,
+    thumbnailCache: Map<Long, android.graphics.Bitmap>,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onToggleSemantic: () -> Unit,
@@ -191,12 +272,17 @@ private fun AlbumContent(
     onOpenFilter: () -> Unit,
     onOpenFolderSidebar: () -> Unit,
     onImport: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onImageContextMenu: (ImageModel) -> Unit,
+    onLoadThumbnail: (Long) -> Unit
 ) {
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (selectedImages.isNotEmpty()) {
-                // Selection mode top bar
+                // Selection mode top bar with animation
                 AnimatedVisibility(
                     visible = selectedImages.isNotEmpty(),
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -214,12 +300,12 @@ private fun AlbumContent(
                                 Icon(Icons.Default.Delete, contentDescription = "Delete",
                                     tint = MaterialTheme.colorScheme.error)
                             }
-                            IconButton(onClick = { /* Share */ }) {
+                            IconButton(onClick = { /* Share selected */ }) {
                                 Icon(Icons.Default.Share, contentDescription = "Share")
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
                         )
                     )
                 }
@@ -236,7 +322,10 @@ private fun AlbumContent(
                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                                 ),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                leadingIcon = {
+                                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                }
                             )
                         } else {
                             Text("Alcedo Studio")
@@ -244,7 +333,10 @@ private fun AlbumContent(
                     },
                     actions = {
                         IconButton(onClick = onToggleSearch) {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
+                            Icon(
+                                if (showSearch) Icons.Default.Close else Icons.Default.Search,
+                                contentDescription = "Search"
+                            )
                         }
                         if (showSearch) {
                             FilterChip(
@@ -263,16 +355,24 @@ private fun AlbumContent(
                         IconButton(onClick = onSettings) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
-                    }
+                    },
+                    scrollBehavior = scrollBehavior
                 )
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onImport,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            AnimatedVisibility(
+                visible = selectedImages.isEmpty(),
+                enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeOut()
             ) {
-                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Import")
+                FloatingActionButton(
+                    onClick = onImport,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Import")
+                }
             }
         }
     ) { padding ->
@@ -318,17 +418,20 @@ private fun AlbumContent(
                         )
 
                         // Thumbnail grid
-                        LazyVerticalStaggeredGrid(
-                            columns = StaggeredGridCells.Fixed(columns),
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalItemSpacing = 6.dp
+                            contentPadding = PaddingValues(
+                                start = 8.dp, end = 8.dp, top = 4.dp, bottom = 88.dp
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             items(images, key = { it.imageId }) { image ->
                                 ThumbnailCard(
                                     image = image,
                                     isSelected = selectedImages.contains(image.imageId),
+                                    thumbnailBitmap = thumbnailCache[image.imageId],
                                     onClick = {
                                         if (selectedImages.isNotEmpty()) {
                                             onToggleImageSelection(image.imageId)
@@ -336,7 +439,13 @@ private fun AlbumContent(
                                             navController.navigate("editor/${image.imageId}")
                                         }
                                     },
-                                    onLongClick = { onToggleImageSelection(image.imageId) }
+                                    onLongClick = {
+                                        if (selectedImages.isEmpty()) {
+                                            onImageContextMenu(image)
+                                        } else {
+                                            onToggleImageSelection(image.imageId)
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -356,7 +465,7 @@ private fun SortFilterBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -366,7 +475,10 @@ private fun SortFilterBar(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
             SortMode.entries.forEach { mode ->
                 AssistChip(
                     onClick = { onSortModeChange(mode) },
@@ -388,13 +500,27 @@ private fun SortFilterBar(
 private fun ThumbnailCard(
     image: ImageModel,
     isSelected: Boolean,
+    thumbnailBitmap: android.graphics.Bitmap?,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 0.9f else 1f,
+        targetValue = if (isSelected) 0.92f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
         label = "selectScale"
     )
+    val elevation by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isSelected) 6.dp else 1.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "cardElevation"
+    )
+
     Card(
         modifier = Modifier
             .graphicsLayer(scaleX = scale, scaleY = scale)
@@ -402,18 +528,16 @@ private fun ThumbnailCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected)
                 MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 4.dp else 0.dp
-        )
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
         Box {
-            // Thumbnail placeholder
+            // Thumbnail image or placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -424,15 +548,29 @@ private fun ThumbnailCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    image.imageName.take(1).uppercase(),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                )
+                if (thumbnailBitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = thumbnailBitmap.asImageBitmap(),
+                        contentDescription = image.imageName,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Placeholder with first letter
+                    Text(
+                        image.imageName.take(1).uppercase(),
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
             }
 
-            // Selection indicator
-            if (isSelected) {
+            // Selection indicator with animation
+            AnimatedVisibility(
+                visible = isSelected,
+                enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeOut()
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -479,7 +617,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // AI label chips
+            // AI label / RAW indicator
             if (image.hasExif) {
                 Surface(
                     modifier = Modifier
@@ -493,25 +631,34 @@ private fun ThumbnailCard(
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
-                        fontSize = 10.sp
+                        fontSize = 9.sp
                     )
                 }
             }
 
-            // Image name
-            Text(
-                image.imageName,
+            // Image name overlay
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = 10.sp
-            )
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                            startY = 0f,
+                            endY = 24.dp.value
+                        )
+                    )
+                    .padding(horizontal = 4.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    image.imageName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 9.sp
+                )
+            }
         }
     }
 }
@@ -570,35 +717,41 @@ private fun FolderSidebar(
 @Composable
 private fun ImportDialog(
     onDismiss: () -> Unit,
-    onImportFiles: (List<android.net.Uri>) -> Unit,
-    onImportDirectory: (String) -> Unit
+    onSelectFiles: () -> Unit,
+    onSelectDirectory: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Import Images") },
+        icon = { Icon(Icons.Default.AddPhotoAlternate, contentDescription = null) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = { /* Open file picker */ },
+                // Select Files button – launches Photo Picker or file picker
+                FilledTonalButton(
+                    onClick = onSelectFiles,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Select Files")
+                    Text("Select Photos")
                 }
+
+                // Select Directory button – launches SAF directory picker
                 OutlinedButton(
-                    onClick = { /* Open directory picker */ },
+                    onClick = onSelectDirectory,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Select Directory")
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
                 Text(
-                    "Drag and drop images here",
+                    "Tip: Long press a photo to open the context menu for editing, rating, and more.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
@@ -608,9 +761,218 @@ private fun ImportDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FilterBottomSheet(
+    onDismiss: () -> Unit,
+    onApply: (FilterState) -> Unit,
+    onReset: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        FilterSheetContent(
+            onApply = onApply,
+            onReset = onReset
+        )
+    }
+}
+
+@Composable
+private fun FilterSheetContent(
+    onApply: (FilterState) -> Unit,
+    onReset: () -> Unit
+) {
+    var cameraMakes by remember { mutableStateOf(setOf<String>()) }
+    var cameraModels by remember { mutableStateOf(setOf<String>()) }
+    var lensModel by remember { mutableStateOf("") }
+    var startDate by remember { mutableStateOf("") }
+    var endDate by remember { mutableStateOf("") }
+    var selectedRating by remember { mutableIntStateOf(0) }
+    var selectedFileTypes by remember { mutableStateOf(setOf<String>()) }
+    var selectedAiLabels by remember { mutableStateOf(setOf<String>()) }
+
+    val sampleCameraMakes = listOf("Sony", "Canon", "Nikon", "Fujifilm", "Leica", "Panasonic", "Olympus")
+    val sampleCameraModels = listOf("α7R V", "EOS R5", "Z8", "X-T5", "M11", "S5 II", "OM-1")
+    val sampleFileTypes = listOf("JPEG", "PNG", "TIFF", "RAW", "DNG")
+    val sampleAiLabels = listOf("Portrait", "Landscape", "Night", "City", "Nature", "Food", "Street", "Abstract")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Filters", style = MaterialTheme.typography.titleLarge)
+            Row {
+                TextButton(onClick = onReset) {
+                    Text("Reset")
+                }
+                TextButton(onClick = {
+                    onApply(
+                        FilterState(
+                            cameraMakes = cameraMakes.toList(),
+                            cameraModels = cameraModels.toList(),
+                            lensModel = lensModel,
+                            startDate = startDate,
+                            endDate = endDate,
+                            rating = selectedRating,
+                            fileTypes = selectedFileTypes.toList(),
+                            aiLabels = selectedAiLabels.toList()
+                        )
+                    )
+                }) {
+                    Text("Apply")
+                }
+            }
+        }
+
+        // Camera Make
+        Text("Camera Make", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            sampleCameraMakes.forEach { make ->
+                FilterChip(
+                    selected = cameraMakes.contains(make),
+                    onClick = {
+                        cameraMakes = if (cameraMakes.contains(make))
+                            cameraMakes - make
+                        else cameraMakes + make
+                    },
+                    label = { Text(make, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+
+        // Camera Model
+        Text("Camera Model", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            sampleCameraModels.forEach { model ->
+                FilterChip(
+                    selected = cameraModels.contains(model),
+                    onClick = {
+                        cameraModels = if (cameraModels.contains(model))
+                            cameraModels - model
+                        else cameraModels + model
+                    },
+                    label = { Text(model, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+
+        // Lens
+        Text("Lens Model", style = MaterialTheme.typography.labelLarge)
+        OutlinedTextField(
+            value = lensModel,
+            onValueChange = { lensModel = it },
+            placeholder = { Text("Any lens...") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = { Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp)) }
+        )
+
+        // Date Range
+        Text("Date Range", style = MaterialTheme.typography.labelLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = startDate,
+                onValueChange = { startDate = it },
+                placeholder = { Text("Start") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            )
+            OutlinedTextField(
+                value = endDate,
+                onValueChange = { endDate = it },
+                placeholder = { Text("End") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Rating
+        Text("Rating", style = MaterialTheme.typography.labelLarge)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            (1..5).forEach { star ->
+                IconButton(
+                    onClick = { selectedRating = if (selectedRating == star) 0 else star },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        if (star <= selectedRating) Icons.Default.Star else Icons.Default.StarOutline,
+                        contentDescription = "$star stars",
+                        tint = if (star <= selectedRating)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            if (selectedRating > 0) {
+                Text("& up", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        // File Type
+        Text("File Type", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            sampleFileTypes.forEach { type ->
+                FilterChip(
+                    selected = selectedFileTypes.contains(type),
+                    onClick = {
+                        selectedFileTypes = if (selectedFileTypes.contains(type))
+                            selectedFileTypes - type
+                        else selectedFileTypes + type
+                    },
+                    label = { Text(type, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+
+        // AI Labels
+        Text("AI Labels", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            sampleAiLabels.forEach { label ->
+                FilterChip(
+                    selected = selectedAiLabels.contains(label),
+                    onClick = {
+                        selectedAiLabels = if (selectedAiLabels.contains(label))
+                            selectedAiLabels - label
+                        else selectedAiLabels + label
+                    },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+    }
+}
+
 enum class SortMode(val label: String) {
     DATE("Date"),
     NAME("Name"),
     RATING("Rating"),
     TYPE("Type")
+}
+
+// Helper to convert Bitmap to ImageBitmap for Compose
+private fun android.graphics.Bitmap.asImageBitmap(): androidx.compose.ui.graphics.ImageBitmap {
+    return androidx.compose.ui.graphics.asImageBitmap()
 }

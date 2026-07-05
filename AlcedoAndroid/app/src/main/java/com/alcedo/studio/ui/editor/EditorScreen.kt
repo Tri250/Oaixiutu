@@ -175,13 +175,13 @@ fun EditorScreen(
                     )
                 }
             } else {
-                // Phone: vertical layout
+                // Phone: vertical layout with adjustable preview/panel split
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Image preview
+                    // Image preview – takes more space on phone for better visibility
                     ImagePreviewArea(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(0.45f),
+                            .weight(0.5f),
                         isProcessing = isProcessing,
                         isCompareMode = isCompareMode,
                         previewBitmap = preview?.asImageBitmap(),
@@ -193,13 +193,16 @@ fun EditorScreen(
                     ScrollableTabRow(
                         selectedTabIndex = selectedPanel.ordinal,
                         modifier = Modifier.fillMaxWidth(),
-                        edgePadding = 0.dp
+                        edgePadding = 0.dp,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         EditorPanel.entries.forEach { panel ->
                             Tab(
                                 selected = selectedPanel == panel,
                                 onClick = { selectedPanel = panel },
-                                text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
+                                text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) },
+                                selectedContentColor = MaterialTheme.colorScheme.primary,
+                                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -208,10 +211,10 @@ fun EditorScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(0.45f)
+                            .weight(0.5f)
                             .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         when (selectedPanel) {
                             EditorPanel.BASIC -> BasicPanel(
