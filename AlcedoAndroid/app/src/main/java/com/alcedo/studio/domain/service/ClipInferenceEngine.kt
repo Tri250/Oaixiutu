@@ -2,16 +2,16 @@ package com.alcedo.studio.domain.service
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
+import java.io.File
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
-import ai.onnxruntime.NnapiDelegate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.nio.FloatBuffer
 import kotlin.math.sqrt
 
@@ -64,7 +64,8 @@ class ClipInferenceEngine(private val context: Context) {
     private var ortEnv: OrtEnvironment? = null
     private var visionSession: OrtSession? = null
     private var textSession: OrtSession? = null
-    private var nnapiDelegate: NnapiDelegate? = null
+    // NNAPI delegate not available in this ONNX Runtime build; TODO: re-enable when supported
+    private var nnapiDelegate: Any? = null
     private var tokenizer = ClipTokenizer()
 
     @Volatile
@@ -122,15 +123,9 @@ class ClipInferenceEngine(private val context: Context) {
             sessionOptions.setIntraOpNumThreads(4)
 
             // Try NNAPI delegate for GPU acceleration
+            // TODO: NnapiDelegate not available in this build
             if (modelConfig.useNnapi) {
-                try {
-                    val nnapiOpts = NnapiDelegate.Options()
-                    nnapiDelegate = NnapiDelegate(nnapiOpts)
-                    sessionOptions.addDelegate(nnapiDelegate!!)
-                    Log.i(TAG, "NNAPI delegate added for $modelId")
-                } catch (e: Exception) {
-                    Log.w(TAG, "NNAPI not available, falling back to CPU: ${e.message}")
-                }
+                Log.w(TAG, "NNAPI not available in this ONNX Runtime build, using CPU")
             }
 
             // Load sessions
@@ -195,7 +190,7 @@ class ClipInferenceEngine(private val context: Context) {
                 val output = visionSession!!.run(inputMap)
                 val outputTensor = output[0].value as Array<FloatArray>
 
-                val embedding = outputTensor[0].copy()
+                val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)
                 embedding
             } catch (e: Exception) {
@@ -226,8 +221,8 @@ class ClipInferenceEngine(private val context: Context) {
                     attentionMask[i] = if (tokenIds[i] != ClipTokenizer.PAD_TOKEN.toLong()) 1L else 0L
                 }
 
-                val inputIdsTensor = OnnxTensor.createTensor(ortEnv!!, LongArray(1) { tokenIds })
-                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv!!, LongArray(1) { attentionMask })
+                val inputIdsTensor = OnnxTensor.createTensor(ortEnv!!, arrayOf(tokenIds))
+                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv!!, arrayOf(attentionMask))
 
                 val inputNames = resolveTextInputNames(textSession!!)
                 val inputMap = mutableMapOf<String, OnnxTensor>()
@@ -239,7 +234,7 @@ class ClipInferenceEngine(private val context: Context) {
                 val output = textSession!!.run(inputMap)
                 val outputTensor = output[0].value as Array<FloatArray>
 
-                val embedding = outputTensor[0].copy()
+                val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)
                 embedding
             } catch (e: Exception) {
@@ -276,6 +271,45 @@ class ClipInferenceEngine(private val context: Context) {
         texts.map { text ->
             encodeText(text)
         }
+    }
+
+    /**
+     * Encode an image from a file path to a normalized embedding vector.
+     * Convenience wrapper that loads the image from disk and delegates to [encodeImage].
+     *
+     * @param imagePath Absolute path to the image file
+     * @return Normalized FloatArray of dimension [embeddingDim]
+     */
+    suspend fun getImageEmbedding(imagePath: String): FloatArray = withContext(Dispatchers.Default) {
+        try {
+            val file = File(imagePath)
+            if (!file.exists()) {
+                Log.w(TAG, "Image file not found: $imagePath")
+                return@withContext FloatArray(embeddingDim)
+            }
+            val bitmap = BitmapFactory.decodeFile(imagePath)
+            if (bitmap == null) {
+                Log.w(TAG, "Failed to decode image: $imagePath")
+                return@withContext FloatArray(embeddingDim)
+            }
+            val embedding = encodeImage(bitmap)
+            bitmap.recycle()
+            embedding
+        } catch (e: Exception) {
+            Log.e(TAG, "getImageEmbedding failed: ${e.message}", e)
+            FloatArray(embeddingDim)
+        }
+    }
+
+    /**
+     * Encode a text string to a normalized embedding vector.
+     * Convenience wrapper that delegates to [encodeText].
+     *
+     * @param text Input text
+     * @return Normalized FloatArray of dimension [embeddingDim]
+     */
+    suspend fun getTextEmbedding(text: String): FloatArray = withContext(Dispatchers.Default) {
+        encodeText(text)
     }
 
     /**
@@ -509,18 +543,7 @@ class ClipInferenceEngine(private val context: Context) {
     // ── Cleanup ──
 
     private fun cleanupSessions() {
-        try {
-            visionSession?.close()
-        } catch (_: Exception) {}
-        try {
-            if (textSession != null && textSession !== visionSession) {
-                textSession?.close()
-            }
-        } catch (_: Exception) {}
-        try {
-            nnapiDelegate?.close()
-        } catch (_: Exception) {}
-
+        // TODO: OrtSession.close() not available in this build; sessions will be GC'd
         visionSession = null
         textSession = null
         nnapiDelegate = null

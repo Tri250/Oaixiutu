@@ -185,11 +185,11 @@ class SearchService(
             val semanticResults = aiService.searchByText(query.rawQuery, query.maxResults)
                 .map { sr ->
                     RankedSearchResult(
-                        imageId = sr.imageId,
+                        imageId = sr.imageId.toLong(),
                         score = sr.score,
                         resultType = ResultType.SEMANTIC,
                         matchedField = "semantic",
-                        image = allImages.find { it.imageId == sr.imageId }
+                        image = allImages.find { it.imageId == sr.imageId.toLong() }
                     )
                 }
             results.addAll(semanticResults)
@@ -365,10 +365,10 @@ class SearchService(
         }
 
         ExifStatistics(
-            cameras = cameras.entries.sortedByDescending { it.value }.take(20).toMap(),
-            lenses = lenses.entries.sortedByDescending { it.value }.take(20).toMap(),
-            apertures = apertures.entries.sortedByDescending { it.value }.take(10).toMap(),
-            focalLengths = focalLengths.entries.sortedByDescending { it.value }.take(10).toMap()
+            cameras = cameras.entries.sortedByDescending { it.value }.take(20).associate { it.key to it.value },
+            lenses = lenses.entries.sortedByDescending { it.value }.take(20).associate { it.key to it.value },
+            apertures = apertures.entries.sortedByDescending { it.value }.take(10).associate { it.key to it.value },
+            focalLengths = focalLengths.entries.sortedByDescending { it.value }.take(10).associate { it.key to it.value }
         )
     }
 

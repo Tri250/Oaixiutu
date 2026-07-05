@@ -2,6 +2,8 @@ package com.alcedo.studio.ui.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.alcedo.studio.domain.repository.EditHistoryRepository
+import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.viewmodel.EditorViewModel

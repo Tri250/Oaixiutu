@@ -1,10 +1,14 @@
 package com.alcedo.studio.ui.common
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -16,11 +20,21 @@ fun AlcedoPullToRefreshBox(
 ) {
     val state = rememberPullToRefreshState()
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
-        state = state,
-        modifier = modifier,
-        content = content
-    )
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
+            state.startRefresh()
+        } else {
+            state.endRefresh()
+        }
+    }
+
+    Box(
+        modifier = modifier.nestedScroll(state.nestedScrollConnection)
+    ) {
+        content()
+        PullToRefreshContainer(
+            state = state,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+    }
 }

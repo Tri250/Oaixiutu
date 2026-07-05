@@ -160,9 +160,31 @@ class DecodeService(
         rawInfoCache[filePath]?.let { return@withContext it.info }
 
         try {
-            val info = decodeBridge.nativeReadRawInfo(filePath)
-            rawInfoCache[filePath] = CachedRawInfo(info)
-            info
+            val nativeInfo = decodeBridge.nativeReadRawInfo(filePath)
+            if (nativeInfo != null) {
+                val info = RawImageInfo(
+                    format = nativeInfo.format,
+                    make = nativeInfo.make,
+                    model = nativeInfo.model,
+                    rawWidth = nativeInfo.rawWidth,
+                    rawHeight = nativeInfo.rawHeight,
+                    bayerPattern = nativeInfo.bayerPattern,
+                    whiteLevel = nativeInfo.whiteLevel,
+                    blackLevel = nativeInfo.blackLevel,
+                    cameraToSrgb = nativeInfo.cameraToSrgb,
+                    daylightWb = nativeInfo.daylightWb,
+                    tungstenWb = nativeInfo.tungstenWb,
+                    cameraWb = nativeInfo.cameraWb,
+                    cfaPattern = nativeInfo.cfaPattern,
+                    bitsPerSample = nativeInfo.bitsPerSample,
+                    compressionType = nativeInfo.compressionType,
+                    isNikonHe = nativeInfo.isNikonHe
+                )
+                rawInfoCache[filePath] = CachedRawInfo(info)
+                info
+            } else {
+                null
+            }
         } catch (e: Exception) {
             null
         }

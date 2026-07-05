@@ -204,7 +204,9 @@ fun HistoryPanel(
                         version.transactions.takeLast(5).reversed().forEach { tx ->
                             Text(
                                 text = "${tx.operatorType.name} · ${
-                                    tx.timestamp.format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                                    DateTimeFormatter.ofPattern("HH:mm:ss")
+                                        .withZone(java.time.ZoneId.systemDefault())
+                                        .format(tx.timestamp)
                                 }",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

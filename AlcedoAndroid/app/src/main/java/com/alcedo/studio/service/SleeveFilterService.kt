@@ -1,5 +1,6 @@
 package com.alcedo.studio.service
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.Dispatchers
@@ -286,7 +287,7 @@ class SleeveFilterService(
                     metadata.map { it.imageId }.toSet()
                 }
                 else -> {
-                    elementDao.ftsSearchElements(filter.getPredicate()).map { it.elementId }.toSet()
+                    elementDao.ftsSearchElements(SimpleSQLiteQuery(filter.getPredicate(), null)).map { it.elementId }.toSet()
                 }
             }
         }

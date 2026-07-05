@@ -1,5 +1,6 @@
 package com.alcedo.studio.domain.service
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.Dispatchers

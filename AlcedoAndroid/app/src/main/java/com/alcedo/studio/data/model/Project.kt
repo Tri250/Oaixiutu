@@ -417,3 +417,55 @@ data class QueryClassification(
     val exifIso: Boolean = false,
     val exifCaptureDate: Boolean = false
 )
+
+// ================================================================
+// Search Query
+// ================================================================
+
+data class SearchQuery(
+    val rawQuery: String,
+    val enableFuzzy: Boolean = true,
+    val enableExif: Boolean = true,
+    val enableLabel: Boolean = true,
+    val enableSemantic: Boolean = false,
+    val filterCombo: FilterCombo? = null,
+    val maxResults: Int = 50
+)
+
+// ================================================================
+// Image Filter
+// ================================================================
+
+data class ImageFilter(
+    val minWidth: Int? = null,
+    val maxWidth: Int? = null,
+    val minHeight: Int? = null,
+    val maxHeight: Int? = null,
+    val imageType: ImageType? = null,
+    val rating: Int? = null
+)
+
+// ================================================================
+// AI Model Management
+// ================================================================
+
+enum class ModelDownloadStatus {
+    NOT_DOWNLOADED, DOWNLOADING, DOWNLOADED, PAUSED, FAILED, VERIFIED, ACTIVATED
+}
+
+data class ModelAsset(
+    val modelId: String,
+    val modelName: String,
+    val modelType: AiModelType,
+    val version: String = "",
+    val fileSizeBytes: Long = 0L,
+    val downloadUrl: String = "",
+    val description: String = "",
+    val embeddingDim: Int = 0,
+    val requiredStorageBytes: Long = 0L,
+    val downloadStatus: ModelDownloadStatus = ModelDownloadStatus.NOT_DOWNLOADED,
+    val localPath: String = "",
+    val downloadProgress: Float = 0f,
+    val isActive: Boolean = false,
+    val checksum: String = ""
+)

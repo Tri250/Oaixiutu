@@ -58,7 +58,7 @@ fun CompareView(
                     .fillMaxSize()
                     .drawWithContent {
                         clipRect(0f, 0f, size.width * sliderPosition, size.height) {
-                            drawContent()
+                            this@drawWithContent.drawContent()
                         }
                     },
                 contentScale = ContentScale.Fit
@@ -78,6 +78,7 @@ fun CompareView(
         )
 
         // Layer 4: Slider visual (divider line, handle, labels)
+        val primaryColor = MaterialTheme.colorScheme.primary
         Canvas(modifier = Modifier.fillMaxSize()) {
             val x = size.width * sliderPosition
 
@@ -97,7 +98,7 @@ fun CompareView(
             )
             // Handle circle — inner fill
             drawCircle(
-                color = MaterialTheme.colorScheme.primary,
+                color = primaryColor,
                 radius = 16f,
                 center = Offset(x, size.height / 2f)
             )

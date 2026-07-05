@@ -397,6 +397,7 @@ class EnglishStrings : StringResources {
     override val gamutAces = "ACES"
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    override val themeHasselblad = "Hasselblad"
     override val themeGold = "Gold"
     override val themeWine = "Wine"
     override val themeSteel = "Steel"

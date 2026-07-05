@@ -39,7 +39,7 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "alcedo::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-alcedo-Release-662d7adf7a86b0ea0c92.json",
+					"jsonFile" : "target-alcedo-Release-a3d7e48d942ac9ad5085.json",
 					"name" : "alcedo",
 					"projectIndex" : 0
 				}
@@ -49,7 +49,7 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/arm64-v8a",
+		"build" : "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/x86_64",
 		"source" : "/workspace/AlcedoAndroid/app/src/main/cpp"
 	},
 	"version" : 

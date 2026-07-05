@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.serializer
 import java.io.*
 import java.security.MessageDigest
 import java.time.Instant
@@ -48,26 +49,26 @@ class ProjectPackageService {
         Log.i(TAG, "Serializing project: ${project.projectName}")
 
         // Collect sleeve tree
-        val sleeveTree = collectSleeveTree(project.sleeveRootId, sleeveRepository)
+        val sleeveTree = collectSleeveTree(project.sleeveRootId.toLong(), sleeveRepository)
 
         // Collect edit histories
         val editHistories = mutableMapOf<UInt, EditHistory>()
         val allImages = imageRepository.getAllImages()
         for (image in allImages) {
-            val history = editHistoryRepository.getHistory(image.imageId)
+            val history = editHistoryRepository.getHistory(image.imageId.toUInt())
             if (history != null) {
-                editHistories[image.imageId] = history
+                editHistories[image.imageId.toUInt()] = history
             }
         }
 
         // Collect image metadata
         val imageMetadata = allImages.map { image ->
             ImageMetaSnapshot(
-                imageId = image.imageId,
+                imageId = image.imageId.toUInt(),
                 imagePath = image.imagePath,
                 imageName = image.imageName,
                 imageType = image.imageType.name,
-                checksum = image.checksum,
+                checksum = image.checksum.toULong(),
                 exifDisplay = image.exifDisplay
             )
         }
@@ -112,8 +113,8 @@ class ProjectPackageService {
                 }
                 val historiesJson = json.encodeToString(
                     kotlinx.serialization.builtins.MapSerializer(
-                        kotlinx.serialization.builtins.String.serializer(),
-                        kotlinx.serialization.builtins.String.serializer()
+                        serializer<String>(),
+                        serializer<String>()
                     ), histories.mapKeys { it.key.toString() }
                 )
                 zos.write(compressString(historiesJson))
@@ -347,7 +348,7 @@ class ProjectPackageService {
         for (image in images) {
             val thumbnail = imageRepository.getThumbnail(image.imageId)
             if (thumbnail != null) {
-                assets.add(embedThumbnail(image.imageId, thumbnail))
+                assets.add(embedThumbnail(image.imageId.toUInt(), thumbnail))
             }
         }
         assets
@@ -370,16 +371,16 @@ class ProjectPackageService {
             ),
             "versionStorage" to json.encodeToString(
                 kotlinx.serialization.builtins.MapSerializer(
-                    kotlinx.serialization.builtins.String.serializer(),
-                    kotlinx.serialization.builtins.String.serializer()
+                    serializer<String>(),
+                    serializer<String>()
                 ),
                 history.versionStorage.mapValues { serializeVersion(it.value) }
             )
         )
         return json.encodeToString(
             kotlinx.serialization.builtins.MapSerializer(
-                kotlinx.serialization.builtins.String.serializer(),
-                kotlinx.serialization.builtins.String.serializer()
+                serializer<String>(),
+                serializer<String>()
             ), map
         )
     }
@@ -395,7 +396,7 @@ class ProjectPackageService {
             "materializedParams" to (version.materializedParams?.toString() ?: ""),
             "transactions" to json.encodeToString(
                 kotlinx.serialization.builtins.ListSerializer(
-                    kotlinx.serialization.builtins.String.serializer()
+                    serializer<String>()
                 ),
                 version.transactions.map { serializeTransaction(it) }
             ),
@@ -404,8 +405,8 @@ class ProjectPackageService {
         )
         return json.encodeToString(
             kotlinx.serialization.builtins.MapSerializer(
-                kotlinx.serialization.builtins.String.serializer(),
-                kotlinx.serialization.builtins.String.serializer()
+                serializer<String>(),
+                serializer<String>()
             ), map
         )
     }
@@ -420,8 +421,8 @@ class ProjectPackageService {
         )
         return json.encodeToString(
             kotlinx.serialization.builtins.MapSerializer(
-                kotlinx.serialization.builtins.String.serializer(),
-                kotlinx.serialization.builtins.String.serializer()
+                serializer<String>(),
+                serializer<String>()
             ), map
         )
     }

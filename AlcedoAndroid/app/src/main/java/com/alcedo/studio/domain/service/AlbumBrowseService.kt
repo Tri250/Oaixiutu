@@ -254,12 +254,17 @@ class AlbumBrowseService(
         for (element in items) {
             if (element.imageId != null && element.thumbnail == null) {
                 val imageIdLong = element.imageId.toLong()
-                val thumbnail = thumbnailService.loadThumbnail(imageIdLong)
-                if (thumbnail != null) {
+                val thumbnailResult = thumbnailService.loadThumbnail(imageIdLong)
+                val bitmap = when (thumbnailResult) {
+                    is ThumbnailService.ThumbnailResult.Success -> thumbnailResult.bitmap
+                    is ThumbnailService.ThumbnailResult.Placeholder -> thumbnailResult.bitmap
+                    is ThumbnailService.ThumbnailResult.Error -> null
+                }
+                if (bitmap != null) {
                     val updatedElements = _albumState.value.filteredElements.toMutableList()
                     val index = updatedElements.indexOfFirst { it.elementId == element.elementId }
                     if (index >= 0) {
-                        updatedElements[index] = element.copy(thumbnail = thumbnail)
+                        updatedElements[index] = element.copy(thumbnail = bitmap)
                         _albumState.value = _albumState.value.copy(filteredElements = updatedElements)
                     }
                 }
@@ -287,12 +292,17 @@ class AlbumBrowseService(
         // Load thumbnails for this page
         for (element in pageElements) {
             if (element.imageId != null && element.thumbnail == null) {
-                val thumbnail = thumbnailService.loadThumbnail(element.imageId)
-                if (thumbnail != null) {
+                val thumbnailResult = thumbnailService.loadThumbnail(element.imageId.toLong())
+                val bitmap = when (thumbnailResult) {
+                    is ThumbnailService.ThumbnailResult.Success -> thumbnailResult.bitmap
+                    is ThumbnailService.ThumbnailResult.Placeholder -> thumbnailResult.bitmap
+                    is ThumbnailService.ThumbnailResult.Error -> null
+                }
+                if (bitmap != null) {
                     val updatedElements = state.filteredElements.toMutableList()
                     val index = updatedElements.indexOfFirst { it.elementId == element.elementId }
                     if (index >= 0) {
-                        updatedElements[index] = element.copy(thumbnail = thumbnail)
+                        updatedElements[index] = element.copy(thumbnail = bitmap)
                         _albumState.value = state.copy(filteredElements = updatedElements)
                     }
                 }
@@ -536,7 +546,7 @@ class AlbumBrowseService(
             QuickAction.DELETE -> {
                 val imageId = element.imageId
                 if (imageId != null) {
-                    imageRepository.deleteImage(imageId)
+                    imageRepository.deleteImage(imageId.toLong())
                 }
                 sleeveRepository.removeElement(elementId)
                 refreshCurrentFolder()
@@ -628,14 +638,21 @@ class AlbumBrowseService(
     private suspend fun mapToAlbumElement(element: SleeveElement): AlbumElement = withContext(Dispatchers.IO) {
         when (element) {
             is SleeveFile -> {
-                val image = element.image ?: element.imageId?.let { imageRepository.getImage(it.toUInt()) }
+                val image = element.image ?: element.imageId?.let { imageRepository.getImage(it.toLong()) }
                 AlbumElement(
                     elementId = element.elementId,
                     elementName = element.elementName,
                     elementType = ElementType.FILE,
                     imageId = element.imageId?.toUInt(),
                     imageType = image?.imageType,
-                    thumbnail = element.imageId?.toUInt()?.let { thumbnailService.loadThumbnail(it) },
+                    thumbnail = element.imageId?.let { id ->
+                        val result = thumbnailService.loadThumbnail(id)
+                        when (result) {
+                            is ThumbnailService.ThumbnailResult.Success -> result.bitmap
+                            is ThumbnailService.ThumbnailResult.Placeholder -> result.bitmap
+                            is ThumbnailService.ThumbnailResult.Error -> null
+                        }
+                    },
                     exifDisplay = image?.exifDisplay,
                     addedTime = element.addedTime,
                     fileSize = image?.imagePath?.let { java.io.File(it).length() } ?: 0L,
@@ -643,7 +660,7 @@ class AlbumBrowseService(
                         try {
                             it.dateTime?.let { dateStr ->
                                 val sdf = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US)
-                                sdf.parse(dateStr)?.time ?: 0L
+                                sdf.parse(dateStr.toString())?.time ?: 0L
                             }
                         } catch (_: Exception) { 0L }
                     } ?: 0L,

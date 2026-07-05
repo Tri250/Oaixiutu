@@ -397,6 +397,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val gamutAces = "ACES"
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    override val themeHasselblad = "哈苏"
     override val themeGold = "金色"
     override val themeWine = "酒红"
     override val themeSteel = "钢蓝"

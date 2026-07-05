@@ -31,14 +31,7 @@ fun SemanticGenerationDialog(
     results: List<SemanticResultItem> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    val selectedOptions = remember { mutableStateSetOf<PersistenceOption>() }
-
-    // Initialize defaults
-    LaunchedEffect(Unit) {
-        if (selectedOptions.isEmpty()) {
-            selectedOptions.addAll(PersistenceOption.entries)
-        }
-    }
+    var selectedOptions by remember { mutableStateOf<Set<PersistenceOption>>(PersistenceOption.entries.toSet()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -97,7 +90,7 @@ fun SemanticGenerationDialog(
                         Checkbox(
                             checked = option in selectedOptions,
                             onCheckedChange = {
-                                if (it) selectedOptions.add(option) else selectedOptions.remove(option)
+                                selectedOptions = if (it) selectedOptions + option else selectedOptions - option
                             }
                         )
                         Column(modifier = Modifier.weight(1f)) {

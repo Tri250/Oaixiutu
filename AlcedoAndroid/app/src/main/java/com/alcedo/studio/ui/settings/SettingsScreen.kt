@@ -336,6 +336,7 @@ fun SettingsScreen(navController: NavController) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
                                 imageVector = when (variant) {
+                                    AlcedoThemeVariant.HASSELBLAD -> Icons.Default.PhotoCamera
                                     AlcedoThemeVariant.GOLD -> Icons.Default.Star
                                     AlcedoThemeVariant.WINE -> Icons.Default.LocalBar
                                     AlcedoThemeVariant.STEEL -> Icons.Default.Construction
@@ -576,6 +577,7 @@ fun SettingsScreen(navController: NavController) {
 @Composable
 private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
     return when (variant) {
+        AlcedoThemeVariant.HASSELBLAD -> stringRes { themeHasselblad }
         AlcedoThemeVariant.GOLD -> stringRes { themeGold }
         AlcedoThemeVariant.WINE -> stringRes { themeWine }
         AlcedoThemeVariant.STEEL -> stringRes { themeSteel }

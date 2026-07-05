@@ -1,6 +1,7 @@
 package com.alcedo.studio.data.model
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.security.MessageDigest
 
@@ -19,6 +20,7 @@ data class EditTransaction(
     val timestamp: Instant = Instant.now()
 )
 
+@Serializable
 data class VersionNode(
     val versionId: String,
     val commitId: String
@@ -31,10 +33,10 @@ data class Version(
     val addedTime: Instant = Instant.now(),
     val lastModifiedTime: Instant = Instant.now(),
     val creationNonce: ULong = 0u,
-    val materializedParams: JsonObject? = null,
+    var materializedParams: JsonObject? = null,
     val transactions: MutableList<EditTransaction> = mutableListOf(),
     var cursor: Int = 0,
-    val versionHash: String = ""
+    var versionHash: String = ""
 ) {
     fun appendTransaction(tx: EditTransaction) {
         if (cursor < transactions.size) {
@@ -121,7 +123,7 @@ data class EditHistory(
     val historyId: String = generateHash128(),
     val boundImageId: UInt = 0u,
     val addedTime: Instant = Instant.now(),
-    val lastModifiedTime: Instant = Instant.now(),
+    var lastModifiedTime: Instant = Instant.now(),
     val versionOrder: MutableList<VersionNode> = mutableListOf(),
     val versionStorage: MutableMap<String, Version> = mutableMapOf(),
     var defaultVersionId: String = "",

@@ -7,13 +7,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.alcedo.studio.ui.theme.AlcedoPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,14 +62,14 @@ fun AboutPage(navController: NavController) {
             Surface(
                 modifier = Modifier.size(96.dp),
                 shape = MaterialTheme.shapes.large,
-                color = AlcedoPrimary.copy(alpha = 0.15f)
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = "Alcedo Studio",
                         modifier = Modifier.size(48.dp),
-                        tint = AlcedoPrimary
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }

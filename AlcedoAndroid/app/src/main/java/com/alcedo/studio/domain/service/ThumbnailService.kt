@@ -146,7 +146,7 @@ class ThumbnailService(
             val sourceLastModified = File(imagePath).lastModified()
             try {
                 diskCache.put(
-                    makeDiskCacheKey(imageId, size),
+                    makeDiskCacheKey(imageId, size).toString(),
                     bitmap,
                     toResolutionTier(size),
                     THUMBNAIL_QUALITY,

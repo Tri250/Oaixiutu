@@ -230,18 +230,18 @@ private fun tempToColor(temp: Float): Color {
         t <= 66f -> 1f
         else -> {
             val x = t - 60f
-            (329.698727446f * (x.toFloat().pow(-0.1332047592f))).coerceIn(0f, 255f) / 255f
+            (329.698727446f * (floatPow(x.toFloat(), -0.1332047592f))).coerceIn(0f, 255f) / 255f
         }
     }
 
     g = when {
         t <= 66f -> {
             val x = t
-            (99.4708025861f * x.toFloat().pow(-0.1332047592f)).coerceIn(0f, 255f) / 255f
+            (99.4708025861f * floatPow(x.toFloat(), -0.1332047592f)).coerceIn(0f, 255f) / 255f
         }
         else -> {
             val x = t - 60f
-            (288.1221695283f * (x.toFloat().pow(-0.0755148492f))).coerceIn(0f, 255f) / 255f
+            (288.1221695283f * (floatPow(x.toFloat(), -0.0755148492f))).coerceIn(0f, 255f) / 255f
         }
     }
 
@@ -250,7 +250,7 @@ private fun tempToColor(temp: Float): Color {
         t <= 19f -> 0f
         else -> {
             val x = t - 10f
-            (138.5177312231f * (x.toFloat().pow(-0.1332047592f))).coerceIn(0f, 255f) / 255f
+            (138.5177312231f * (floatPow(x.toFloat(), -0.1332047592f))).coerceIn(0f, 255f) / 255f
         }
     }
 
@@ -281,4 +281,4 @@ private fun tintToColor(tint: Float): Color {
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
-private fun Float.pow(exp: Float): Float = kotlin.math.pow(this.toDouble(), exp.toDouble()).toFloat()
+private fun floatPow(a: Float, exp: Float): Float = Math.pow(a.toDouble(), exp.toDouble()).toFloat()

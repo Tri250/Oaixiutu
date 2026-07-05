@@ -401,6 +401,7 @@ interface StringResources {
     val gamutAces: String
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    val themeHasselblad: String
     val themeGold: String
     val themeWine: String
     val themeSteel: String

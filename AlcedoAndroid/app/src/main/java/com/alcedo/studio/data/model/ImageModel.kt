@@ -883,3 +883,29 @@ data class CollectionImageV2Entity(
     @ColumnInfo(name = "added_at")
     val addedAt: Long = System.currentTimeMillis()
 )
+
+enum class AiProviderType {
+    OPENAI,
+    ANTHROPIC,
+    DOUBAO,
+    CUSTOM
+}
+
+data class AiProviderProfile(
+    val providerId: String,
+    val providerName: String,
+    val providerType: AiProviderType,
+    val defaultBaseUrl: String,
+    val defaultModel: String,
+    val maxTokens: Int = 4096
+)
+
+data class AiCredential(
+    val providerId: String,
+    val apiKey: String = "",
+    val apiBaseUrl: String = "",
+    val providerName: String = "",
+    val isActive: Boolean = false,
+    val defaultBaseUrl: String = "",
+    val defaultModel: String = ""
+)

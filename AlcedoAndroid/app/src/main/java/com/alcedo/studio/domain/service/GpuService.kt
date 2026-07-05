@@ -253,7 +253,7 @@ class GpuService private constructor(private val context: Context) {
             if (!EGL14.eglInitialize(display, version, 0, version, 1)) return false
 
             val configAttribs = intArrayOf(
-                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES3_BIT,
+                EGL14.EGL_RENDERABLE_TYPE, 0x0040, // EGL_OPENGL_ES3_BIT
                 EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT,
                 EGL14.EGL_RED_SIZE, 8,
                 EGL14.EGL_GREEN_SIZE, 8,
@@ -352,7 +352,7 @@ class GpuService private constructor(private val context: Context) {
             EGL14.eglInitialize(display, version, 0, version, 1)
 
             val configAttribs = intArrayOf(
-                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES3_BIT,
+                EGL14.EGL_RENDERABLE_TYPE, 0x0040, // EGL_OPENGL_ES3_BIT
                 EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT,
                 EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8,
                 EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8,

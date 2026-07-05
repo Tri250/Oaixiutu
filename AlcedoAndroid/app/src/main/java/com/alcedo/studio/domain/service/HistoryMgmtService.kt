@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.serializer
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -365,8 +366,8 @@ class HistoryMgmtService(
         val json = kotlinx.serialization.json.Json { encodeDefaults = true }
         json.encodeToString(
             kotlinx.serialization.builtins.MapSerializer(
-                kotlinx.serialization.builtins.String.serializer(),
-                kotlinx.serialization.builtins.String.serializer()
+                serializer<String>(),
+                serializer<String>()
             ),
             mapOf(
                 "historyId" to history.historyId,

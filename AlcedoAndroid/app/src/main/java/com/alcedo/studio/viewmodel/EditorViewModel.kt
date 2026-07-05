@@ -277,7 +277,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateLensCorrection(k1: Float, k2: Float, k3: Float, p1: Float, p2: Float) {
         _params.value = _params.value.copy(lensK1 = k1, lensK2 = k2, lensK3 = k3, lensP1 = p1, lensP2 = p2)
-        recordTransaction(OperatorType.LENS, "lensK1", k1)
+        recordTransaction(OperatorType.GEOMETRY, "lensK1", k1)
         regeneratePreview()
     }
 
@@ -608,7 +608,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _history.value?.let { hist ->
             val newVersionId = hist.createVersion(displayName)
             _history.value = hist
-            editHistoryRepository.saveHistory(hist)
+            viewModelScope.launch {
+                editHistoryRepository.saveHistory(hist)
+            }
             // Switch to new version
             switchVersion(newVersionId)
         }
@@ -623,7 +625,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     hist.activeVersionId = hist.defaultVersionId
                 }
                 _history.value = hist
-                editHistoryRepository.saveHistory(hist)
+                viewModelScope.launch {
+                    editHistoryRepository.saveHistory(hist)
+                }
             }
         }
     }
@@ -634,7 +638,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val updated = version.copy(displayName = newName)
                 hist.versionStorage[versionId] = updated
                 _history.value = hist
-                editHistoryRepository.saveHistory(hist)
+                viewModelScope.launch {
+                    editHistoryRepository.saveHistory(hist)
+                }
             }
         }
     }
@@ -643,7 +649,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _history.value?.let { hist ->
             val cloned = hist.cloneForFile(hist.boundImageId)
             _history.value = cloned
-            editHistoryRepository.saveHistory(cloned)
+            viewModelScope.launch {
+                editHistoryRepository.saveHistory(cloned)
+            }
+        }
+    }
+
+    fun saveVersion() {
+        _history.value?.let { hist ->
+            val updated = hist.copy(lastModifiedTime = java.time.Instant.now())
+            _history.value = updated
+            viewModelScope.launch {
+                editHistoryRepository.saveHistory(updated)
+            }
         }
     }
 

@@ -4,14 +4,14 @@
   ],
   "cleanCommandsComponents": [
     [
-      "/root/.android/sdk/cmake/3.22.1/bin/ninja",
+      "/opt/android-sdk/cmake/3.22.1/bin/ninja",
       "-C",
       "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/armeabi-v7a",
       "clean"
     ]
   ],
   "buildTargetsCommandComponents": [
-    "/root/.android/sdk/cmake/3.22.1/bin/ninja",
+    "/opt/android-sdk/cmake/3.22.1/bin/ninja",
     "-C",
     "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/armeabi-v7a",
     "{LIST_OF_TARGETS_TO_BUILD}"

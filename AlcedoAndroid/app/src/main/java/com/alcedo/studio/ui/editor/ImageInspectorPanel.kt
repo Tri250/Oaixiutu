@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -250,6 +251,7 @@ private fun FileInfoRow(label: String, value: String, maxLines: Int = 1) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WrapContentRow(
     items: List<String>,

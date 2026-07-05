@@ -17,6 +17,7 @@ enum class TransferMode(val label: String) {
     MERGE("Merge (Combine)")
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdjustmentTransferDialog(
     onDismiss: () -> Unit,
@@ -26,12 +27,12 @@ fun AdjustmentTransferDialog(
 ) {
     var sourceImageId by remember { mutableStateOf<Long?>(null) }
     var transferMode by remember { mutableStateOf(TransferMode.PASTE) }
-    val selectedGroups = remember { mutableStateSetOf<TransferParamGroup>() }
+    var selectedGroups by remember { mutableStateOf<Set<TransferParamGroup>>(setOf(TransferParamGroup.ALL)) }
 
     // Initialize with ALL selected
     LaunchedEffect(Unit) {
         if (selectedGroups.isEmpty()) {
-            selectedGroups.add(TransferParamGroup.ALL)
+            selectedGroups = setOf(TransferParamGroup.ALL)
         }
     }
 
@@ -139,17 +140,16 @@ fun AdjustmentTransferDialog(
                             onCheckedChange = { checked ->
                                 if (isAllGroup) {
                                     if (checked) {
-                                        selectedGroups.clear()
-                                        selectedGroups.add(TransferParamGroup.ALL)
+                                        selectedGroups = setOf(TransferParamGroup.ALL)
                                     } else {
-                                        selectedGroups.remove(TransferParamGroup.ALL)
+                                        selectedGroups = emptySet()
                                     }
                                 } else {
-                                    selectedGroups.remove(TransferParamGroup.ALL)
+                                    selectedGroups = selectedGroups - TransferParamGroup.ALL
                                     if (checked) {
-                                        selectedGroups.add(group)
+                                        selectedGroups = selectedGroups + group
                                     } else {
-                                        selectedGroups.remove(group)
+                                        selectedGroups = selectedGroups - group
                                     }
                                 }
                             }
@@ -187,7 +187,8 @@ fun AdjustmentTransferDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            selectedGroups.forEach { group ->
+                            val groups: List<TransferParamGroup> = selectedGroups.toList()
+                            for (group in groups) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(vertical = 2.dp)

@@ -59,8 +59,8 @@ class RenderService {
                     shadows = params.shadows,
                     saturation = params.saturation,
                     vibrance = params.vibrance,
-                    clarity = params.clarity,
-                    sharpen = params.sharpen
+                    clarity = params.clarityAmount,
+                    sharpen = params.sharpenAmount
                 )
 
                 if (!cancelFlag.get() && request.callback != null) {

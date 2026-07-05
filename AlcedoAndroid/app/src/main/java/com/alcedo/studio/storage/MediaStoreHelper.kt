@@ -242,7 +242,7 @@ object MediaStoreHelper {
     )
 
     fun isRawFile(fileName: String, mimeType: String): Boolean {
-        val ext = fileName.substringAfterLast('.', '').lowercase()
+        val ext = fileName.substringAfterLast('.', "").lowercase()
         return ext in RAW_EXTENSIONS || mimeType.startsWith("image/x-") || mimeType == "image/dng"
     }
 

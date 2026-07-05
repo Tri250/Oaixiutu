@@ -7,6 +7,7 @@ import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.model.*
@@ -325,6 +326,7 @@ class ExportService(private val context: Context) {
     // Color space conversion
     // ================================================================
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun applyColorSpaceConversion(bitmap: Bitmap, targetColorSpace: ColorSpace): Bitmap {
         if (targetColorSpace == ColorSpace.SRGB) return bitmap
 
@@ -341,7 +343,9 @@ class ExportService(private val context: Context) {
             val converted = Bitmap.createBitmap(bitmap.width, bitmap.height, wideConfig)
             val canvas = android.graphics.Canvas(converted)
             val paint = android.graphics.Paint().apply {
-                colorSpace = androidCs
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    colorSpace = androidCs
+                }
                 isAntiAlias = false
                 isFilterBitmap = true
             }
@@ -523,6 +527,7 @@ class ExportService(private val context: Context) {
     // Metadata writeback
     // ================================================================
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun writeMetadata(outputFile: File, sourcePath: String, config: ExportConfig) {
         try {
             val sourceExif = try { ExifInterface(sourcePath) } catch (_: Exception) { null }
@@ -545,7 +550,11 @@ class ExportService(private val context: Context) {
                 for (tag in copyTags) {
                     sourceExif.getAttribute(tag)?.let { outputExif.setAttribute(tag, it) }
                 }
-                sourceExif.thumbnailBytes?.let { outputExif.setThumbnail(it) }
+                sourceExif.thumbnailBytes?.let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        outputExif.setThumbnail(it)
+                    }
+                }
             }
 
             val colorSpaceExif = when (config.colorSpace) {

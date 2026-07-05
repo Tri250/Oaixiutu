@@ -20,7 +20,7 @@ fun AlbumExportDialog(
     onExport: (List<Long>, ExportSettings) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val selectedIds = remember { mutableStateSetOf<Long>() }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var format by remember { mutableStateOf(ExportFormat.JPEG) }
     var quality by remember { mutableIntStateOf(95) }
     var colorSpace by remember { mutableStateOf(ColorSpace.SRGB) }
@@ -55,13 +55,13 @@ fun AlbumExportDialog(
                     // Quick actions
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { selectedIds.clear(); selectedIds.addAll(images.map { it.imageId }) },
+                            onClick = { selectedIds = images.map { it.imageId }.toSet() },
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Select All", style = MaterialTheme.typography.labelSmall)
                         }
                         OutlinedButton(
-                            onClick = { selectedIds.clear() },
+                            onClick = { selectedIds = emptySet() },
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text("Clear", style = MaterialTheme.typography.labelSmall)
@@ -77,8 +77,8 @@ fun AlbumExportDialog(
                             Checkbox(
                                 checked = image.imageId in selectedIds,
                                 onCheckedChange = {
-                                    if (it) selectedIds.add(image.imageId)
-                                    else selectedIds.remove(image.imageId)
+                                    if (it) selectedIds = selectedIds + image.imageId
+                                    else selectedIds = selectedIds - image.imageId
                                 }
                             )
                             Text(

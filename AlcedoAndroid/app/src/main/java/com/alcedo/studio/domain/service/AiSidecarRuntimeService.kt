@@ -33,7 +33,7 @@ class AiSidecarRuntimeService(
             }
             // Initialize CLIP engine if local
             if (providerId == "local") {
-                clipEngine.initialize()
+                clipEngine.loadModel("mobileclip-s2")
             }
             _activeProvider.value = providerId
             _state.value = RuntimeState.READY

@@ -69,6 +69,62 @@ class ExportViewModel : ViewModel() {
     private val _showColorSpaceOptions = mutableStateOf(false)
     val showColorSpaceOptions get() = _showColorSpaceOptions
 
+    // ── Convenience properties for ExportScreen ──
+
+    var format: ExportFormat
+        get() = _settings.value.format
+        set(value) { _settings.value = _settings.value.copy(format = value) }
+
+    var quality: Int
+        get() = _settings.value.quality
+        set(value) { _settings.value = _settings.value.copy(quality = value.coerceIn(1, 100)) }
+
+    var bitDepth: Int
+        get() = _settings.value.bitDepth
+        set(value) { _settings.value = _settings.value.copy(bitDepth = value) }
+
+    var colorSpace: ColorSpace
+        get() = _settings.value.colorSpace
+        set(value) { _settings.value = _settings.value.copy(colorSpace = value) }
+
+    var embedIcc: Boolean
+        get() = _settings.value.embedIcc
+        set(value) { _settings.value = _settings.value.copy(embedIcc = value) }
+
+    var includeMetadata: Boolean
+        get() = _settings.value.includeMetadata
+        set(value) { _settings.value = _settings.value.copy(includeMetadata = value) }
+
+    var isHdr: Boolean
+        get() = _settings.value.isHdr
+        set(value) { _settings.value = _settings.value.copy(isHdr = value) }
+
+    var maxDimension: String
+        get() = _settings.value.maxDimension?.toString() ?: ""
+        set(value) { _settings.value = _settings.value.copy(maxDimension = value.toIntOrNull()) }
+
+    var maxWidth: String
+        get() = _settings.value.maxWidth?.toString() ?: ""
+        set(value) { _settings.value = _settings.value.copy(maxWidth = value.toIntOrNull()) }
+
+    var maxHeight: String
+        get() = _settings.value.maxHeight?.toString() ?: ""
+        set(value) { _settings.value = _settings.value.copy(maxHeight = value.toIntOrNull()) }
+
+    var outputPath: String
+        get() = _settings.value.outputPath ?: ""
+        set(value) { _settings.value = _settings.value.copy(outputPath = value) }
+
+    var showBatchExport: Boolean = false
+
+    val batchImageIds: List<String>
+        get() = _batchItems.value.map { it.imageId.toString() }
+
+    val lastResult: StateFlow<ExportService.ExportResult?> get() = lastExportResult
+
+    private val _batchResult = MutableStateFlow<ExportService.ExportBatchResult?>(null)
+    val batchResult: StateFlow<ExportService.ExportBatchResult?> = _batchResult.asStateFlow()
+
     // ================================================================
     // Settings manipulation
     // ================================================================
@@ -322,6 +378,35 @@ class ExportViewModel : ViewModel() {
             val exportSettings = _settings.value
             exportService.exportBatch(exportItems, exportSettings)
 
+            _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
+            _isExporting.value = false
+        }
+    }
+
+    // ================================================================
+    // ExportScreen-compatible API
+    // ================================================================
+
+    fun resetState() {
+        _lastExportResult.value = null
+        _batchResult.value = null
+    }
+
+    fun exportSingle(sourcePath: String) {
+        exportImage(sourcePath, PipelineParams())
+    }
+
+    fun exportBatch(items: List<ExportService.ExportBatchItem>) {
+        viewModelScope.launch {
+            _isExporting.value = true
+            _batchProgress.value = _batchProgress.value.copy(
+                totalItems = items.size,
+                completedItems = 0,
+                currentItem = 0
+            )
+            val exportSettings = _settings.value
+            val result = exportService.exportBatch(items, exportSettings)
+            _batchResult.value = result
             _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
             _isExporting.value = false
         }

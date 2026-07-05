@@ -5,8 +5,8 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideIntoContainer
-import androidx.compose.animation.slideOutOfContainer
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +17,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -105,10 +106,10 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                    exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeOut(tween(150)) },
-                    popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                    popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeOut(tween(150)) }
+                    enterTransition = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(200, delayMillis = 75)) },
+                    exitTransition = { slideOutHorizontally(tween(350)) { it } + fadeOut(tween(150)) },
+                    popEnterTransition = { slideInHorizontally(tween(350)) { -it } + fadeIn(tween(200, delayMillis = 75)) },
+                    popExitTransition = { slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(150)) }
                 ) {
                     alcedoNavGraph(navController)
                 }
@@ -152,10 +153,10 @@ fun MainScreen(
                         navController = navController,
                         startDestination = MainDestination.ALBUM.route,
                         modifier = Modifier.fillMaxSize(),
-                        enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                        exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeOut(tween(150)) },
-                        popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                        popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeOut(tween(150)) }
+                        enterTransition = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(200, delayMillis = 75)) },
+                        exitTransition = { slideOutHorizontally(tween(350)) { it } + fadeOut(tween(150)) },
+                        popEnterTransition = { slideInHorizontally(tween(350)) { -it } + fadeIn(tween(200, delayMillis = 75)) },
+                        popExitTransition = { slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(150)) }
                     ) {
                         alcedoNavGraph(navController)
                     }
@@ -199,10 +200,10 @@ fun MainScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding),
-                        enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                        exitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(350)) + fadeOut(tween(150)) },
-                        popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeIn(tween(200, delayMillis = 75)) },
-                        popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(350)) + fadeOut(tween(150)) }
+                        enterTransition = { slideInHorizontally(tween(350)) { it } + fadeIn(tween(200, delayMillis = 75)) },
+                        exitTransition = { slideOutHorizontally(tween(350)) { it } + fadeOut(tween(150)) },
+                        popEnterTransition = { slideInHorizontally(tween(350)) { -it } + fadeIn(tween(200, delayMillis = 75)) },
+                        popExitTransition = { slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(150)) }
                     ) {
                         alcedoNavGraph(navController)
                     }

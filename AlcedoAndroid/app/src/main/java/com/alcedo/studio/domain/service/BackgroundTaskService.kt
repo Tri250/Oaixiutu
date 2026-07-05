@@ -198,7 +198,7 @@ class BackgroundTaskService(private val context: Context) {
         interactionLocks.remove(lockKey, taskId)
     }
 
-    fun isLocked(lockKey: String): Boolean = lockKey in interactionLocks
+    fun isLocked(lockKey: String): Boolean = interactionLocks.containsKey(lockKey)
 
     fun getLockHolder(lockKey: String): String? = interactionLocks[lockKey]
 

@@ -1,18 +1,21 @@
 package com.alcedo.studio.ui.common
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AnimatedPanelSwitcher(
-    currentPanel: Any,
+    currentPanel: Int,
     modifier: Modifier = Modifier,
-    transitionSpec: AnimatedContentTransitionScope<Any>.() -> AnimatedContentTransitionScope<Any>.SlideDirection = {
+    transitionSpec: AnimatedContentTransitionScope<Int>.() -> AnimatedContentTransitionScope.SlideDirection = {
         if (targetState > initialState) AnimatedContentTransitionScope.SlideDirection.Left
         else AnimatedContentTransitionScope.SlideDirection.Right
     },
-    content: @Composable (Any) -> Unit
+    content: @Composable (Int) -> Unit
 ) {
     AnimatedContent(
         targetState = currentPanel,

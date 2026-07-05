@@ -64,4 +64,25 @@ object AlcedoNdkBridge {
             nativeSetLogLevel(level)
         }
     }
+
+    // ── Pipeline Processing ──
+
+    fun processPipeline(
+        pixels: FloatArray,
+        width: Int,
+        height: Int,
+        channels: Int,
+        exposure: Float,
+        contrast: Float,
+        highlights: Float,
+        shadows: Float,
+        saturation: Float,
+        vibrance: Float,
+        clarity: Float,
+        sharpen: Float
+    ): Boolean {
+        if (!isAvailable) return false
+        Log.w(TAG, "processPipeline: AI inference not yet available via NDK bridge")
+        return false
+    }
 }

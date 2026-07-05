@@ -6,13 +6,16 @@ import android.graphics.BitmapFactory
 import android.graphics.ColorSpace as AndroidColorSpace
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -242,6 +245,7 @@ class ExportService(private val context: Context) {
     // Color space conversion
     // ================================================================
 
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun applyColorSpaceConversion(bitmap: Bitmap, targetColorSpace: ColorSpace): Bitmap {
         if (targetColorSpace == ColorSpace.SRGB) return bitmap
 
@@ -249,11 +253,13 @@ class ExportService(private val context: Context) {
             ColorSpace.SRGB -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
             ColorSpace.DISPLAY_P3 -> AndroidColorSpace.get(AndroidColorSpace.Named.DISPLAY_P3)
             ColorSpace.REC2020 -> AndroidColorSpace.get(AndroidColorSpace.Named.BT2020)
-            ColorSpace.ACES -> try {
+            ColorSpace.ACES -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
+            // ACES_SRGB_LINEAR not available in this SDK version
+            /*ColorSpace.ACES -> try {
                 AndroidColorSpace.get(AndroidColorSpace.Named.ACES_SRGB_LINEAR)
             } catch (_: Exception) {
                 AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
-            }
+            }*/
             else -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
         }
 
@@ -265,7 +271,9 @@ class ExportService(private val context: Context) {
             val converted = Bitmap.createBitmap(bitmap.width, bitmap.height, wideConfig)
             val canvas = android.graphics.Canvas(converted)
             val paint = android.graphics.Paint().apply {
-                colorSpace = androidCs
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    colorSpace = androidCs
+                }
                 isAntiAlias = false
                 isFilterBitmap = true
             }
@@ -886,7 +894,7 @@ class ExportService(private val context: Context) {
         // MPF body (after APP2 marker + length)
         val mpfBody = ByteArrayOutputStream()
         // MP endian ("II" little-endian + 0x2A00 + offset 0x08000000)
-        mpfBody.write("MPF\0".toByteArray())
+        mpfBody.write("MPF\u0000".toByteArray())
         mpfBody.write(byteArrayOf(0x49, 0x49)) // little-endian
         mpfBody.write(shortToBytes(0x002A, true)) // MP format tag
         mpfBody.write(intToBytes(24, true)) // Offset to first IFD from start of MP endian
@@ -1016,7 +1024,7 @@ class ExportService(private val context: Context) {
             result.write(byteArrayOf(0xFF.toByte(), 0xE2.toByte())) // APP2 marker
             val segmentLen = chunk.size + 2 + 12 // +2 for length field, +12 for ICC header
             result.write(shortToBytesBigEndian(segmentLen))
-            result.write("ICC_PROFILE\0".toByteArray())
+            result.write("ICC_PROFILE\u0000".toByteArray())
             result.write(index + 1) // chunk number (1-based)
             result.write(chunks.size) // total chunks
             result.write(chunk)
@@ -1331,6 +1339,18 @@ class ExportService(private val context: Context) {
         }
 
         private fun align4(size: Int): Int = ((size + 3) / 4) * 4
+
+        private fun writeIccInt(bos: ByteArrayOutputStream, value: Int) {
+            bos.write((value shr 24) and 0xFF)
+            bos.write((value shr 16) and 0xFF)
+            bos.write((value shr 8) and 0xFF)
+            bos.write(value and 0xFF)
+        }
+
+        private fun writeIccS15Fixed16(bos: ByteArrayOutputStream, value: Float) {
+            val fixed = (value * 65536.0).toInt()
+            writeIccInt(bos, fixed)
+        }
     }
 
     // ================================================================
@@ -1341,6 +1361,7 @@ class ExportService(private val context: Context) {
      * Write EXIF metadata from the original source file into the exported file.
      * Also writes rating, tags, and color space information.
      */
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun writeMetadata(outputFile: File, sourcePath: String, settings: ExportSettings) {
         try {
             // Read original EXIF
@@ -1390,7 +1411,7 @@ class ExportService(private val context: Context) {
                     ExifInterface.TAG_ARTIST,
                     ExifInterface.TAG_COPYRIGHT,
                     ExifInterface.TAG_SOFTWARE,
-                    ExifInterface.TAG_CAMERA_SERIAL_NUMBER,
+                    "CameraSerialNumber",
                     ExifInterface.TAG_LENS_SERIAL_NUMBER
                 )
 
@@ -1404,7 +1425,9 @@ class ExportService(private val context: Context) {
                 // Copy thumbnail if present
                 val thumbBytes = sourceExif.thumbnailBytes
                 if (thumbBytes != null) {
-                    outputExif.setThumbnail(thumbBytes)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        outputExif.setThumbnail(thumbBytes)
+                    }
                 }
             }
 
@@ -1420,13 +1443,13 @@ class ExportService(private val context: Context) {
 
             // Write rating (mapped to EXIF Rating tag)
             if (settings.rating > 0) {
-                outputExif.setAttribute(ExifInterface.TAG_RATING, settings.rating.toString())
+                outputExif.setAttribute("Rating", settings.rating.toString())
             }
 
             // Write tags as XPKeywords (Windows-compatible) or UserComment
             if (settings.tags.isNotEmpty()) {
                 val keywords = settings.tags.joinToString("; ")
-                outputExif.setAttribute(ExifInterface.TAG_XP_KEYWORDS, keywords)
+                outputExif.setAttribute("XPKeywords", keywords)
                 // Also set ImageDescription if not already set from source
                 if (sourceExif?.getAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION).isNullOrBlank()) {
                     outputExif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, keywords)

@@ -113,7 +113,7 @@ class ImportService(
     // ================================================================
 
     private val magicBytes = mapOf(
-        byteArrayOf(0xFF.toByte(), 0xD8, 0xFF.toByte()) to ImageType.JPEG,
+        byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) to ImageType.JPEG,
         byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) to ImageType.PNG,
         byteArrayOf(0x49, 0x49, 0x2A, 0x00) to ImageType.TIFF,   // Little-endian
         byteArrayOf(0x4D, 0x4D, 0x00, 0x2A) to ImageType.TIFF,   // Big-endian
@@ -360,7 +360,7 @@ class ImportService(
                     val imageDimensions = getImageDimensions(info.uri)
 
                     // Update DB with full metadata
-                    val existing = metadataDao.getMetadataById(imageId)
+                    val existing = metadataDao.getMetadataByImageId(imageId)
                     if (existing != null) {
                         metadataDao.updateMetadata(existing.copy(
                             width = imageDimensions.first,
@@ -411,7 +411,7 @@ class ImportService(
 
                 try {
                     generateAndCacheThumbnail(imageId, info.uri)
-                    val existing = metadataDao.getMetadataById(imageId)
+                    val existing = metadataDao.getMetadataByImageId(imageId)
                     if (existing != null) {
                         metadataDao.updateMetadata(existing.copy(
                             thumbState = ThumbState.READY.ordinal,
