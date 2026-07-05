@@ -58,6 +58,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.album.AlbumScreen
 import com.alcedo.studio.ui.album.StatsView
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
+import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.ai.AiSearchScreen
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
@@ -425,6 +426,9 @@ private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
     }
     composable("ai_models") {
         AiModelManagerScreen(navController = navController)
+    }
+    composable("ai_rating") {
+        AiRatingScreen(navController = navController)
     }
     composable("about") {
         AboutPage(navController = navController)

@@ -11,21 +11,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.EditHistory
 import com.alcedo.studio.data.model.Version
-import com.alcedo.studio.data.model.generateHash128
+import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.viewmodel.EditorViewModel
 import java.time.format.DateTimeFormatter
 
 @Composable
 fun HistoryPanel(
-    history: EditHistory?,
-    onSwitchVersion: (String) -> Unit,
-    onCreateVersion: (String) -> Unit,
-    onDeleteVersion: (String) -> Unit,
-    onRenameVersion: (String, String) -> Unit,
-    onCloneHistory: () -> Unit,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
+    viewModel: EditorViewModel,
     modifier: Modifier = Modifier
 ) {
+    val history by viewModel.history.collectAsState()
+    val canUndo by viewModel.canUndo.collectAsState()
+    val canRedo by viewModel.canRedo.collectAsState()
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var newVersionName by remember { mutableStateOf("") }
     var renamingVersionId by remember { mutableStateOf<String?>(null) }
@@ -44,58 +42,73 @@ fun HistoryPanel(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Versions (${orderedVersions.size})",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Row {
-                IconButton(onClick = { onUndo() }) {
-                    Icon(Icons.Default.Undo, contentDescription = "Undo")
+        // ── Header with Undo/Redo ──────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Versions (${orderedVersions.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Row {
+                        IconButton(
+                            onClick = { viewModel.undo() },
+                            enabled = canUndo
+                        ) {
+                            Icon(
+                                Icons.Default.Undo,
+                                contentDescription = "Undo",
+                                tint = if (canUndo) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.redo() },
+                            enabled = canRedo
+                        ) {
+                            Icon(
+                                Icons.Default.Redo,
+                                contentDescription = "Redo",
+                                tint = if (canRedo) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
+                        }
+                        IconButton(onClick = { viewModel.cloneHistory() }) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "Clone History",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
-                IconButton(onClick = { onRedo() }) {
-                    Icon(Icons.Default.Redo, contentDescription = "Redo")
-                }
-                IconButton(onClick = onCloneHistory) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Clone History")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        newVersionName = ""
+                        showCreateDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("New Version")
                 }
             }
         }
 
-        Button(
-            onClick = {
-                newVersionName = ""
-                showCreateDialog = true
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("New Version")
-        }
-
-        // Version list
+        // ── Version List ───────────────────────────────────────────
         orderedVersions.forEach { version ->
             val isActive = version.versionId == activeVersionId
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isActive)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surface
-                ),
-                onClick = {
-                    if (!isActive) onSwitchVersion(version.versionId)
-                }
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
-                ) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -135,7 +148,7 @@ fun HistoryPanel(
                         if (renamingVersionId == version.versionId) {
                             IconButton(
                                 onClick = {
-                                    onRenameVersion(version.versionId, renameText)
+                                    viewModel.renameVersion(version.versionId, renameText)
                                     renamingVersionId = null
                                 },
                                 modifier = Modifier.size(24.dp)
@@ -216,12 +229,23 @@ fun HistoryPanel(
                             )
                         }
                     }
+
+                    // Switch version button for non-active versions
+                    if (!isActive) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.switchVersion(version.versionId) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Switch to this version")
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Create version dialog
+    // ── Create version dialog ──────────────────────────────────────
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -238,7 +262,7 @@ fun HistoryPanel(
             },
             confirmButton = {
                 Button(onClick = {
-                    onCreateVersion(newVersionName.ifEmpty { "Version ${orderedVersions.size + 1}" })
+                    viewModel.createVersion(newVersionName.ifEmpty { "Version ${orderedVersions.size + 1}" })
                     showCreateDialog = false
                 }) {
                     Text("Create")
@@ -252,7 +276,7 @@ fun HistoryPanel(
         )
     }
 
-    // Delete confirmation
+    // ── Delete confirmation ────────────────────────────────────────
     if (deleteConfirmId != null) {
         AlertDialog(
             onDismissRequest = { deleteConfirmId = null },
@@ -261,7 +285,7 @@ fun HistoryPanel(
             confirmButton = {
                 Button(
                     onClick = {
-                        onDeleteVersion(deleteConfirmId!!)
+                        viewModel.deleteVersion(deleteConfirmId!!)
                         deleteConfirmId = null
                     },
                     colors = ButtonDefaults.buttonColors(

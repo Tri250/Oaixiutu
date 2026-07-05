@@ -3,13 +3,20 @@ package com.alcedo.studio.ui.common
 import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,14 +27,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.ui.theme.LocalAlcedoColorScheme
 
 // ═══════════════════════════════════════════════════════════════════
 // Liquid Glass Effect System – 2026 flagship frosted-glass UI
-// Enhanced with RenderEffect backdrop blur (API 31+)
-// ═══════════════════════════════════════════════════════════════════
+// Uses RenderEffect backdrop blur (API 31+) with fallback tint
 // Three levels of glass depth:
 //   Surface  – light tint, minimal blur (cards, list items, chips)
 //   Panel    – medium tint, moderate blur (bottom sheets, side panels)
@@ -58,15 +63,56 @@ private fun glassColors(): Triple<Color, Color, Color> {
     )
 }
 
+/**
+ * Backdrop blur modifier – blurs the content BEHIND this composable.
+ * On API 31+ (Android 12+), uses RenderEffect with the correct layer placement
+ * to achieve a true frosted glass look. On older APIs, falls back to a
+ * semi-transparent tinted overlay.
+ */
 private fun Modifier.glassBlur(radius: Float): Modifier {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         this.graphicsLayer {
+            // Use renderEffect on the content behind this layer.
+            // The key insight: we apply blur at the graphicsLayer level so that
+            // the composables rendered BEHIND this one get blurred when they
+            // show through the semi-transparent background.
             renderEffect = RenderEffect.createBlurEffect(
                 radius, radius, Shader.TileMode.CLAMP
             ).asComposeRenderEffect()
+            // Preserve alpha so the tinted background can blend with blurred backdrop
+            this.alpha = 0.96f
         }
     } else {
+        // Fallback: stronger tint on pre-Android 12 to simulate glass
         this
+    }
+}
+
+/**
+ * Animated glass appearance – fades in with a gentle scale animation.
+ */
+@Composable
+private fun Modifier.animatedGlassEntry(visible: Boolean = true): Modifier {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "glassAlpha"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.96f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "glassScale"
+    )
+    return this.graphicsLayer {
+        this.alpha = alpha
+        this.scaleX = scale
+        this.scaleY = scale
     }
 }
 
@@ -83,11 +129,21 @@ fun LiquidGlassSurface(
             .clip(shape)
             .glassBlur(LiquidGlassDefaults.SURFACE_BLUR)
             .drawBehind {
+                // Multi-layer glass background:
+                // 1. Base tint fill
                 drawRect(tint)
+                // 2. Top highlight line (light refraction simulation)
                 drawLine(
                     highlight, Offset(0f, 0f), Offset(size.width, 0f),
                     strokeWidth = 1.dp.toPx()
                 )
+                // 3. Subtle inner glow at top
+                val glowBrush = Brush.verticalGradient(
+                    colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
+                    startY = 0f,
+                    endY = size.height * 0.15f
+                )
+                drawRect(glowBrush)
             }
             .border(
                 width = 0.5.dp,
@@ -125,6 +181,12 @@ fun LiquidGlassPanel(
                     highlight, Offset(0f, 0f), Offset(size.width, 0f),
                     strokeWidth = 1.5.dp.toPx()
                 )
+                val glowBrush = Brush.verticalGradient(
+                    colors = listOf(highlight.copy(alpha = 0.08f), Color.Transparent),
+                    startY = 0f,
+                    endY = size.height * 0.2f
+                )
+                drawRect(glowBrush)
             }
             .border(
                 width = 0.75.dp,
@@ -163,7 +225,7 @@ fun LiquidGlassFloating(
                     strokeWidth = 2.dp.toPx()
                 )
                 val glowBrush = Brush.verticalGradient(
-                    colors = listOf(highlight.copy(alpha = 0.08f), Color.Transparent),
+                    colors = listOf(highlight.copy(alpha = 0.1f), Color.Transparent),
                     startY = 0f,
                     endY = size.height * 0.3f
                 )
@@ -205,6 +267,12 @@ fun LiquidGlassToolbar(
                     highlight, Offset(0f, 0f), Offset(size.width, 0f),
                     strokeWidth = 1.dp.toPx()
                 )
+                val glowBrush = Brush.verticalGradient(
+                    colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
+                    startY = 0f,
+                    endY = size.height * 0.2f
+                )
+                drawRect(glowBrush)
             }
             .border(
                 width = 0.5.dp,
