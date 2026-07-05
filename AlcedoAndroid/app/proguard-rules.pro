@@ -238,6 +238,14 @@
     <fields>;
 }
 
+# ── SQLCipher ───────────────────────────────────────────────────
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-keep class net.sqlcipher.** { *; }
+-dontwarn net.sqlcipher.**
+-keepclassmembers class * {
+    @net.sqlcipher.database.* <fields>;
+}
+
 # ── Security Crypto ─────────────────────────────────────────────
 -keep class androidx.security.crypto.** { *; }
 -dontwarn com.google.api.client.http.**

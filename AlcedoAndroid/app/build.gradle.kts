@@ -88,7 +88,6 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            // R8 full mode
             isProfileable = true
 
             signingConfig = signingConfigs.getByName("release")

@@ -102,7 +102,7 @@ abstract class SleeveDatabase : RoomDatabase() {
                     .build()
                     INSTANCE = instance
                     instance
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Log.e(TAG, "Failed to open database, attempting recovery", e)
                     deleteDatabaseFiles(appContext)
                     resetPassphrase(appContext)
