@@ -122,10 +122,22 @@ class AlbumViewModel : ViewModel() {
     val permissionRationale: StateFlow<String?> = _permissionRationale
 
     init {
-        checkPermissions()
-        loadImages()
-        loadFolders()
-        loadCollections()
+        try {
+            checkPermissions()
+        } catch (e: Throwable) {
+            // Permission check should never crash the app.
+        }
+        // Defer database access off the main thread so a database
+        // initialization failure cannot crash Composable composition.
+        viewModelScope.launch {
+            try {
+                loadImages()
+                loadFolders()
+                loadCollections()
+            } catch (_: Throwable) {
+                // Swallow startup failures; UI will simply show empty state.
+            }
+        }
     }
 
     // ================================================================

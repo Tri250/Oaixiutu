@@ -12,18 +12,20 @@ class AlcedoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Install crash handler first
-        CrashHandler.initialize(this)
-
-        // Initialize privacy manager and apply retention policy
-        PrivacyManager.initialize(this)
-        PrivacyManager.applyRetentionPolicy(this)
-
-        // Clean up old temp files
-        TempFileManager.cleanupOldFiles(this)
-
-        // Run security checks
+        // Install crash handler first so any subsequent crash is recorded.
         try {
+            CrashHandler.initialize(this)
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "Failed to install crash handler", e)
+        }
+
+        // Each initialization step is fully isolated; nothing here
+        // can take down the application.
+        runSafe("PrivacyManager.initialize") { PrivacyManager.initialize(this) }
+        runSafe("PrivacyManager.applyRetentionPolicy") { PrivacyManager.applyRetentionPolicy(this) }
+        runSafe("TempFileManager.cleanupOldFiles") { TempFileManager.cleanupOldFiles(this) }
+
+        runSafe("SecurityChecker.checkSecurity") {
             val securityStatus = SecurityChecker.checkSecurity(this)
             if (securityStatus.isDebuggerAttached && !BuildConfig.DEBUG) {
                 Log.w("AlcedoApp", "Debugger detected in release build!")
@@ -31,14 +33,16 @@ class AlcedoApplication : Application() {
             if (securityStatus.isRooted) {
                 Log.i("AlcedoApp", "Device appears to be rooted")
             }
-        } catch (e: Exception) {
-            Log.e("AlcedoApp", "Security check failed", e)
         }
 
+        runSafe("AppModule.initialize") { AppModule.initialize(this) }
+    }
+
+    private inline fun runSafe(tag: String, block: () -> Unit) {
         try {
-            AppModule.initialize(this)
-        } catch (e: Exception) {
-            Log.e("AlcedoApp", "Failed to initialize app module", e)
+            block()
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "$tag failed", e)
         }
     }
 }

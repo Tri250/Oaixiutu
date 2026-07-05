@@ -45,18 +45,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Validate incoming intent data
-        intent?.data?.let { uri ->
-            if (uri.scheme != "content" && uri.scheme != "file") {
-                Log.w("MainActivity", "Ignoring unsafe URI scheme: ${uri.scheme}")
-                intent.data = null
+        try {
+            intent?.data?.let { uri ->
+                if (uri.scheme != "content" && uri.scheme != "file") {
+                    Log.w("MainActivity", "Ignoring unsafe URI scheme: ${uri.scheme}")
+                    intent.data = null
+                }
             }
+        } catch (e: Throwable) {
+            Log.e("MainActivity", "Intent validation failed", e)
         }
 
         // Initialize managers
-        ThemeManager.initialize(this)
-        LanguageManager.initialize(this)
+        try { ThemeManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "ThemeManager init failed", e) }
+        try { LanguageManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "LanguageManager init failed", e) }
 
-        enableEdgeToEdge()
+        try { enableEdgeToEdge() } catch (e: Throwable) { Log.e("MainActivity", "enableEdgeToEdge failed", e) }
         setContent {
             AlcedoTheme {
                 Surface(
