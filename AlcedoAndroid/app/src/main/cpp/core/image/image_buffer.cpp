@@ -5,9 +5,13 @@
 #include <mutex>
 #include <list>
 #include <android/log.h>
+#if defined(__ANDROID__)
+#include <GLES3/gl31.h>
+#endif
 
 #define LOG_TAG "AlcedoImgBuf"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 namespace alcedo {
 
@@ -124,14 +128,14 @@ void ImageBuffer::convert_to_float32() {
     if (format == PixelFormat::FLOAT32_RGBA || format == PixelFormat::FLOAT32_RGB ||
         format == PixelFormat::FLOAT32_RAW) return;
 
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     std::vector<uint8_t> new_data(total * sizeof(float));
     float* dst = reinterpret_cast<float*>(new_data.data());
 
     switch (format) {
         case PixelFormat::UINT8_RGBA:
         case PixelFormat::UINT8_RGB: {
-            for (int i = 0; i < total; ++i) {
+            for (size_t i = 0; i < total; ++i) {
                 dst[i] = cpu_data[i] / 255.0f;
             }
             break;
@@ -139,7 +143,7 @@ void ImageBuffer::convert_to_float32() {
         case PixelFormat::UINT16_RGBA:
         case PixelFormat::UINT16_RAW: {
             uint16_t* src = uint16_data();
-            for (int i = 0; i < total; ++i) {
+            for (size_t i = 0; i < total; ++i) {
                 dst[i] = src[i] / 65535.0f;
             }
             break;
@@ -147,7 +151,7 @@ void ImageBuffer::convert_to_float32() {
         case PixelFormat::FLOAT16_RGBA: {
             // Half-float to float conversion
             uint16_t* src = uint16_data();
-            for (int i = 0; i < total; ++i) {
+            for (size_t i = 0; i < total; ++i) {
                 uint16_t h = src[i];
                 uint32_t h_exp = (h >> 10) & 0x1F;
                 uint32_t h_mant = h & 0x3FF;
@@ -176,10 +180,10 @@ void ImageBuffer::convert_to_uint8() {
     if (format == PixelFormat::UINT8_RGBA || format == PixelFormat::UINT8_RGB) return;
 
     convert_to_float32();
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     std::vector<uint8_t> new_data(total);
     float* src = float_data();
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         new_data[i] = static_cast<uint8_t>(std::max(0.0f, std::min(1.0f, src[i])) * 255.0f);
     }
     cpu_data = std::move(new_data);
@@ -191,11 +195,11 @@ void ImageBuffer::convert_to_float16() {
     if (format == PixelFormat::FLOAT16_RGBA) return;
 
     convert_to_float32();
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     std::vector<uint8_t> new_data(total * sizeof(uint16_t));
     uint16_t* dst = reinterpret_cast<uint16_t*>(new_data.data());
     float* src = float_data();
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         uint32_t f_bits;
         std::memcpy(&f_bits, &src[i], sizeof(float));
         uint32_t sign = (f_bits >> 31) & 1;
@@ -217,11 +221,11 @@ void ImageBuffer::convert_to_float16() {
 void ImageBuffer::convert_to_uint16() {
     if (format == PixelFormat::UINT16_RGBA || format == PixelFormat::UINT16_RAW) return;
     convert_to_float32();
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     std::vector<uint8_t> new_data(total * sizeof(uint16_t));
     uint16_t* dst = reinterpret_cast<uint16_t*>(new_data.data());
     float* src = float_data();
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         dst[i] = static_cast<uint16_t>(std::max(0.0f, std::min(1.0f, src[i])) * 65535.0f);
     }
     cpu_data = std::move(new_data);
@@ -245,16 +249,121 @@ ImageBuffer ImageBuffer::clone() const {
 }
 
 void ImageBuffer::upload_to_gpu() {
-    // GPU upload would use EGLImage / AHardwareBuffer / GL texture
-    // Placeholder for actual GPU backend integration
+    if (gpu_data_valid) return;
+    if (cpu_data.empty()) {
+        LOGW("GPU upload skipped: no CPU data");
+        return;
+    }
+
+#if defined(__ANDROID__)
+    // Lazily allocate a GL texture handle (stored as GLuint in the void*).
+    GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(gpu_texture_id));
+    if (tex == 0) {
+        glGenTextures(1, &tex);
+        if (tex == 0) {
+            LOGW("GPU upload: glGenTextures failed (no GL context?)");
+            gpu_data_valid = false;
+            return;
+        }
+        gpu_texture_id = reinterpret_cast<void*>(static_cast<uintptr_t>(tex));
+    }
+
+    GLenum glFormat = GL_RGBA;
+    GLenum glType = GL_UNSIGNED_BYTE;
+    switch (format) {
+        case PixelFormat::UINT8_RGBA:   glFormat = GL_RGBA; glType = GL_UNSIGNED_BYTE;    break;
+        case PixelFormat::UINT8_RGB:    glFormat = GL_RGB;  glType = GL_UNSIGNED_BYTE;    break;
+        case PixelFormat::FLOAT32_RGBA: glFormat = GL_RGBA; glType = GL_FLOAT;            break;
+        case PixelFormat::FLOAT32_RGB:  glFormat = GL_RGB;  glType = GL_FLOAT;            break;
+        case PixelFormat::FLOAT32_RAW:  glFormat = GL_RED;  glType = GL_FLOAT;            break;
+        case PixelFormat::UINT16_RAW:   glFormat = GL_RED;  glType = GL_UNSIGNED_SHORT;   break;
+        case PixelFormat::UINT16_RGBA:  glFormat = GL_RGBA; glType = GL_UNSIGNED_SHORT;   break;
+        case PixelFormat::FLOAT16_RGBA: glFormat = GL_RGBA; glType = GL_HALF_FLOAT;       break;
+        default:                        glFormat = GL_RGBA; glType = GL_UNSIGNED_BYTE;    break;
+    }
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, glFormat, width, height, 0,
+                 glFormat, glType, cpu_data.data());
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        LOGW("GPU upload: glTexImage2D failed (GL error 0x%x, %dx%d fmt=%d)",
+             err, width, height, static_cast<int>(format));
+        gpu_data_valid = false;
+        return;
+    }
+    gpu_data_valid = true;
+    LOGI("GPU upload: %dx%d tex=%u channels=%d", width, height, tex, channels);
+#else
+    LOGW("GPU upload: OpenGL ES unavailable (non-Android build)");
     gpu_data_valid = false;
-    LOGI("GPU upload not yet implemented");
+#endif
 }
 
 void ImageBuffer::download_from_gpu() {
-    // GPU download
-    gpu_data_valid = false;
-    LOGI("GPU download not yet implemented");
+    if (!gpu_data_valid) return;
+
+#if defined(__ANDROID__)
+    GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(gpu_texture_id));
+    if (tex == 0) {
+        LOGW("GPU download: no texture handle");
+        return;
+    }
+
+    GLenum glFormat = GL_RGBA;
+    GLenum glType = GL_UNSIGNED_BYTE;
+    switch (format) {
+        case PixelFormat::UINT8_RGBA:   glFormat = GL_RGBA; glType = GL_UNSIGNED_BYTE;    break;
+        case PixelFormat::UINT8_RGB:    glFormat = GL_RGB;  glType = GL_UNSIGNED_BYTE;    break;
+        case PixelFormat::FLOAT32_RGBA: glFormat = GL_RGBA; glType = GL_FLOAT;            break;
+        case PixelFormat::FLOAT32_RGB:  glFormat = GL_RGB;  glType = GL_FLOAT;            break;
+        case PixelFormat::FLOAT32_RAW:  glFormat = GL_RED;  glType = GL_FLOAT;            break;
+        case PixelFormat::UINT16_RAW:   glFormat = GL_RED;  glType = GL_UNSIGNED_SHORT;   break;
+        case PixelFormat::UINT16_RGBA:  glFormat = GL_RGBA; glType = GL_UNSIGNED_SHORT;   break;
+        case PixelFormat::FLOAT16_RGBA: glFormat = GL_RGBA; glType = GL_HALF_FLOAT;       break;
+        default:                        glFormat = GL_RGBA; glType = GL_UNSIGNED_BYTE;    break;
+    }
+
+    // OpenGL ES has no glGetTexImage; read back via a Framebuffer Object.
+    GLuint fbo = 0;
+    glGenFramebuffers(1, &fbo);
+    if (fbo == 0) {
+        LOGW("GPU download: glGenFramebuffers failed");
+        return;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, tex, 0);
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGW("GPU download: FBO incomplete (0x%x)", status);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &fbo);
+        return;
+    }
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, glFormat, glType, cpu_data.data());
+    GLenum err = glGetError();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &fbo);
+
+    if (err != GL_NO_ERROR) {
+        LOGW("GPU download: glReadPixels failed (GL error 0x%x)", err);
+        return;
+    }
+    // Note: OpenGL's origin is bottom-left; callers needing top-left ordering
+    // must flip the rows of cpu_data afterwards.
+    LOGI("GPU download: %dx%d tex=%u", width, height, tex);
+#else
+    LOGW("GPU download: OpenGL ES unavailable (non-Android build)");
+#endif
 }
 
 void ImageBuffer::release_gpu() {

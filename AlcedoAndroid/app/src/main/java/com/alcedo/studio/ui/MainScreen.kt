@@ -43,7 +43,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,9 +96,9 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(): Boo
     return from in tabRoutes && to in tabRoutes
 }
 
-// ── NavTransitions adapters ──────────────────────────────────────────
-// Tab switches (album/ai_search/settings) use fadeTransition().
-// Detail pages (editor/export/…) use slideInRight() for push, slideInLeft() for pop.
+// ── NavTransitions 适配器 ──────────────────────────────────────────
+// Tab 切换（album/ai_search/settings）使用 fadeTransition()。
+// 详情页（editor/export/…）使用 slideInRight() 推入，slideInLeft() 弹出。
 private fun alcedoNavEnter(scope: AnimatedContentTransitionScope<NavBackStackEntry>): EnterTransition =
     if (scope.isTabSwitch()) NavTransitions.fadeTransition().targetContentEnter
     else NavTransitions.slideInRight().targetContentEnter
@@ -135,7 +135,7 @@ fun MainScreen(
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
     // 后台任务进度浮层
-    val taskSnapshots by com.alcedo.studio.di.AppModule.backgroundTaskService.tasks.collectAsState()
+    val taskSnapshots by com.alcedo.studio.di.AppModule.backgroundTaskService.tasks.collectAsStateWithLifecycle()
     val hasActiveTasks = taskSnapshots.any {
         it.status == com.alcedo.studio.domain.service.TaskStatus.RUNNING ||
             it.status == com.alcedo.studio.domain.service.TaskStatus.PENDING ||
@@ -353,7 +353,7 @@ fun MainScreen(
     }
 }
 
-// ── Bottom navigation item with liquid-glass aware styling ───────────
+// ── 液态玻璃风格底部导航项 ───────────
 @Composable
 private fun RowScope.AlcedoNavItem(
     selected: Boolean,
@@ -385,7 +385,7 @@ private fun RowScope.AlcedoNavItem(
     )
 }
 
-// ── Navigation rail item with consistent styling ────────────────────
+// ── 导航栏项（统一样式）────────────
 @Composable
 private fun AlcedoRailItem(
     selected: Boolean,
@@ -417,7 +417,7 @@ private fun AlcedoRailItem(
     )
 }
 
-// ── Icon with subtle scale spring animation when selected ───────────
+// ── 选中时带轻微缩放弹簧动画的图标 ───────────
 @Composable
 private fun AlcedoNavIcon(
     selected: Boolean,

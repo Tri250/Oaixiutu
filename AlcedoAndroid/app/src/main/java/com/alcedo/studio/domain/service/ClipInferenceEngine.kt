@@ -301,7 +301,13 @@ class ClipInferenceEngine(private val context: Context) {
                 Log.w(TAG, "Image file not found: $imagePath")
                 return@withContext FloatArray(embeddingDim)
             }
-            val bitmap = BitmapFactory.decodeFile(imagePath)
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+                BitmapFactory.decodeFile(imagePath, this)
+                inSampleSize = calculateInSampleSize(outWidth, outHeight, 224, 224)
+                inJustDecodeBounds = false
+            }
+            val bitmap = BitmapFactory.decodeFile(imagePath, options)
             if (bitmap == null) {
                 Log.w(TAG, "Failed to decode image: $imagePath")
                 return@withContext FloatArray(embeddingDim)
@@ -411,6 +417,19 @@ class ClipInferenceEngine(private val context: Context) {
 
         val shape = longArrayOf(1, 3, imageSize.toLong(), imageSize.toLong())
         return OnnxTensor.createTensor(ortEnv!!, floatBuffer, shape)
+    }
+
+    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
+        if (reqWidth <= 0 || reqHeight <= 0) return 1
+        var inSampleSize = 1
+        if (outHeight > reqHeight || outWidth > reqWidth) {
+            val halfHeight = outHeight / 2
+            val halfWidth = outWidth / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 
     // ── Normalization ──

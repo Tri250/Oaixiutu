@@ -5,10 +5,10 @@ namespace alcedo {
 
 void ChannelMixerOperator::apply_rgb(float* pixels, int width, int height,
                                       const float matrix[9], bool monochrome) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -33,10 +33,10 @@ void ChannelMixerOperator::apply_rgb(float* pixels, int width, int height,
 
 void ChannelMixerOperator::apply_rgba(float* pixels, int width, int height,
                                        const float matrix[9], bool monochrome) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

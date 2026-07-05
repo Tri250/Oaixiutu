@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.ai
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -15,10 +17,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import com.alcedo.studio.service.AiService
+import com.alcedo.studio.di.AppModule
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class AiRatingResult(
     val imageId: Long,
@@ -31,15 +40,19 @@ data class AiRatingResult(
     val suggestion: String
 )
 
+data class AnalysisProgress(val current: Int, val total: Int)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiRatingScreen(
     navController: NavController,
     albumViewModel: AlbumViewModel = viewModel()
 ) {
-    val images by albumViewModel.filteredImages.collectAsState()
-    val thumbnailCache by albumViewModel.thumbnailCache.collectAsState()
+    val images by albumViewModel.filteredImages.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val aiService = remember { AppModule.appAiService }
+    val coroutineScope = rememberCoroutineScope()
+    val analysisProgress = remember { MutableStateFlow(AnalysisProgress(0, 0)) }
 
     var ratingResults by remember { mutableStateOf<List<AiRatingResult>>(emptyList()) }
     var isAnalyzing by remember { mutableStateOf(false) }
@@ -47,40 +60,47 @@ fun AiRatingScreen(
 
     // Trigger AI analysis
     fun startAnalysis() {
-        if (images.isEmpty()) return
-        isAnalyzing = true
-        analysisComplete = false
-
-        // Use AiService to predict ratings for each image
-        ratingResults = images.mapNotNull { image ->
-            try {
-                val prediction = AiService.predictRating(context, image.imageId)
-                AiRatingResult(
-                    imageId = image.imageId,
-                    imageName = image.imageName,
-                    overallScore = prediction.overall,
-                    compositionScore = prediction.composition,
-                    exposureScore = prediction.exposure,
-                    colorScore = prediction.color,
-                    sharpnessScore = prediction.sharpness,
-                    suggestion = prediction.suggestion
-                )
-            } catch (_: Exception) {
-                null
+        if (!isAnalyzing) {
+            isAnalyzing = true
+            analysisComplete = false
+            ratingResults = emptyList()
+            coroutineScope.launch {
+                val results = images.mapIndexed { index, image ->
+                    ensureActive()
+                    analysisProgress.value = AnalysisProgress(index + 1, images.size)
+                    val prediction = predictRatingSafely(
+                        context = context,
+                        aiService = aiService,
+                        imageId = image.imageId,
+                        imagePath = image.imagePath
+                    )
+                    AiRatingResult(
+                        imageId = image.imageId,
+                        imageName = image.imageName,
+                        overallScore = prediction.overall,
+                        compositionScore = prediction.composition,
+                        exposureScore = prediction.exposure,
+                        colorScore = prediction.color,
+                        sharpnessScore = prediction.sharpness,
+                        suggestion = prediction.suggestion
+                    )
+                }.sortedByDescending { it.overallScore }
+                withContext(Dispatchers.Main) {
+                    ratingResults = results
+                    isAnalyzing = false
+                    analysisComplete = true
+                }
             }
-        }.sortedByDescending { it.overallScore }
-
-        isAnalyzing = false
-        analysisComplete = true
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI 智能评分") },
+                title = { Text(stringRes { aiRatingTitle }.format("")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 },
                 actions = {
@@ -91,7 +111,7 @@ fun AiRatingScreen(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("开始评分")
+                            Text(stringRes { aiStartRating })
                         }
                     }
                 }
@@ -104,9 +124,13 @@ fun AiRatingScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("AI 正在分析图片质量...", style = MaterialTheme.typography.bodyLarge)
-                        Text("评估构图、曝光、色彩、锐度", style = MaterialTheme.typography.bodySmall,
+                        Text(stringRes { aiRatingEvaluating }, style = MaterialTheme.typography.bodyLarge)
+                        Text(stringRes { aiRatingAnalyze }, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val progress by analysisProgress.collectAsStateWithLifecycle()
+                        if (progress.total > 0) {
+                            Text("${progress.current} / ${progress.total}", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -116,8 +140,8 @@ fun AiRatingScreen(
                         Icon(Icons.Default.ImageNotSupported, contentDescription = null,
                             modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("没有可分析的图片", style = MaterialTheme.typography.titleMedium)
-                        Text("请先导入图片到相册", style = MaterialTheme.typography.bodySmall,
+                        Text(stringRes { aiRatingNoImages }, style = MaterialTheme.typography.titleMedium)
+                        Text(stringRes { aiRatingNoImagesDesc }, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -132,7 +156,7 @@ fun AiRatingScreen(
                     item {
                         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("评分概览", style = MaterialTheme.typography.titleSmall)
+                                Text(stringRes { aiRatingScoreOverview }, style = MaterialTheme.typography.titleSmall)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 val avgScore = ratingResults.map { it.overallScore }.average().toInt()
                                 val topCount = ratingResults.count { it.overallScore >= 80 }
@@ -140,9 +164,9 @@ fun AiRatingScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceEvenly
                                 ) {
-                                    ScoreStat("平均分", avgScore)
-                                    ScoreStat("优秀(80+)", topCount)
-                                    ScoreStat("总数", ratingResults.size)
+                                    ScoreStat(stringRes { aiRatingAverageScore }, avgScore)
+                                    ScoreStat(stringRes { aiRatingExcellent }, topCount)
+                                    ScoreStat(stringRes { aiRatingTotal }, ratingResults.size)
                                 }
                             }
                         }
@@ -163,14 +187,14 @@ fun AiRatingScreen(
                         Icon(Icons.Default.AutoAwesome, contentDescription = null,
                             modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("AI 智能评分", style = MaterialTheme.typography.titleLarge)
-                        Text("分析图片的构图、曝光、色彩和锐度", style = MaterialTheme.typography.bodyMedium,
+                        Text(stringRes { aiRatingTitle }.format(""), style = MaterialTheme.typography.titleLarge)
+                        Text(stringRes { aiRatingAnalyzeDesc }, style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(24.dp))
                         FilledTonalButton(onClick = { startAnalysis() }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("开始评分 (${images.size} 张图片)")
+                            Text(stringRes { aiRatingStartWithCount }.format(images.size))
                         }
                     }
                 }
@@ -221,10 +245,10 @@ private fun RatingCard(result: AiRatingResult, onClick: () -> Unit) {
 
             // Sub-scores
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                SubScore("构图", result.compositionScore)
-                SubScore("曝光", result.exposureScore)
-                SubScore("色彩", result.colorScore)
-                SubScore("锐度", result.sharpnessScore)
+                SubScore(stringRes { aiRatingComposition }, result.compositionScore)
+                SubScore(stringRes { aiRatingExposure }, result.exposureScore)
+                SubScore(stringRes { aiRatingColorScore }, result.colorScore)
+                SubScore(stringRes { aiRatingSharpness }, result.sharpnessScore)
             }
 
             if (result.suggestion.isNotBlank()) {
@@ -240,7 +264,7 @@ private fun RatingCard(result: AiRatingResult, onClick: () -> Unit) {
             OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("编辑图片")
+                Text(stringRes { aiRatingEditImage })
             }
         }
     }
@@ -271,18 +295,57 @@ data class RatingPrediction(
     val suggestion: String
 )
 
-// Extension to call AiService for rating prediction
-private fun AiService.predictRating(context: android.content.Context, imageId: Long): RatingPrediction {
-    // Use the existing AiService predictRating method
-    val result = this.predictRating(imageId)
-    return RatingPrediction(
-        overall = (result * 100).toInt().coerceIn(0, 100),
-        composition = ((result * 85 + 15).toInt().coerceIn(0, 100)),
-        exposure = ((result * 90 + 10).toInt().coerceIn(0, 100)),
-        color = ((result * 88 + 12).toInt().coerceIn(0, 100)),
-        sharpness = ((result * 82 + 18).toInt().coerceIn(0, 100)),
-        suggestion = if (result > 0.8f) "出色的作品，构图和曝光都非常出色"
-            else if (result > 0.6f) "不错的作品，可以尝试调整构图或曝光"
-            else "有提升空间，建议关注构图和光线"
+// 挂起函数，在 IO 线程执行真实评分推理
+suspend fun predictRatingSafely(
+    context: android.content.Context,
+    aiService: AiService,
+    imageId: Long,
+    imagePath: String
+): RatingPrediction = withContext(Dispatchers.Default) {
+    // 加载图片（采样到合理尺寸）
+    val bitmap = try {
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+            BitmapFactory.decodeFile(imagePath, this)
+            inSampleSize = calculateInSampleSize(outWidth, outHeight, 512, 512)
+            inJustDecodeBounds = false
+        }
+        BitmapFactory.decodeFile(imagePath, options)
+    } catch (e: Exception) {
+        null
+    }
+
+    // 调用真实 AI 评分服务
+    val (score, description) = if (bitmap != null) {
+        try {
+            aiService.predictRating(imageId.toUInt(), bitmap)
+        } catch (e: Exception) {
+            3 to "评分失败：${e.message}"
+        }
+    } else {
+        3 to "无法加载图片"
+    }
+
+    // 基于评分结果生成多维度分数
+    val overallScore = (score * 20).coerceIn(0, 100)
+    RatingPrediction(
+        overall = overallScore,
+        composition = (overallScore * 0.9 + 5).toInt().coerceIn(0, 100),
+        exposure = (overallScore * 0.95 + 3).toInt().coerceIn(0, 100),
+        color = (overallScore * 0.88 + 8).toInt().coerceIn(0, 100),
+        sharpness = (overallScore * 0.92 + 4).toInt().coerceIn(0, 100),
+        suggestion = description
     )
+}
+
+private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
+    var inSampleSize = 1
+    if (outHeight > reqHeight || outWidth > reqWidth) {
+        val halfHeight = outHeight / 2
+        val halfWidth = outWidth / 2
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize
 }

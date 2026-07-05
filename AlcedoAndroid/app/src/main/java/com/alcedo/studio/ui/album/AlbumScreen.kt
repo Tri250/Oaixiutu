@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,27 +55,32 @@ fun AlbumScreen(
     navController: NavController,
     viewModel: AlbumViewModel = viewModel()
 ) {
-    val images by viewModel.filteredImages.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedImages = viewModel.selectedImages
-    val showSearch = viewModel.showSearch.value
-    val semanticEnabled = viewModel.semanticSearchEnabled.value
-    val folders by viewModel.folders.collectAsState()
-    val sortMode by viewModel.sortMode.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val thumbnailCache by viewModel.thumbnailCache.collectAsState()
+    val images by viewModel.filteredImages.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val selectedImages by viewModel.selectedImages.collectAsStateWithLifecycle()
+    val showSearch by viewModel.showSearch.collectAsStateWithLifecycle()
+    val semanticEnabled by viewModel.semanticSearchEnabled.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    // 缩略图缓存通过 LruCache 存储，UI 通过版本号触发重组，
+    // 实际 bitmap 通过 viewModel.getThumbnail(id) 直接访问
+    val thumbnailCacheVersion by viewModel.thumbnailCacheVersion.collectAsStateWithLifecycle()
+    val hasMorePages by viewModel.hasMorePages.collectAsStateWithLifecycle()
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var showFolderSidebar by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(false) }
     var contextMenuImage by remember { mutableStateOf<ImageModel?>(null) }
     var ratingTarget by remember { mutableStateOf<ImageModel?>(null) }
+    var showBatchAiTagDialog by remember { mutableStateOf(false) }
+    var showBatchRatingDialog by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // ── Permission management ────────────────────────────────────
+    // ── 权限管理 ────────────────────────────────────
     val permissionState = rememberPermissionState(
         onResult = { results ->
             val allGranted = results.all { it.value }
@@ -84,7 +90,7 @@ fun AlbumScreen(
         }
     )
 
-    // Request media permissions on first launch
+    // 首次启动时请求媒体权限
     LaunchedEffect(Unit) {
         if (!PermissionHelper.hasReadMediaAccess(context)) {
             permissionState.requestMediaAccess()
@@ -98,7 +104,7 @@ fun AlbumScreen(
         else -> 3
     }
 
-    // ── Photo Picker launcher ──────────────────────────────────────
+    // ── Photo Picker 启动器 ──────────────────────────────────────
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(500)
     ) { uris: List<Uri> ->
@@ -107,7 +113,7 @@ fun AlbumScreen(
         }
     }
 
-    // ── SAF directory picker launcher ──────────────────────────────
+    // ── SAF 目录选择器启动器 ──────────────────────────────
     val safDirLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
@@ -116,7 +122,7 @@ fun AlbumScreen(
         }
     }
 
-    // ── Legacy file picker launcher (fallback) ─────────────────────
+    // ── 传统文件选择器启动器（回退）─────────────────────
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
@@ -134,6 +140,15 @@ fun AlbumScreen(
                         folders = folders,
                         onFolderSelected = { folderId ->
                             viewModel.navigateToFolder(folderId)
+                            scope.launch { drawerState.close() }
+                        },
+                        onSmartAlbumSelected = { type ->
+                            // 智能相册：根据类型应用对应筛选/排序
+                            when (type) {
+                                "favorites" -> viewModel.applyFilter(FilterState(rating = 4))
+                                "recent" -> viewModel.setSortMode(SortMode.DATE)
+                                "to_export" -> { /* 待导出：保留入口，筛选逻辑后续扩展 */ }
+                            }
                             scope.launch { drawerState.close() }
                         },
                         onClose = {
@@ -155,13 +170,18 @@ fun AlbumScreen(
                 semanticEnabled = semanticEnabled,
                 sortMode = sortMode,
                 columns = columns,
-                thumbnailCache = thumbnailCache,
+                thumbnailCacheVersion = thumbnailCacheVersion,
+                hasMorePages = hasMorePages,
+                onGetThumbnail = viewModel::getThumbnail,
+                onLoadMore = viewModel::loadMoreImages,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
                 onToggleSearch = viewModel::toggleSearch,
                 onToggleSemantic = viewModel::toggleSemanticSearch,
                 onToggleImageSelection = viewModel::toggleImageSelection,
                 onClearSelection = viewModel::clearSelection,
                 onDeleteSelected = viewModel::deleteSelected,
+                onBatchAiTag = { showBatchAiTagDialog = true },
+                onBatchRating = { showBatchRatingDialog = true },
                 onRefresh = viewModel::refresh,
                 onSortModeChange = viewModel::setSortMode,
                 onOpenFilter = { showFilterSheet = true },
@@ -187,13 +207,18 @@ fun AlbumScreen(
             semanticEnabled = semanticEnabled,
             sortMode = sortMode,
             columns = columns,
-            thumbnailCache = thumbnailCache,
+            thumbnailCacheVersion = thumbnailCacheVersion,
+            hasMorePages = hasMorePages,
+            onGetThumbnail = viewModel::getThumbnail,
+            onLoadMore = viewModel::loadMoreImages,
             onSearchQueryChange = viewModel::onSearchQueryChange,
             onToggleSearch = viewModel::toggleSearch,
             onToggleSemantic = viewModel::toggleSemanticSearch,
             onToggleImageSelection = viewModel::toggleImageSelection,
             onClearSelection = viewModel::clearSelection,
             onDeleteSelected = viewModel::deleteSelected,
+            onBatchAiTag = { showBatchAiTagDialog = true },
+            onBatchRating = { showBatchRatingDialog = true },
             onRefresh = viewModel::refresh,
             onSortModeChange = viewModel::setSortMode,
             onOpenFilter = { showFilterSheet = true },
@@ -205,7 +230,7 @@ fun AlbumScreen(
         )
     }
 
-    // Filter bottom sheet
+    // 筛选底部表单
     if (showFilterSheet) {
         FilterBottomSheet(
             onDismiss = { showFilterSheet = false },
@@ -220,7 +245,7 @@ fun AlbumScreen(
         )
     }
 
-    // Import dialog
+    // 导入对话框
     if (showImport) {
         ImportDialog(
             onDismiss = { showImport = false },
@@ -241,7 +266,7 @@ fun AlbumScreen(
         )
     }
 
-    // Image context menu
+    // 图片上下文菜单
     contextMenuImage?.let { image ->
         ImageContextMenu(
             imageName = image.imageName,
@@ -269,7 +294,7 @@ fun AlbumScreen(
         )
     }
 
-    // Rating picker dialog (replaces previously hardcoded rating value)
+    // 评分选择对话框（替代之前硬编码的评分值）
     ratingTarget?.let { image ->
         RatingPickerDialog(
             imageName = image.imageName,
@@ -277,6 +302,36 @@ fun AlbumScreen(
             onPick = { rating ->
                 viewModel.setRating(image.imageId, rating)
                 ratingTarget = null
+            }
+        )
+    }
+
+    // 批量 AI 标签对话框
+    if (showBatchAiTagDialog) {
+        AlertDialog(
+            onDismissRequest = { showBatchAiTagDialog = false },
+            title = { Text("批量 AI 标签") },
+            text = { Text("为选中的 ${selectedImages.size} 张图片生成 AI 标签？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.generateLabelsForImages(selectedImages.toList())
+                    showBatchAiTagDialog = false
+                }) { Text(stringRes { confirm }) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchAiTagDialog = false }) { Text(stringRes { cancel }) }
+            }
+        )
+    }
+
+    // 批量评分对话框（复用 RatingPickerDialog）
+    if (showBatchRatingDialog) {
+        RatingPickerDialog(
+            imageName = "${selectedImages.size} 张图片",
+            onDismiss = { showBatchRatingDialog = false },
+            onPick = { rating ->
+                viewModel.rateImages(selectedImages.toList(), rating)
+                showBatchRatingDialog = false
             }
         )
     }
@@ -290,18 +345,23 @@ private fun AlbumContent(
     isLoading: Boolean,
     isRefreshing: Boolean,
     searchQuery: String,
-    selectedImages: List<Long>,
+    selectedImages: Set<Long>,
     showSearch: Boolean,
     semanticEnabled: Boolean,
     sortMode: SortMode,
     columns: Int,
-    thumbnailCache: Map<Long, android.graphics.Bitmap>,
+    thumbnailCacheVersion: Int,
+    hasMorePages: Boolean,
+    onGetThumbnail: (Long) -> android.graphics.Bitmap?,
+    onLoadMore: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onToggleSearch: () -> Unit,
     onToggleSemantic: () -> Unit,
     onToggleImageSelection: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onDeleteSelected: () -> Unit,
+    onBatchAiTag: () -> Unit,
+    onBatchRating: () -> Unit,
     onRefresh: () -> Unit,
     onSortModeChange: (SortMode) -> Unit,
     onOpenFilter: () -> Unit,
@@ -317,7 +377,7 @@ private fun AlbumContent(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (selectedImages.isNotEmpty()) {
-                // Selection mode top bar with animation
+                // 选择模式顶栏（带动画）
                 AnimatedVisibility(
                     visible = selectedImages.isNotEmpty(),
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -331,17 +391,29 @@ private fun AlbumContent(
                             }
                         },
                         actions = {
-                            IconButton(onClick = onDeleteSelected) {
-                                Icon(Icons.Default.Delete, contentDescription = stringRes { delete },
-                                    tint = MaterialTheme.colorScheme.error)
+                            // 批量 AI 标签
+                            IconButton(onClick = onBatchAiTag) {
+                                Icon(Icons.Default.Label, contentDescription = "AI标签",
+                                    tint = MaterialTheme.colorScheme.onSurface)
                             }
+                            // 批量评分
+                            IconButton(onClick = onBatchRating) {
+                                Icon(Icons.Default.Star, contentDescription = stringRes { aiRatingTitle },
+                                    tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                            // 批量导出选中图片
                             IconButton(onClick = {
-                                // 批量导出选中图片
                                 selectedImages.firstOrNull()?.let { firstId ->
                                     navController.navigate("export/$firstId")
                                 }
                             }) {
-                                Icon(Icons.Default.Share, contentDescription = stringRes { export }, tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(Icons.Default.Share, contentDescription = stringRes { export },
+                                    tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                            // 删除
+                            IconButton(onClick = onDeleteSelected) {
+                                Icon(Icons.Default.Delete, contentDescription = stringRes { delete },
+                                    tint = MaterialTheme.colorScheme.error)
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -450,15 +522,30 @@ private fun AlbumContent(
                 }
                 else -> {
                     Column {
-                        // Sort/filter bar
+                        // 排序/筛选栏
                         SortFilterBar(
                             sortMode = sortMode,
                             onSortModeChange = onSortModeChange,
                             imageCount = images.size
                         )
 
-                        // Thumbnail grid
+                        // 分页加载：当剩余可见项不足阈值时自动请求下一页
+                        val gridState = rememberLazyGridState()
+                        val shouldLoadMore by remember {
+                            derivedStateOf {
+                                if (!hasMorePages || images.isEmpty()) return@derivedStateOf false
+                                val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+                                    ?: return@derivedStateOf false
+                                lastVisible >= images.size - 10
+                            }
+                        }
+                        LaunchedEffect(shouldLoadMore) {
+                            if (shouldLoadMore) onLoadMore()
+                        }
+
+                        // 缩略图网格
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Fixed(columns),
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
@@ -470,8 +557,8 @@ private fun AlbumContent(
                             items(images, key = { it.imageId }) { image ->
                                 ThumbnailCard(
                                     image = image,
-                                    isSelected = selectedImages.contains(image.imageId),
-                                    thumbnailBitmap = thumbnailCache[image.imageId],
+                                    isSelected = image.imageId in selectedImages,
+                                    thumbnailBitmap = onGetThumbnail(image.imageId),
                                     onClick = {
                                         if (selectedImages.isNotEmpty()) {
                                             onToggleImageSelection(image.imageId)
@@ -487,6 +574,18 @@ private fun AlbumContent(
                                         }
                                     }
                                 )
+                            }
+                            if (hasMorePages) {
+                                item(span = { GridItemSpan(columns) }) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    }
+                                }
                             }
                         }
                     }
@@ -577,7 +676,7 @@ private fun ThumbnailCard(
         elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
         Box {
-            // Thumbnail image or placeholder
+            // 缩略图或占位符
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -596,7 +695,7 @@ private fun ThumbnailCard(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // Placeholder with first letter
+                    // 首字母占位符
                     Text(
                         image.imageName.take(1).uppercase(),
                         style = MaterialTheme.typography.headlineLarge,
@@ -605,7 +704,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // Selection indicator with animation
+            // 选择指示器（带动画）
             AnimatedVisibility(
                 visible = isSelected,
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
@@ -636,7 +735,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // Rating overlay
+            // 评分浮层
             val rating = image.exifDisplay.rating
             if (rating > 0) {
                 Row(
@@ -659,7 +758,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // AI label / RAW indicator
+            // AI 标签 / RAW 指示器
             val isRaw = image.imageName.endsWith(".raw", true) ||
                 image.imageName.endsWith(".dng", true) ||
                 image.imageName.endsWith(".cr2", true) ||
@@ -683,7 +782,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // Image name overlay
+            // 图片名称浮层
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -714,6 +813,7 @@ private fun ThumbnailCard(
 private fun FolderSidebar(
     folders: List<SleeveFolder>,
     onFolderSelected: (Long) -> Unit,
+    onSmartAlbumSelected: (String) -> Unit,
     onClose: () -> Unit
 ) {
     Column(
@@ -736,6 +836,56 @@ private fun FolderSidebar(
         HorizontalDivider()
 
         LazyColumn {
+            // ── 智能相册分区 ──
+            item {
+                Text(
+                    "智能相册",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("收藏夹") },
+                    leadingContent = {
+                        Icon(Icons.Default.Favorite, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { onSmartAlbumSelected("favorites") }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("最近查看") },
+                    leadingContent = {
+                        Icon(Icons.Default.Schedule, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { onSmartAlbumSelected("recent") }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("待导出") },
+                    leadingContent = {
+                        Icon(Icons.Default.FileDownload, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { onSmartAlbumSelected("to_export") }
+                )
+            }
+
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp))
+            }
+
+            // ── 文件夹分区 ──
+            item {
+                Text(
+                    stringRes { albumFolders },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
             item {
                 ListItem(
                     headlineContent = { Text(stringRes { albumAllImages }) },
@@ -745,7 +895,7 @@ private fun FolderSidebar(
                     modifier = Modifier.clickable { onFolderSelected(0L) }
                 )
             }
-            items(folders) { folder: SleeveFolder ->
+            items(folders, key = { it.elementId }) { folder: SleeveFolder ->
                 ListItem(
                     headlineContent = { Text(folder.elementName) },
                     supportingContent = { Text(stringRes { albumFilesCount }.format(folder.fileCount)) },
@@ -773,7 +923,7 @@ private fun ImportDialog(
         icon = { Icon(Icons.Default.AddPhotoAlternate, contentDescription = null) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Select Files button – launches Photo Picker or file picker
+                // 选择文件按钮 – 启动 Photo Picker 或文件选择器
                 FilledTonalButton(
                     onClick = onSelectFiles,
                     modifier = Modifier.fillMaxWidth()
@@ -783,7 +933,7 @@ private fun ImportDialog(
                     Text(stringRes { albumSelectFiles })
                 }
 
-                // Select Directory button – launches SAF directory picker
+                // 选择目录按钮 – 启动 SAF 目录选择器
                 OutlinedButton(
                     onClick = onSelectDirectory,
                     modifier = Modifier.fillMaxWidth()
@@ -857,7 +1007,7 @@ private fun FilterSheetContent(
             .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // 头部
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -887,7 +1037,7 @@ private fun FilterSheetContent(
             }
         }
 
-        // Camera Make
+        // 相机品牌
         Text(stringRes { albumFilterCameraMake }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleCameraMakes.forEach { make ->
@@ -903,7 +1053,7 @@ private fun FilterSheetContent(
             }
         }
 
-        // Camera Model
+        // 相机型号
         Text(stringRes { albumFilterCameraModel }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleCameraModels.forEach { model ->
@@ -919,7 +1069,7 @@ private fun FilterSheetContent(
             }
         }
 
-        // Lens
+        // 镜头
         Text(stringRes { albumFilterLensModel }, style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = lensModel,
@@ -930,7 +1080,7 @@ private fun FilterSheetContent(
             leadingIcon = { Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp)) }
         )
 
-        // Date Range
+        // 日期范围
         Text(stringRes { albumFilterDateRange }, style = MaterialTheme.typography.labelLarge)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -953,7 +1103,7 @@ private fun FilterSheetContent(
             )
         }
 
-        // Rating
+        // 评分
         Text(stringRes { albumFilterRating }, style = MaterialTheme.typography.labelLarge)
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -979,7 +1129,7 @@ private fun FilterSheetContent(
             }
         }
 
-        // File Type
+        // 文件类型
         Text(stringRes { albumFilterFileType }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleFileTypes.forEach { type ->
@@ -995,7 +1145,7 @@ private fun FilterSheetContent(
             }
         }
 
-        // AI Labels
+        // AI 标签
         Text(stringRes { albumFilterAiLabels }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleAiLabels.forEach { label ->
@@ -1104,7 +1254,7 @@ private fun RatingPickerDialog(
     )
 }
 
-// Helper to convert Bitmap to ImageBitmap for Compose
+// 将 Bitmap 转换为 Compose 使用的 ImageBitmap 的辅助函数
 private fun android.graphics.Bitmap.asImageBitmap(): androidx.compose.ui.graphics.ImageBitmap {
     return androidx.compose.ui.graphics.asImageBitmap()
 }

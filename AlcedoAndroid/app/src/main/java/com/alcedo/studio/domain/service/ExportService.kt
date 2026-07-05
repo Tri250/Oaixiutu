@@ -87,7 +87,7 @@ class ExportService(private val context: Context) {
                 status = ExportStatus.EXPORTING
             )
 
-            val bitmap = processedBitmap ?: BitmapFactory.decodeFile(sourcePath)
+            val bitmap = processedBitmap ?: decodeSampledBitmap(sourcePath, settings)
                 ?: return@withContext ExportResult.Error("Failed to decode source image: $sourcePath")
 
             updateItemProgress(0f)
@@ -169,6 +169,33 @@ class ExportService(private val context: Context) {
             )
             ExportResult.Error(e.message ?: "Export failed")
         }
+    }
+
+    // ================================================================
+    // Sampled bitmap decoding helpers
+    // ================================================================
+
+    private fun decodeSampledBitmap(path: String, settings: ExportSettings): Bitmap? {
+        val reqWidth = settings.maxWidth ?: settings.maxDimension ?: 0
+        val reqHeight = settings.maxHeight ?: settings.maxDimension ?: 0
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, opts)
+        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, reqWidth, reqHeight)
+        opts.inJustDecodeBounds = false
+        return BitmapFactory.decodeFile(path, opts)
+    }
+
+    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
+        if (reqWidth <= 0 || reqHeight <= 0) return 1
+        var inSampleSize = 1
+        if (outHeight > reqHeight || outWidth > reqWidth) {
+            val halfHeight = outHeight / 2
+            val halfWidth = outWidth / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 
     // ================================================================
@@ -1430,14 +1457,13 @@ class ExportService(private val context: Context) {
             }
 
             // Update image dimensions
-            outputExif.setAttribute(ExifInterface.TAG_IMAGE_WIDTH, outputFile.let {
-                val bmp = BitmapFactory.decodeFile(it.absolutePath)
-                bmp?.width?.toString() ?: ""
-            })
-            outputExif.setAttribute(ExifInterface.TAG_IMAGE_LENGTH, outputFile.let {
-                val bmp = BitmapFactory.decodeFile(it.absolutePath)
-                bmp?.height?.toString() ?: ""
-            })
+            val dims = outputFile.let { f ->
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(f.absolutePath, opts)
+                opts.outWidth to opts.outHeight
+            }
+            outputExif.setAttribute(ExifInterface.TAG_IMAGE_WIDTH, dims.first.toString())
+            outputExif.setAttribute(ExifInterface.TAG_IMAGE_LENGTH, dims.second.toString())
 
             // Write rating (mapped to EXIF Rating tag)
             if (settings.rating > 0) {

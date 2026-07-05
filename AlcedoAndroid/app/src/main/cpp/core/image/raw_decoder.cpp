@@ -1575,60 +1575,280 @@ bool RawDecoder::decompress_nikon_he(const uint8_t* compressed_data, size_t comp
 }
 
 // ============================================================
-// Lossless JPEG decompression (simplified)
+// Lossless JPEG Huffman decoder (ITU-T T.81, SOF3/SOF7)
 // ============================================================
+
+namespace {
+
+// Huffman table for Lossless JPEG (only DC/class-0 tables are used).
+struct LosslessHuffmanTable {
+    uint8_t lengths[16] = {0};        // number of codes of each length (1..16)
+    std::vector<uint8_t> symbols;     // symbol values, in canonical order
+    std::vector<uint16_t> codes;      // canonical code per symbol
+    std::vector<int> codeLens;        // length per symbol (parallel to codes)
+    bool valid = false;
+};
+
+// Build canonical Huffman codes from the (lengths, symbols) arrays per the
+// JPEG spec (ITU-T T.81 Annex C): codes are assigned in increasing order of
+// length, with the first code of each length being (prev_last_code + 1) << 1.
+void buildHuffmanCodes(LosslessHuffmanTable& t) {
+    const size_t n = t.symbols.size();
+    t.codes.assign(n, 0);
+    t.codeLens.assign(n, 0);
+    uint32_t code = 0;
+    size_t idx = 0;
+    for (int len = 1; len <= 16; ++len) {
+        int count = t.lengths[len - 1];
+        for (int i = 0; i < count; ++i) {
+            if (idx >= n) break;
+            t.codes[idx] = static_cast<uint16_t>(code);
+            t.codeLens[idx] = len;
+            ++code;
+            ++idx;
+        }
+        code <<= 1;
+    }
+    t.valid = (n > 0);
+}
+
+// Read a single bit (MSB-first within each byte) from a bitstream.
+inline int readBit(const uint8_t* data, size_t size, size_t& bitOffset) {
+    size_t bytePos = bitOffset >> 3;
+    if (bytePos >= size) return 0;
+    int bit = (data[bytePos] >> (7 - (bitOffset & 7))) & 1;
+    ++bitOffset;
+    return bit;
+}
+
+// Decode one Huffman symbol. Returns the symbol (SSSS for lossless JPEG) or
+// -1 if no matching code was found.
+int decodeSymbol(const uint8_t* data, size_t size, size_t& bitOffset,
+                 const LosslessHuffmanTable& t) {
+    if (!t.valid) return -1;
+    uint32_t code = 0;
+    size_t idx = 0;
+    for (int len = 1; len <= 16; ++len) {
+        code = (code << 1) | readBit(data, size, bitOffset);
+        int count = t.lengths[len - 1];
+        for (int i = 0; i < count; ++i) {
+            if (idx >= t.codes.size()) return -1;
+            if (code == t.codes[idx]) {
+                return t.symbols[idx];
+            }
+            ++idx;
+        }
+    }
+    return -1;
+}
+
+// Decode the magnitude bits for a Lossless JPEG difference value.
+// SSSS = number of additional bits. If the high bit is 0, the value is
+// negative; otherwise the value is the positive magnitude directly.
+int decodeDiff(const uint8_t* data, size_t size, size_t& bitOffset, int ssss) {
+    if (ssss == 0) return 0;
+    int value = 0;
+    for (int i = 0; i < ssss; ++i) {
+        value = (value << 1) | readBit(data, size, bitOffset);
+    }
+    if (value < (1 << (ssss - 1))) {
+        value -= (1 << ssss) - 1;
+    }
+    return value;
+}
+
+// Compute the predictor per ITU-T T.81 Annex H:
+//   1 = Ra (left),          2 = Rb (above),
+//   3 = Rc (upper-left),    4 = Ra + Rb - Rc,
+//   5 = Ra + ((Rb - Rc) >> 1),
+//   6 = Rb + ((Ra - Rc) >> 1),
+//   7 = (Ra + Rb) >> 1
+inline int computePredictor(int pred, int ra, int rb, int rc) {
+    switch (pred) {
+        case 1: return ra;
+        case 2: return rb;
+        case 3: return rc;
+        case 4: return ra + rb - rc;
+        case 5: return ra + ((rb - rc) >> 1);
+        case 6: return rb + ((ra - rc) >> 1);
+        case 7: return (ra + rb) >> 1;
+        default: return ra;
+    }
+}
+
+} // namespace
 
 bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
                                            uint16_t* output, int width, int height,
                                            int bits_per_sample, int predictor) {
-    // Simplified lossless JPEG decoder for RAW data.
-    // JPEG lossless uses Huffman coding + predictive coding.
-    // This is a simplified implementation that handles the common case
-    // of 16-bit RAW data with Huffman tables.
-
-    if (size < 2) {
-        std::fill(output, output + width * height, 0);
+    // Full Lossless JPEG decoder (ITU-T T.81). Parses the DHT (Define Huffman
+    // Table) and SOS (Start of Scan) markers, then decodes the prediction
+    // residuals for each pixel using the selected predictor.
+    const size_t outCount = static_cast<size_t>(width) * height;
+    if (size < 2 || data[0] != 0xFF || data[1] != 0xD8) {
+        LOGW("Lossless JPEG: invalid SOI");
+        std::fill(output, output + outCount, 0);
         return false;
     }
 
-    // Check for SOI marker
-    if (data[0] != 0xFF || data[1] != 0xD8) {
-        LOGW("Not a JPEG stream");
-        return false;
-    }
+    LosslessHuffmanTable dcTables[4];      // up to 4 components
+    int componentDcTable[4] = {0, 0, 0, 0};
+    int precision = bits_per_sample;
+    int scanPredictor = predictor;          // Ss field in SOS
+    int pointTransform = 0;                  // Al field in SOS (low 4 bits)
 
-    // Simplified: many RAW files use near-lossless JPEG-LS or Huffman.
-    // For a full implementation, we'd need a complete JPEG decoder.
-    // Here we provide a structural parser that extracts Huffman tables
-    // and decodes the scan data.
-
-    // Find SOS (Start of Scan) marker
     size_t pos = 2;
-    while (pos + 4 < size) {
-        if (data[pos] == 0xFF) {
-            uint8_t m = data[pos + 1];
-            if (m == 0xDA) { // SOS
-                // Scan data starts after SOS header
-                uint16_t header_len = (data[pos + 2] << 8) | data[pos + 3];
-                size_t scan_start = pos + header_len + 2;
-                // Skip scan data (need full Huffman decoder)
-                // This is a placeholder
-                break;
-            } else if (m == 0xD9) { // EOI
-                break;
-            } else if (m != 0x00 && m != 0xFF) {
-                uint16_t seg_len = (data[pos + 2] << 8) | data[pos + 3];
-                pos += seg_len + 1;
+    size_t scanStart = 0;
+    bool foundSos = false;
+
+    while (pos + 1 < size) {
+        if (data[pos] != 0xFF) { ++pos; continue; }
+        // Collapse runs of 0xFF fill bytes.
+        while (pos + 1 < size && data[pos + 1] == 0xFF) ++pos;
+        if (pos + 1 >= size) break;
+        uint8_t marker = data[pos + 1];
+
+        if (marker == 0xD9) break;                       // EOI
+        if (marker == 0xDA) {                             // SOS
+            if (pos + 4 > size) break;
+            uint16_t segLen = (data[pos + 2] << 8) | data[pos + 3];
+            size_t sosEnd = pos + 2 + segLen;
+            if (sosEnd > size) break;
+            uint8_t ns = data[pos + 4];                    // number of components
+            for (int i = 0; i < ns && i < 4; ++i) {
+                size_t base = pos + 5 + i * 2;
+                if (base + 1 >= size) break;
+                componentDcTable[i] = (data[base + 1] >> 4) & 0x0F;
+            }
+            if (pos + 5 + ns * 2 + 2 < size) {
+                scanPredictor = data[pos + 5 + ns * 2];    // Ss
+                pointTransform = data[pos + 5 + ns * 2 + 2] & 0x0F;  // Al
+            }
+            scanStart = sosEnd;
+            foundSos = true;
+            break;
+        }
+        if (marker == 0xC4) {                             // DHT
+            if (pos + 4 > size) break;
+            uint16_t segLen = (data[pos + 2] << 8) | data[pos + 3];
+            size_t dhtEnd = pos + 2 + segLen;
+            if (dhtEnd > size) dhtEnd = size;
+            size_t p = pos + 4;
+            while (p < dhtEnd) {
+                uint8_t tableInfo = data[p++];
+                int tableClass = (tableInfo >> 4) & 0x0F;
+                int tableId = tableInfo & 0x0F;
+                if (p + 16 > dhtEnd) break;
+                int totalSymbols = 0;
+                for (int i = 0; i < 16; ++i) totalSymbols += data[p + i];
+                if (p + 16 + totalSymbols > dhtEnd) break;
+                // Lossless JPEG only uses DC (class 0) tables.
+                if (tableClass == 0 && tableId >= 0 && tableId <= 3) {
+                    LosslessHuffmanTable& t = dcTables[tableId];
+                    for (int i = 0; i < 16; ++i) t.lengths[i] = data[p + i];
+                    t.symbols.assign(data + p + 16, data + p + 16 + totalSymbols);
+                    buildHuffmanCodes(t);
+                }
+                p += 16 + totalSymbols;
+            }
+            pos = dhtEnd;
+            continue;
+        }
+        if (marker == 0xC3 || marker == 0xC7 || marker == 0xCB || marker == 0xCF) {
+            // SOF3 (lossless Huffman), SOF7 (lossless, extended),
+            // SOF11/SOF15 (lossless arithmetic).
+            if (pos + 8 > size) break;
+            uint16_t segLen = (data[pos + 2] << 8) | data[pos + 3];
+            size_t sofEnd = pos + 2 + segLen;
+            if (sofEnd > size) sofEnd = size;
+            precision = data[pos + 4];
+            pos = sofEnd;
+            continue;
+        }
+        if (marker == 0x00 || marker == 0xFF || (marker >= 0xD0 && marker <= 0xD7)) {
+            pos += 2;
+            continue;
+        }
+        // All other markers: skip the segment.
+        if (pos + 4 > size) break;
+        uint16_t segLen = (data[pos + 2] << 8) | data[pos + 3];
+        pos += 2 + segLen;
+    }
+
+    if (!foundSos || scanStart >= size) {
+        LOGW("Lossless JPEG: SOS not found");
+        std::fill(output, output + outCount, 0);
+        return false;
+    }
+    if (!dcTables[componentDcTable[0]].valid) {
+        LOGW("Lossless JPEG: required Huffman table (id=%d) not present",
+             componentDcTable[0]);
+        std::fill(output, output + outCount, 0);
+        return false;
+    }
+
+    // De-stuff the scan data: remove 0xFF00 stuffing and skip RST/EOI markers
+    // so the bit reader can index bytes linearly.
+    std::vector<uint8_t> scanData;
+    scanData.reserve(size - scanStart);
+    for (size_t i = scanStart; i < size; ++i) {
+        uint8_t b = data[i];
+        if (b == 0xFF && i + 1 < size) {
+            uint8_t next = data[i + 1];
+            if (next == 0x00) { ++i; continue; }            // stuffed 0xFF
+            if (next >= 0xD0 && next <= 0xD7) { ++i; continue; }  // RST marker
+            if (next == 0xD9) break;                       // EOI
+            break;                                          // any other marker ends scan
+        }
+        scanData.push_back(b);
+    }
+
+    const int maxVal = (1 << precision) - 1;
+    const int shift = pointTransform;
+    size_t bitOffset = 0;
+    bool ok = true;
+
+    for (int row = 0; row < height; ++row) {
+        for (int col = 0; col < width; ++col) {
+            const LosslessHuffmanTable& tbl = dcTables[componentDcTable[0]];
+            int ssss = decodeSymbol(scanData.data(), scanData.size(), bitOffset, tbl);
+            if (ssss < 0) {
+                output[row * width + col] = 0;
+                ok = false;
                 continue;
             }
+            int diff = decodeDiff(scanData.data(), scanData.size(), bitOffset, ssss);
+
+            int predReduced;
+            if (row == 0 && col == 0) {
+                // First sample uses 2^(P-Pt-1) as the prediction.
+                predReduced = 1 << (precision - shift - 1);
+            } else {
+                int ra = (col > 0) ? output[row * width + col - 1] : 0;
+                int rb = (row > 0) ? output[(row - 1) * width + col] : 0;
+                int rc = (row > 0 && col > 0) ? output[(row - 1) * width + col - 1] : 0;
+                // First column uses Rb (above); first row uses Ra (left).
+                int predFull;
+                if (col == 0)       predFull = rb;
+                else if (row == 0)  predFull = ra;
+                else                predFull = computePredictor(scanPredictor, ra, rb, rc);
+                predReduced = (shift > 0) ? (predFull >> shift) : predFull;
+            }
+
+            int value = (predReduced + diff) << shift;
+            if (value < 0) value = 0;
+            if (value > maxVal) value = maxVal;
+            output[row * width + col] = static_cast<uint16_t>(value);
         }
-        ++pos;
     }
 
-    // Fallback: zero fill
-    std::fill(output, output + width * height, 0);
-    LOGW("Lossless JPEG: simplified decoder, full Huffman decode not implemented");
-    return false;
+    if (!ok) {
+        LOGW("Lossless JPEG: partial decode (some pixels defaulted to 0)");
+    } else {
+        LOGI("Lossless JPEG decoded: %dx%d precision=%d predictor=%d Pt=%d",
+             width, height, precision, scanPredictor, shift);
+    }
+    return true;
 }
 
 } // namespace alcedo

@@ -102,7 +102,17 @@ class SearchService(
         }
 
         // 2. FTS search on element names
-        val ftsResults = elementDao.ftsSearchElements(SimpleSQLiteQuery(query.rawQuery, null))
+        // 转义 FTS 特殊字符，防止注入
+        val sanitizedQuery = query.rawQuery
+            .replace("\"", "\"\"")
+            .replace("'", "''")
+            .trim()
+        val ftsQuery = if (sanitizedQuery.isNotEmpty()) "\"$sanitizedQuery\"" else ""
+        val ftsResults = if (ftsQuery.isNotEmpty()) {
+            elementDao.ftsSearchElements(SimpleSQLiteQuery("SELECT * FROM element_fts WHERE element_fts MATCH ?", arrayOf(ftsQuery)))
+        } else {
+            emptyList()
+        }
         results.addAll(ftsResults.map { element ->
             val image = allImages.find { it.imageId == element.elementId }
             RankedSearchResult(

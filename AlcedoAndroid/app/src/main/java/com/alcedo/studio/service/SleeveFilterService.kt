@@ -287,7 +287,9 @@ class SleeveFilterService(
                     metadata.map { it.imageId }.toSet()
                 }
                 else -> {
-                    elementDao.ftsSearchElements(SimpleSQLiteQuery(filter.getPredicate(), null)).map { it.elementId }.toSet()
+                    val predicate = filter.getPredicate()
+                    val bindArgs = filter.getBindArgs()
+                    elementDao.ftsSearchElements(SimpleSQLiteQuery(predicate, bindArgs)).map { it.elementId }.toSet()
                 }
             }
         }

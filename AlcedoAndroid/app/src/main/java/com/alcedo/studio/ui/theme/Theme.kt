@@ -10,7 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -95,8 +95,8 @@ fun AlcedoColorScheme.toMaterialLightColorScheme() = lightColorScheme(
  */
 @Composable
 fun LocalAlcedoColorScheme(): AlcedoColorScheme {
-    val variant by ThemeManager.themeVariant.collectAsState()
-    val darkMode by ThemeManager.darkMode.collectAsState()
+    val variant by ThemeManager.themeVariant.collectAsStateWithLifecycle()
+    val darkMode by ThemeManager.darkMode.collectAsStateWithLifecycle()
     val darkTheme = when (darkMode) {
         "light" -> false
         "dark" -> true
@@ -109,8 +109,8 @@ fun LocalAlcedoColorScheme(): AlcedoColorScheme {
 fun AlcedoTheme(
     content: @Composable () -> Unit
 ) {
-    val variant by ThemeManager.themeVariant.collectAsState()
-    val darkMode by ThemeManager.darkMode.collectAsState()
+    val variant by ThemeManager.themeVariant.collectAsStateWithLifecycle()
+    val darkMode by ThemeManager.darkMode.collectAsStateWithLifecycle()
 
     val darkTheme = when (darkMode) {
         "light" -> false
@@ -160,7 +160,7 @@ fun AlcedoTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val variant by ThemeManager.themeVariant.collectAsState()
+    val variant by ThemeManager.themeVariant.collectAsStateWithLifecycle()
     val isDynamic = (dynamicColor || variant == AlcedoThemeVariant.DYNAMIC) &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 

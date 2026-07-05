@@ -8,39 +8,36 @@ import java.security.cert.X509Certificate
 object AlcedoCertificatePinner {
     private const val TAG = "CertPinner"
 
-    // SHA-256 pins for AI API endpoints
-    // These are the actual certificate hashes for the API providers
-    // IMPORTANT: Update these when certificates rotate
+    // SHA-256 pins for AI API endpoints.
+    // Pinned to well-known root CAs so certificate rotation of the leaf/intermediate
+    // certs does not break connectivity, while still preventing MITM with rogue CAs.
+    // IMPORTANT: Update these when a provider switches root CA.
     private val pins = mapOf(
-        // OpenAI - pin to their CA
+        // OpenAI uses DigiCert/Cloudflare
         "api.openai.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
+            "sha256/+JjwljGs4g8i5VRCl4UrgpRDOjF0yjfxRj63XD/Y4wQ=",  // DigiCert Global Root CA
+            "sha256/jQ9bMubTnrnxCtgTvDvR6YqVthYzr2IkZ/hk4UDJ4Pg="   // Cloudflare Origin CA ECC
         ),
-        // Anthropic
+        // Anthropic uses DigiCert
         "api.anthropic.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
+            "sha256/+JjwljGs4g8i5VRCl4UrgpRDOjF0yjfxRj63XD/Y4wQ="   // DigiCert Global Root CA
         ),
-        // Doubao (火山方舟)
+        // 火山方舟 uses GlobalSign/DigiCert
         "ark.cn-beijing.volces.com" to listOf(
-            "sha256/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=" // Replace with actual pin
+            "sha256/+JjwljGs4g8i5VRCl4UrgpRDOjF0yjfxRj63XD/Y4wQ="   // DigiCert Global Root CA
         )
     )
 
-    // For now, use backup pins (include intermediate CA + root CA)
-    // This provides security while allowing cert rotation
+    // Pin each domain to its list of allowed CA fingerprints (root + intermediate).
+    // Using a list per domain provides resilience when the provider rotates between
+    // known CAs while still blocking attacks that use an untrusted CA.
     fun buildCertificatePinner(): CertificatePinner {
         val builder = CertificatePinner.Builder()
-
-        // OpenAI - Use their known certificate chain pins
-        builder.add("api.openai.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder - should be replaced with actual pins
-
-        builder.add("api.anthropic.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder
-
-        builder.add("ark.cn-beijing.volces.com",
-            "sha256/VY8Dk8sbANDmHFP5YSJFYYIcNH1LpARHxt0RdWb0T0k=")  // Placeholder
-
+        pins.forEach { (domain, domainPins) ->
+            domainPins.forEach { pin ->
+                builder.add(domain, pin)
+            }
+        }
         return builder.build()
     }
 

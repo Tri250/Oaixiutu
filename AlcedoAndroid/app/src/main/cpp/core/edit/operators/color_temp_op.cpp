@@ -71,9 +71,9 @@ void ColorTempOp::ApplyImpl(float* pixels, int width, int height, int channels) 
     ComputeTemperatureMatrix(cct, tint, mat);
 
     // Apply the 3x3 matrix to each pixel
-    int total = width * height;
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    size_t total = static_cast<size_t>(width) * height;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

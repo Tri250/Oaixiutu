@@ -1,9 +1,12 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,16 +38,11 @@ import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.viewmodel.EditorPanel
 import com.alcedo.studio.viewmodel.EditorViewModel
+import com.alcedo.studio.viewmodel.ScopeType
 import com.alcedo.studio.ui.common.LoadingOverlay
 import com.alcedo.studio.ui.editor.HlsProfilePanel
-
-enum class ScopeType(val label: String) {
-    HISTOGRAM("Histogram"),
-    WAVEFORM("Waveform"),
-    VECTORSCOPE("Vectorscope"),
-    CHROMATICITY("Chromaticity")
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -51,37 +51,78 @@ fun EditorScreen(
     imageId: String,
     viewModel: EditorViewModel = viewModel(factory = EditorViewModelFactory(imageId))
 ) {
-    val image by viewModel.imageModel.collectAsState()
-    val preview by viewModel.previewBitmap.collectAsState()
-    val isProcessing by viewModel.isProcessing.collectAsState()
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
+    val image by viewModel.imageModel.collectAsStateWithLifecycle()
+    val preview by viewModel.previewBitmap.collectAsStateWithLifecycle()
+    val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
+    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
+    val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
 
-    var selectedPanel by remember { mutableStateOf(EditorPanel.BASIC) }
-    val isCompareMode by viewModel.isCompareMode.collectAsState()
-    var showExport by remember { mutableStateOf(false) }
-    var showScope by remember { mutableStateOf(false) }
-    var selectedScopeType by remember { mutableStateOf(ScopeType.HISTOGRAM) }
-    var histogramChannel by remember { mutableStateOf(HistogramChannel.RGB) }
-    var histogramScale by remember { mutableStateOf(HistogramScale.LINEAR) }
-    var waveformMode by remember { mutableStateOf(WaveformMode.RGB_PARADE) }
-    var gamutOverlay by remember { mutableStateOf(setOf(GamutOverlay.SRGB)) }
+    val selectedPanel by viewModel.selectedPanel.collectAsStateWithLifecycle()
+    val isCompareMode by viewModel.isCompareMode.collectAsStateWithLifecycle()
+    val showExport by viewModel.showExport.collectAsStateWithLifecycle()
+    val showScope by viewModel.showScope.collectAsStateWithLifecycle()
+    val selectedScopeType by viewModel.selectedScopeType.collectAsStateWithLifecycle()
+    val histogramChannel by viewModel.histogramChannel.collectAsStateWithLifecycle()
+    val histogramScale by viewModel.histogramScale.collectAsStateWithLifecycle()
+    val waveformMode by viewModel.waveformMode.collectAsStateWithLifecycle()
+    val gamutOverlay by viewModel.gamutOverlay.collectAsStateWithLifecycle()
+
+    // 未保存修改拦截 + 自动保存
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = true) {
+        if (viewModel.hasUnsavedChanges()) {
+            showUnsavedDialog = true
+        } else {
+            navController.popBackStack()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.startAutoSave()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopAutoSave()
+        }
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            title = { Text("未保存的修改") },
+            text = { Text("您有未保存的修改，是否保存？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.saveVersion()
+                    showUnsavedDialog = false
+                    navController.popBackStack()
+                }) { Text("保存并退出") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnsavedDialog = false
+                    navController.popBackStack()
+                }) { Text("不保存退出") }
+            }
+        )
+    }
 
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
 
-    // Zoom/Pan state
+    // 缩放/平移状态
     val zoomableState = rememberZoomableState()
-    val originalBitmap by viewModel.originalBitmap.collectAsState()
+    val originalBitmap by viewModel.originalBitmap.collectAsStateWithLifecycle()
 
-    // Scope data
+    // 示波器数据
     var histogramData by remember { mutableStateOf(HistogramData()) }
     var waveformData by remember { mutableStateOf(WaveformData()) }
     var vectorscopeData by remember { mutableStateOf(VectorscopeData()) }
     var chromaticityData by remember { mutableStateOf(ChromaticityData()) }
     var isScopeComputing by remember { mutableStateOf(false) }
 
-    // Compute scope data when bitmap changes
+    // 位图变化时计算示波器数据
     LaunchedEffect(preview) {
         preview?.let { bitmap ->
             isScopeComputing = true
@@ -122,12 +163,13 @@ fun EditorScreen(
                     isCompareMode = isCompareMode,
                     canUndo = canUndo,
                     canRedo = canRedo,
+                    onAutoEnhance = { viewModel.autoEnhance() },
                     onUndo = { viewModel.undo() },
                     onRedo = { viewModel.redo() },
                     onCompare = { viewModel.toggleCompareMode() },
-                    onScope = { showScope = !showScope },
+                    onScope = { viewModel.toggleShowScope() },
                     onSave = { viewModel.saveVersion() },
-                    onExport = { showExport = true }
+                    onExport = { viewModel.toggleShowExport() }
                 )
             }
         }
@@ -138,9 +180,9 @@ fun EditorScreen(
                 .padding(padding)
         ) {
             if (isTablet) {
-                // Tablet: side-by-side layout
+                // 平板：左右分栏布局
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // Image preview
+                    // 图片预览
                     ImagePreviewArea(
                         modifier = Modifier
                             .weight(1f)
@@ -152,20 +194,20 @@ fun EditorScreen(
                         zoomableState = zoomableState
                     )
 
-                    // Editor panels
+                    // 编辑器面板
                     EditorPanelColumn(
                         modifier = Modifier
                             .width(360.dp)
                             .fillMaxHeight(),
                         selectedPanel = selectedPanel,
-                        onPanelSelected = { selectedPanel = it },
+                        onPanelSelected = { viewModel.updateSelectedPanel(it) },
                         viewModel = viewModel
                     )
                 }
             } else {
-                // Phone: vertical layout with adjustable preview/panel split
+                // 手机：垂直布局，预览/面板可调
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Image preview – takes more space on phone for better visibility
+                    // 图片预览 – 手机上占用更多空间以提升可见性
                     ImagePreviewArea(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -177,12 +219,12 @@ fun EditorScreen(
                         zoomableState = zoomableState
                     )
 
-                    // Panel tabs (synced with the swipeable pager below)
+                    // 面板标签（与下方可滑动 Pager 同步）
                     val pagerState = rememberPagerState(
                         initialPage = selectedPanel.ordinal,
                         pageCount = { EditorPanel.entries.size }
                     )
-                    // Keep tab selection and pager page in sync
+                    // 保持标签选择与 Pager 页面同步
                     LaunchedEffect(selectedPanel) {
                         if (pagerState.currentPage != selectedPanel.ordinal) {
                             pagerState.animateScrollToPage(selectedPanel.ordinal)
@@ -190,7 +232,7 @@ fun EditorScreen(
                     }
                     LaunchedEffect(pagerState.currentPage) {
                         val synced = EditorPanel.entries[pagerState.currentPage]
-                        if (synced != selectedPanel) selectedPanel = synced
+                        if (synced != selectedPanel) viewModel.updateSelectedPanel(synced)
                     }
 
                     ScrollableTabRow(
@@ -202,7 +244,7 @@ fun EditorScreen(
                         EditorPanel.entries.forEach { panel ->
                             Tab(
                                 selected = pagerState.currentPage == panel.ordinal,
-                                onClick = { selectedPanel = panel },
+                                onClick = { viewModel.updateSelectedPanel(panel) },
                                 text = { Text(stringRes(panel.labelKey), style = MaterialTheme.typography.labelSmall) },
                                 selectedContentColor = MaterialTheme.colorScheme.primary,
                                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -210,7 +252,7 @@ fun EditorScreen(
                         }
                     }
 
-                    // Swipeable editor panel content (HorizontalPager replaces tab-only navigation)
+                    // 可滑动的编辑器面板内容（HorizontalPager 替代纯标签导航）
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -247,7 +289,7 @@ fun EditorScreen(
                 }
             }
 
-            // Scope Analyzer overlay panel
+            // 示波器分析浮层
             if (showScope) {
                 ScopeAnalyzerPanel(
                     modifier = Modifier
@@ -255,21 +297,21 @@ fun EditorScreen(
                         .fillMaxWidth(if (isTablet) 0.35f else 0.5f)
                         .padding(8.dp),
                     selectedScopeType = selectedScopeType,
-                    onScopeTypeSelected = { selectedScopeType = it },
+                    onScopeTypeSelected = { viewModel.updateSelectedScopeType(it) },
                     histogramData = histogramData,
                     histogramChannel = histogramChannel,
-                    onHistogramChannelChange = { histogramChannel = it },
+                    onHistogramChannelChange = { viewModel.updateHistogramChannel(it) },
                     histogramScale = histogramScale,
-                    onHistogramScaleChange = { histogramScale = it },
+                    onHistogramScaleChange = { viewModel.updateHistogramScale(it) },
                     waveformData = waveformData,
                     waveformMode = waveformMode,
-                    onWaveformModeChange = { waveformMode = it },
+                    onWaveformModeChange = { viewModel.updateWaveformMode(it) },
                     vectorscopeData = vectorscopeData,
                     chromaticityData = chromaticityData,
                     gamutOverlay = gamutOverlay,
-                    onGamutOverlayChange = { gamutOverlay = it },
+                    onGamutOverlayChange = { viewModel.updateGamutOverlay(it) },
                     isComputing = isScopeComputing,
-                    onClose = { showScope = false }
+                    onClose = { viewModel.dismissShowScope() }
                 )
             }
 
@@ -282,20 +324,20 @@ fun EditorScreen(
         }
     }
 
-    // Export dialog
+    // 导出对话框
     if (showExport) {
         ExportDialog(
-            onDismiss = { showExport = false },
+            onDismiss = { viewModel.dismissExport() },
             onExport = { settings ->
                 viewModel.export(settings)
-                showExport = false
+                viewModel.dismissExport()
             },
             imageId = imageId
         )
     }
 }
 
-// ── Scope Analyzer Panel ──────────────────────────────────────────────────
+// ── 示波器分析面板 ──────────────────────────────────────────────────
 
 @Composable
 private fun ScopeAnalyzerPanel(
@@ -326,7 +368,7 @@ private fun ScopeAnalyzerPanel(
         Column(
             modifier = Modifier.padding(8.dp)
         ) {
-            // Header with scope type tabs
+            // 头部示波器类型标签
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -338,7 +380,7 @@ private fun ScopeAnalyzerPanel(
                         onClick = { onScopeTypeSelected(scopeType) },
                         label = {
                             Text(
-                                scopeType.label,
+                                stringRes(scopeType.labelKey),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
@@ -366,7 +408,7 @@ private fun ScopeAnalyzerPanel(
                 )
             }
 
-            // Scope content
+            // 示波器内容
             when (selectedScopeType) {
                 ScopeType.HISTOGRAM -> {
                     HistogramView(
@@ -375,7 +417,7 @@ private fun ScopeAnalyzerPanel(
                         scale = histogramScale,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    // Channel selector row
+                    // 通道选择行
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
@@ -499,7 +541,7 @@ private fun ScopeAnalyzerPanel(
     }
 }
 
-// ── Image Preview Area ────────────────────────────────────────────────────
+// ── 图片预览区域 ────────────────────────────────────────────────────
 
 @Composable
 private fun ImagePreviewArea(
@@ -510,9 +552,27 @@ private fun ImagePreviewArea(
     originalBitmap: ImageBitmap?,
     zoomableState: ZoomableState
 ) {
+    // 长按对比 — 长按显示原图（修改前），松开恢复
+    var showOriginalOverlay by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier
-            .background(Color(0xFF0D0D0D)),
+            .background(Color(0xFF0D0D0D))
+            .pointerInput(isCompareMode) {
+                // 对比模式下由 CompareView 负责交互，不拦截长按
+                if (isCompareMode) return@pointerInput
+                detectTapGestures(
+                    onLongPress = {
+                        // 长按显示原图
+                        showOriginalOverlay = true
+                    },
+                    onPress = {
+                        // 松开（或手势被取消）后恢复编辑后预览
+                        tryAwaitRelease()
+                        showOriginalOverlay = false
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         if (isProcessing) {
@@ -528,6 +588,16 @@ private fun ImagePreviewArea(
                 imageBitmap = previewBitmap,
                 modifier = Modifier.fillMaxSize(),
                 zoomableState = zoomableState
+            )
+        }
+
+        // 长按时叠加显示原图
+        if (showOriginalOverlay && originalBitmap != null) {
+            Image(
+                bitmap = originalBitmap,
+                contentDescription = stringRes { compareBefore },
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
             )
         }
 
@@ -550,7 +620,7 @@ private fun ImagePreviewArea(
     }
 }
 
-// ── Editor Panel Column ───────────────────────────────────────────────────
+// ── 编辑器面板列 ────────────────────────────────────────────────────
 
 @Composable
 private fun EditorPanelColumn(
@@ -698,7 +768,7 @@ private fun ExportDialog(
         title = { Text(stringRes { exportImage }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Format
+                // 格式
                 Text(stringRes { exportFormat }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     ExportFormat.entries.forEach { f ->
@@ -710,7 +780,7 @@ private fun ExportDialog(
                     }
                 }
 
-                // Quality
+                // 质量
                 if (format == ExportFormat.JPEG || format == ExportFormat.ULTRA_HDR) {
                     Text(stringRes { exportQuality }.format("$quality"), style = MaterialTheme.typography.labelLarge)
                     Slider(
@@ -721,7 +791,7 @@ private fun ExportDialog(
                     )
                 }
 
-                // Bit depth
+                // 位深度
                 if (format == ExportFormat.PNG || format == ExportFormat.TIFF) {
                     Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -738,7 +808,7 @@ private fun ExportDialog(
                     }
                 }
 
-                // Color space
+                // 色彩空间
                 Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
@@ -797,22 +867,12 @@ private fun ExportDialog(
     )
 }
 
-enum class EditorPanel(val labelKey: StringResources.() -> String) {
-    BASIC({ editorPanelBasic }),
-    TONE_CURVE({ editorPanelCurve }),
-    COLOR({ editorPanelColor }),
-    HSL({ editorPanelHsl }),
-    GEOMETRY({ editorPanelGeometry }),
-    EFFECTS({ editorPanelEffects }),
-    RAW({ editorPanelRaw }),
-    HISTORY({ editorPanelHistory })
-}
-
 @Composable
 private fun EditorBottomToolbar(
     isCompareMode: Boolean,
     canUndo: Boolean,
     canRedo: Boolean,
+    onAutoEnhance: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onCompare: () -> Unit,
@@ -834,6 +894,13 @@ private fun EditorBottomToolbar(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 智能优化 — 一键自动增强（置于工具栏首位，Undo 之前）
+            EditorToolbarButton(
+                icon = Icons.Default.AutoAwesome,
+                label = stringRes { editorAutoEnhance },
+                onClick = onAutoEnhance,
+                tint = MaterialTheme.colorScheme.primary
+            )
             EditorToolbarButton(
                 icon = Icons.Default.Undo,
                 label = stringRes { editorUndo },

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,9 +30,9 @@ fun ExportScreen(
     viewModel: ExportViewModel = viewModel()
 ) {
     // Collect progress from ViewModel
-    val progress by viewModel.exportProgress.collectAsState()
-    val lastResult by viewModel.lastResult.collectAsState()
-    val batchResult by viewModel.batchResult.collectAsState()
+    val progress by viewModel.exportProgress.collectAsStateWithLifecycle()
+    val lastResult by viewModel.lastResult.collectAsStateWithLifecycle()
+    val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
 
     // Show result snackbar
@@ -95,7 +96,7 @@ fun ExportScreen(
                 Snackbar(
                     action = {
                         TextButton(onClick = { showResultSnack = false }) {
-                            Text("OK")
+                            Text(stringRes { ok })
                         }
                     },
                     modifier = Modifier.padding(16.dp)
@@ -365,22 +366,27 @@ fun ExportScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // 文件大小预估
+            val estimatedSize = viewModel.estimateFileSize()
+            if (estimatedSize > 0) {
+                Text(
+                    "预计文件大小：约 ${String.format("%.1f", estimatedSize / 1024.0 / 1024.0)} MB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+
             // Export button
             Button(
                 onClick = {
-                    viewModel.resetState()
-                    // For single image export, use the imageId as source path
-                    // In production, resolve imageId to actual file path
-                    val sourcePath = imageId
-                    if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) {
-                        val items = viewModel.batchImageIds.map { id ->
-                            ExportService.ExportBatchItem(sourcePath = id)
-                        }
-                        viewModel.exportBatch(items)
-                    } else {
-                        viewModel.exportSingle(sourcePath)
-                    }
-                },
+                viewModel.resetState()
+                if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) {
+                    viewModel.exportBatchByIds(viewModel.batchImageIds)
+                } else {
+                    viewModel.exportSingleById(imageId)
+                }
+            },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isExporting
             ) {

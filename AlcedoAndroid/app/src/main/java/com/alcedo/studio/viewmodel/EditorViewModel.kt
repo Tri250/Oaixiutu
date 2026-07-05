@@ -10,10 +10,15 @@ import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
+import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.alcedo.studio.ui.editor.ScopeAnalyzer
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -125,6 +130,43 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ── Pipeline snapshot ──
 
     private var snapshotHandle: Long = 0
+
+    // ── 示波器状态 (Scope analyzer state persisted across rotation) ──
+
+    private val _selectedPanel = MutableStateFlow(EditorPanel.BASIC)
+    val selectedPanel: StateFlow<EditorPanel> = _selectedPanel.asStateFlow()
+
+    private val _showScope = MutableStateFlow(false)
+    val showScope: StateFlow<Boolean> = _showScope.asStateFlow()
+
+    private val _selectedScopeType = MutableStateFlow(ScopeType.HISTOGRAM)
+    val selectedScopeType: StateFlow<ScopeType> = _selectedScopeType.asStateFlow()
+
+    private val _histogramChannel = MutableStateFlow(HistogramChannel.RGB)
+    val histogramChannel: StateFlow<HistogramChannel> = _histogramChannel.asStateFlow()
+
+    private val _histogramScale = MutableStateFlow(HistogramScale.LINEAR)
+    val histogramScale: StateFlow<HistogramScale> = _histogramScale.asStateFlow()
+
+    private val _waveformMode = MutableStateFlow(WaveformMode.RGB_PARADE)
+    val waveformMode: StateFlow<WaveformMode> = _waveformMode.asStateFlow()
+
+    private val _gamutOverlay = MutableStateFlow(setOf(GamutOverlay.SRGB))
+    val gamutOverlay: StateFlow<Set<GamutOverlay>> = _gamutOverlay.asStateFlow()
+
+    private val _showExport = MutableStateFlow(false)
+    val showExport: StateFlow<Boolean> = _showExport.asStateFlow()
+
+    fun updateSelectedPanel(panel: EditorPanel) { _selectedPanel.value = panel }
+    fun toggleShowScope() { _showScope.value = !_showScope.value }
+    fun dismissShowScope() { _showScope.value = false }
+    fun updateSelectedScopeType(type: ScopeType) { _selectedScopeType.value = type }
+    fun updateHistogramChannel(channel: HistogramChannel) { _histogramChannel.value = channel }
+    fun updateHistogramScale(scale: HistogramScale) { _histogramScale.value = scale }
+    fun updateWaveformMode(mode: WaveformMode) { _waveformMode.value = mode }
+    fun updateGamutOverlay(overlay: Set<GamutOverlay>) { _gamutOverlay.value = overlay }
+    fun toggleShowExport() { _showExport.value = !_showExport.value }
+    fun dismissExport() { _showExport.value = false }
 
     init {
         try {
@@ -512,6 +554,99 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     }
 
     // ================================================================
+    // Auto Enhance (智能优化)
+    // ================================================================
+
+    fun autoEnhance() {
+        // 智能优化 — 自动分析图像并应用最佳调整
+        viewModelScope.launch {
+            try {
+                val currentParams = _params.value
+
+                // 计算自动曝光补偿
+                val autoExposure = analyzeExposure()
+                val autoContrast = analyzeContrast()
+                val autoSaturation = analyzeSaturation()
+
+                // 应用自动调整
+                _params.value = currentParams.copy(
+                    exposure = autoExposure,
+                    contrast = autoContrast,
+                    saturation = autoSaturation
+                )
+
+                recordTransaction(OperatorType.EXPOSURE, "exposure", autoExposure)
+                recordTransaction(OperatorType.CONTRAST, "contrast", autoContrast)
+                recordTransaction(OperatorType.SATURATION, "saturation", autoSaturation)
+
+                // 记录到历史
+                saveVersion()
+                regeneratePreview()
+            } catch (e: Throwable) {
+                android.util.Log.e("EditorVM", "autoEnhance failed", e)
+            }
+        }
+    }
+
+    private suspend fun analyzeExposure(): Float {
+        // 基于预览位图分析直方图，计算最佳曝光补偿
+        val previewBitmap = _previewBitmap.value ?: return 0f
+        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+        val lum = histogram.luminance
+        var total = 0f
+        var weighted = 0f
+        for (i in lum.indices) {
+            total += lum[i]
+            weighted += lum[i] * (i / 255f)
+        }
+        val avgBrightness = if (total > 0f) weighted / total else 0.5f
+        // 目标亮度: 0.5 (中灰)
+        return ((0.5f - avgBrightness) * 2f).coerceIn(-2f, 2f)
+    }
+
+    private suspend fun analyzeContrast(): Float {
+        val previewBitmap = _previewBitmap.value ?: return 0f
+        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+        val lum = histogram.luminance
+        var total = 0f
+        var weighted = 0f
+        for (i in lum.indices) {
+            total += lum[i]
+            weighted += lum[i] * (i / 255f)
+        }
+        val mean = if (total > 0f) weighted / total else 0.5f
+        var variance = 0f
+        for (i in lum.indices) {
+            val diff = (i / 255f) - mean
+            variance += lum[i] * diff * diff
+        }
+        val stddev = if (total > 0f) kotlin.math.sqrt(variance / total) else 0f
+        // 对比度调整: 标准差小于0.25时增加对比度
+        return ((0.25f - stddev) * 2f).coerceIn(-0.5f, 0.5f)
+    }
+
+    private suspend fun analyzeSaturation(): Float {
+        val previewBitmap = _previewBitmap.value ?: return 0f
+        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+        val r = histogram.r
+        val g = histogram.g
+        val b = histogram.b
+        var total = 0f
+        var weighted = 0f
+        for (i in r.indices) {
+            val maxC = maxOf(r[i], g[i], b[i])
+            val minC = minOf(r[i], g[i], b[i])
+            val count = (r[i] + g[i] + b[i]) / 3f
+            val sat = if (maxC > 0f) (maxC - minC) / maxC else 0f
+            total += count
+            weighted += sat * count
+        }
+        val avgSat = if (total > 0f) weighted / total else 0.4f
+        // 目标饱和度: 0.4
+        return ((0.4f - avgSat) * 1.5f).coerceIn(-0.5f, 0.5f)
+    }
+
+    // ================================================================
     // History / Undo / Redo
     // ================================================================
 
@@ -696,6 +831,28 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 }
             }
         }
+    }
+
+    // 如果有可撤销的操作说明有未保存的修改
+    fun hasUnsavedChanges(): Boolean = _canUndo.value
+
+    // 自动保存 — 每30秒检查一次
+    private var autoSaveJob: Job? = null
+
+    fun startAutoSave() {
+        autoSaveJob?.cancel()
+        autoSaveJob = viewModelScope.launch {
+            while (isActive) {
+                delay(30_000) // 30秒
+                if (_canUndo.value) {
+                    saveVersion()
+                }
+            }
+        }
+    }
+
+    fun stopAutoSave() {
+        autoSaveJob?.cancel()
     }
 
     private fun reconstructParamsFromJson(json: JsonObject) {
@@ -936,3 +1093,26 @@ private val builtInPresets = listOf(
         sharpenAmount = 0.1f, halationIntensity = 0.08f
     ))
 )
+
+// ================================================================
+// Editor panel / scope type enums (moved here so ViewModel can hold
+// them as persisted state; UI imports from this package).
+// ================================================================
+
+enum class EditorPanel(val labelKey: StringResources.() -> String) {
+    BASIC({ editorPanelBasic }),
+    TONE_CURVE({ editorPanelCurve }),
+    COLOR({ editorPanelColor }),
+    HSL({ editorPanelHsl }),
+    GEOMETRY({ editorPanelGeometry }),
+    EFFECTS({ editorPanelEffects }),
+    RAW({ editorPanelRaw }),
+    HISTORY({ editorPanelHistory })
+}
+
+enum class ScopeType(val labelKey: StringResources.() -> String) {
+    HISTOGRAM({ editorHistogram }),
+    WAVEFORM({ editorWaveform }),
+    VECTORSCOPE({ editorVectorscope }),
+    CHROMATICITY({ editorChromaticity })
+}

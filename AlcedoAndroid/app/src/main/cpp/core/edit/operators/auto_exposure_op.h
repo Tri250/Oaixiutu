@@ -34,11 +34,11 @@ public:
                       float target_luminance = 0.18f);
 
     // Compute luminance histogram
-    static void compute_histogram(const float* pixels, int pixel_count, int channels,
+    static void compute_histogram(const float* pixels, size_t pixel_count, int channels,
                                   int* histogram, int bins = 256);
 
     // Find percentile value from histogram
-    static float find_percentile(const int* histogram, int bins, int pixel_count,
+    static float find_percentile(const int* histogram, int bins, size_t pixel_count,
                                  float percentile);
 };
 

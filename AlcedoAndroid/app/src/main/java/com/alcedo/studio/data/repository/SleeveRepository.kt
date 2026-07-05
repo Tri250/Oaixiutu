@@ -6,7 +6,6 @@ import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.dao.AiEmbeddingDao
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
 /**
  * Repository that mediates between DAOs and ViewModel layer.
@@ -114,15 +113,15 @@ class SleeveRepository(
     }
 
     suspend fun getUnsyncedElements(): List<SleeveElementEntity> {
-        return sleeveElementDao.getElementsByType(0) // placeholder
+        return sleeveElementDao.getUnsyncedElements()
     }
 
     suspend fun getDeletedElements(): List<SleeveElementEntity> {
-        return emptyList() // placeholder
+        return sleeveElementDao.getDeletedElements()
     }
 
     suspend fun purgeDeletedElements() {
-        // placeholder
+        sleeveElementDao.purgeDeletedElements()
     }
 
     suspend fun markAsSynced(elementId: Long) {
@@ -144,15 +143,16 @@ class SleeveRepository(
     }
 
     fun getAllImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.observeImageByFileId(-1).map { it?.let { listOf(it) } ?: emptyList() } // placeholder
+        return imageDao.observeAllImages()
     }
 
     suspend fun searchImages(query: String): List<ImageEntity> {
-        return emptyList() // placeholder
+        if (query.isBlank()) return emptyList()
+        return imageDao.searchImages(query)
     }
 
     suspend fun getImagesByDateRange(startDate: Long, endDate: Long): List<ImageEntity> {
-        return emptyList() // placeholder
+        return imageDao.getImagesByDateRange(startDate, endDate)
     }
 
     suspend fun getImagesByRating(rating: Int): List<ImageEntity> {
@@ -168,7 +168,7 @@ class SleeveRepository(
     }
 
     fun getRawImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.observeImageByFileId(-1).map { it?.let { listOf(it) } ?: emptyList() } // placeholder
+        return imageDao.observeRawImages()
     }
 
     suspend fun importImage(image: ImageEntity): Long {

@@ -15,10 +15,10 @@ void ODTOp::SetOutputP3() { output_space_ = 1; }
 void ODTOp::SetOutputRec2020() { output_space_ = 2; }
 
 void ODTOp::ApplyImpl(float* pixels, int width, int height, int channels) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

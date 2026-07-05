@@ -14,7 +14,9 @@ data class CatalogModelAsset(
     val version: String,
     val sizeBytes: Long,
     val downloadUrl: String,
-    val checksumSha256: String,
+    // null means checksum verification is skipped (with a warning); a concrete
+    // hex digest enables strict integrity verification on download.
+    val checksumSha256: String? = null,
     val isDownloaded: Boolean = false,
     val localPath: String? = null
 )
@@ -39,7 +41,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 350_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-visual.onnx",
-            checksumSha256 = "placeholder_sha256"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "clip-vit-b-32-textual",
@@ -48,7 +50,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 250_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-textual.onnx",
-            checksumSha256 = "placeholder_sha256"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "alcedo-image-analysis",
@@ -57,7 +59,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 150_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-image-analysis.onnx",
-            checksumSha256 = "placeholder_sha256"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "alcedo-ai-rating",
@@ -66,7 +68,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 100_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-ai-rating.onnx",
-            checksumSha256 = "placeholder_sha256"
+            checksumSha256 = null
         )
     )
 
@@ -95,4 +97,31 @@ class ModelAssetCatalog {
 
     fun isModelReady(modelId: String): Boolean =
         _models.value.find { it.id == modelId }?.isDownloaded == true
+
+    /**
+     * 校验已下载模型文件的完整性。
+     *
+     * @param model      目标模型资产
+     * @param actualHash 已下载文件的 SHA-256 十六进制摘要（小写）
+     * @return 当 [CatalogModelAsset.checksumSha256] 为 null 时跳过校验并打印警告后返回 true；
+     *         否则返回实际哈希与预期哈希是否一致。
+     */
+    fun verifyModelChecksum(model: CatalogModelAsset, actualHash: String): Boolean {
+        val expected = model.checksumSha256
+        if (expected == null) {
+            android.util.Log.w(
+                "ModelAssetCatalog",
+                "校验跳过：模型 ${model.id} 未配置 checksumSha256，无法验证下载完整性"
+            )
+            return true
+        }
+        return actualHash.equals(expected, ignoreCase = true).also { matched ->
+            if (!matched) {
+                android.util.Log.e(
+                    "ModelAssetCatalog",
+                    "校验失败：模型 ${model.id} 期望哈希=$expected 实际哈希=$actualHash"
+                )
+            }
+        }
+    }
 }

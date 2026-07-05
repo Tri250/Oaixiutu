@@ -250,12 +250,14 @@ class ProjectPackageService {
         return pkg.copy(version = 2)
     }
 
-    fun getPackageVersion(filePath: String): Int {
-        return try {
-            val pkg = runBlockingInIO { deserializeProject(filePath) }
-            pkg.version
-        } catch (e: Exception) {
-            -1
+    suspend fun getPackageVersion(filePath: String): Int? {
+        return withContext(Dispatchers.IO) {
+            try {
+                deserializeProject(filePath).version
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get package version", e)
+                null
+            }
         }
     }
 
@@ -501,7 +503,5 @@ class ProjectPackageService {
         }
     }
 
-    private fun runBlockingInIO(block: suspend () -> ProjectPackage): ProjectPackage {
-        return kotlinx.coroutines.runBlocking(Dispatchers.IO) { block() }
-    }
+    private suspend fun <T> runInIO(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 }

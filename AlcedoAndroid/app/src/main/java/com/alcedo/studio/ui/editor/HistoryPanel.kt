@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -20,9 +21,9 @@ fun HistoryPanel(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier
 ) {
-    val history by viewModel.history.collectAsState()
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
+    val history by viewModel.history.collectAsStateWithLifecycle()
+    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
+    val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var newVersionName by remember { mutableStateOf("") }

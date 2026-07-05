@@ -1,12 +1,14 @@
 package com.alcedo.studio.viewmodel
 
 import android.app.Application
+import android.content.ContentUris
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.util.Log
+import android.util.LruCache
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
@@ -25,6 +27,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AlbumViewModel : ViewModel() {
+
+    companion object {
+        private const val PAGE_SIZE = 50
+        private const val THUMBNAIL_CACHE_SIZE = 50
+    }
+
     private val sleeveRepository by lazy { AppModule.sleeveRepository }
     private val imageRepository by lazy { AppModule.imageRepository }
     private val importService by lazy { AppModule.importService }
@@ -46,21 +54,29 @@ class AlbumViewModel : ViewModel() {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    // ── Pagination ──
+
+    private val _currentPage = MutableStateFlow(0)
+    val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
+
+    private val _hasMorePages = MutableStateFlow(true)
+    val hasMorePages: StateFlow<Boolean> = _hasMorePages.asStateFlow()
+
     // ── Selection ──
 
-    private val _selectedImages = mutableStateListOf<Long>()
-    val selectedImages: List<Long> get() = _selectedImages
+    private val _selectedImages = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedImages: StateFlow<Set<Long>> = _selectedImages.asStateFlow()
 
     // ── Search ──
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    private val _showSearch = mutableStateOf(false)
-    val showSearch get() = _showSearch
+    private val _showSearch = MutableStateFlow(false)
+    val showSearch: StateFlow<Boolean> = _showSearch.asStateFlow()
 
-    private val _semanticSearchEnabled = mutableStateOf(false)
-    val semanticSearchEnabled get() = _semanticSearchEnabled
+    private val _semanticSearchEnabled = MutableStateFlow(false)
+    val semanticSearchEnabled: StateFlow<Boolean> = _semanticSearchEnabled.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<RankedSearchResult>>(emptyList())
     val searchResults: StateFlow<List<RankedSearchResult>> = _searchResults
@@ -73,8 +89,8 @@ class AlbumViewModel : ViewModel() {
     private val _sortMode = MutableStateFlow(SortMode.DATE)
     val sortMode: StateFlow<SortMode> = _sortMode
 
-    private val _currentFilter = mutableStateOf<FilterState?>(null)
-    val currentFilter get() = _currentFilter
+    private val _currentFilter = MutableStateFlow<FilterState?>(null)
+    val currentFilter: StateFlow<FilterState?> = _currentFilter.asStateFlow()
 
     // ── Folder navigation ──
 
@@ -92,8 +108,15 @@ class AlbumViewModel : ViewModel() {
 
     // ── Thumbnail loading ──
 
-    private val _thumbnailCache = MutableStateFlow<Map<Long, Bitmap>>(emptyMap())
-    val thumbnailCache: StateFlow<Map<Long, Bitmap>> = _thumbnailCache
+    // LruCache backs the in-memory thumbnail store; a versioned StateFlow lets
+    // Compose recompose whenever the cache mutates without exposing the
+    // bitmaps themselves through the flow.
+    private val thumbnailLruCache = LruCache<Long, Bitmap>(THUMBNAIL_CACHE_SIZE)
+    private val _thumbnailCacheVersion = MutableStateFlow(0)
+    val thumbnailCacheVersion: StateFlow<Int> = _thumbnailCacheVersion.asStateFlow()
+
+    /** Returns the cached thumbnail for [imageId], or null if not yet loaded. */
+    fun getThumbnail(imageId: Long): Bitmap? = thumbnailLruCache.get(imageId)
 
     private val _thumbnailsLoading = mutableStateListOf<Long>()
     val thumbnailsLoading: List<Long> get() = _thumbnailsLoading
@@ -159,7 +182,7 @@ class AlbumViewModel : ViewModel() {
             loadImages()
         } else {
             val denied = results.filterValues { !it }.keys
-            _permissionRationale.value = "Permission denied: ${denied.joinToString()}"
+            _permissionRationale.value = "权限被拒绝：${denied.joinToString()}"
         }
     }
 
@@ -240,9 +263,75 @@ class AlbumViewModel : ViewModel() {
 
     fun importDirectoryScoped(path: String? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // On Android 10+, use SAF instead of direct file path
-            _permissionRationale.value = "Please select a directory using the system picker"
-            // The UI should launch SAF picker and call importFromSafDirectory() with the result
+            // On Android 10+, traverse MediaStore via content URIs (Scoped Storage)
+            viewModelScope.launch {
+                _isLoading.value = true
+                try {
+                    val context = AppModule.context
+                    val resolver = context.contentResolver
+
+                    // Optionally filter by relative path when a path is supplied
+                    val (selection, selectionArgs) = if (!path.isNullOrBlank()) {
+                        val normalized = path.trimEnd('/').removePrefix("/")
+                        Pair(
+                            "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?",
+                            arrayOf("%$normalized%")
+                        )
+                    } else {
+                        Pair<String?, Array<String>?>(null, null)
+                    }
+
+                    val projection = arrayOf(MediaStore.Images.Media._ID)
+                    val contentUris = mutableListOf<Uri>()
+
+                    resolver.query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        selection,
+                        selectionArgs,
+                        "${MediaStore.Images.Media.DATE_ADDED} DESC"
+                    )?.use { cursor ->
+                        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(idColumn)
+                            contentUris.add(
+                                ContentUris.withAppendedId(
+                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
+                                )
+                            )
+                        }
+                    }
+
+                    if (contentUris.isEmpty()) {
+                        _permissionRationale.value = "请使用系统选择器选择目录"
+                        return@launch
+                    }
+
+                    // Take persistable read permission for each URI when possible
+                    for (uri in contentUris) {
+                        try {
+                            resolver.takePersistableUriPermission(
+                                uri,
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {
+                            // MediaStore URIs do not always grant persistable permission; ignore.
+                        }
+                        try {
+                            importService.importImage(uri)
+                        } catch (e: Exception) {
+                            Log.e("AlbumVM", "Failed to import $uri", e)
+                        }
+                    }
+                    loadImages()
+                    loadFolders()
+                } catch (e: Throwable) {
+                    Log.e("AlbumVM", "importDirectoryScoped failed", e)
+                    _permissionRationale.value = "请使用系统选择器选择目录"
+                } finally {
+                    _isLoading.value = false
+                }
+            }
         } else {
             // Legacy: direct file path access
             if (path != null) {
@@ -252,22 +341,56 @@ class AlbumViewModel : ViewModel() {
     }
 
     // ================================================================
-    // Image loading
+    // Image loading (paginated)
     // ================================================================
 
     fun loadImages() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // 重置分页状态：每次 loadImages 都从第一页开始
+                _currentPage.value = 0
                 val allImages = imageRepository.getAllImages()
-                _images.value = allImages
                 _imageCount.value = allImages.size
                 _totalSize.value = allImages.sumOf { it.fileSize }
-                applyCurrentSortAndFilter(allImages)
+                val firstPage = allImages.take(PAGE_SIZE)
+                _images.value = firstPage
+                _hasMorePages.value = allImages.size > PAGE_SIZE
+                applyCurrentSortAndFilter(firstPage)
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "loadImages failed", e)
                 _images.value = emptyList()
                 _filteredImages.value = emptyList()
+                _hasMorePages.value = false
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun loadMoreImages() {
+        if (!_hasMorePages.value) return
+        if (_isLoading.value || _isRefreshing.value) return
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val nextPageIndex = _currentPage.value + 1
+                // ImageRepository 没有 paged query，因此取全量后 drop/take 切片
+                val allImages = imageRepository.getAllImages()
+                val nextPage = allImages.drop(nextPageIndex * PAGE_SIZE).take(PAGE_SIZE)
+                if (nextPage.isEmpty()) {
+                    _hasMorePages.value = false
+                } else {
+                    _currentPage.value = nextPageIndex
+                    val combined = _images.value + nextPage
+                    _images.value = combined
+                    _imageCount.value = allImages.size
+                    _totalSize.value = allImages.sumOf { it.fileSize }
+                    _hasMorePages.value = allImages.size > combined.size
+                    applyCurrentSortAndFilter(combined)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "loadMoreImages failed", e)
             } finally {
                 _isLoading.value = false
             }
@@ -278,11 +401,15 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
+                // 重置分页：refresh 等价于重新加载第一页
+                _currentPage.value = 0
                 val allImages = imageRepository.getAllImages()
-                _images.value = allImages
                 _imageCount.value = allImages.size
                 _totalSize.value = allImages.sumOf { it.fileSize }
-                applyCurrentSortAndFilter(allImages)
+                val firstPage = allImages.take(PAGE_SIZE)
+                _images.value = firstPage
+                _hasMorePages.value = allImages.size > PAGE_SIZE
+                applyCurrentSortAndFilter(firstPage)
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "refresh failed", e)
             } finally {
@@ -324,6 +451,9 @@ class AlbumViewModel : ViewModel() {
                         imageRepository.getImage(file.imageId)
                     }
                     _images.value = imagesInFolder
+                    // 文件夹视图不分页，关闭"加载更多"以避免无限滚动把全部图库
+                    // 错误地追加到当前文件夹列表里
+                    _hasMorePages.value = false
                     applyCurrentSortAndFilter(imagesInFolder)
 
                     // Update breadcrumbs
@@ -608,7 +738,7 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun loadThumbnail(imageId: Long) {
-        if (_thumbnailCache.value.containsKey(imageId)) return
+        if (thumbnailLruCache.get(imageId) != null) return
         if (_thumbnailsLoading.contains(imageId)) return
 
         _thumbnailsLoading.add(imageId)
@@ -616,9 +746,9 @@ class AlbumViewModel : ViewModel() {
             try {
                 val result = thumbnailService.loadThumbnail(imageId)
                 if (result is ThumbnailService.ThumbnailResult.Success) {
-                    val updated = _thumbnailCache.value.toMutableMap()
-                    updated[imageId] = result.bitmap
-                    _thumbnailCache.value = updated
+                    thumbnailLruCache.put(imageId, result.bitmap)
+                    // 通知 UI 缩略图已更新（bitmap 通过 getThumbnail 直接访问）
+                    _thumbnailCacheVersion.value = _thumbnailCacheVersion.value + 1
                 }
             } catch (_: Exception) {
                 // Thumbnail load failure is non-fatal
@@ -639,26 +769,22 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun toggleImageSelection(imageId: Long) {
-        if (_selectedImages.contains(imageId)) {
-            _selectedImages.remove(imageId)
-        } else {
-            _selectedImages.add(imageId)
-        }
+        val current = _selectedImages.value
+        _selectedImages.value = if (imageId in current) current - imageId else current + imageId
     }
 
     fun selectAll() {
-        _selectedImages.clear()
-        _selectedImages.addAll(_filteredImages.value.map { it.imageId })
+        _selectedImages.value = _filteredImages.value.map { it.imageId }.toSet()
     }
 
     fun clearSelection() {
-        _selectedImages.clear()
+        _selectedImages.value = emptySet()
     }
 
     fun deleteSelected() {
         viewModelScope.launch {
             try {
-                _selectedImages.forEach { imageRepository.deleteImage(it) }
+                _selectedImages.value.forEach { imageRepository.deleteImage(it) }
                 clearSelection()
                 loadImages()
                 loadFolders()
@@ -671,7 +797,7 @@ class AlbumViewModel : ViewModel() {
     fun rateSelected(rating: Int) {
         viewModelScope.launch {
             try {
-                for (imageId in _selectedImages) {
+                for (imageId in _selectedImages.value) {
                     sleeveRepository.setRating(imageId, rating)
                 }
             } catch (e: Throwable) {
@@ -683,7 +809,7 @@ class AlbumViewModel : ViewModel() {
     fun addSelectedToCollection(collectionId: Long) {
         viewModelScope.launch {
             try {
-                for (imageId in _selectedImages) {
+                for (imageId in _selectedImages.value) {
                     sleeveRepository.addImageToCollection(collectionId, imageId)
                 }
             } catch (e: Throwable) {
@@ -760,13 +886,44 @@ class AlbumViewModel : ViewModel() {
         }
     }
 
+    /** 批量为多张图片生成 AI 标签 */
+    fun generateLabelsForImages(ids: List<Long>) {
+        viewModelScope.launch {
+            try {
+                for (imageId in ids) {
+                    val image = imageRepository.getImage(imageId) ?: continue
+                    val result = thumbnailService.loadThumbnail(imageId)
+                    if (result is ThumbnailService.ThumbnailResult.Success) {
+                        aiService.generateLabels(imageId.toUInt(), result.bitmap)
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
+        }
+    }
+
+    /** 批量为多张图片设置评分 */
+    fun rateImages(ids: List<Long>, rating: Int) {
+        viewModelScope.launch {
+            try {
+                for (imageId in ids) {
+                    sleeveRepository.setRating(imageId, rating)
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
+        }
+    }
+
     // ================================================================
     // Export helpers
     // ================================================================
 
     fun getSelectedImagePaths(): List<String> {
+        val selected = _selectedImages.value
         return _filteredImages.value
-            .filter { it.imageId in _selectedImages }
+            .filter { it.imageId in selected }
             .map { it.imagePath }
     }
 
@@ -776,8 +933,9 @@ class AlbumViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        _thumbnailCache.value.values.forEach { it.recycle() }
-        _thumbnailCache.value = emptyMap()
+        // LruCache 回收所有缓存的 bitmap，避免内存泄漏
+        thumbnailLruCache.snapshot().values.forEach { it.recycle() }
+        thumbnailLruCache.evictAll()
     }
 }
 

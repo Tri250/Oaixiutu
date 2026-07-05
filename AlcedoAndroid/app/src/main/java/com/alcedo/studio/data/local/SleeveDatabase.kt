@@ -15,7 +15,12 @@ import com.alcedo.studio.data.dao.AiEmbeddingDao
 import android.util.Log
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
+import java.security.KeyStore
 import java.security.SecureRandom
+import javax.crypto.KeyGenerator
+import javax.crypto.Mac
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 
 @Database(
     entities = [
@@ -196,23 +201,20 @@ abstract class SleeveDatabase : RoomDatabase() {
         }
 
         private fun resetFallbackPassphrase(context: Context) {
-            try {
-                context.getSharedPreferences("alcedo_fallback", Context.MODE_PRIVATE)
-                    .edit().remove("db_passphrase").apply()
-            } catch (e: Throwable) {
-                Log.e(TAG, "Failed to reset fallback passphrase", e)
-            }
+            // No-op: the KeyStore-derived fallback key is not persisted anywhere,
+            // so there is nothing to reset. We intentionally keep the keystore alias
+            // intact so the derived passphrase remains stable across recovery attempts.
         }
 
         private fun getOrCreatePassphrase(context: Context): ByteArray {
             return try {
                 getOrCreateEncryptedPassphrase(context)
             } catch (e: Throwable) {
-                Log.e(TAG, "EncryptedSharedPreferences unavailable, falling back", e)
+                Log.e(TAG, "EncryptedSharedPreferences unavailable, using KeyStore-derived key", e)
                 try {
-                    getFallbackPassphrase(context)
+                    getOrCreateSecureKey(context)
                 } catch (e2: Throwable) {
-                    Log.e(TAG, "Fallback also failed, using ephemeral passphrase", e2)
+                    Log.e(TAG, "KeyStore fallback also failed, using ephemeral passphrase", e2)
                     ByteArray(32).also { SecureRandom().nextBytes(it) }
                 }
             }
@@ -245,27 +247,41 @@ abstract class SleeveDatabase : RoomDatabase() {
             return generateAndSavePassphrase(securePrefs)
         }
 
-        private fun getFallbackPassphrase(context: Context): ByteArray {
-            val prefs = context.getSharedPreferences("alcedo_fallback", Context.MODE_PRIVATE)
-            val existingKey = prefs.getString("db_passphrase", null)
-            if (existingKey != null) {
-                return try {
-                    Base64.decode(existingKey, Base64.NO_WRAP)
-                } catch (e: IllegalArgumentException) {
-                    Log.e(TAG, "Failed to decode fallback passphrase, generating new one", e)
-                    generateAndSaveFallbackPassphrase(prefs)
-                }
-            }
-            return generateAndSaveFallbackPassphrase(prefs)
-        }
+        /**
+         * Derive a stable SQLCipher passphrase from a non-exportable AndroidKeystore key.
+         *
+         * Used as a secure fallback when EncryptedSharedPreferences is unavailable.
+         * No plaintext storage is involved: the passphrase is recomputed from the
+         * keystore-bound HMAC key every time, so there is nothing on disk to leak.
+         *
+         * The keystore key is bound to the device, so the derived passphrase is
+         * stable across launches but inaccessible to other apps or to attackers
+         * without the device's keystore.
+         */
+        private fun getOrCreateSecureKey(context: Context): ByteArray {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val alias = "alcedo_db_key"
 
-        private fun generateAndSaveFallbackPassphrase(prefs: android.content.SharedPreferences): ByteArray {
-            val key = ByteArray(32)
-            SecureRandom().nextBytes(key)
-            prefs.edit()
-                .putString("db_passphrase", Base64.encodeToString(key, Base64.NO_WRAP))
-                .apply()
-            return key
+            if (!keyStore.containsAlias(alias)) {
+                val keyGenerator = KeyGenerator.getInstance(
+                    KeyProperties.KEY_ALGORITHM_HMAC_SHA256, "AndroidKeyStore"
+                )
+                val spec = KeyGenParameterSpec.Builder(
+                    alias,
+                    KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+                )
+                    .setKeySize(256)
+                    .build()
+                keyGenerator.init(spec)
+                keyGenerator.generateKey()
+            }
+
+            val secretKey = (keyStore.getEntry(alias, null) as KeyStore.SecretKeyEntry).secretKey
+            // Sign a fixed message to derive a deterministic 32-byte passphrase.
+            // The keystore key is non-exportable, but signing operations are permitted.
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(secretKey)
+            return mac.doFinal("alcedo-sqlcipher-passphrase-v1".toByteArray(Charsets.UTF_8))
         }
 
         private fun generateAndSavePassphrase(securePrefs: android.content.SharedPreferences): ByteArray {

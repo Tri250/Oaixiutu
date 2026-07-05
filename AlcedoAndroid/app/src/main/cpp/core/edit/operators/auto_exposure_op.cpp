@@ -8,7 +8,7 @@
 
 namespace alcedo {
 
-void AutoExposureOperator::compute_histogram(const float* pixels, int pixel_count, int channels,
+void AutoExposureOperator::compute_histogram(const float* pixels, size_t pixel_count, int channels,
                                               int* histogram, int bins) {
     std::fill(histogram, histogram + bins, 0);
 
@@ -17,8 +17,8 @@ void AutoExposureOperator::compute_histogram(const float* pixels, int pixel_coun
     const float lumG = 0.7152f;
     const float lumB = 0.0722f;
 
-    for (int i = 0; i < pixel_count; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        size_t idx = i * channels;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -34,9 +34,9 @@ void AutoExposureOperator::compute_histogram(const float* pixels, int pixel_coun
     }
 }
 
-float AutoExposureOperator::find_percentile(const int* histogram, int bins, int pixel_count,
+float AutoExposureOperator::find_percentile(const int* histogram, int bins, size_t pixel_count,
                                              float percentile) {
-    if (pixel_count <= 0) return 0.0f;
+    if (pixel_count == 0) return 0.0f;
 
     float target_count = percentile * static_cast<float>(pixel_count);
     float accumulated = 0.0f;
@@ -65,8 +65,8 @@ float AutoExposureOperator::compute_auto_exposure(const float* pixels, int width
                                                    int channels,
                                                    float target_percentile,
                                                    float target_luminance) {
-    int pixel_count = width * height;
-    if (pixel_count <= 0 || !pixels) return 0.0f;
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    if (pixel_count == 0 || !pixels) return 0.0f;
 
     // Build luminance histogram
     const int HISTOGRAM_BINS = 256;
@@ -106,10 +106,10 @@ void AutoExposureOperator::apply(float* pixels, int width, int height, int chann
     if (exposure == 0.0f) return;
 
     float scale = std::pow(2.0f, exposure);
-    int pixel_count = width * height;
+    size_t pixel_count = static_cast<size_t>(width) * height;
 
-    for (int i = 0; i < pixel_count; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        size_t idx = i * channels;
         for (int c = 0; c < 3 && c < channels; ++c) {
             pixels[idx + c] *= scale;
         }

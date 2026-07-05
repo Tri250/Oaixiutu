@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import com.alcedo.studio.BuildConfig
 import androidx.compose.ui.Modifier
@@ -40,7 +41,7 @@ fun SettingsScreen(navController: NavController) {
     val context = LocalContext.current
 
     // Theme mode (light/dark/system)
-    val darkMode by ThemeManager.darkMode.collectAsState()
+    val darkMode by ThemeManager.darkMode.collectAsStateWithLifecycle()
     val selectedTheme = when (darkMode) {
         "light" -> s.light
         "dark" -> s.dark
@@ -48,11 +49,11 @@ fun SettingsScreen(navController: NavController) {
     }
 
     // Theme variant
-    val currentVariant by ThemeManager.themeVariant.collectAsState()
+    val currentVariant by ThemeManager.themeVariant.collectAsStateWithLifecycle()
 
     // Language
-    val currentLanguage by LanguageManager.currentLanguage.collectAsState()
-    val followSystem by LanguageManager.followSystem.collectAsState()
+    val currentLanguage by LanguageManager.currentLanguage.collectAsStateWithLifecycle()
+    val followSystem by LanguageManager.followSystem.collectAsStateWithLifecycle()
     val selectedLanguage = if (followSystem) s.langSystemDefault else currentLanguage.nativeName
 
     // Album / Editor settings – persisted via SharedPreferences
@@ -89,7 +90,8 @@ fun SettingsScreen(navController: NavController) {
     var exportCachePath by remember { mutableStateOf(prefs.getString("export_cache_path", DEFAULT_EXPORT_PATH) ?: DEFAULT_EXPORT_PATH) }
 
     // Calculate real cache size
-    var cacheSize by remember { mutableStateOf("计算中...") }
+    val cacheCalculatingText = stringRes { cacheCalculating }
+    var cacheSize by remember { mutableStateOf(cacheCalculatingText) }
     LaunchedEffect(Unit) {
         cacheSize = calculateCacheSize(context)
     }
@@ -102,9 +104,9 @@ fun SettingsScreen(navController: NavController) {
         else -> s.albumSortDate
     }
     val thumbQualityLabel = when (selectedThumbQuality) {
-        "standard" -> "标准"
-        "low" -> "节省"
-        else -> "高清"
+        "standard" -> stringRes { thumbnailQualityStandard }
+        "low" -> stringRes { thumbnailQualityLow }
+        else -> stringRes { thumbnailQualityHigh }
     }
     val exportFormatLabel = when (selectedExportFormat) {
         "png" -> "PNG"
@@ -112,9 +114,9 @@ fun SettingsScreen(navController: NavController) {
         else -> "JPEG"
     }
     val exportQualityLabel = when (selectedExportQuality) {
-        "medium" -> "中"
-        "low" -> "低"
-        else -> "高"
+        "medium" -> stringRes { exportQualityMedium }
+        "low" -> stringRes { exportQualityLow }
+        else -> stringRes { exportQualityHigh }
     }
     val colorSpaceLabel = when (selectedColorSpace) {
         "p3" -> s.gamutP3
@@ -222,7 +224,7 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // ── 相册设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader("相册设置")
+            SettingsSectionHeader(stringRes { settingsAlbumSection })
             LiquidGlassSurface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -230,21 +232,21 @@ fun SettingsScreen(navController: NavController) {
             ) {
                 SettingsRow(
                     icon = Icons.Default.Sort,
-                    title = "默认排序方式",
+                    title = stringRes { settingsDefaultSort },
                     value = sortLabel,
                     onClick = { showSortDialog = true }
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.Image,
-                    title = "缩略图质量",
+                    title = stringRes { settingsThumbnailQuality },
                     value = thumbQualityLabel,
                     onClick = { showThumbQualityDialog = true }
                 )
             }
 
             // ── 编辑设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader("编辑设置")
+            SettingsSectionHeader(stringRes { settingsEditorSection })
             LiquidGlassSurface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -252,21 +254,21 @@ fun SettingsScreen(navController: NavController) {
             ) {
                 SettingsRow(
                     icon = Icons.Default.FilePresent,
-                    title = "默认导出格式",
+                    title = stringRes { settingsDefaultExportFormat },
                     value = exportFormatLabel,
                     onClick = { showExportFormatDialog = true }
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.HighQuality,
-                    title = "默认导出质量",
+                    title = stringRes { settingsDefaultExportQuality },
                     value = exportQualityLabel,
                     onClick = { showExportQualityDialog = true }
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.ColorLens,
-                    title = "默认色彩空间",
+                    title = stringRes { settingsDefaultColorSpace },
                     value = colorSpaceLabel,
                     onClick = { showColorSpaceDialog = true }
                 )
@@ -332,7 +334,7 @@ fun SettingsScreen(navController: NavController) {
                             persistSetting("export_cache_path", it)
                         },
                         label = { Text(stringRes { settingsExportCachePath }) },
-                        placeholder = { Text("选择导出路径...") },
+                        placeholder = { Text(stringRes { settingsSelectExportPath }) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -340,7 +342,7 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // ── 隐私设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader("隐私设置")
+            SettingsSectionHeader(stringRes { settingsPrivacySection })
             LiquidGlassSurface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -348,8 +350,8 @@ fun SettingsScreen(navController: NavController) {
             ) {
                 SwitchRow(
                     icon = Icons.Default.Psychology,
-                    title = "本地 AI 处理",
-                    subtitle = "CLIP 图像搜索与 AI 建议，全部本地处理",
+                    title = stringRes { settingsLocalAi },
+                    subtitle = stringRes { settingsLocalAiDesc },
                     checked = aiProcessingConsent,
                     onCheckedChange = {
                         aiProcessingConsent = it
@@ -360,8 +362,8 @@ fun SettingsScreen(navController: NavController) {
                 SectionDivider()
                 SwitchRow(
                     icon = Icons.Default.BugReport,
-                    title = "崩溃报告",
-                    subtitle = "匿名崩溃报告，不包含任何个人数据",
+                    title = stringRes { settingsCrashReport },
+                    subtitle = stringRes { settingsCrashReportDesc },
                     checked = crashReportsConsent,
                     onCheckedChange = {
                         crashReportsConsent = it
@@ -372,8 +374,8 @@ fun SettingsScreen(navController: NavController) {
                 SectionDivider()
                 SwitchRow(
                     icon = Icons.Default.Analytics,
-                    title = "使用分析",
-                    subtitle = "匿名使用统计，不收集任何个人数据",
+                    title = stringRes { settingsUsageAnalytics },
+                    subtitle = stringRes { settingsUsageAnalyticsDesc },
                     checked = analyticsConsent,
                     onCheckedChange = {
                         analyticsConsent = it
@@ -403,7 +405,7 @@ fun SettingsScreen(navController: NavController) {
             ) {
                 SettingsRow(
                     icon = Icons.Default.Info,
-                    title = "版本信息",
+                    title = stringRes { settingsVersionInfo },
                     value = "v$APP_VERSION"
                 )
                 SectionDivider()
@@ -444,7 +446,7 @@ fun SettingsScreen(navController: NavController) {
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "开发者",
+                            text = stringRes { settingsDeveloper },
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -609,7 +611,7 @@ fun SettingsScreen(navController: NavController) {
     // Album sort dialog
     if (showSortDialog) {
         OptionListDialog(
-            title = "默认排序方式",
+            title = stringRes { settingsDefaultSort },
             options = listOf(
                 "date" to s.albumSortDate,
                 "name" to s.albumSortName,
@@ -629,11 +631,11 @@ fun SettingsScreen(navController: NavController) {
     // Thumbnail quality dialog
     if (showThumbQualityDialog) {
         OptionListDialog(
-            title = "缩略图质量",
+            title = stringRes { settingsThumbnailQuality },
             options = listOf(
-                "high" to "高清",
-                "standard" to "标准",
-                "low" to "节省"
+                "high" to stringRes { thumbnailQualityHigh },
+                "standard" to stringRes { thumbnailQualityStandard },
+                "low" to stringRes { thumbnailQualityLow }
             ),
             selectedId = selectedThumbQuality,
             onOptionSelected = {
@@ -648,7 +650,7 @@ fun SettingsScreen(navController: NavController) {
     // Export format dialog
     if (showExportFormatDialog) {
         OptionListDialog(
-            title = "默认导出格式",
+            title = stringRes { settingsDefaultExportFormat },
             options = listOf(
                 "jpeg" to "JPEG",
                 "png" to "PNG",
@@ -667,11 +669,11 @@ fun SettingsScreen(navController: NavController) {
     // Export quality dialog
     if (showExportQualityDialog) {
         OptionListDialog(
-            title = "默认导出质量",
+            title = stringRes { settingsDefaultExportQuality },
             options = listOf(
-                "high" to "高",
-                "medium" to "中",
-                "low" to "低"
+                "high" to stringRes { exportQualityHigh },
+                "medium" to stringRes { exportQualityMedium },
+                "low" to stringRes { exportQualityLow }
             ),
             selectedId = selectedExportQuality,
             onOptionSelected = {
@@ -686,7 +688,7 @@ fun SettingsScreen(navController: NavController) {
     // Color space dialog
     if (showColorSpaceDialog) {
         OptionListDialog(
-            title = "默认色彩空间",
+            title = stringRes { settingsDefaultColorSpace },
             options = listOf(
                 "srgb" to s.gamutSrgb,
                 "p3" to s.gamutP3,

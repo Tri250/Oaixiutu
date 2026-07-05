@@ -13,11 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.security.SecureHttpClient
 import com.alcedo.studio.service.AiService
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -38,12 +42,24 @@ data class AiModelInfo(
 @Composable
 fun AiModelManagerScreen(navController: NavController) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Model list - CLIP, Rating, etc.
     var models by remember {
         mutableStateOf(getAvailableModels(context))
     }
     var isRefreshing by remember { mutableStateOf(false) }
+
+    // 下载进度状态
+    val downloadProgress = remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+    val downloadErrors = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(downloadErrors.value) {
+        downloadErrors.value.values.lastOrNull()?.let { error ->
+            snackbarHostState.showSnackbar(error)
+        }
+    }
 
     fun refreshModels() {
         models = getAvailableModels(context)
@@ -52,14 +68,15 @@ fun AiModelManagerScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI 模型管理") },
+                title = { Text(stringRes { aiModelManager }) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -83,11 +100,10 @@ fun AiModelManagerScreen(navController: NavController) {
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("本地运行 · 隐私安全", style = MaterialTheme.typography.titleSmall)
+                            Text(stringRes { aiModelPrivacy }, style = MaterialTheme.typography.titleSmall)
                         }
                         Text(
-                            "所有 AI 模型均在设备本地运行，不会将您的图片上传到任何服务器。" +
-                                "CLIP 模型用于语义搜索，评分模型用于智能图片推荐。",
+                            stringRes { aiModelPrivacyDesc },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -99,7 +115,7 @@ fun AiModelManagerScreen(navController: NavController) {
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "已下载 $downloadedCount/${models.size} 个模型 · ${totalSize}MB",
+                            stringRes { aiModelDownloaded }.format(downloadedCount, models.size, totalSize),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -111,19 +127,49 @@ fun AiModelManagerScreen(navController: NavController) {
             items(models, key = { it.id }) { model ->
                 ModelCard(
                     model = model,
+                    downloadProgress = downloadProgress.value[model.id],
                     onDownload = {
                         // Trigger actual download via AiService
                         val aiService = AiService(context)
-                        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                            val success = aiService.ensureModelDownloaded(context, model.id)
-                            if (success) {
-                                kotlinx.coroutines.withContext(Dispatchers.Main) {
-                                    models = models.map {
-                                        if (it.id == model.id) it.copy(isDownloaded = true)
-                                        else it
+                        scope.launch(Dispatchers.IO) {
+                            val currentProgress = downloadProgress.value.toMutableMap()
+                            try {
+                                currentProgress[model.id] = 0f
+                                downloadProgress.value = currentProgress
+
+                                var retryCount = 0
+                                val maxRetries = 3
+                                var success = false
+                                while (!success && retryCount < maxRetries) {
+                                    try {
+                                        success = aiService.ensureModelDownloaded(context, model.id) { progress ->
+                                            currentProgress[model.id] = progress
+                                            downloadProgress.value = currentProgress.toMap()
+                                        }
+                                    } catch (e: Exception) {
+                                        retryCount++
+                                        if (retryCount >= maxRetries) throw e
+                                        delay(2000L * retryCount)  // 指数退避
                                     }
-                                    refreshModels()
                                 }
+
+                                if (success) {
+                                    // 更新模型状态
+                                    withContext(Dispatchers.Main) {
+                                        models = models.map {
+                                            if (it.id == model.id) it.copy(isDownloaded = true)
+                                            else it
+                                        }
+                                        refreshModels()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                val errors = downloadErrors.value.toMutableMap()
+                                errors[model.id] = e.message ?: "下载失败"
+                                downloadErrors.value = errors
+                            } finally {
+                                currentProgress.remove(model.id)
+                                downloadProgress.value = currentProgress.toMap()
                             }
                         }
                     },
@@ -143,7 +189,7 @@ fun AiModelManagerScreen(navController: NavController) {
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("模型使用说明", style = MaterialTheme.typography.titleSmall)
+                        Text(stringRes { aiModelUsage }, style = MaterialTheme.typography.titleSmall)
                         ModelUsageRow("CLIP 图像编码器", "语义搜索核心模型，将图片编码为语义向量")
                         ModelUsageRow("CLIP 文本编码器", "将文本查询编码为语义向量，与图片向量匹配")
                         ModelUsageRow("评分推荐模型", "基于图片质量分析，自动推荐最佳图片")
@@ -157,6 +203,7 @@ fun AiModelManagerScreen(navController: NavController) {
 @Composable
 private fun ModelCard(
     model: AiModelInfo,
+    downloadProgress: Float?,
     onDownload: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -212,7 +259,7 @@ private fun ModelCard(
                             color = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
                             Text(
-                                "必需",
+                                stringRes { aiModelRequired },
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -224,7 +271,8 @@ private fun ModelCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Action button
+            // Action button / 下载进度
+            val progress = downloadProgress
             if (model.isDownloaded) {
                 IconButton(
                     onClick = { showDeleteConfirm = true },
@@ -232,16 +280,22 @@ private fun ModelCard(
                 ) {
                     Icon(
                         Icons.Default.DeleteOutline,
-                        contentDescription = "删除",
+                        contentDescription = stringRes { delete },
                         tint = if (model.isRequired) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         else MaterialTheme.colorScheme.error
                     )
                 }
+            } else if (progress != null) {
+                // 显示下载进度条
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.width(72.dp).padding(vertical = 4.dp)
+                )
             } else {
                 FilledTonalButton(onClick = onDownload) {
                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("下载", style = MaterialTheme.typography.labelMedium)
+                    Text(stringRes { download }, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -251,8 +305,8 @@ private fun ModelCard(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("删除模型") },
-            text = { Text("确定要删除 ${model.name} 吗？删除后相关功能将不可用，可随时重新下载。") },
+            title = { Text(stringRes { aiModelDeleteTitle }) },
+            text = { Text(stringRes { aiModelDeleteMessage }.format(model.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -260,10 +314,10 @@ private fun ModelCard(
                         showDeleteConfirm = false
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("删除") }
+                ) { Text(stringRes { delete }) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringRes { cancel }) }
             }
         )
     }
@@ -318,67 +372,72 @@ private fun getAvailableModels(context: android.content.Context): List<AiModelIn
 }
 
 // ── AiService extensions for model management ───────────────
-private suspend fun AiService.ensureModelDownloaded(context: android.content.Context, modelId: String): Boolean {
-    return try {
-        val modelsDir = File(context.filesDir, "ai_models")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
-        val modelFile = File(modelsDir, "$modelId.onnx")
+private suspend fun AiService.ensureModelDownloaded(
+    context: android.content.Context,
+    modelId: String,
+    onProgress: (Float) -> Unit = {}
+): Boolean {
+    val modelsDir = File(context.filesDir, "ai_models")
+    if (!modelsDir.exists()) modelsDir.mkdirs()
+    val modelFile = File(modelsDir, "$modelId.onnx")
 
-        // Already downloaded
-        if (modelFile.exists() && modelFile.length() > 0) return true
+    // Already downloaded
+    if (modelFile.exists() && modelFile.length() > 0) {
+        onProgress(1f)
+        return true
+    }
 
-        // Download from CDN
-        val cdnBaseUrl = "https://models.alcedo.studio/"
-        val downloadUrl = cdnBaseUrl + modelId + ".onnx"
+    // Download from CDN
+    val cdnBaseUrl = "https://models.alcedo.studio/"
+    val downloadUrl = cdnBaseUrl + modelId + ".onnx"
 
-        withContext(Dispatchers.IO) {
-            val client = OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(120, TimeUnit.SECONDS)
-                .followRedirects(true)
-                .build()
+    withContext(Dispatchers.IO) {
+        val client = SecureHttpClient.getClient(context)
 
-            val request = Request.Builder()
-                .url(downloadUrl)
-                .build()
+        val request = Request.Builder()
+            .url(downloadUrl)
+            .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                android.util.Log.e("AiModelManager", "Download failed: ${response.code} for $downloadUrl")
-                return@withContext false
-            }
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            android.util.Log.e("AiModelManager", "Download failed: ${response.code} for $downloadUrl")
+            throw java.io.IOException("Download failed: HTTP ${response.code}")
+        }
 
-            val body = response.body ?: return@withContext false
-            val inputStream = body.byteStream()
-            val tempFile = File(modelsDir, "$modelId.onnx.tmp")
+        val body = response.body ?: throw java.io.IOException("Empty response body for $downloadUrl")
+        val inputStream = body.byteStream()
+        val tempFile = File(modelsDir, "$modelId.onnx.tmp")
 
-            try {
-                tempFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
+        try {
+            val totalBytes = body.contentLength()
+            tempFile.outputStream().use { output ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                var downloaded = 0L
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    output.write(buffer, 0, bytesRead)
+                    downloaded += bytesRead
+                    if (totalBytes > 0) {
+                        onProgress((downloaded.toFloat() / totalBytes).coerceIn(0f, 1f))
                     }
                 }
-                // Atomic rename
-                if (tempFile.renameTo(modelFile)) {
-                    android.util.Log.i("AiModelManager", "Model $modelId downloaded successfully (${modelFile.length()} bytes)")
-                    true
-                } else {
-                    tempFile.delete()
-                    android.util.Log.e("AiModelManager", "Failed to rename temp file for $modelId")
-                    false
-                }
-            } catch (e: Exception) {
-                tempFile.delete()
-                throw e
-            } finally {
-                inputStream.close()
             }
+            // Atomic rename
+            if (tempFile.renameTo(modelFile)) {
+                android.util.Log.i("AiModelManager", "Model $modelId downloaded successfully (${modelFile.length()} bytes)")
+                onProgress(1f)
+                true
+            } else {
+                tempFile.delete()
+                android.util.Log.e("AiModelManager", "Failed to rename temp file for $modelId")
+                throw java.io.IOException("Failed to rename temp file for $modelId")
+            }
+        } catch (e: Exception) {
+            tempFile.delete()
+            throw e
+        } finally {
+            inputStream.close()
         }
-    } catch (e: Exception) {
-        android.util.Log.e("AiModelManager", "Model download failed for $modelId: ${e.message}", e)
-        false
     }
 }
 

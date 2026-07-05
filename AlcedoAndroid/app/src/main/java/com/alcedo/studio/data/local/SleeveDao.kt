@@ -90,6 +90,16 @@ interface SleeveElementDao {
     @Query("UPDATE sleeve_elements SET sync_flag = :syncFlag WHERE element_id = :elementId")
     suspend fun setSyncFlag(elementId: Long, syncFlag: Int)
 
+    // sync_flag semantics (SyncFlag enum): UNSYNC=0, MODIFIED=1, SYNCED=2, DELETED=3
+    @Query("SELECT * FROM sleeve_elements WHERE sync_flag != 2")
+    suspend fun getUnsyncedElements(): List<SleeveElementEntity>
+
+    @Query("SELECT * FROM sleeve_elements WHERE sync_flag = 3")
+    suspend fun getDeletedElements(): List<SleeveElementEntity>
+
+    @Query("DELETE FROM sleeve_elements WHERE sync_flag = 3")
+    suspend fun purgeDeletedElements()
+
     @Query("SELECT COUNT(*) FROM sleeve_elements")
     suspend fun getTotalElementCount(): Int
 
@@ -778,6 +788,28 @@ interface ImageDao {
 
     @Query("SELECT * FROM images ORDER BY import_date DESC LIMIT :limit OFFSET :offset")
     suspend fun getImagesPaginated(limit: Int, offset: Int): List<ImageEntity>
+
+    @Query("SELECT * FROM images ORDER BY import_date DESC")
+    fun observeAllImages(): Flow<List<ImageEntity>>
+
+    @Query("""
+        SELECT i.* FROM images i
+        INNER JOIN sleeve_files sf ON i.file_id = sf.element_id
+        WHERE sf.file_path LIKE '%' || :query || '%'
+           OR sf.file_extension LIKE '%' || :query || '%'
+        ORDER BY i.import_date DESC
+    """)
+    suspend fun searchImages(query: String): List<ImageEntity>
+
+    @Query("SELECT * FROM images WHERE import_date BETWEEN :startDate AND :endDate ORDER BY import_date DESC")
+    suspend fun getImagesByDateRange(startDate: Long, endDate: Long): List<ImageEntity>
+
+    @Query("""
+        SELECT * FROM images WHERE UPPER(format) IN
+        ('ARW','CR2','CR3','NEF','DNG','RAW','RW2','ORF','RAF','PEF','SRW')
+        ORDER BY import_date DESC
+    """)
+    fun observeRawImages(): Flow<List<ImageEntity>>
 
     @Query("SELECT COUNT(*) FROM images")
     suspend fun getImageCount(): Int

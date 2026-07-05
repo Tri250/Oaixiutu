@@ -241,7 +241,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
     jshort *raw = env->GetShortArrayElements(rawData, nullptr);
     if (!raw) { LOGE("Failed to get raw data"); return nullptr; }
 
-    int output_size = rawWidth * rawHeight * 3;
+    size_t output_size = static_cast<size_t>(rawWidth) * rawHeight * 3;
     std::vector<float> output_rgb(output_size);
 
     RawDecodeParams raw_params;
@@ -260,13 +260,13 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
 
     env->ReleaseShortArrayElements(rawData, raw, JNI_ABORT);
 
-    jfloatArray result = env->NewFloatArray(output_size);
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(output_size));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create float array for raw decode result");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(result, 0, output_size, output_rgb.data());
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(output_size), output_rgb.data());
     return result;
 }
 
@@ -308,8 +308,8 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
     }
 
     // Convert uint16 RGB to ARGB int array
-    int totalPixels = decResult.width * decResult.height;
-    jintArray result = env->NewIntArray(totalPixels);
+    size_t totalPixels = static_cast<size_t>(decResult.width) * decResult.height;
+    jintArray result = env->NewIntArray(static_cast<jsize>(totalPixels));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create int array for legacy RAW decode result");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
@@ -319,14 +319,14 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
     std::vector<jint> outPixels(totalPixels);
     int wl = static_cast<int>(decResult.image_info.white_level);
     if (wl <= 0) wl = 65535;
-    for (int i = 0; i < totalPixels; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < totalPixels; ++i) {
+        size_t idx = i * 3;
         int r = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx]) / wl) * 255.0f);
         int g = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx + 1]) / wl) * 255.0f);
         int b = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx + 2]) / wl) * 255.0f);
         outPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
-    env->SetIntArrayRegion(result, 0, totalPixels, outPixels.data());
+    env->SetIntArrayRegion(result, 0, static_cast<jsize>(totalPixels), outPixels.data());
     return result;
 }
 
@@ -350,14 +350,14 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAcesTransf
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    int pixel_count = width * height;
-    color_science::convert_color_space_bulk(float_pixels.data(), pixel_count, 3, 0, 3); // sRGB → AP0
-    color_science::aces_rrt_bulk(float_pixels.data(), pixel_count, 3, 3);
-    color_science::convert_color_space_bulk(float_pixels.data(), pixel_count, 3, 3, 0); // AP0 → sRGB
-    color_science::apply_peak_luminance_scale_bulk(float_pixels.data(), pixel_count, 3, peakLuminance);
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    color_science::convert_color_space_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, 0, 3); // sRGB → AP0
+    color_science::aces_rrt_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, 3);
+    color_science::convert_color_space_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, 3, 0); // AP0 → sRGB
+    color_science::apply_peak_luminance_scale_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, peakLuminance);
 
-    for (int i = 0; i < pixel_count; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        size_t idx = i * 3;
         color_science::srgb_eotf_rgb(&float_pixels[idx], &float_pixels[idx+1], &float_pixels[idx+2]);
     }
 
@@ -387,12 +387,12 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyOpenDRTTra
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    int pixel_count = width * height;
-    color_science::opendrt_tone_map_bulk(float_pixels.data(), pixel_count, 3, 3);
-    color_science::apply_peak_luminance_scale_bulk(float_pixels.data(), pixel_count, 3, peakLuminance);
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    color_science::opendrt_tone_map_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, 3);
+    color_science::apply_peak_luminance_scale_bulk(float_pixels.data(), static_cast<int>(pixel_count), 3, peakLuminance);
 
-    for (int i = 0; i < pixel_count; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        size_t idx = i * 3;
         color_science::srgb_eotf_rgb(&float_pixels[idx], &float_pixels[idx+1], &float_pixels[idx+2]);
     }
 
@@ -452,9 +452,9 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyEOTF(
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    int pixel_count = width * height;
-    for (int i = 0; i < pixel_count; ++i) {
-        int idx = i * 3;
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        size_t idx = i * 3;
         float r = float_pixels[idx], g = float_pixels[idx+1], b = float_pixels[idx+2];
         switch (eotfType) {
             case 0: color_science::srgb_eotf_rgb(&r, &g, &b); break;
@@ -748,17 +748,17 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeRenderSnapshot(
     auto it = g_snapshots.find(snapshotHandle);
     if (it == g_snapshots.end()) return nullptr;
 
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     std::vector<float> output(total);
     if (!it->second->render(output.data(), width, height)) return nullptr;
 
-    jfloatArray result = env->NewFloatArray(total);
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(total));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create float array for snapshot render result");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(result, 0, total, output.data());
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(total), output.data());
     return result;
 }
 
@@ -799,8 +799,8 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativePlanckianWhiteB
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    int pixel_count = width * height;
-    color_science::planckian_white_balance_bulk(float_pixels.data(), pixel_count, channels,
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    color_science::planckian_white_balance_bulk(float_pixels.data(), static_cast<int>(pixel_count), channels,
                                                  temperature, tint);
 
     jfloatArray result = env->NewFloatArray(len);
@@ -851,7 +851,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
     jshort *raw = env->GetShortArrayElements(rawData, nullptr);
     if (!raw) return nullptr;
 
-    int outputSize = width * height * 3;
+    size_t outputSize = static_cast<size_t>(width) * height * 3;
     std::vector<float> output_r(width * height);
     std::vector<float> output_g(width * height);
     std::vector<float> output_b(width * height);
@@ -865,20 +865,20 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
 
     // Interleave R, G, B
     std::vector<float> rgb(outputSize);
-    int total = width * height;
-    for (int i = 0; i < total; ++i) {
+    size_t total = static_cast<size_t>(width) * height;
+    for (size_t i = 0; i < total; ++i) {
         rgb[i * 3]     = output_r[i];
         rgb[i * 3 + 1] = output_g[i];
         rgb[i * 3 + 2] = output_b[i];
     }
 
-    jfloatArray result = env->NewFloatArray(outputSize);
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(outputSize));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create float array for AHD demosaic result");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(outputSize), rgb.data());
     return result;
 }
 
@@ -897,7 +897,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
     jshort *raw = env->GetShortArrayElements(rawData, nullptr);
     if (!raw) return nullptr;
 
-    int outputSize = width * height * 3;
+    size_t outputSize = static_cast<size_t>(width) * height * 3;
     std::vector<float> output_r(width * height);
     std::vector<float> output_g(width * height);
     std::vector<float> output_b(width * height);
@@ -910,20 +910,20 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
     env->ReleaseShortArrayElements(rawData, raw, JNI_ABORT);
 
     std::vector<float> rgb(outputSize);
-    int total = width * height;
-    for (int i = 0; i < total; ++i) {
+    size_t total = static_cast<size_t>(width) * height;
+    for (size_t i = 0; i < total; ++i) {
         rgb[i * 3]     = output_r[i];
         rgb[i * 3 + 1] = output_g[i];
         rgb[i * 3 + 2] = output_b[i];
     }
 
-    jfloatArray result = env->NewFloatArray(outputSize);
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(outputSize));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create float array for AMAZE demosaic result");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(outputSize), rgb.data());
     return result;
 }
 
@@ -1546,7 +1546,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDemosaic(
     jshort* raw = env->GetShortArrayElements(rawCfaData, nullptr);
     if (!raw) return nullptr;
 
-    int outputSize = width * height * 3;
+    size_t outputSize = static_cast<size_t>(width) * height * 3;
     std::vector<float> rgb(outputSize);
 
     const uint16_t* raw16 = reinterpret_cast<const uint16_t*>(raw);
@@ -1561,13 +1561,13 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDemosaic(
 
     env->ReleaseShortArrayElements(rawCfaData, raw, JNI_ABORT);
 
-    jfloatArray result = env->NewFloatArray(outputSize);
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(outputSize));
     if (!result || env->ExceptionCheck()) {
         LOGE("Failed to create demosaic result float array");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(result, 0, outputSize, rgb.data());
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(outputSize), rgb.data());
     return result;
 }
 

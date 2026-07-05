@@ -6,6 +6,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.json.*
+import org.json.JSONObject
 import java.time.Instant
 
 // ================================================================
@@ -430,6 +431,7 @@ sealed class SleeveFilter(
 ) {
     abstract fun resetFilter()
     abstract fun getPredicate(): String
+    abstract fun getBindArgs(): Array<Any?>
     abstract fun toJson(): String
     abstract fun fromJson(json: String)
 }
@@ -446,12 +448,20 @@ data class DateTimeFilter(
     }
 
     override fun getPredicate(): String =
-        "added_time BETWEEN $startDate AND $endDate ORDER BY added_time ${if (order == ElementOrder.ASC) "ASC" else "DESC"}"
+        "added_time BETWEEN ? AND ? ORDER BY added_time ${if (order == ElementOrder.ASC) "ASC" else "DESC"}"
+
+    override fun getBindArgs(): Array<Any?> = arrayOf(startDate, endDate)
 
     override fun toJson(): String =
         """{"type":"DATETIME","startDate":$startDate,"endDate":$endDate,"order":"$order"}"""
 
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        startDate = obj.optLong("startDate", 0L)
+        endDate = obj.optLong("endDate", Long.MAX_VALUE)
+        order = runCatching { ElementOrder.valueOf(obj.optString("order", "DESC")) }
+            .getOrDefault(ElementOrder.DESC)
+    }
 }
 
 data class ExifFilter(
@@ -496,7 +506,7 @@ data class ExifFilter(
         return conditions.joinToString(" AND ")
     }
 
-    fun getBindArgs(): List<Any?> {
+    override fun getBindArgs(): Array<Any?> {
         val args = mutableListOf<Any?>()
         cameraMake?.let { args.add(it) }
         cameraModel?.let { args.add(it) }
@@ -511,13 +521,37 @@ data class ExifFilter(
         maxShutterSpeed?.let { args.add(it) }
         dateFrom?.let { args.add(it) }
         dateTo?.let { args.add(it) }
-        return args
+        return args.toTypedArray()
     }
 
     override fun toJson(): String =
         """{"type":"EXIF","cameraMake":"$cameraMake","cameraModel":"$cameraModel","lensModel":"$lensModel"}"""
 
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        cameraMake = obj.optString("cameraMake", "").takeIf { it.isNotEmpty() && it != "null" }
+        cameraModel = obj.optString("cameraModel", "").takeIf { it.isNotEmpty() && it != "null" }
+        lensModel = obj.optString("lensModel", "").takeIf { it.isNotEmpty() && it != "null" }
+        minFocalLength = obj.optFloatOrNull("minFocalLength")
+        maxFocalLength = obj.optFloatOrNull("maxFocalLength")
+        minAperture = obj.optFloatOrNull("minAperture")
+        maxAperture = obj.optFloatOrNull("maxAperture")
+        minIso = obj.optIntOrNull("minIso")
+        maxIso = obj.optIntOrNull("maxIso")
+        minShutterSpeed = obj.optFloatOrNull("minShutterSpeed")
+        maxShutterSpeed = obj.optFloatOrNull("maxShutterSpeed")
+        dateFrom = obj.optLongOrNull("dateFrom")
+        dateTo = obj.optLongOrNull("dateTo")
+    }
+
+    private fun JSONObject.optFloatOrNull(key: String): Float? =
+        if (has(key) && !isNull(key)) getDouble(key).toFloat() else null
+
+    private fun JSONObject.optIntOrNull(key: String): Int? =
+        if (has(key) && !isNull(key)) getInt(key) else null
+
+    private fun JSONObject.optLongOrNull(key: String): Long? =
+        if (has(key) && !isNull(key)) getLong(key) else null
 }
 
 data class ValueFilter(
@@ -526,9 +560,13 @@ data class ValueFilter(
 ) : SleeveFilter(FilterType.VALUE) {
     override fun resetFilter() { field = ""; value = "" }
     override fun getPredicate(): String = "$field = ?"
-    fun getBindArgs(): List<Any?> = listOf(value)
+    override fun getBindArgs(): Array<Any?> = arrayOf(value)
     override fun toJson(): String = """{"type":"VALUE","field":"$field","value":"$value"}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        field = obj.optString("field", "")
+        value = obj.optString("value", "")
+    }
 }
 
 data class RangeFilter(
@@ -538,9 +576,14 @@ data class RangeFilter(
 ) : SleeveFilter(FilterType.RANGE) {
     override fun resetFilter() { field = ""; minValue = 0.0; maxValue = Double.MAX_VALUE }
     override fun getPredicate(): String = "$field BETWEEN ? AND ?"
-    fun getBindArgs(): List<Any?> = listOf(minValue, maxValue)
+    override fun getBindArgs(): Array<Any?> = arrayOf(minValue, maxValue)
     override fun toJson(): String = """{"type":"RANGE","field":"$field","min":$minValue,"max":$maxValue}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        field = obj.optString("field", "")
+        minValue = obj.optDouble("min", 0.0)
+        maxValue = obj.optDouble("max", Double.MAX_VALUE)
+    }
 }
 
 data class StringFilter(
@@ -550,10 +593,15 @@ data class StringFilter(
 ) : SleeveFilter(FilterType.STRING) {
     override fun resetFilter() { field = ""; pattern = ""; exact = false }
     override fun getPredicate(): String = if (exact) "$field = ?" else "$field LIKE '%' || ? || '%'"
-    fun getBindArgs(): List<Any?> = listOf(pattern)
+    override fun getBindArgs(): Array<Any?> = arrayOf(pattern)
     override fun toJson(): String =
         """{"type":"STRING","field":"$field","pattern":"$pattern","exact":$exact}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        field = obj.optString("field", "")
+        pattern = obj.optString("pattern", "")
+        exact = obj.optBoolean("exact", false)
+    }
 }
 
 data class FilterCombo(
@@ -573,15 +621,7 @@ data class FilterCombo(
     }
 
     fun getAllBindArgs(): List<Any?> {
-        return filters.flatMap { filter ->
-            when (filter) {
-                is ExifFilter -> filter.getBindArgs()
-                is ValueFilter -> filter.getBindArgs()
-                is RangeFilter -> filter.getBindArgs()
-                is StringFilter -> filter.getBindArgs()
-                else -> emptyList()
-            }
-        }
+        return filters.flatMap { it.getBindArgs().toList() }
     }
 
     fun toEntity(): FilterEntity = FilterEntity(
@@ -748,14 +788,18 @@ interface FilterEvaluationContext {
 // ================================================================
 
 data class RatingFilterNode(
-    val minRating: Int = 0,
-    val maxRating: Int = 5
+    var minRating: Int = 0,
+    var maxRating: Int = 5
 ) : SleeveFilter(FilterType.RANGE) {
     override fun resetFilter() { minRating; maxRating }
     override fun getPredicate(): String = "rating BETWEEN ? AND ?"
-    fun getBindArgs(): List<Any?> = listOf(minRating, maxRating)
+    override fun getBindArgs(): Array<Any?> = arrayOf(minRating, maxRating)
     override fun toJson(): String = """{"type":"RATING","minRating":$minRating,"maxRating":$maxRating}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        minRating = obj.optInt("minRating", 0)
+        maxRating = obj.optInt("maxRating", 5)
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "RATING")
         put("minRating", minRating)
@@ -764,14 +808,20 @@ data class RatingFilterNode(
 }
 
 data class FileTypeFilterNode(
-    val imageTypes: List<String> = emptyList()
+    var imageTypes: List<String> = emptyList()
 ) : SleeveFilter(FilterType.VALUE) {
     override fun resetFilter() { imageTypes; }
     override fun getPredicate(): String =
         if (imageTypes.isEmpty()) "" else "image_type IN (${imageTypes.joinToString(",") { "?" }})"
-    fun getBindArgs(): List<Any?> = imageTypes
+    override fun getBindArgs(): Array<Any?> = imageTypes.toTypedArray()
     override fun toJson(): String = """{"type":"FILE_TYPE","imageTypes":${imageTypes.joinToString(",", "[", "]") { "\"$it\"" }}}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        val typesArray = obj.optJSONArray("imageTypes")
+        imageTypes = if (typesArray != null) {
+            (0 until typesArray.length()).map { typesArray.getString(it) }
+        } else emptyList()
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "FILE_TYPE")
         put("imageTypes", buildJsonArray { imageTypes.forEach { add(it) } })
@@ -779,14 +829,18 @@ data class FileTypeFilterNode(
 }
 
 data class DateRangeFilterNode(
-    val from: Long = 0L,
-    val to: Long = Long.MAX_VALUE
+    var from: Long = 0L,
+    var to: Long = Long.MAX_VALUE
 ) : SleeveFilter(FilterType.DATETIME) {
     override fun resetFilter() { from; to }
     override fun getPredicate(): String = "capture_date BETWEEN ? AND ?"
-    fun getBindArgs(): List<Any?> = listOf(from, to)
+    override fun getBindArgs(): Array<Any?> = arrayOf(from, to)
     override fun toJson(): String = """{"type":"DATE_RANGE","from":$from,"to":$to}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        from = obj.optLong("from", 0L)
+        to = obj.optLong("to", Long.MAX_VALUE)
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "DATE_RANGE")
         put("from", from)
@@ -795,8 +849,8 @@ data class DateRangeFilterNode(
 }
 
 data class CameraFilterNode(
-    val cameraMake: String? = null,
-    val cameraModel: String? = null
+    var cameraMake: String? = null,
+    var cameraModel: String? = null
 ) : SleeveFilter(FilterType.EXIF) {
     override fun resetFilter() { cameraMake; cameraModel }
     override fun getPredicate(): String {
@@ -805,9 +859,13 @@ data class CameraFilterNode(
         cameraModel?.let { conditions.add("camera_model LIKE '%' || ? || '%'") }
         return conditions.joinToString(" AND ")
     }
-    fun getBindArgs(): List<Any?> = listOfNotNull(cameraMake, cameraModel)
+    override fun getBindArgs(): Array<Any?> = arrayOfNotNull(cameraMake, cameraModel)
     override fun toJson(): String = """{"type":"CAMERA","cameraMake":"$cameraMake","cameraModel":"$cameraModel"}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        cameraMake = obj.optString("cameraMake", "").takeIf { it.isNotEmpty() && it != "null" }
+        cameraModel = obj.optString("cameraModel", "").takeIf { it.isNotEmpty() && it != "null" }
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "CAMERA")
         cameraMake?.let { put("cameraMake", it) }
@@ -816,13 +874,16 @@ data class CameraFilterNode(
 }
 
 data class LensFilterNode(
-    val lensModel: String? = null
+    var lensModel: String? = null
 ) : SleeveFilter(FilterType.EXIF) {
     override fun resetFilter() { lensModel; }
     override fun getPredicate(): String = lensModel?.let { "lens_model LIKE '%' || ? || '%'" } ?: ""
-    fun getBindArgs(): List<Any?> = listOfNotNull(lensModel)
+    override fun getBindArgs(): Array<Any?> = arrayOfNotNull(lensModel)
     override fun toJson(): String = """{"type":"LENS","lensModel":"$lensModel"}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        lensModel = obj.optString("lensModel", "").takeIf { it.isNotEmpty() && it != "null" }
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "LENS")
         lensModel?.let { put("lensModel", it) }
@@ -830,14 +891,20 @@ data class LensFilterNode(
 }
 
 data class TagFilterNode(
-    val tags: List<String> = emptyList()
+    var tags: List<String> = emptyList()
 ) : SleeveFilter(FilterType.STRING) {
     override fun resetFilter() { tags; }
     override fun getPredicate(): String =
         if (tags.isEmpty()) "" else "label IN (${tags.joinToString(",") { "?" }})"
-    fun getBindArgs(): List<Any?> = tags
+    override fun getBindArgs(): Array<Any?> = tags.toTypedArray()
     override fun toJson(): String = """{"type":"TAG","tags":${tags.joinToString(",", "[", "]") { "\"$it\"" }}}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        val tagsArray = obj.optJSONArray("tags")
+        tags = if (tagsArray != null) {
+            (0 until tagsArray.length()).map { tagsArray.getString(it) }
+        } else emptyList()
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "TAG")
         put("tags", buildJsonArray { tags.forEach { add(it) } })
@@ -845,13 +912,16 @@ data class TagFilterNode(
 }
 
 data class CollectionFilterNode(
-    val collectionId: Long = 0L
+    var collectionId: Long = 0L
 ) : SleeveFilter(FilterType.COMBO) {
     override fun resetFilter() { collectionId }
     override fun getPredicate(): String = "image_id IN (SELECT image_id FROM collection_images WHERE collection_id = ?)"
-    fun getBindArgs(): List<Any?> = listOf(collectionId)
+    override fun getBindArgs(): Array<Any?> = arrayOf(collectionId)
     override fun toJson(): String = """{"type":"COLLECTION","collectionId":$collectionId}"""
-    override fun fromJson(json: String) {}
+    override fun fromJson(json: String) {
+        val obj = JSONObject(json)
+        collectionId = obj.optLong("collectionId", 0L)
+    }
     fun toJsonNodeElement(): kotlinx.serialization.json.JsonObject = buildJsonObject {
         put("type", "COLLECTION")
         put("collectionId", collectionId)

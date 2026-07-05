@@ -99,13 +99,13 @@ fun StatsView(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            "图库概览",
+                            stringRes { statsLibraryOverview },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            "图库共 $totalImages 张图片",
+                            stringRes { statsTotalImages }.format(totalImages),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -121,6 +121,9 @@ fun StatsView(
 
             // ── Lens Distribution ────────────────────────────────────
             LensDistributionChart(lensDistribution)
+
+            // ── Focal Length Distribution ─────────────────────────────
+            FocalLengthDistributionChart(lensDistribution)
 
             // ── Rating Distribution ──────────────────────────────────
             RatingDistributionChart(ratingDistribution, totalImages)
@@ -179,12 +182,12 @@ private fun AnimatedHorizontalBar(
 @Composable
 private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
     ChartCard(
-        title = "时间分布",
+        title = stringRes { statsDateDistribution },
         icon = Icons.Default.DateRange,
         iconTint = MaterialTheme.colorScheme.primary
     ) {
         if (dateDistribution.isEmpty()) {
-            EmptyChartMessage("暂无时间数据")
+            EmptyChartMessage(stringRes { statsNoDateData })
         } else {
             val maxCount = dateDistribution.maxOfOrNull { it.count } ?: 1
             val total = dateDistribution.sumOf { it.count }
@@ -242,12 +245,12 @@ private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
 @Composable
 private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
     ChartCard(
-        title = "相机型号",
+        title = stringRes { statsCameraModels },
         icon = Icons.Default.PhotoCamera,
         iconTint = MaterialTheme.colorScheme.secondary
     ) {
         if (cameraDistribution.isEmpty()) {
-            EmptyChartMessage("暂无相机数据")
+            EmptyChartMessage(stringRes { statsNoCameraData })
         } else {
             val maxCount = cameraDistribution.maxOfOrNull { it.count } ?: 1
             val total = cameraDistribution.sumOf { it.count }
@@ -312,12 +315,12 @@ private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
 @Composable
 private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
     ChartCard(
-        title = "镜头分布",
+        title = stringRes { statsLensDistribution },
         icon = Icons.Default.Camera,
         iconTint = MaterialTheme.colorScheme.tertiary
     ) {
         if (lensDistribution.isEmpty()) {
-            EmptyChartMessage("暂无镜头数据")
+            EmptyChartMessage(stringRes { statsNoLensData })
         } else {
             val maxCount = lensDistribution.maxOfOrNull { it.count } ?: 1
             val total = lensDistribution.sumOf { it.count }
@@ -375,6 +378,85 @@ private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+// Focal Length Distribution Chart
+// ════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun FocalLengthDistributionChart(lensDistribution: List<LensFacet>) {
+    ChartCard(
+        title = "焦段分布",
+        icon = Icons.Default.Camera,
+        iconTint = ChartColors[3 % ChartColors.size]
+    ) {
+        // 从镜头型号中提取焦段（如 "24-70mm" 或 "50mm"）
+        val focalLengths = lensDistribution
+            .mapNotNull { it.model }
+            .mapNotNull { lens ->
+                val match = Regex("""(\d+)-?(\d+)?mm""", RegexOption.IGNORE_CASE).find(lens)
+                match?.let {
+                    val min = it.groupValues[1].toIntOrNull()
+                    val max = it.groupValues.getOrNull(2)?.toIntOrNull() ?: min
+                    if (min != null) {
+                        if (max != null && max != min) "${min}-${max}mm" else "${min}mm"
+                    } else null
+                }
+            }
+            .groupingBy { it }
+            .eachCount()
+            .toList()
+            .sortedByDescending { it.second }
+            .take(10)
+
+        if (focalLengths.isEmpty()) {
+            EmptyChartMessage("暂无焦段数据")
+        } else {
+            val maxCount = focalLengths.maxOf { it.second }
+            val total = focalLengths.sumOf { it.second }
+            focalLengths.forEach { (focal, count) ->
+                val fraction = count.toFloat() / maxCount
+                val percentage = if (total > 0) count * 100f / total else 0f
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        focal,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(64.dp)
+                    )
+                    AnimatedHorizontalBar(
+                        fraction = fraction,
+                        gradientColors = BarGradientSecondary,
+                        barHeight = 14.dp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "$count",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.width(28.dp),
+                        textAlign = TextAlign.End
+                    )
+                    Text(
+                        String.format("%.0f%%", percentage),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(34.dp),
+                        textAlign = TextAlign.End
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // Rating Distribution Chart (Stars + Bar)
 // ════════════════════════════════════════════════════════════════════
 
@@ -384,12 +466,12 @@ private fun RatingDistributionChart(
     totalImages: Int
 ) {
     ChartCard(
-        title = "评分分布",
+        title = stringRes { statsRatingDistribution },
         icon = Icons.Default.Star,
         iconTint = Color(0xFFFFD700)
     ) {
         if (ratingDistribution.isEmpty()) {
-            EmptyChartMessage("暂无评分数据")
+            EmptyChartMessage(stringRes { statsNoRatingData })
         } else {
             val maxCount = ratingDistribution.maxOfOrNull { it.count } ?: 1
 
@@ -420,7 +502,7 @@ private fun RatingDistributionChart(
                             }
                         } else {
                             Text(
-                                "未评分",
+                                stringRes { statsUnrated },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.sp
@@ -469,12 +551,12 @@ private fun RatingDistributionChart(
 @Composable
 private fun TagCloudChart(tagCloud: List<LabelFrequency>) {
     ChartCard(
-        title = "标签云",
+        title = stringRes { statsTagCloud },
         icon = Icons.Default.Label,
         iconTint = MaterialTheme.colorScheme.primary
     ) {
         if (tagCloud.isEmpty()) {
-            EmptyChartMessage("暂无标签。运行语义分析以生成标签。")
+            EmptyChartMessage(stringRes { statsNoTagsData })
         } else {
             val maxCount = tagCloud.maxOfOrNull { it.count } ?: 1
 

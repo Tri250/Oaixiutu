@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import com.alcedo.studio.BuildConfig
 import java.io.File
 import java.security.MessageDigest
 
@@ -37,7 +38,7 @@ object SecurityChecker {
     // ── Root Detection ──
 
     fun isDeviceRooted(): Boolean {
-        return checkRootMethod1() || checkRootMethod2() || checkRootMethod3()
+        return checkRootMethod1() || checkRootMethod3()
     }
 
     // Check for su binary
@@ -51,17 +52,29 @@ object SecurityChecker {
         return paths.any { File(it).exists() }
     }
 
-    // Check for root-related apps
-    private fun checkRootMethod2(): Boolean {
-        val packages = arrayOf(
-            "com.noshufou.android.su",
-            "com.thirdparty.superuser",
+    // 检测已知的 root/Magisk/调试工具
+    fun hasDangerousApps(context: Context): Boolean {
+        val dangerousPackages = listOf(
+            "com.topjohnwu.magisk",
             "eu.chainfire.supersu",
             "com.koushikdutta.superuser",
-            "com.topjohnwu.magisk"
+            "com.thirdparty.superuser",
+            "com.noshufou.android.su",
+            "com.noshufou.android.su.elite",
+            "com.yellowes.su",
+            "com.kingo.root",
+            "com.smedroid.root",
+            "com.zhiqupk.root.global",
+            "com.alephzain.framaroot"
         )
-        // Can't check installed packages without query intent, use file check instead
-        return false // Simplified - actual check would use PackageManager
+        return dangerousPackages.any { pkg ->
+            try {
+                context.packageManager.getPackageInfo(pkg, 0)
+                true
+            } catch (e: PackageManager.NameNotFoundException) {
+                false
+            }
+        }
     }
 
     // Check for dangerous properties
@@ -108,9 +121,20 @@ object SecurityChecker {
             val hash = md.digest(signature.toByteArray())
             val hexHash = hash.joinToString("") { "%02x".format(it) }
 
-            // In production, compare with known good hash
-            // For now, just verify a signature exists
-            hexHash.isNotEmpty()
+            // Debug 构建跳过校验
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Debug build, skipping signature verification. Hash: $hexHash")
+                return true
+            }
+
+            // 正式版校验签名指纹
+            val expectedHash = "REPLACE_WITH_RELEASE_SIGNING_KEY_HASH"
+            // 当未配置预期哈希时，仅记录但不阻断
+            if (expectedHash == "REPLACE_WITH_RELEASE_SIGNING_KEY_HASH") {
+                Log.w(TAG, "签名校验：未配置预期签名指纹，跳过校验")
+                return true
+            }
+            hexHash.equals(expectedHash, ignoreCase = true)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to verify app signature", e)
             false
@@ -132,7 +156,7 @@ object SecurityChecker {
         val isDebuggable = (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val isDebuggerAttached = isDebuggerAttached()
         val isEmulator = isRunningOnEmulator()
-        val isRooted = isDeviceRooted()
+        val isRooted = isDeviceRooted() || hasDangerousApps(context)
         val signatureValid = verifyAppSignature(context)
 
         val isSecure = !isDebuggable && !isDebuggerAttached && !isRooted && signatureValid

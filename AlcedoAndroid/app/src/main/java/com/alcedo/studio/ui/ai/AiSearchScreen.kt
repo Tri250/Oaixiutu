@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,12 +41,13 @@ fun AiSearchScreen(
     navController: NavController,
     albumViewModel: AlbumViewModel = viewModel()
 ) {
-    val searchQuery by albumViewModel.searchQuery.collectAsState()
-    val isSearching by albumViewModel.isSearching.collectAsState()
-    val searchResults by albumViewModel.searchResults.collectAsState()
-    val semanticEnabled = albumViewModel.semanticSearchEnabled.value
-    val images by albumViewModel.filteredImages.collectAsState()
-    val thumbnailCache by albumViewModel.thumbnailCache.collectAsState()
+    val searchQuery by albumViewModel.searchQuery.collectAsStateWithLifecycle()
+    val isSearching by albumViewModel.isSearching.collectAsStateWithLifecycle()
+    val searchResults by albumViewModel.searchResults.collectAsStateWithLifecycle()
+    val semanticEnabled by albumViewModel.semanticSearchEnabled.collectAsStateWithLifecycle()
+    val images by albumViewModel.filteredImages.collectAsStateWithLifecycle()
+    // 缩略图通过 LruCache 存储；订阅版本号触发重组，bitmap 直接访问
+    @Suppress("UNUSED_VARIABLE") val thumbnailCacheVersion by albumViewModel.thumbnailCacheVersion.collectAsStateWithLifecycle()
 
     var inputText by remember { mutableStateOf("") }
     var searchHistory by remember { mutableStateOf(loadSearchHistory()) }
@@ -204,7 +206,7 @@ fun AiSearchScreen(
                     items(images, key = { it.imageId }) { image ->
                         SearchResultCard(
                             image = image,
-                            thumbnailBitmap = thumbnailCache[image.imageId],
+                            thumbnailBitmap = albumViewModel.getThumbnail(image.imageId),
                             similarity = searchResults.find { it.imageId == image.imageId }?.score,
                             onClick = { navController.navigate("editor/${image.imageId}") },
                             onLongClick = {
@@ -252,7 +254,7 @@ fun AiSearchScreen(
                                 }
                             }
                         }
-                        items(searchHistory) { query ->
+                        items(searchHistory, key = { it }) { query ->
                             ListItem(
                                 headlineContent = { Text(query) },
                                 leadingContent = {

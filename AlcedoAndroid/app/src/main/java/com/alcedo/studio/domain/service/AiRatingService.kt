@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.security.SecureHttpClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,10 +40,7 @@ class AiRatingService(
     private val _ratingStatus = MutableStateFlow<Map<UInt, AiRatingStatus>>(emptyMap())
     val ratingStatus: StateFlow<Map<UInt, AiRatingStatus>> = _ratingStatus.asStateFlow()
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
-        .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
-        .build()
+    private val httpClient = SecureHttpClient.getClient(context)
 
     private val activeJobs = mutableMapOf<UInt, Job>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

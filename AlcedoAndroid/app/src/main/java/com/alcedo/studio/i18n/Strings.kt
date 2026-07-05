@@ -424,6 +424,83 @@ interface StringResources {
     val langFrench: String
     val langSpanish: String
     val langSystemDefault: String
+
+    // ── 设置页补充 ────────────────────────────────────────────────────
+    val settingsAlbumSection: String
+    val settingsEditorSection: String
+    val settingsPrivacySection: String
+    val settingsDefaultSort: String
+    val settingsThumbnailQuality: String
+    val settingsDefaultExportFormat: String
+    val settingsDefaultExportQuality: String
+    val settingsDefaultColorSpace: String
+    val settingsLocalAi: String
+    val settingsLocalAiDesc: String
+    val settingsCrashReport: String
+    val settingsCrashReportDesc: String
+    val settingsUsageAnalytics: String
+    val settingsUsageAnalyticsDesc: String
+    val settingsVersionInfo: String
+    val settingsDeveloper: String
+    val settingsSelectExportPath: String
+    val thumbnailQualityHigh: String
+    val thumbnailQualityStandard: String
+    val thumbnailQualityLow: String
+    val exportQualityHigh: String
+    val exportQualityMedium: String
+    val exportQualityLow: String
+    val cacheCalculating: String
+
+    // ── AI 评分页 ──────────────────────────────────────────────────────
+    val aiRatingAnalyze: String
+    val aiRatingEvaluating: String
+    val aiRatingScoreOverview: String
+    val aiRatingAverageScore: String
+    val aiRatingExcellent: String
+    val aiRatingTotal: String
+    val aiRatingAnalyzeDesc: String
+    val aiRatingStartWithCount: String
+    val aiRatingComposition: String
+    val aiRatingExposure: String
+    val aiRatingColorScore: String
+    val aiRatingSharpness: String
+    val aiRatingEditImage: String
+    val aiRatingNoImages: String
+    val aiRatingNoImagesDesc: String
+
+    // ── AI 模型管理页 ──────────────────────────────────────────────────
+    val aiModelPrivacy: String
+    val aiModelPrivacyDesc: String
+    val aiModelDownloaded: String
+    val aiModelUsage: String
+    val aiModelRequired: String
+    val aiModelDeleteTitle: String
+    val aiModelDeleteMessage: String
+    val aiModelDownloadFailed: String
+    val aiModelDownloading: String
+
+    // ── 编辑器补充 ─────────────────────────────────────────────────────
+    val editorUnsavedTitle: String
+    val editorUnsavedMessage: String
+    val editorSaveAndExit: String
+    val editorExitWithoutSave: String
+    val editorAutoEnhance: String
+    val editorPresets: String
+
+    // ── Stats ──────────────────────────────────────────────────────────
+    val statsLibraryOverview: String
+    val statsTotalImages: String
+    val statsDateDistribution: String
+    val statsCameraModels: String
+    val statsLensDistribution: String
+    val statsRatingDistribution: String
+    val statsTagCloud: String
+    val statsUnrated: String
+    val statsNoDateData: String
+    val statsNoCameraData: String
+    val statsNoLensData: String
+    val statsNoRatingData: String
+    val statsNoTagsData: String
 }
 
 /**

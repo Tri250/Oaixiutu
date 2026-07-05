@@ -1,9 +1,9 @@
 package com.alcedo.studio.viewmodel
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.ColorSpace
@@ -14,6 +14,8 @@ import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,8 +28,8 @@ class ExportViewModel : ViewModel() {
 
     // ── Export settings state ──
 
-    private val _settings = mutableStateOf(ExportSettings())
-    val settings get() = _settings
+    private val _settings = MutableStateFlow(ExportSettings())
+    val settings: StateFlow<ExportSettings> = _settings.asStateFlow()
 
     // ── Export progress ──
 
@@ -53,22 +55,22 @@ class ExportViewModel : ViewModel() {
 
     // ── Resize mode ──
 
-    private val _resizeMode = mutableStateOf(ResizeMode.NONE)
-    val resizeMode get() = _resizeMode
+    private val _resizeMode = MutableStateFlow(ResizeMode.NONE)
+    val resizeMode: StateFlow<ResizeMode> = _resizeMode.asStateFlow()
 
     // ── UI state ──
 
     private val _isExporting = MutableStateFlow(false)
     val isExporting: StateFlow<Boolean> = _isExporting
 
-    private val _showFormatOptions = mutableStateOf(false)
-    val showFormatOptions get() = _showFormatOptions
+    private val _showFormatOptions = MutableStateFlow(false)
+    val showFormatOptions: StateFlow<Boolean> = _showFormatOptions.asStateFlow()
 
-    private val _showResizeOptions = mutableStateOf(false)
-    val showResizeOptions get() = _showResizeOptions
+    private val _showResizeOptions = MutableStateFlow(false)
+    val showResizeOptions: StateFlow<Boolean> = _showResizeOptions.asStateFlow()
 
-    private val _showColorSpaceOptions = mutableStateOf(false)
-    val showColorSpaceOptions get() = _showColorSpaceOptions
+    private val _showColorSpaceOptions = MutableStateFlow(false)
+    val showColorSpaceOptions: StateFlow<Boolean> = _showColorSpaceOptions.asStateFlow()
 
     // ── Convenience properties for ExportScreen ──
 
@@ -125,6 +127,67 @@ class ExportViewModel : ViewModel() {
 
     private val _batchResult = MutableStateFlow<ExportService.ExportBatchResult?>(null)
     val batchResult: StateFlow<ExportService.ExportBatchResult?> = _batchResult.asStateFlow()
+
+    // ================================================================
+    // Export presets
+    // ================================================================
+
+    private val _presets = MutableStateFlow<List<ExportPreset>>(emptyList())
+    val presets: StateFlow<List<ExportPreset>> = _presets.asStateFlow()
+
+    private val prefs = AppModule.context.getSharedPreferences("export_presets", Context.MODE_PRIVATE)
+
+    init {
+        loadPresets()
+    }
+
+    fun savePreset(name: String) {
+        val preset = ExportPreset(
+            name = name,
+            format = format,
+            quality = quality,
+            colorSpace = colorSpace,
+            maxDimension = _settings.value.maxDimension ?: 0,
+            embedIcc = embedIcc,
+            includeMetadata = includeMetadata
+        )
+        val current = _presets.value.toMutableList()
+        current.removeAll { it.name == name }
+        current.add(preset)
+        _presets.value = current
+        persistPresets()
+    }
+
+    fun loadPreset(preset: ExportPreset) {
+        _settings.value = _settings.value.copy(
+            format = preset.format,
+            quality = preset.quality,
+            colorSpace = preset.colorSpace,
+            maxDimension = preset.maxDimension,
+            embedIcc = preset.embedIcc,
+            includeMetadata = preset.includeMetadata
+        )
+    }
+
+    fun deletePreset(name: String) {
+        _presets.value = _presets.value.filterNot { it.name == name }
+        persistPresets()
+    }
+
+    private fun loadPresets() {
+        val json = prefs.getString("presets", null) ?: return
+        try {
+            val type = object : TypeToken<List<ExportPreset>>() {}.type
+            _presets.value = Gson().fromJson(json, type)
+        } catch (e: Exception) {
+            Log.e("ExportVM", "加载预设失败", e)
+        }
+    }
+
+    private fun persistPresets() {
+        val json = Gson().toJson(_presets.value)
+        prefs.edit().putString("presets", json).apply()
+    }
 
     // ================================================================
     // Settings manipulation
@@ -262,6 +325,23 @@ class ExportViewModel : ViewModel() {
     }
 
     // ================================================================
+    // Bitmap sampling helper
+    // ================================================================
+
+    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
+        if (reqWidth <= 0 || reqHeight <= 0) return 1
+        var inSampleSize = 1
+        if (outHeight > reqHeight || outWidth > reqWidth) {
+            val halfHeight = outHeight / 2
+            val halfWidth = outWidth / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
+    // ================================================================
     // Single image export
     // ================================================================
 
@@ -275,7 +355,17 @@ class ExportViewModel : ViewModel() {
             var bitmap: Bitmap? = null
             var processedBitmap: Bitmap? = null
             try {
-                bitmap = BitmapFactory.decodeFile(imagePath)
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                    BitmapFactory.decodeFile(imagePath, this)
+                    inSampleSize = calculateInSampleSize(
+                        outWidth, outHeight,
+                        _settings.value.maxWidth ?: 0,
+                        _settings.value.maxHeight ?: 0
+                    )
+                    inJustDecodeBounds = false
+                }
+                bitmap = BitmapFactory.decodeFile(imagePath, options)
                 if (bitmap == null) {
                     _lastExportResult.value = ExportService.ExportResult.Error("Failed to decode image")
                     return@launch
@@ -431,6 +521,46 @@ class ExportViewModel : ViewModel() {
     }
 
     // ================================================================
+    // Export by image id (resolves imageId → file path via repository)
+    // ================================================================
+
+    fun exportSingleById(imageId: String) {
+        viewModelScope.launch {
+            _isExporting.value = true
+            try {
+                val image = imageRepository.getImage(imageId.toLongOrNull() ?: 0L)
+                val sourcePath = image?.imagePath ?: imageId
+                val settings = _settings.value.copy(
+                    maxDimension = _settings.value.maxDimension ?: 0,
+                    maxWidth = _settings.value.maxWidth ?: 0,
+                    maxHeight = _settings.value.maxHeight ?: 0
+                )
+                val result = exportService.exportImage(sourcePath, settings)
+                _lastExportResult.value = result
+            } catch (e: Exception) {
+                _lastExportResult.value = ExportService.ExportResult.Error(e.message ?: "导出失败")
+            } finally {
+                _isExporting.value = false
+            }
+        }
+    }
+
+    fun exportBatchByIds(imageIds: List<String>) {
+        viewModelScope.launch {
+            _isExporting.value = true
+            val items = imageIds.mapNotNull { id ->
+                val image = imageRepository.getImage(id.toLongOrNull() ?: 0L)
+                image?.let { ExportService.ExportBatchItem(sourcePath = it.imagePath) }
+            }
+            if (items.isNotEmpty()) {
+                val result = exportService.exportBatch(items, _settings.value)
+                _batchResult.value = result
+            }
+            _isExporting.value = false
+        }
+    }
+
+    // ================================================================
     // Cancel export
     // ================================================================
 
@@ -512,3 +642,13 @@ data class BatchExportProgress(
     val isComplete: Boolean
         get() = completedItems >= totalItems && totalItems > 0
 }
+
+data class ExportPreset(
+    val name: String,
+    val format: ExportFormat,
+    val quality: Int,
+    val colorSpace: ColorSpace,
+    val maxDimension: Int,
+    val embedIcc: Boolean,
+    val includeMetadata: Boolean
+)
