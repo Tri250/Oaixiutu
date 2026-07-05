@@ -11,6 +11,11 @@ interface StringResources {
     val navAi: String
     val navSettings: String
     val navAiSearch: String
+    val navCreate: String
+    val navMine: String
+    val navStats: String
+    val navAiRating: String
+    val navAiModels: String
 
     // ── Common ──────────────────────────────────────────────────────────
     val ok: String

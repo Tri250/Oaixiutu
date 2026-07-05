@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ import com.alcedo.studio.ui.theme.ThemeManager
 
 private val APP_VERSION = BuildConfig.VERSION_NAME.ifBlank { "1.1.5" }
 private const val DEVELOPER_NAME = "带娃的小陈工"
+private val DEFAULT_EXPORT_PATH = ""  // 使用系统默认存储路径
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,7 +86,7 @@ fun SettingsScreen(navController: NavController) {
     var crashReportsConsent by remember { mutableStateOf(consentStatus.crashReports) }
     var aiProcessingConsent by remember { mutableStateOf(consentStatus.aiProcessing) }
 
-    var exportCachePath by remember { mutableStateOf(prefs.getString("export_cache_path", "/sdcard/Pictures/Alcedo") ?: "/sdcard/Pictures/Alcedo") }
+    var exportCachePath by remember { mutableStateOf(prefs.getString("export_cache_path", DEFAULT_EXPORT_PATH) ?: DEFAULT_EXPORT_PATH) }
 
     // Calculate real cache size
     var cacheSize by remember { mutableStateOf("计算中...") }
@@ -330,6 +332,7 @@ fun SettingsScreen(navController: NavController) {
                             persistSetting("export_cache_path", it)
                         },
                         label = { Text(stringRes { settingsExportCachePath }) },
+                        placeholder = { Text("选择导出路径...") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
@@ -379,6 +382,17 @@ fun SettingsScreen(navController: NavController) {
                     }
                 )
             }
+
+            // 统计分析
+            SettingsSectionHeader(stringRes { settingsStatistics })
+            SectionDivider()
+            SettingsRow(
+                icon = Icons.Default.BarChart,
+                title = stringRes { navStats },
+                value = stringRes { settingsStatisticsDesc },
+                onClick = { navController.navigate("stats") }
+            )
+            SectionDivider()
 
             // ── 关于 ─────────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAbout })

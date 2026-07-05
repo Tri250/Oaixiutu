@@ -7,6 +7,11 @@ class ChineseSimplifiedStrings : StringResources {
     override val navAi = "AI"
     override val navSettings = "设置"
     override val navAiSearch = "AI 搜索"
+    override val navCreate = "创作"
+    override val navMine = "我的"
+    override val navStats = "统计"
+    override val navAiRating = "AI 评分"
+    override val navAiModels = "AI 模型"
 
     // ── Common ──────────────────────────────────────────────────────────
     override val ok = "确定"

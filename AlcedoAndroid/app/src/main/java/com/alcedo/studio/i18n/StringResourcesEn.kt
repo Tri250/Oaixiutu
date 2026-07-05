@@ -7,6 +7,11 @@ class EnglishStrings : StringResources {
     override val navAi = "AI"
     override val navSettings = "Settings"
     override val navAiSearch = "AI Search"
+    override val navCreate = "Create"
+    override val navMine = "Mine"
+    override val navStats = "Statistics"
+    override val navAiRating = "AI Rating"
+    override val navAiModels = "AI Models"
 
     // ── Common ──────────────────────────────────────────────────────────
     override val ok = "OK"

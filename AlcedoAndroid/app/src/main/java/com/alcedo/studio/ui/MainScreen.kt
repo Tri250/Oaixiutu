@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -81,11 +83,11 @@ enum class MainDestination(
     val icon: ImageVector
 ) {
     ALBUM("album", { navAlbum }, Icons.Default.PhotoLibrary),
-    AI_SEARCH("ai_search", { navAiSearch }, Icons.Default.Search),
-    SETTINGS("settings", { navSettings }, Icons.Default.Settings)
+    CREATE("ai_search", { navCreate }, Icons.Default.AutoAwesome),
+    MINE("settings", { navMine }, Icons.Default.Person)
 }
 
-// Routes rendered as top-level tabs – used to pick fade vs slide transitions.
+// 顶部 Tab 路由 – 相册/创作/我的
 private val tabRoutes: Set<String> = MainDestination.entries.map { it.route }.toSet()
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.isTabSwitch(): Boolean {
@@ -132,7 +134,7 @@ fun MainScreen(
     val bottomBarDestinations = MainDestination.entries
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
-    // Background task progress overlay – surfaced above the bottom nav when tasks run.
+    // 后台任务进度浮层
     val taskSnapshots by com.alcedo.studio.di.AppModule.backgroundTaskService.tasks.collectAsState()
     val hasActiveTasks = taskSnapshots.any {
         it.status == com.alcedo.studio.domain.service.TaskStatus.RUNNING ||
@@ -146,7 +148,7 @@ fun MainScreen(
     Scaffold(
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
-                // Floating liquid-glass bottom navigation bar
+                // 液态玻璃底部导航栏
                 Box(
                     Modifier
                         .navigationBarsPadding()
@@ -206,7 +208,7 @@ fun MainScreen(
                         .fillMaxSize()
                         .padding(padding)
                 ) {
-                    // Floating liquid-glass navigation rail
+                    // 液态玻璃侧边导航栏
                     Box(
                         Modifier
                             .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp)
@@ -335,8 +337,7 @@ fun MainScreen(
             }
         }
 
-        // Background task progress overlay – floats above the bottom navigation
-        // bar whenever import / export / AI tagging tasks are running.
+        // 后台任务进度条
         if (hasActiveTasks) {
             BackgroundTaskBar(
                 activeTasks = taskSnapshots,
@@ -436,14 +437,15 @@ private fun AlcedoNavIcon(
     }
 }
 
+// 导航图 – 注册所有页面路由
 private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
     composable(MainDestination.ALBUM.route) {
         AlbumScreen(navController = navController)
     }
-    composable(MainDestination.AI_SEARCH.route) {
+    composable(MainDestination.CREATE.route) {
         AiSearchScreen(navController = navController)
     }
-    composable(MainDestination.SETTINGS.route) {
+    composable(MainDestination.MINE.route) {
         SettingsScreen(navController = navController)
     }
     composable("editor/{imageId}") { backStackEntry ->

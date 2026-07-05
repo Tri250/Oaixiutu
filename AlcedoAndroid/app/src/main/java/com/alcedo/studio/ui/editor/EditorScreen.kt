@@ -3,11 +3,13 @@ package com.alcedo.studio.ui.editor
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,14 +23,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.i18n.StringResources
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.viewmodel.EditorViewModel
 import com.alcedo.studio.ui.common.LoadingOverlay
+import com.alcedo.studio.ui.editor.HlsProfilePanel
 
 enum class ScopeType(val label: String) {
     HISTOGRAM("Histogram"),
@@ -47,6 +54,8 @@ fun EditorScreen(
     val image by viewModel.imageModel.collectAsState()
     val preview by viewModel.previewBitmap.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
+    val canUndo by viewModel.canUndo.collectAsState()
+    val canRedo by viewModel.canRedo.collectAsState()
 
     var selectedPanel by remember { mutableStateOf(EditorPanel.BASIC) }
     val isCompareMode by viewModel.isCompareMode.collectAsState()
@@ -92,46 +101,35 @@ fun EditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        image?.imageName ?: "Editor",
-                        maxLines = 1
+                        image?.imageName ?: stringRes { editorTitle },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 },
-                actions = {
-                    IconButton(onClick = { viewModel.undo() }) {
-                        Icon(Icons.Default.Undo, contentDescription = "Undo")
-                    }
-                    IconButton(onClick = { viewModel.redo() }) {
-                        Icon(Icons.Default.Redo, contentDescription = "Redo")
-                    }
-                    IconButton(onClick = { viewModel.toggleCompareMode() }) {
-                        Icon(
-                            Icons.Default.Compare,
-                            contentDescription = "Compare",
-                            tint = if (isCompareMode) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = { showScope = !showScope }) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = "Scope Analyzer",
-                            tint = if (showScope) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = { viewModel.saveVersion() }) {
-                        Icon(Icons.Default.Save, contentDescription = "Save")
-                    }
-                    IconButton(onClick = { showExport = true }) {
-                        Icon(Icons.Default.Share, contentDescription = "Export")
-                    }
-                }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                )
             )
+        },
+        bottomBar = {
+            if (!isTablet) {
+                EditorBottomToolbar(
+                    isCompareMode = isCompareMode,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    onUndo = { viewModel.undo() },
+                    onRedo = { viewModel.redo() },
+                    onCompare = { viewModel.toggleCompareMode() },
+                    onScope = { showScope = !showScope },
+                    onSave = { viewModel.saveVersion() },
+                    onExport = { showExport = true }
+                )
+            }
         }
     ) { padding ->
         Box(
@@ -205,7 +203,7 @@ fun EditorScreen(
                             Tab(
                                 selected = pagerState.currentPage == panel.ordinal,
                                 onClick = { selectedPanel = panel },
-                                text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) },
+                                text = { Text(stringRes(panel.labelKey), style = MaterialTheme.typography.labelSmall) },
                                 selectedContentColor = MaterialTheme.colorScheme.primary,
                                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -232,7 +230,13 @@ fun EditorScreen(
                                 EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
                                 EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
                                 EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
-                                EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
+                                EditorPanel.HSL -> {
+                                    val params by remember { viewModel.params }
+                                    HlsProfilePanel(
+                                        params = params,
+                                        onParamsChanged = { viewModel.updateParams(it) }
+                                    )
+                                }
                                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
                                 EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
                                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
@@ -269,10 +273,10 @@ fun EditorScreen(
                 )
             }
 
-            // Loading overlay
+            // 后台任务进度浮层
             LoadingOverlay(
                 isProcessing,
-                message = "Processing...",
+                message = stringRes { editorProcessing },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -347,7 +351,7 @@ private fun ScopeAnalyzerPanel(
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = stringRes { close },
                         modifier = Modifier.size(14.dp),
                         tint = Color.White.copy(alpha = 0.6f)
                     )
@@ -537,7 +541,7 @@ private fun ImagePreviewArea(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "No image",
+                    stringRes { editorNoImage },
                     color = Color.White.copy(alpha = 0.3f),
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -567,7 +571,7 @@ private fun EditorPanelColumn(
                 Tab(
                     selected = selectedPanel == panel,
                     onClick = { onPanelSelected(panel) },
-                    text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) }
+                    text = { Text(stringRes(panel.labelKey), style = MaterialTheme.typography.labelSmall) }
                 )
             }
         }
@@ -582,7 +586,13 @@ private fun EditorPanelColumn(
                 EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
                 EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
                 EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
-                EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
+                EditorPanel.HSL -> {
+                    val params by remember { viewModel.params }
+                    HlsProfilePanel(
+                        params = params,
+                        onParamsChanged = { viewModel.updateParams(it) }
+                    )
+                }
                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
                 EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
@@ -599,7 +609,7 @@ private fun RawDecodePanel(
     val params by remember { viewModel.params }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Demosaic Algorithm", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { editorDemosaicAlgorithm }, style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DemosaicAlgorithm.entries.forEach { algo ->
                 FilterChip(
@@ -631,7 +641,7 @@ private fun RawDecodePanel(
                     )
                 }
             )
-            Text("Highlight Reconstruction", style = MaterialTheme.typography.bodyMedium)
+            Text(stringRes { editorHighlightReconstruction }, style = MaterialTheme.typography.bodyMedium)
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -647,7 +657,7 @@ private fun RawDecodePanel(
                     )
                 }
             )
-            Text("Auto Brightness", style = MaterialTheme.typography.bodyMedium)
+            Text(stringRes { editorAutoBrightness }, style = MaterialTheme.typography.bodyMedium)
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -663,7 +673,7 @@ private fun RawDecodePanel(
                     )
                 }
             )
-            Text("Use Camera Matrix", style = MaterialTheme.typography.bodyMedium)
+            Text(stringRes { editorUseCameraMatrix }, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -685,11 +695,11 @@ private fun ExportDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Export Image") },
+        title = { Text(stringRes { exportImage }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Format
-                Text("Format", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportFormat }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     ExportFormat.entries.forEach { f ->
                         FilterChip(
@@ -702,7 +712,7 @@ private fun ExportDialog(
 
                 // Quality
                 if (format == ExportFormat.JPEG || format == ExportFormat.ULTRA_HDR) {
-                    Text("Quality: $quality%", style = MaterialTheme.typography.labelLarge)
+                    Text(stringRes { exportQuality }.format("$quality"), style = MaterialTheme.typography.labelLarge)
                     Slider(
                         value = quality.toFloat(),
                         onValueChange = { quality = it.toInt() },
@@ -713,23 +723,23 @@ private fun ExportDialog(
 
                 // Bit depth
                 if (format == ExportFormat.PNG || format == ExportFormat.TIFF) {
-                    Text("Bit Depth", style = MaterialTheme.typography.labelLarge)
+                    Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = bitDepth == 8,
                             onClick = { bitDepth = 8 },
-                            label = { Text("8-bit") }
+                            label = { Text(stringRes { export8Bit }) }
                         )
                         FilterChip(
                             selected = bitDepth == 16,
                             onClick = { bitDepth = 16 },
-                            label = { Text("16-bit") }
+                            label = { Text(stringRes { export16Bit }) }
                         )
                     }
                 }
 
                 // Color space
-                Text("Color Space", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
                         .forEach { cs ->
@@ -743,22 +753,22 @@ private fun ExportDialog(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = embedIcc, onCheckedChange = { embedIcc = it })
-                    Text("Embed ICC Profile", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringRes { exportEmbedIcc }, style = MaterialTheme.typography.bodyMedium)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = includeMetadata, onCheckedChange = { includeMetadata = it })
-                    Text("Include Metadata", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringRes { exportIncludeMetadata }, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (format == ExportFormat.ULTRA_HDR) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = isHdr, onCheckedChange = { isHdr = it })
-                        Text("HDR Output", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringRes { exportHdrOutput }, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 OutlinedTextField(
                     value = maxDimension,
                     onValueChange = { maxDimension = it.filter { c -> c.isDigit() } },
-                    label = { Text("Max dimension (px)") },
+                    label = { Text(stringRes { exportMaxDimension }) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -778,22 +788,120 @@ private fun ExportDialog(
                     )
                 )
             }) {
-                Text("Export")
+                Text(stringRes { export })
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
 }
 
-enum class EditorPanel(val label: String) {
-    BASIC("Basic"),
-    TONE_CURVE("Curve"),
-    COLOR("Color"),
-    HSL("HSL"),
-    GEOMETRY("Geometry"),
-    EFFECTS("Effects"),
-    RAW("RAW"),
-    HISTORY("History")
+enum class EditorPanel(val labelKey: StringResources.() -> String) {
+    BASIC({ editorPanelBasic }),
+    TONE_CURVE({ editorPanelCurve }),
+    COLOR({ editorPanelColor }),
+    HSL({ editorPanelHsl }),
+    GEOMETRY({ editorPanelGeometry }),
+    EFFECTS({ editorPanelEffects }),
+    RAW({ editorPanelRaw }),
+    HISTORY({ editorPanelHistory })
+}
+
+@Composable
+private fun EditorBottomToolbar(
+    isCompareMode: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onCompare: () -> Unit,
+    onScope: () -> Unit,
+    onSave: () -> Unit,
+    onExport: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            EditorToolbarButton(
+                icon = Icons.Default.Undo,
+                label = stringRes { editorUndo },
+                enabled = canUndo,
+                onClick = onUndo
+            )
+            EditorToolbarButton(
+                icon = Icons.Default.Redo,
+                label = stringRes { editorRedo },
+                enabled = canRedo,
+                onClick = onRedo
+            )
+            EditorToolbarButton(
+                icon = Icons.Default.Compare,
+                label = stringRes { editorCompare },
+                selected = isCompareMode,
+                onClick = onCompare
+            )
+            EditorToolbarButton(
+                icon = Icons.Default.BarChart,
+                label = stringRes { editorScopeAnalyzer },
+                onClick = onScope
+            )
+            EditorToolbarButton(
+                icon = Icons.Default.Save,
+                label = stringRes { editorSave },
+                onClick = onSave
+            )
+            EditorToolbarButton(
+                icon = Icons.Default.Share,
+                label = stringRes { editorExport },
+                onClick = onExport,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditorToolbarButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    selected: Boolean = false,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            modifier = Modifier.size(22.dp),
+            tint = if (!enabled) tint.copy(alpha = 0.38f)
+                else if (selected) MaterialTheme.colorScheme.primary
+                else tint
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (!enabled) tint.copy(alpha = 0.38f)
+                else if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

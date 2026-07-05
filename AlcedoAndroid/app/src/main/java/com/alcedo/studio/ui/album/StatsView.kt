@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.i18n.stringRes
 import androidx.navigation.NavController
 
 // Chart color palette
@@ -58,10 +59,10 @@ fun StatsView(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Statistics") },
+                title = { Text(stringRes { settingsStatistics }) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 }
             )
@@ -98,13 +99,13 @@ fun StatsView(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            "Library Overview",
+                            "图库概览",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            "$totalImages images in library",
+                            "图库共 $totalImages 张图片",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -178,12 +179,12 @@ private fun AnimatedHorizontalBar(
 @Composable
 private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
     ChartCard(
-        title = "Date Distribution",
+        title = "时间分布",
         icon = Icons.Default.DateRange,
         iconTint = MaterialTheme.colorScheme.primary
     ) {
         if (dateDistribution.isEmpty()) {
-            EmptyChartMessage("No date data available")
+            EmptyChartMessage("暂无时间数据")
         } else {
             val maxCount = dateDistribution.maxOfOrNull { it.count } ?: 1
             val total = dateDistribution.sumOf { it.count }
@@ -241,12 +242,12 @@ private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
 @Composable
 private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
     ChartCard(
-        title = "Camera Models",
+        title = "相机型号",
         icon = Icons.Default.PhotoCamera,
         iconTint = MaterialTheme.colorScheme.secondary
     ) {
         if (cameraDistribution.isEmpty()) {
-            EmptyChartMessage("No camera data available")
+            EmptyChartMessage("暂无相机数据")
         } else {
             val maxCount = cameraDistribution.maxOfOrNull { it.count } ?: 1
             val total = cameraDistribution.sumOf { it.count }
@@ -311,12 +312,12 @@ private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
 @Composable
 private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
     ChartCard(
-        title = "Lens Distribution",
+        title = "镜头分布",
         icon = Icons.Default.Camera,
         iconTint = MaterialTheme.colorScheme.tertiary
     ) {
         if (lensDistribution.isEmpty()) {
-            EmptyChartMessage("No lens data available")
+            EmptyChartMessage("暂无镜头数据")
         } else {
             val maxCount = lensDistribution.maxOfOrNull { it.count } ?: 1
             val total = lensDistribution.sumOf { it.count }
@@ -383,12 +384,12 @@ private fun RatingDistributionChart(
     totalImages: Int
 ) {
     ChartCard(
-        title = "Rating Distribution",
+        title = "评分分布",
         icon = Icons.Default.Star,
         iconTint = Color(0xFFFFD700)
     ) {
         if (ratingDistribution.isEmpty()) {
-            EmptyChartMessage("No rating data available")
+            EmptyChartMessage("暂无评分数据")
         } else {
             val maxCount = ratingDistribution.maxOfOrNull { it.count } ?: 1
 
@@ -419,7 +420,7 @@ private fun RatingDistributionChart(
                             }
                         } else {
                             Text(
-                                "Unrated",
+                                "未评分",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 10.sp
@@ -468,12 +469,12 @@ private fun RatingDistributionChart(
 @Composable
 private fun TagCloudChart(tagCloud: List<LabelFrequency>) {
     ChartCard(
-        title = "Tag Cloud",
+        title = "标签云",
         icon = Icons.Default.Label,
         iconTint = MaterialTheme.colorScheme.primary
     ) {
         if (tagCloud.isEmpty()) {
-            EmptyChartMessage("No tags available. Run semantic analysis to generate tags.")
+            EmptyChartMessage("暂无标签。运行语义分析以生成标签。")
         } else {
             val maxCount = tagCloud.maxOfOrNull { it.count } ?: 1
 

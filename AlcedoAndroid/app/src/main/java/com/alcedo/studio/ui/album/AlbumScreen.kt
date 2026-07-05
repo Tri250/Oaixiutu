@@ -39,6 +39,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.data.model.SleeveFolder
+import com.alcedo.studio.i18n.StringResources
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.ui.common.*
 import com.alcedo.studio.viewmodel.AlbumViewModel
@@ -98,7 +100,7 @@ fun AlbumScreen(
 
     // ── Photo Picker launcher ──────────────────────────────────────
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(50)
+        contract = ActivityResultContracts.PickMultipleVisualMedia(500)
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             viewModel.importFromPhotoPicker(uris)
@@ -322,19 +324,24 @@ private fun AlbumContent(
                     exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                 ) {
                     TopAppBar(
-                        title = { Text("${selectedImages.size} selected") },
+                        title = { Text(stringRes { albumSelectedCount }.format(selectedImages.size)) },
                         navigationIcon = {
                             IconButton(onClick = onClearSelection) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                Icon(Icons.Default.Close, contentDescription = stringRes { clear })
                             }
                         },
                         actions = {
                             IconButton(onClick = onDeleteSelected) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete",
+                                Icon(Icons.Default.Delete, contentDescription = stringRes { delete },
                                     tint = MaterialTheme.colorScheme.error)
                             }
-                            IconButton(onClick = { /* Share selected */ }) {
-                                Icon(Icons.Default.Share, contentDescription = "Share")
+                            IconButton(onClick = {
+                                // 批量导出选中图片
+                                selectedImages.firstOrNull()?.let { firstId ->
+                                    navController.navigate("export/$firstId")
+                                }
+                            }) {
+                                Icon(Icons.Default.Share, contentDescription = stringRes { export }, tint = MaterialTheme.colorScheme.onSurface)
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -349,7 +356,7 @@ private fun AlbumContent(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("Search images...") },
+                                placeholder = { Text(stringRes { albumSearchHint }) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -428,14 +435,14 @@ private fun AlbumContent(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         EmptyState(
                             icon = Icons.Default.PhotoLibrary,
-                            title = "No images yet",
-                            message = "Import photos to get started",
+                            title = stringRes { albumNoImages },
+                            message = stringRes { albumNoImagesDesc },
                             action = {
                                 Button(onClick = onImport) {
                                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null,
                                         modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Import Photos")
+                                    Text(stringRes { albumImportPhotos })
                                 }
                             }
                         )
@@ -504,7 +511,7 @@ private fun SortFilterBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "${imageCount} images",
+            stringRes { albumImagesCount }.format(imageCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -515,7 +522,7 @@ private fun SortFilterBar(
             SortMode.entries.forEach { mode ->
                 AssistChip(
                     onClick = { onSortModeChange(mode) },
-                    label = { Text(mode.label, style = MaterialTheme.typography.labelSmall) },
+                    label = { Text(stringRes(mode.labelKey), style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.height(28.dp),
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = if (sortMode == mode)
@@ -630,18 +637,18 @@ private fun ThumbnailCard(
             }
 
             // Rating overlay
-            if (image.imageId.toInt() % 5 == 0) {
+            val rating = image.exifDisplay.rating
+            if (rating > 0) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(4.dp)
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    repeat(3) { i ->
+                    repeat(rating.coerceIn(1, 5)) {
                         Icon(
                             Icons.Default.Star,
                             contentDescription = null,
@@ -653,7 +660,12 @@ private fun ThumbnailCard(
             }
 
             // AI label / RAW indicator
-            if (image.hasExif) {
+            val isRaw = image.imageName.endsWith(".raw", true) ||
+                image.imageName.endsWith(".dng", true) ||
+                image.imageName.endsWith(".cr2", true) ||
+                image.imageName.endsWith(".nef", true) ||
+                image.imageName.endsWith(".arw", true)
+            if (isRaw) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -716,9 +728,9 @@ private fun FolderSidebar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Folders", style = MaterialTheme.typography.titleMedium)
+            Text(stringRes { albumFolders }, style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Close")
+                Icon(Icons.Default.Close, contentDescription = stringRes { close })
             }
         }
         HorizontalDivider()
@@ -726,7 +738,7 @@ private fun FolderSidebar(
         LazyColumn {
             item {
                 ListItem(
-                    headlineContent = { Text("All Images") },
+                    headlineContent = { Text(stringRes { albumAllImages }) },
                     leadingContent = {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                     },
@@ -736,7 +748,7 @@ private fun FolderSidebar(
             items(folders) { folder: SleeveFolder ->
                 ListItem(
                     headlineContent = { Text(folder.elementName) },
-                    supportingContent = { Text("${folder.fileCount} files") },
+                    supportingContent = { Text(stringRes { albumFilesCount }.format(folder.fileCount)) },
                     leadingContent = {
                         Icon(Icons.Default.Folder, contentDescription = null)
                     },
@@ -757,7 +769,7 @@ private fun ImportDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import Images") },
+        title = { Text(stringRes { albumImportTitle }) },
         icon = { Icon(Icons.Default.AddPhotoAlternate, contentDescription = null) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -768,7 +780,7 @@ private fun ImportDialog(
                 ) {
                     Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Select Photos")
+                    Text(stringRes { albumSelectFiles })
                 }
 
                 // Select Directory button – launches SAF directory picker
@@ -778,20 +790,20 @@ private fun ImportDialog(
                 ) {
                     Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Select Directory")
+                    Text(stringRes { albumSelectDirectory })
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                 Text(
-                    "Tip: Long press a photo to open the context menu for editing, rating, and more.",
+                    stringRes { albumDragDrop },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
 }
@@ -822,6 +834,7 @@ private fun FilterSheetContent(
     onApply: (FilterState) -> Unit,
     onReset: () -> Unit
 ) {
+    // TODO: 预填当前筛选状态 — 从 ViewModel 获取 FilterState
     var cameraMakes by remember { mutableStateOf(setOf<String>()) }
     var cameraModels by remember { mutableStateOf(setOf<String>()) }
     var lensModel by remember { mutableStateOf("") }
@@ -850,10 +863,10 @@ private fun FilterSheetContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Filters", style = MaterialTheme.typography.titleLarge)
+            Text(stringRes { albumFilterTitle }, style = MaterialTheme.typography.titleLarge)
             Row {
                 TextButton(onClick = onReset) {
-                    Text("Reset")
+                    Text(stringRes { albumFilterReset })
                 }
                 TextButton(onClick = {
                     onApply(
@@ -869,13 +882,13 @@ private fun FilterSheetContent(
                         )
                     )
                 }) {
-                    Text("Apply")
+                    Text(stringRes { albumFilterApply })
                 }
             }
         }
 
         // Camera Make
-        Text("Camera Make", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterCameraMake }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleCameraMakes.forEach { make ->
                 FilterChip(
@@ -891,7 +904,7 @@ private fun FilterSheetContent(
         }
 
         // Camera Model
-        Text("Camera Model", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterCameraModel }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleCameraModels.forEach { model ->
                 FilterChip(
@@ -907,18 +920,18 @@ private fun FilterSheetContent(
         }
 
         // Lens
-        Text("Lens Model", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterLensModel }, style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = lensModel,
             onValueChange = { lensModel = it },
-            placeholder = { Text("Any lens...") },
+            placeholder = { Text(stringRes { albumFilterLensPlaceholder }) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp)) }
         )
 
         // Date Range
-        Text("Date Range", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterDateRange }, style = MaterialTheme.typography.labelLarge)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -926,7 +939,7 @@ private fun FilterSheetContent(
             OutlinedTextField(
                 value = startDate,
                 onValueChange = { startDate = it },
-                placeholder = { Text("Start") },
+                placeholder = { Text(stringRes { albumFilterStart }) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -934,14 +947,14 @@ private fun FilterSheetContent(
             OutlinedTextField(
                 value = endDate,
                 onValueChange = { endDate = it },
-                placeholder = { Text("End") },
+                placeholder = { Text(stringRes { albumFilterEnd }) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
         }
 
         // Rating
-        Text("Rating", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterRating }, style = MaterialTheme.typography.labelLarge)
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -962,12 +975,12 @@ private fun FilterSheetContent(
                 }
             }
             if (selectedRating > 0) {
-                Text("& up", style = MaterialTheme.typography.bodySmall)
+                Text(stringRes { albumFilterAndUp }, style = MaterialTheme.typography.bodySmall)
             }
         }
 
         // File Type
-        Text("File Type", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterFileType }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleFileTypes.forEach { type ->
                 FilterChip(
@@ -983,7 +996,7 @@ private fun FilterSheetContent(
         }
 
         // AI Labels
-        Text("AI Labels", style = MaterialTheme.typography.labelLarge)
+        Text(stringRes { albumFilterAiLabels }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             sampleAiLabels.forEach { label ->
                 FilterChip(
@@ -1000,11 +1013,11 @@ private fun FilterSheetContent(
     }
 }
 
-enum class SortMode(val label: String) {
-    DATE("Date"),
-    NAME("Name"),
-    RATING("Rating"),
-    TYPE("Type")
+enum class SortMode(val labelKey: StringResources.() -> String) {
+    DATE({ albumSortDate }),
+    NAME({ albumSortName }),
+    RATING({ albumSortRating }),
+    TYPE({ albumSortType })
 }
 
 /**
@@ -1025,7 +1038,7 @@ private fun RatingPickerDialog(
         icon = { Icon(Icons.Default.Star, contentDescription = null) },
         title = {
             Text(
-                "Rate: $imageName",
+                stringRes { aiRatingTitle }.format(imageName),
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1078,14 +1091,14 @@ private fun RatingPickerDialog(
             Button(
                 onClick = { onPick(selectedRating) },
                 enabled = true
-            ) { Text("Apply") }
+            ) { Text(stringRes { apply }) }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = {
                     onPick(0)
-                }) { Text("Clear") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                }) { Text(stringRes { clear }) }
+                TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
             }
         }
     )

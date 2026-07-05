@@ -2,18 +2,23 @@ package com.alcedo.studio.ui.ai
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -22,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.data.model.RankedSearchResult
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
@@ -50,17 +56,18 @@ fun AiSearchScreen(
         listOf(
             "日落风景", "人像特写", "城市夜景", "美食摄影",
             "街头纪实", "建筑线条", "花卉微距", "宠物",
-            "黑白摄影", "长曝光", "逆光剪影", "冬日雪景"
+            "黑白摄影", "长曝光", "逆光剪影", "冬日雪景",
+            "汉服人像", "古镇风光", "烟花", "车展"
         )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI 智能搜索") },
+                title = { Text(stringRes { aiSearchTitle }) },
                 actions = {
                     IconButton(onClick = { navController.navigate("ai_models") }) {
-                        Icon(Icons.Default.ModelTraining, contentDescription = "AI模型")
+                        Icon(Icons.Default.ModelTraining, contentDescription = stringRes { navAiModels })
                     }
                 }
             )
@@ -107,6 +114,29 @@ fun AiSearchScreen(
                     )
                 }
             ) {}
+
+            // AI 快捷入口
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    AiQuickActionCard(
+                        icon = Icons.Default.AutoAwesome,
+                        title = stringRes { navAiRating },
+                        subtitle = "智能评分",
+                        onClick = { navController.navigate("ai_rating") }
+                    )
+                }
+                item {
+                    AiQuickActionCard(
+                        icon = Icons.Default.ModelTraining,
+                        title = stringRes { navAiModels },
+                        subtitle = "模型管理",
+                        onClick = { navController.navigate("ai_models") }
+                    )
+                }
+            }
 
             // ── Semantic mode indicator ───────────────────────────
             AnimatedVisibility(
@@ -177,7 +207,10 @@ fun AiSearchScreen(
                             thumbnailBitmap = thumbnailCache[image.imageId],
                             similarity = searchResults.find { it.imageId == image.imageId }?.score,
                             onClick = { navController.navigate("editor/${image.imageId}") },
-                            onLongClick = { /* context menu */ }
+                            onLongClick = {
+                                // 长按预览大图
+                                navController.navigate("editor/${image.imageId}")
+                            }
                         )
                     }
                 }
@@ -395,7 +428,7 @@ private const val KEY_HISTORY = "search_queries"
 private fun loadSearchHistory(): List<String> {
     return try {
         val prefs = com.alcedo.studio.di.AppModule.context.getSharedPreferences(HISTORY_PREFS, 0)
-        prefs.getStringSet(KEY_HISTORY, emptySet())?.toList()?.sortedByDescending { it } ?: emptyList()
+        prefs.getStringSet(KEY_HISTORY, emptySet())?.toList()?.reversed() ?: emptyList()
     } catch (_: Exception) { emptyList() }
 }
 
@@ -415,3 +448,44 @@ private fun clearSearchHistory(context: android.content.Context) {
 }
 
 private fun android.graphics.Bitmap.asImageBitmap() = androidx.compose.ui.graphics.asImageBitmap()
+
+@Composable
+private fun AiQuickActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(140.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
