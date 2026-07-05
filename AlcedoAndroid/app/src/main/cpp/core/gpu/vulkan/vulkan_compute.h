@@ -64,6 +64,12 @@ public:
     void release();
     bool isValid() const { return pipeline_ != nullptr; }
 
+    // Begin recording commands into the given command buffer.
+    // Stores the command buffer for subsequent bind/dispatch/barrier/pushConstants calls.
+    void beginCommands(VulkanCommandBuffer& cmd);
+    // End command buffer recording and submit to the compute queue.
+    void endCommands();
+
     void bind();
     void dispatch(uint32_t groupsX, uint32_t groupsY = 1, uint32_t groupsZ = 1);
     void barrier();
@@ -79,6 +85,7 @@ private:
     void* descriptorSetLayout_ = nullptr;
     void* descriptorSet_ = nullptr;
     void* shaderModule_ = nullptr;
+    void* currentCmdBuffer_ = nullptr; // active command buffer for recording
 };
 
 // ============================================================

@@ -6,6 +6,10 @@
 #include <sstream>
 #include <unordered_map>
 
+#ifdef HAS_ONNXRUNTIME
+#include <onnxruntime_cxx_api.h>
+#endif
+
 namespace alcedo::ai {
 
 // ── Construction ──
@@ -20,24 +24,47 @@ bool ClipInference::loadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
     if (loaded_) return true;
 
-    // In production, this would call:
-    //   Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "AlcedoClip");
-    //   Ort::SessionOptions sessionOptions;
-    //   sessionOptions.SetIntraOpNumThreads(config_.numThreads);
-    //   if (config_.useFP16) sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
-    //   session_ = std::make_unique<Ort::Session>(env, config_.modelPath.c_str(), sessionOptions);
-    //
-    // For now, we validate the model path is non-empty
     if (config_.modelPath.empty()) {
         return false;
     }
 
-    loaded_ = true;
-    return true;
+#ifdef HAS_ONNXRUNTIME
+    try {
+        env_ = std::make_unique<OrtEnvHolder>();
+        auto& env = *reinterpret_cast<Ort::Env*>(env_.get());
+        new (&env) Ort::Env(ORT_LOGGING_LEVEL_WARNING, "AlcedoClip");
+
+        Ort::SessionOptions sessionOptions;
+        sessionOptions.SetIntraOpNumThreads(config_.numThreads);
+        if (config_.useFP16) {
+            sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        }
+
+        session_ = std::make_unique<OrtSessionHolder>();
+        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
+        new (&session) Ort::Session(*reinterpret_cast<Ort::Env*>(env_.get()),
+                                    config_.modelPath.c_str(), sessionOptions);
+
+        loaded_ = true;
+        return true;
+    } catch (const Ort::Exception& e) {
+        // ONNX Runtime failed to load the model; C++ inference unavailable.
+        // The Kotlin ClipInferenceEngine should be used instead.
+        return false;
+    }
+#else
+    // ONNX Runtime not linked at build time.
+    // C++ ClipInference cannot run inference; delegate to Kotlin engine.
+    return false;
+#endif
 }
 
 void ClipInference::unloadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
+#ifdef HAS_ONNXRUNTIME
+    session_.reset();
+    env_.reset();
+#endif
     loaded_ = false;
 }
 
@@ -164,33 +191,51 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 
 // ── Inference ──
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
-    // Placeholder for actual ONNX Runtime inference.
-    // In production, this would:
-    //   1. Create Ort::Value input tensor from input data
-    //   2. Run session_->Run(...)
-    //   3. Extract output tensor data
-    //
-    // For now, we return a deterministic hash-based embedding that serves as
-    // a valid placeholder during development. The actual ONNX integration
-    // replaces this method body.
-
-    std::vector<float> output(config_.embeddingDim, 0.0f);
-
-    // Compute a seed from the input data for deterministic behavior
-    float seed = 0.0f;
-    for (size_t i = 0; i < input.size(); ++i) {
-        seed += input[i] * static_cast<float>(i + 1);
-    }
-    uint32_t hash = static_cast<uint32_t>(std::abs(seed) * 1000000.0f);
-
-    // Generate a deterministic pseudo-random embedding
-    for (int i = 0; i < config_.embeddingDim; ++i) {
-        hash = hash * 1103515245u + 12345u;
-        output[i] = (static_cast<float>(hash & 0x7FFFFFFF) / 2147483648.0f) - 1.0f;
+#ifdef HAS_ONNXRUNTIME
+    if (!session_) {
+        // ONNX session not loaded; return empty to signal Kotlin delegation is needed.
+        return {};
     }
 
-    normalize(output);
-    return output;
+    try {
+        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
+        auto allocator = Ort::AllocatorWithDefaultOptions();
+
+        // Create input tensor
+        std::vector<int64_t> inputShape = {1, static_cast<int64_t>(input.size())};
+        Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
+            allocator, inputShape.data(), inputShape.size());
+
+        float* tensorData = inputTensor.GetTensorMutableData<float>();
+        std::copy(input.begin(), input.end(), tensorData);
+
+        // Run inference
+        const char* inputNames[] = {inputName.c_str()};
+        auto outputTensors = session.Run(
+            Ort::RunOptions{nullptr}, inputNames, &inputTensor, 1, nullptr, 0);
+
+        if (outputTensors.empty()) {
+            return {};
+        }
+
+        // Extract output data
+        const float* outputData = outputTensors[0].GetTensorData<float>();
+        size_t outputLen = outputTensors[0].GetTensorTypeAndShapeInfo().GetElementCount();
+
+        std::vector<float> output(outputData, outputData + outputLen);
+        normalize(output);
+        return output;
+    } catch (const Ort::Exception&) {
+        // Inference failed; return empty to signal Kotlin delegation.
+        return {};
+    }
+#else
+    // ONNX Runtime not available; return empty vector to indicate
+    // the caller should delegate to the Kotlin ClipInferenceEngine.
+    (void)input;
+    (void)inputName;
+    return {};
+#endif
 }
 
 ClipInferenceResult ClipInference::encodeImage(const uint8_t* rgbData, int width, int height) {
@@ -205,6 +250,11 @@ ClipInferenceResult ClipInference::encodeImage(const uint8_t* rgbData, int width
     try {
         auto preprocessed = preprocessImage(rgbData, width, height);
         result.imageEmbedding = runInference(preprocessed, "pixel_values");
+        if (result.imageEmbedding.empty()) {
+            result.success = false;
+            result.errorMessage = "ONNX Runtime unavailable; delegate to Kotlin engine";
+            return result;
+        }
         result.success = true;
     } catch (const std::exception& e) {
         result.success = false;
@@ -228,6 +278,11 @@ ClipInferenceResult ClipInference::encodeText(const std::string& text) {
         // Convert tokens to float input for ONNX
         std::vector<float> tokenFloats(tokens.begin(), tokens.end());
         result.textEmbedding = runInference(tokenFloats, "input_ids");
+        if (result.textEmbedding.empty()) {
+            result.success = false;
+            result.errorMessage = "ONNX Runtime unavailable; delegate to Kotlin engine";
+            return result;
+        }
         result.success = true;
     } catch (const std::exception& e) {
         result.success = false;

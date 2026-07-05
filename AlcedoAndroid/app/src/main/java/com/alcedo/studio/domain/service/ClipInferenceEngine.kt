@@ -64,7 +64,7 @@ class ClipInferenceEngine(private val context: Context) {
     private var ortEnv: OrtEnvironment? = null
     private var visionSession: OrtSession? = null
     private var textSession: OrtSession? = null
-    // NNAPI delegate not available in this ONNX Runtime build; TODO: re-enable when supported
+    // NNAPI delegate — loaded via reflection if the ONNX Runtime Android extension is available at runtime
     private var nnapiDelegate: Any? = null
     private var tokenizer = ClipTokenizer()
 
@@ -122,10 +122,24 @@ class ClipInferenceEngine(private val context: Context) {
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             sessionOptions.setIntraOpNumThreads(4)
 
-            // Try NNAPI delegate for GPU acceleration
-            // TODO: NnapiDelegate not available in this build
+            // Try NNAPI delegate for GPU acceleration via reflection
             if (modelConfig.useNnapi) {
-                Log.w(TAG, "NNAPI not available in this ONNX Runtime build, using CPU")
+                try {
+                    val nnapiClass = Class.forName("ai.onnxruntime.extensions.NnapiDelegate")
+                    val constructor = nnapiClass.getConstructor()
+                    val delegate = constructor.newInstance()
+                    nnapiDelegate = delegate
+                    // NnapiDelegate implements OrtSession.Delegate, add via sessionOptions
+                    val addDelegateMethod = OrtSession.SessionOptions::class.java.getMethod(
+                        "addDelegate", Class.forName("ai.onnxruntime.OrtSession\$Delegate")
+                    )
+                    addDelegateMethod.invoke(sessionOptions, delegate)
+                    Log.i(TAG, "NNAPI delegate attached successfully via reflection")
+                } catch (e: ClassNotFoundException) {
+                    Log.i(TAG, "NNAPI delegate class not found, using CPU only")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to attach NNAPI delegate, using CPU: ${e.message}")
+                }
             }
 
             // Load sessions
@@ -543,9 +557,40 @@ class ClipInferenceEngine(private val context: Context) {
     // ── Cleanup ──
 
     private fun cleanupSessions() {
-        // TODO: OrtSession.close() not available in this build; sessions will be GC'd
+        // Close OrtSession via reflection if close() is available at runtime
+        closeOrtSession(visionSession)
+        closeOrtSession(textSession)
         visionSession = null
         textSession = null
+
+        // Close NNAPI delegate via reflection if possible
+        closeNnapiDelegate()
         nnapiDelegate = null
+    }
+
+    private fun closeOrtSession(session: OrtSession?) {
+        if (session == null) return
+        try {
+            val closeMethod = OrtSession::class.java.getMethod("close")
+            closeMethod.invoke(session)
+            Log.d(TAG, "OrtSession closed via reflection")
+        } catch (e: NoSuchMethodException) {
+            Log.d(TAG, "OrtSession.close() not available, relying on GC")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to close OrtSession: ${e.message}")
+        }
+    }
+
+    private fun closeNnapiDelegate() {
+        val delegate = nnapiDelegate ?: return
+        try {
+            val closeMethod = delegate.javaClass.getMethod("close")
+            closeMethod.invoke(delegate)
+            Log.d(TAG, "NNAPI delegate closed via reflection")
+        } catch (e: NoSuchMethodException) {
+            Log.d(TAG, "NNAPI delegate close() not available, relying on GC")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to close NNAPI delegate: ${e.message}")
+        }
     }
 }

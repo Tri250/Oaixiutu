@@ -4,9 +4,9 @@
 // Image writer implementation for Android.
 // The C++ layer prepares float data and does format conversion
 // (float32 → uint8/uint16, RGBA → RGB, resize).
-// The actual file writing is a stub that marks "needs Kotlin bridge" —
-// the C++ side writes raw pixels and the Kotlin side uses Android Bitmap API.
-// No OIIO, no OpenCV.
+// Actual encoding is delegated to the Kotlin layer via Android Bitmap API —
+// the C++ side writes raw pixels (ALCD blob) and the Kotlin side reads and
+// encodes them using Android Bitmap.compress(). No OIIO, no OpenCV.
 
 #include "io/image_writer.h"
 
@@ -51,7 +51,7 @@ bool WriteRawPixelBlob(const std::string& path, int width, int height,
 
     __android_log_print(ANDROID_LOG_INFO, kTag,
                         "WriteRawPixelBlob: wrote %zu bytes to %s "
-                        "(needs Kotlin bridge for actual encoding)",
+                        "(Kotlin layer encodes via Android Bitmap API)",
                         data_len, path.c_str());
     return ofs.good();
 }

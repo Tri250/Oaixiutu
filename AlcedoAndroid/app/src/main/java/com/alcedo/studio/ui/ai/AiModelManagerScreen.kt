@@ -17,7 +17,13 @@ import com.alcedo.studio.service.AiService
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 data class AiModelInfo(
     val id: String,
@@ -107,12 +113,19 @@ fun AiModelManagerScreen(navController: NavController) {
                     model = model,
                     onDownload = {
                         // Trigger actual download via AiService
-                        models = models.map {
-                            if (it.id == model.id) it.copy(isDownloaded = true)
-                            else it
+                        val aiService = AiService(context)
+                        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                            val success = aiService.ensureModelDownloaded(context, model.id)
+                            if (success) {
+                                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                    models = models.map {
+                                        if (it.id == model.id) it.copy(isDownloaded = true)
+                                        else it
+                                    }
+                                    refreshModels()
+                                }
+                            }
                         }
-                        AiService.ensureModelDownloaded(context, model.id)
-                        refreshModels()
                     },
                     onDelete = {
                         // Delete model files
@@ -305,16 +318,68 @@ private fun getAvailableModels(context: android.content.Context): List<AiModelIn
 }
 
 // ── AiService extensions for model management ───────────────
-private fun AiService.ensureModelDownloaded(context: android.content.Context, modelId: String) {
-    try {
+private suspend fun AiService.ensureModelDownloaded(context: android.content.Context, modelId: String): Boolean {
+    return try {
         val modelsDir = File(context.filesDir, "ai_models")
         if (!modelsDir.exists()) modelsDir.mkdirs()
-        // Mark model as available - in production this would download from CDN
         val modelFile = File(modelsDir, "$modelId.onnx")
-        if (!modelFile.exists()) {
-            modelFile.createNewFile()
+
+        // Already downloaded
+        if (modelFile.exists() && modelFile.length() > 0) return true
+
+        // Download from CDN
+        val cdnBaseUrl = "https://models.alcedo.studio/"
+        val downloadUrl = cdnBaseUrl + modelId + ".onnx"
+
+        withContext(Dispatchers.IO) {
+            val client = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .build()
+
+            val request = Request.Builder()
+                .url(downloadUrl)
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                android.util.Log.e("AiModelManager", "Download failed: ${response.code} for $downloadUrl")
+                return@withContext false
+            }
+
+            val body = response.body ?: return@withContext false
+            val inputStream = body.byteStream()
+            val tempFile = File(modelsDir, "$modelId.onnx.tmp")
+
+            try {
+                tempFile.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                }
+                // Atomic rename
+                if (tempFile.renameTo(modelFile)) {
+                    android.util.Log.i("AiModelManager", "Model $modelId downloaded successfully (${modelFile.length()} bytes)")
+                    true
+                } else {
+                    tempFile.delete()
+                    android.util.Log.e("AiModelManager", "Failed to rename temp file for $modelId")
+                    false
+                }
+            } catch (e: Exception) {
+                tempFile.delete()
+                throw e
+            } finally {
+                inputStream.close()
+            }
         }
-    } catch (_: Exception) {}
+    } catch (e: Exception) {
+        android.util.Log.e("AiModelManager", "Model download failed for $modelId: ${e.message}", e)
+        false
+    }
 }
 
 private fun AiService.deleteModel(context: android.content.Context, modelId: String) {

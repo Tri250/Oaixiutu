@@ -522,8 +522,7 @@ class AlbumViewModel : ViewModel() {
             SortMode.DATE -> images.sortedByDescending { it.imageId }
             SortMode.NAME -> images.sortedBy { it.imageName }
             SortMode.RATING -> images.sortedByDescending {
-                // TODO: use rating from metadata entity
-                0
+                it.exifDisplay.rating
             }
             SortMode.TYPE -> images.sortedBy { it.imageType.ordinal }
         }
@@ -574,8 +573,7 @@ class AlbumViewModel : ViewModel() {
 
         if (filter.rating > 0) {
             result = result.filter {
-                // TODO: integrate with RatingEntity
-                true
+                it.exifDisplay.rating >= filter.rating
             }
         }
 

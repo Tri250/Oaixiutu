@@ -81,7 +81,8 @@ private:
     // Preprocess image: resize, center-crop, normalize to model input
     std::vector<float> preprocessImage(const uint8_t* rgbData, int width, int height) const;
 
-    // Run ONNX inference (placeholder for actual ORT integration)
+    // Run ONNX inference; returns empty vector if ONNX Runtime is unavailable
+    // (caller should treat empty output as a signal to delegate to the Kotlin engine)
     std::vector<float> runInference(const std::vector<float>& input, const std::string& inputName) const;
 
     // Simple tokenizer (word-level with CLIP vocab approximations)
@@ -92,6 +93,14 @@ private:
 
     // Normalize pixel values (mean/std for CLIP)
     static void normalizePixels(std::vector<float>& pixels, int size);
+
+#ifdef HAS_ONNXRUNTIME
+    // ONNX Runtime session (only available when built with ORT)
+    struct OrtSessionHolder;
+    std::unique_ptr<OrtSessionHolder> session_;
+    struct OrtEnvHolder;
+    std::unique_ptr<OrtEnvHolder> env_;
+#endif
 };
 
 } // namespace alcedo::ai

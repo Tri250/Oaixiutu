@@ -270,7 +270,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
     return result;
 }
 
-// Legacy RAW decode
+// Legacy RAW decode (path-based)
 JNIEXPORT jintArray JNICALL
 Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
         JNIEnv *env,
@@ -288,11 +288,45 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
     }
     LOGI("Decoding RAW: %s (demosaic=%d)", path, demosaic);
 
-    // Integer array placeholder - real implementation would use LibRaw
-    jintArray result = env->NewIntArray(0);
-    if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+    RawDecodeOptions opts;
+    opts.demosaic = static_cast<DemosaicMethod>(demosaic);
+    opts.highlight_mode = highlightReconstruction ? HighlightMode::RECONSTRUCT : HighlightMode::CLIP;
+    opts.output_float = false;
+    opts.extract_thumbnail = false;
+    opts.extract_preview = false;
 
+    RawDecodeResult decResult;
+    RawDecoder raw;
+    bool ok = raw.decode(path, decResult, opts);
     env->ReleaseStringUTFChars(rawPath, path);
+
+    if (!ok || !decResult.success || decResult.rgb_data.empty()) {
+        LOGE("Legacy RAW decode failed for: %s", path);
+        jintArray empty = env->NewIntArray(0);
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return empty ? empty : env->NewIntArray(0);
+    }
+
+    // Convert uint16 RGB to ARGB int array
+    int totalPixels = decResult.width * decResult.height;
+    jintArray result = env->NewIntArray(totalPixels);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create int array for legacy RAW decode result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+
+    std::vector<jint> outPixels(totalPixels);
+    int wl = static_cast<int>(decResult.image_info.white_level);
+    if (wl <= 0) wl = 65535;
+    for (int i = 0; i < totalPixels; ++i) {
+        int idx = i * 3;
+        int r = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx]) / wl) * 255.0f);
+        int g = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx + 1]) / wl) * 255.0f);
+        int b = static_cast<int>(std::min(1.0f, static_cast<float>(decResult.rgb_data[idx + 2]) / wl) * 255.0f);
+        outPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+    }
+    env->SetIntArrayRegion(result, 0, totalPixels, outPixels.data());
     return result;
 }
 

@@ -217,7 +217,8 @@ data class ExifDisplayMetaData(
     val iso: String = "",
     val captureDate: String = "",
     val imageSize: String = "",
-    val fileSize: String = ""
+    val fileSize: String = "",
+    val rating: Int = 0
 )
 
 data class RawRuntimeColorContext(

@@ -505,20 +505,63 @@ void VulkanComputePipeline::release() {
     context_ = nullptr;
 }
 
+void VulkanComputePipeline::beginCommands(VulkanCommandBuffer& cmd) {
+    cmd.begin();
+    currentCmdBuffer_ = cmd.get();
+}
+
+void VulkanComputePipeline::endCommands() {
+    if (!currentCmdBuffer_) return;
+    // End recording and submit
+    g_vkCompute.vkEndCommandBuffer(currentCmdBuffer_);
+
+    VkSubmitInfo submitInfo;
+    submitInfo.sType = 0; // VK_STRUCTURE_TYPE_SUBMIT_INFO
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &currentCmdBuffer_;
+
+    g_vkCompute.vkQueueSubmit(context_->getComputeQueue(), 1, &submitInfo, nullptr);
+    currentCmdBuffer_ = nullptr;
+}
+
 void VulkanComputePipeline::bind() {
-    // Binding is done via command buffer
+    if (!currentCmdBuffer_ || !pipeline_) return;
+    g_vkCompute.vkCmdBindPipeline(currentCmdBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
+    g_vkCompute.vkCmdBindDescriptorSets(currentCmdBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                         pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
 }
 
 void VulkanComputePipeline::dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
-    // Dispatch requires a command buffer
+    if (!currentCmdBuffer_) return;
+    g_vkCompute.vkCmdDispatch(currentCmdBuffer_, groupsX, groupsY, groupsZ);
 }
 
 void VulkanComputePipeline::barrier() {
-    // Memory barrier
+    if (!currentCmdBuffer_) return;
+    // Compute-shader memory barrier: ensure writes are visible to subsequent reads
+    struct VkMemoryBarrier {
+        uint32_t sType = 0;
+        const void* pNext = nullptr;
+        uint32_t srcAccessMask = 0;
+        uint32_t dstAccessMask = 0;
+    };
+    VkMemoryBarrier memBarrier;
+    memBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    memBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    g_vkCompute.vkCmdPipelineBarrier(currentCmdBuffer_,
+                                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                      0, // dependencyFlags
+                                      1, &memBarrier,
+                                      0, nullptr,
+                                      0, nullptr);
 }
 
-void VulkanComputePipeline::pushConstants(const void* /*data*/, uint32_t /*size*/, uint32_t /*offset*/) {
-    // Push constants
+void VulkanComputePipeline::pushConstants(const void* data, uint32_t size, uint32_t offset) {
+    if (!currentCmdBuffer_ || !data || size == 0) return;
+    g_vkCompute.vkCmdPushConstants(currentCmdBuffer_, pipelineLayout_,
+                                    VK_SHADER_STAGE_COMPUTE_BIT, offset, size, data);
 }
 
 void VulkanComputePipeline::finish() {
@@ -599,7 +642,14 @@ void VulkanCommandBuffer::submit() {
 }
 
 void VulkanCommandBuffer::reset() {
-    // Reset command buffer for reuse
+    if (!cmdBuffer_ || !context_) return;
+    // Reset the fence so we can wait on it again after next submit
+    g_vkCompute.vkResetFences(context_->getDevice(), 1, &fence_);
+    // Re-begin the command buffer for reuse
+    VkCommandBufferBeginInfo beginInfo;
+    beginInfo.sType = 0; // VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+    beginInfo.flags = 0; // VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    g_vkCompute.vkBeginCommandBuffer(cmdBuffer_, &beginInfo);
 }
 
 // ============================================================

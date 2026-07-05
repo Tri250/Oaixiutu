@@ -87,10 +87,10 @@ class ImageWriter {
 public:
     // Write an image to the given path with the specified options.
     // On Android, this prepares the pixel data (format conversion, resize)
-    // and then delegates the actual encoding/writing to the Kotlin layer
-    // via the "needs Kotlin bridge" stub.
+    // and writes it as a raw ALCD blob. The Kotlin layer reads the blob and
+    // performs actual encoding (JPEG/PNG/WEBP etc.) via Android Bitmap API.
     //
-    // Returns true if the preparation succeeded (data is ready for Kotlin).
+    // Returns true if the pixel data was written successfully.
     static bool WriteImageToPath(const ImageBuffer& buffer,
                                  const ExportFormatOptions& options,
                                  const ExportColorProfileConfig& color_config);
