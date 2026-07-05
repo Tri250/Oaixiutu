@@ -42,6 +42,8 @@ import com.alcedo.studio.data.model.SleeveFolder
 import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.ui.common.*
 import com.alcedo.studio.viewmodel.AlbumViewModel
+import com.alcedo.studio.permission.PermissionHelper
+import com.alcedo.studio.permission.rememberPermissionState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -67,6 +69,24 @@ fun AlbumScreen(
     var contextMenuImage by remember { mutableStateOf<ImageModel?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // ── Permission management ────────────────────────────────────
+    val permissionState = rememberPermissionState(
+        onResult = { results ->
+            val allGranted = results.all { it.value }
+            if (allGranted) {
+                viewModel.refresh()
+            }
+        }
+    )
+
+    // Request media permissions on first launch
+    LaunchedEffect(Unit) {
+        if (!PermissionHelper.hasReadMediaAccess(context)) {
+            permissionState.requestMediaAccess()
+        }
+    }
 
     val configuration = LocalConfiguration.current
     val columns = when {

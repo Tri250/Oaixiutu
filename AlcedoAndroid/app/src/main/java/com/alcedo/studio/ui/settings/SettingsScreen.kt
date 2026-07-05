@@ -52,12 +52,18 @@ fun SettingsScreen(navController: NavController) {
     val followSystem by LanguageManager.followSystem.collectAsState()
     val selectedLanguage = if (followSystem) s.langSystemDefault else currentLanguage.nativeName
 
-    // Album / Editor settings
-    var selectedSort by remember { mutableStateOf("date") }
-    var selectedThumbQuality by remember { mutableStateOf("high") }
-    var selectedExportFormat by remember { mutableStateOf("jpeg") }
-    var selectedExportQuality by remember { mutableStateOf("high") }
-    var selectedColorSpace by remember { mutableStateOf("srgb") }
+    // Album / Editor settings – persisted via SharedPreferences
+    val prefs = remember { context.getSharedPreferences("alcedo_settings", 0) }
+    var selectedSort by remember { mutableStateOf(prefs.getString("album_sort", "date") ?: "date") }
+    var selectedThumbQuality by remember { mutableStateOf(prefs.getString("thumb_quality", "high") ?: "high") }
+    var selectedExportFormat by remember { mutableStateOf(prefs.getString("export_format", "jpeg") ?: "jpeg") }
+    var selectedExportQuality by remember { mutableStateOf(prefs.getString("export_quality", "high") ?: "high") }
+    var selectedColorSpace by remember { mutableStateOf(prefs.getString("color_space", "srgb") ?: "srgb") }
+
+    // Helper to persist a setting
+    fun persistSetting(key: String, value: String) {
+        prefs.edit().putString(key, value).apply()
+    }
 
     // Dialog visibility states
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -77,8 +83,13 @@ fun SettingsScreen(navController: NavController) {
     var crashReportsConsent by remember { mutableStateOf(consentStatus.crashReports) }
     var aiProcessingConsent by remember { mutableStateOf(consentStatus.aiProcessing) }
 
-    var exportCachePath by remember { mutableStateOf("/sdcard/Pictures/Alcedo") }
-    val cacheSize = remember { "1.2 GB" }
+    var exportCachePath by remember { mutableStateOf(prefs.getString("export_cache_path", "/sdcard/Pictures/Alcedo") ?: "/sdcard/Pictures/Alcedo") }
+
+    // Calculate real cache size
+    var cacheSize by remember { mutableStateOf("计算中...") }
+    LaunchedEffect(Unit) {
+        cacheSize = calculateCacheSize(context)
+    }
 
     // Resolved display values
     val sortLabel = when (selectedSort) {
@@ -313,7 +324,10 @@ fun SettingsScreen(navController: NavController) {
                     Spacer(modifier = Modifier.width(14.dp))
                     OutlinedTextField(
                         value = exportCachePath,
-                        onValueChange = { exportCachePath = it },
+                        onValueChange = {
+                            exportCachePath = it
+                            persistSetting("export_cache_path", it)
+                        },
                         label = { Text(stringRes { settingsExportCachePath }) },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -590,6 +604,7 @@ fun SettingsScreen(navController: NavController) {
             selectedId = selectedSort,
             onOptionSelected = {
                 selectedSort = it
+                persistSetting("album_sort", it)
                 showSortDialog = false
             },
             onDismiss = { showSortDialog = false }
@@ -608,6 +623,7 @@ fun SettingsScreen(navController: NavController) {
             selectedId = selectedThumbQuality,
             onOptionSelected = {
                 selectedThumbQuality = it
+                persistSetting("thumb_quality", it)
                 showThumbQualityDialog = false
             },
             onDismiss = { showThumbQualityDialog = false }
@@ -626,6 +642,7 @@ fun SettingsScreen(navController: NavController) {
             selectedId = selectedExportFormat,
             onOptionSelected = {
                 selectedExportFormat = it
+                persistSetting("export_format", it)
                 showExportFormatDialog = false
             },
             onDismiss = { showExportFormatDialog = false }
@@ -644,6 +661,7 @@ fun SettingsScreen(navController: NavController) {
             selectedId = selectedExportQuality,
             onOptionSelected = {
                 selectedExportQuality = it
+                persistSetting("export_quality", it)
                 showExportQualityDialog = false
             },
             onDismiss = { showExportQualityDialog = false }
@@ -662,6 +680,7 @@ fun SettingsScreen(navController: NavController) {
             selectedId = selectedColorSpace,
             onOptionSelected = {
                 selectedColorSpace = it
+                persistSetting("color_space", it)
                 showColorSpaceDialog = false
             },
             onDismiss = { showColorSpaceDialog = false }
@@ -674,6 +693,9 @@ fun SettingsScreen(navController: NavController) {
             message = stringRes { settingsClearCacheMessage },
             confirmText = stringRes { clear },
             onConfirm = {
+                // Actually clear thumbnail and temp caches
+                clearAppCache(context)
+                cacheSize = calculateCacheSize(context)
                 showClearCacheDialog = false
             },
             onDismiss = { showClearCacheDialog = false },
@@ -687,6 +709,9 @@ fun SettingsScreen(navController: NavController) {
             message = stringRes { settingsClearModelsMessage },
             confirmText = stringRes { clear },
             onConfirm = {
+                // Actually delete AI model files
+                clearAiModels(context)
+                cacheSize = calculateCacheSize(context)
                 showClearModelsDialog = false
             },
             onDismiss = { showClearModelsDialog = false },
@@ -853,4 +878,49 @@ private fun OptionListDialog(
             TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
+}
+
+// ── Real cache management ──────────────────────────────────
+private fun calculateCacheSize(context: android.content.Context): String {
+    var totalBytes = 0L
+    try {
+        // Thumbnail cache
+        val thumbDir = java.io.File(context.cacheDir, "thumbnails")
+        if (thumbDir.exists()) totalBytes += thumbDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        // Temp files
+        val tempDir = java.io.File(context.cacheDir, "temp")
+        if (tempDir.exists()) totalBytes += tempDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        // AI model files
+        val modelsDir = java.io.File(context.filesDir, "ai_models")
+        if (modelsDir.exists()) totalBytes += modelsDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        // General cache
+        totalBytes += context.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    } catch (_: Exception) {}
+    return formatFileSize(totalBytes)
+}
+
+private fun clearAppCache(context: android.content.Context) {
+    try {
+        val thumbDir = java.io.File(context.cacheDir, "thumbnails")
+        thumbDir.deleteRecursively()
+        val tempDir = java.io.File(context.cacheDir, "temp")
+        tempDir.deleteRecursively()
+        context.cacheDir.walkTopDown().filter { it.isFile && it.name.endsWith(".tmp") }.forEach { it.delete() }
+    } catch (_: Exception) {}
+}
+
+private fun clearAiModels(context: android.content.Context) {
+    try {
+        val modelsDir = java.io.File(context.filesDir, "ai_models")
+        modelsDir.deleteRecursively()
+    } catch (_: Exception) {}
+}
+
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes >= 1_073_741_824 -> "%.1f GB".format(bytes / 1_073_741_824.0)
+        bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
+        bytes >= 1_024 -> "%.1f KB".format(bytes / 1_024.0)
+        else -> "$bytes B"
+    }
 }

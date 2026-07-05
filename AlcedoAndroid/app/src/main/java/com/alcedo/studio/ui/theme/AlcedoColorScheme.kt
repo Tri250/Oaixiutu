@@ -224,21 +224,22 @@ val MistLightColors = AlcedoColorScheme(
 )
 
 // ═══════════════════════════════════════════════════════════════════
-// DeepSpace – Deep space black with white text, inspired by PixelCake
-// Pure professional photography aesthetic, 2026 flagship redesign
+// DeepSpace – Deep space black with pure white text
+// Pure professional photography aesthetic, inspired by flagship cameras
+// Ultra-deep #000000 black, bright white #FFFFFF text, blue accent
 // ═══════════════════════════════════════════════════════════════════
 val DeepSpaceDarkColors = AlcedoColorScheme(
-    bgDeep = Color(0xFF050507), bgBase = Color(0xFF0A0A0F), bgPanel = Color(0xFF111118), bgCanvas = Color(0xFF08080C),
-    primary = Color(0xFFB0CFFF), onPrimary = Color(0xFF002569), primaryContainer = Color(0xFF1A2A4A), onPrimaryContainer = Color(0xFFB0CFFF),
-    secondary = Color(0xFFA8B0C0), onSecondary = Color(0xFF1A1F28), secondaryContainer = Color(0xFF2A2F38), onSecondaryContainer = Color(0xFFD0D8E8),
-    tertiary = Color(0xFFC8B8E0), onTertiary = Color(0xFF2A1A40), tertiaryContainer = Color(0xFF3A2A50), onTertiaryContainer = Color(0xFFE0D0F0),
-    surface = Color(0xFF0A0A0F), onSurface = Color(0xFFF0F0F5), surfaceVariant = Color(0xFF1C1C24), onSurfaceVariant = Color(0xFFC0C0CC),
-    surfaceContainerLowest = Color(0xFF050507), surfaceContainerLow = Color(0xFF0E0E14), surfaceContainer = Color(0xFF14141C), surfaceContainerHigh = Color(0xFF1C1C24), surfaceContainerHighest = Color(0xFF24242E),
+    bgDeep = Color(0xFF000000), bgBase = Color(0xFF050508), bgPanel = Color(0xFF0C0C12), bgCanvas = Color(0xFF030306),
+    primary = Color(0xFFA8C8FF), onPrimary = Color(0xFF003062), primaryContainer = Color(0xFF142438), onPrimaryContainer = Color(0xFFA8C8FF),
+    secondary = Color(0xFFB0B8C8), onSecondary = Color(0xFF1A1E28), secondaryContainer = Color(0xFF242830), onSecondaryContainer = Color(0xFFD8E0F0),
+    tertiary = Color(0xFFC8B8E8), onTertiary = Color(0xFF2A1840), tertiaryContainer = Color(0xFF382850), onTertiaryContainer = Color(0xFFE0D0F8),
+    surface = Color(0xFF050508), onSurface = Color(0xFFFFFFFF), surfaceVariant = Color(0xFF181820), onSurfaceVariant = Color(0xFFC8C8D4),
+    surfaceContainerLowest = Color(0xFF000000), surfaceContainerLow = Color(0xFF0A0A10), surfaceContainer = Color(0xFF101018), surfaceContainerHigh = Color(0xFF181820), surfaceContainerHighest = Color(0xFF202028),
     error = Color(0xFFFFB4AB), onError = Color(0xFF690005), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
-    outline = Color(0xFF60606C), outlineVariant = Color(0xFF2C2C36),
+    outline = Color(0xFF585868), outlineVariant = Color(0xFF282830),
     inverseSurface = Color(0xFFF0F0F5), inverseOnSurface = Color(0xFF14141C), inversePrimary = Color(0xFF4A6FA5),
-    scrim = Color(0xFF000000), accent = Color(0xFFB0CFFF), onAccent = Color(0xFF002569),
-    glassTint = Color(0x30FFFFFF), glassBorder = Color(0x20FFFFFF), glassHighlight = Color(0x15FFFFFF)
+    scrim = Color(0xFF000000), accent = Color(0xFFA8C8FF), onAccent = Color(0xFF003062),
+    glassTint = Color(0x28FFFFFF), glassBorder = Color(0x18FFFFFF), glassHighlight = Color(0x12FFFFFF)
 )
 
 val DeepSpaceLightColors = AlcedoColorScheme(
