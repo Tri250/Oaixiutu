@@ -791,7 +791,7 @@ data class RatingFilterNode(
     var minRating: Int = 0,
     var maxRating: Int = 5
 ) : SleeveFilter(FilterType.RANGE) {
-    override fun resetFilter() { minRating; maxRating }
+    override fun resetFilter() { minRating = 0; maxRating = 5 }
     override fun getPredicate(): String = "rating BETWEEN ? AND ?"
     override fun getBindArgs(): Array<Any?> = arrayOf(minRating, maxRating)
     override fun toJson(): String = """{"type":"RATING","minRating":$minRating,"maxRating":$maxRating}"""
@@ -810,7 +810,7 @@ data class RatingFilterNode(
 data class FileTypeFilterNode(
     var imageTypes: List<String> = emptyList()
 ) : SleeveFilter(FilterType.VALUE) {
-    override fun resetFilter() { imageTypes; }
+    override fun resetFilter() { imageTypes = emptyList() }
     override fun getPredicate(): String =
         if (imageTypes.isEmpty()) "" else "image_type IN (${imageTypes.joinToString(",") { "?" }})"
     override fun getBindArgs(): Array<Any?> = imageTypes.toTypedArray()
@@ -832,7 +832,7 @@ data class DateRangeFilterNode(
     var from: Long = 0L,
     var to: Long = Long.MAX_VALUE
 ) : SleeveFilter(FilterType.DATETIME) {
-    override fun resetFilter() { from; to }
+    override fun resetFilter() { from = 0L; to = Long.MAX_VALUE }
     override fun getPredicate(): String = "capture_date BETWEEN ? AND ?"
     override fun getBindArgs(): Array<Any?> = arrayOf(from, to)
     override fun toJson(): String = """{"type":"DATE_RANGE","from":$from,"to":$to}"""
@@ -852,7 +852,7 @@ data class CameraFilterNode(
     var cameraMake: String? = null,
     var cameraModel: String? = null
 ) : SleeveFilter(FilterType.EXIF) {
-    override fun resetFilter() { cameraMake; cameraModel }
+    override fun resetFilter() { cameraMake = null; cameraModel = null }
     override fun getPredicate(): String {
         val conditions = mutableListOf<String>()
         cameraMake?.let { conditions.add("camera_make LIKE '%' || ? || '%'") }
@@ -876,7 +876,7 @@ data class CameraFilterNode(
 data class LensFilterNode(
     var lensModel: String? = null
 ) : SleeveFilter(FilterType.EXIF) {
-    override fun resetFilter() { lensModel; }
+    override fun resetFilter() { lensModel = null }
     override fun getPredicate(): String = lensModel?.let { "lens_model LIKE '%' || ? || '%'" } ?: ""
     override fun getBindArgs(): Array<Any?> = arrayOfNotNull(lensModel)
     override fun toJson(): String = """{"type":"LENS","lensModel":"$lensModel"}"""
@@ -893,7 +893,7 @@ data class LensFilterNode(
 data class TagFilterNode(
     var tags: List<String> = emptyList()
 ) : SleeveFilter(FilterType.STRING) {
-    override fun resetFilter() { tags; }
+    override fun resetFilter() { tags = emptyList() }
     override fun getPredicate(): String =
         if (tags.isEmpty()) "" else "label IN (${tags.joinToString(",") { "?" }})"
     override fun getBindArgs(): Array<Any?> = tags.toTypedArray()
@@ -914,7 +914,7 @@ data class TagFilterNode(
 data class CollectionFilterNode(
     var collectionId: Long = 0L
 ) : SleeveFilter(FilterType.COMBO) {
-    override fun resetFilter() { collectionId }
+    override fun resetFilter() { collectionId = 0L }
     override fun getPredicate(): String = "image_id IN (SELECT image_id FROM collection_images WHERE collection_id = ?)"
     override fun getBindArgs(): Array<Any?> = arrayOf(collectionId)
     override fun toJson(): String = """{"type":"COLLECTION","collectionId":$collectionId}"""
