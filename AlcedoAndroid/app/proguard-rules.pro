@@ -240,6 +240,9 @@
 
 # ── Security Crypto ─────────────────────────────────────────────
 -keep class androidx.security.crypto.** { *; }
+-dontwarn com.google.api.client.http.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn org.joda.time.**
 
 # ── Application Class ───────────────────────────────────────────
 -keep class com.alcedo.studio.AlcedoApplication { *; }

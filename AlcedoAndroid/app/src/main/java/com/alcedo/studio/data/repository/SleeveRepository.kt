@@ -6,6 +6,7 @@ import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.dao.AiEmbeddingDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Repository that mediates between DAOs and ViewModel layer.
@@ -143,7 +144,7 @@ class SleeveRepository(
     }
 
     fun getAllImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.observeImageByFileId(-1) // placeholder
+        return imageDao.observeImageByFileId(-1).map { it?.let { listOf(it) } ?: emptyList() } // placeholder
     }
 
     suspend fun searchImages(query: String): List<ImageEntity> {
@@ -167,7 +168,7 @@ class SleeveRepository(
     }
 
     fun getRawImagesFlow(): Flow<List<ImageEntity>> {
-        return imageDao.observeImageByFileId(-1) // placeholder
+        return imageDao.observeImageByFileId(-1).map { it?.let { listOf(it) } ?: emptyList() } // placeholder
     }
 
     suspend fun importImage(image: ImageEntity): Long {

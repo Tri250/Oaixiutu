@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -39,16 +41,21 @@ android {
     // ── Signing Configuration ─────────────────────────────────────
     signingConfigs {
         create("release") {
-            // Read from local.properties or environment variables
-            val keystorePath: String? by project
-            val keystorePassword: String? by project
-            val keyAlias: String? by project
-            val keyPassword: String? by project
+            // Read from local.properties
+            val props = Properties()
+            val propsFile = rootProject.file("local.properties")
+            if (propsFile.exists()) {
+                propsFile.reader().use { reader -> props.load(reader) }
+            }
+            val ksPath = props.getProperty("keystorePath") ?: System.getenv("ALCEDO_KEYSTORE_PATH")
+            val ksPass = props.getProperty("keystorePassword") ?: System.getenv("ALCEDO_KEYSTORE_PASSWORD")
+            val ksAlias = props.getProperty("keyAlias") ?: System.getenv("ALCEDO_KEY_ALIAS")
+            val ksKeyPass = props.getProperty("keyPassword") ?: System.getenv("ALCEDO_KEY_PASSWORD")
 
-            storeFile = keystorePath?.let { file(it) }
-            storePassword = keystorePassword ?: System.getenv("ALCEDO_KEYSTORE_PASSWORD")
-            this.keyAlias = keyAlias ?: System.getenv("ALCEDO_KEY_ALIAS")
-            this.keyPassword = keyPassword ?: System.getenv("ALCEDO_KEY_PASSWORD")
+            storeFile = ksPath?.let { file(it) }
+            storePassword = ksPass
+            this.keyAlias = ksAlias
+            this.keyPassword = ksKeyPass
         }
     }
 
@@ -188,7 +195,7 @@ dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 
     // ── Security (EncryptedSharedPreferences) ──────────────────────
-    implementation("androidx.security:security-crypto:1.0.0")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // ── Testing ────────────────────────────────────────────────────
     testImplementation("junit:junit:4.13.2")

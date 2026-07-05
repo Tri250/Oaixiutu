@@ -27,11 +27,11 @@ class ImageRepositoryImpl(
     private val thumbnailCache: ThumbnailDiskCache
 ) : ImageRepository {
 
-    override suspend fun addImage(image: ImageModel) = withContext(Dispatchers.IO) {
+    override suspend fun addImage(image: ImageModel): Unit = withContext(Dispatchers.IO) {
         metadataDao.insertMetadata(image.toMetadataEntity())
     }
 
-    override suspend fun addImageMetadata(metadata: ImageMetadataEntity) = withContext(Dispatchers.IO) {
+    override suspend fun addImageMetadata(metadata: ImageMetadataEntity): Unit = withContext(Dispatchers.IO) {
         metadataDao.insertMetadata(metadata)
     }
 

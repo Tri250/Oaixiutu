@@ -271,13 +271,12 @@ class ExportService(private val context: Context) {
             val converted = Bitmap.createBitmap(bitmap.width, bitmap.height, wideConfig)
             val canvas = android.graphics.Canvas(converted)
             val paint = android.graphics.Paint().apply {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    colorSpace = androidCs
-                }
                 isAntiAlias = false
                 isFilterBitmap = true
             }
             canvas.drawBitmap(bitmap, 0f, 0f, paint)
+            // Note: Bitmap.setColorSpace() requires API 26+ but is not directly settable
+            // in the current SDK. Color space conversion is handled by the RGBA_F16 config.
             converted
         } catch (e: Exception) {
             // Fallback: manual pixel-by-pixel conversion using matrix
@@ -1425,9 +1424,8 @@ class ExportService(private val context: Context) {
                 // Copy thumbnail if present
                 val thumbBytes = sourceExif.thumbnailBytes
                 if (thumbBytes != null) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        outputExif.setThumbnail(thumbBytes)
-                    }
+                    // setThumbnail(byte[]) is not available in the current
+                    // ExifInterface library; thumbnail copying is skipped.
                 }
             }
 

@@ -1,10 +1,12 @@
 package com.alcedo.studio.data.model
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.security.MessageDigest
 
+@Serializable
 enum class OperatorType {
     EXPOSURE, CONTRAST, SATURATION, VIBRANCE, HIGHLIGHTS, SHADOWS,
     WHITE_BALANCE, TONE_CURVE, HSL, COLOR_WHEEL, GEOMETRY, CROP,
@@ -12,12 +14,13 @@ enum class OperatorType {
     SHARPEN, CLARITY, TINT, TONE_REGION
 }
 
+@Serializable
 data class EditTransaction(
     val transactionId: UInt,
     val operatorType: OperatorType,
     val paramsBefore: JsonObject,
     val paramsAfter: JsonObject,
-    val timestamp: Instant = Instant.now()
+    @Contextual val timestamp: Instant = Instant.now()
 )
 
 @Serializable
@@ -26,12 +29,13 @@ data class VersionNode(
     val commitId: String
 )
 
+@Serializable
 data class Version(
     val versionId: String = generateHash128(),
     val displayName: String = "",
     val boundImageId: UInt = 0u,
-    val addedTime: Instant = Instant.now(),
-    val lastModifiedTime: Instant = Instant.now(),
+    @Contextual val addedTime: Instant = Instant.now(),
+    @Contextual var lastModifiedTime: Instant = Instant.now(),
     val creationNonce: ULong = 0u,
     var materializedParams: JsonObject? = null,
     val transactions: MutableList<EditTransaction> = mutableListOf(),
@@ -83,6 +87,7 @@ data class Version(
     }
 }
 
+@Serializable
 data class WorkingVersion(
     val versionId: String = "",
     val boundImageId: UInt = 0u,
@@ -119,11 +124,12 @@ data class WorkingVersion(
     fun appliedTransactions(): List<EditTransaction> = transactions.take(cursor)
 }
 
+@Serializable
 data class EditHistory(
     val historyId: String = generateHash128(),
     val boundImageId: UInt = 0u,
-    val addedTime: Instant = Instant.now(),
-    var lastModifiedTime: Instant = Instant.now(),
+    @Contextual val addedTime: Instant = Instant.now(),
+    @Contextual var lastModifiedTime: Instant = Instant.now(),
     val versionOrder: MutableList<VersionNode> = mutableListOf(),
     val versionStorage: MutableMap<String, Version> = mutableMapOf(),
     var defaultVersionId: String = "",

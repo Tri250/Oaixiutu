@@ -1,6 +1,9 @@
 package com.alcedo.studio.di
 
 import android.content.Context
+import com.alcedo.studio.data.dao.EditHistoryDao
+import com.alcedo.studio.data.dao.PipelinePresetDao
+import com.alcedo.studio.data.dao.AiEmbeddingDao
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.domain.repository.*
 import com.alcedo.studio.domain.service.*
@@ -126,7 +129,7 @@ object AppModule {
     }
 
     val backgroundTaskService: BackgroundTaskService by lazy {
-        BackgroundTaskService()
+        BackgroundTaskService(this.context)
     }
 
     // AI Services
@@ -175,15 +178,27 @@ object AppModule {
         AppAiService(this.context)
     }
 
+    // DAOs from data.dao package
+    val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }
+    val pipelinePresetDao: PipelinePresetDao by lazy { database.pipelinePresetDao() }
+    val aiEmbeddingDao: AiEmbeddingDao by lazy { database.aiEmbeddingDao() }
+
     // ── Repositories ──
 
     val sleeveRepository: SleeveRepository by lazy {
         SleeveRepository(
-            sleeveElementDao = elementDao,
-            imageDao = imageDao,
-            editHistoryDao = editHistoryDao,
-            pipelinePresetDao = pipelinePresetDao,
-            aiEmbeddingDao = aiEmbeddingDao
+            sleeveService = sleeveService,
+            filterService = sleeveFilterService,
+            elementDao = elementDao,
+            fileDao = fileDao,
+            folderDao = folderDao,
+            metadataDao = metadataDao,
+            collectionDao = collectionDao,
+            ratingDao = ratingDao,
+            labelDao = labelDao,
+            filterDao = filterDao,
+            pathResolver = pathResolver,
+            cacheManager = dentryCacheManager
         )
     }
 

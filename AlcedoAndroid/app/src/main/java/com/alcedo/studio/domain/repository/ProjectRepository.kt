@@ -30,7 +30,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
     private val writableDb get() = db.openHelper.writableDatabase
     private val readableDb get() = db.openHelper.readableDatabase
 
-    override suspend fun createProject(project: Project) = withContext(Dispatchers.IO) {
+    override suspend fun createProject(project: Project): Unit = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put("project_id", project.projectId)
             put("project_name", project.projectName)
@@ -83,16 +83,16 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
         list
     }
 
-    override suspend fun updateProject(project: Project) = createProject(project)
+    override suspend fun updateProject(project: Project): Unit = createProject(project)
 
-    override suspend fun deleteProject(projectId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteProject(projectId: String): Unit = withContext(Dispatchers.IO) {
         writableDb.delete("projects", "project_id = ?", arrayOf(projectId))
     }
 
     override suspend fun setProjectMetadata(
         projectId: String,
         metadata: kotlinx.serialization.json.JsonObject
-    ) = withContext(Dispatchers.IO) {
+    ): Unit = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put("metadata_json", metadata.toString())
             put("modified_at", Instant.now().toEpochMilli())
@@ -100,7 +100,7 @@ class ProjectRepositoryImpl(private val db: SleeveDatabase) : ProjectRepository 
         writableDb.update("projects", SQLiteDatabase.CONFLICT_REPLACE, values, "project_id = ?", arrayOf(projectId))
     }
 
-    override suspend fun updateProjectModifiedTime(projectId: String) = withContext(Dispatchers.IO) {
+    override suspend fun updateProjectModifiedTime(projectId: String): Unit = withContext(Dispatchers.IO) {
         val values = ContentValues().apply {
             put("modified_at", Instant.now().toEpochMilli())
         }

@@ -1,5 +1,6 @@
 package com.alcedo.studio.data.model
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -42,7 +43,7 @@ data class RecentProject(
     val projectId: String,
     val projectName: String,
     val projectPath: String,
-    val lastOpenedAt: Instant = Instant.now(),
+    @Contextual val lastOpenedAt: Instant = Instant.now(),
     val thumbnailPath: String = ""
 )
 
@@ -51,10 +52,10 @@ data class ProjectPackage(
     val version: Int = Project.CURRENT_PACKAGE_VERSION,
     val project: Project,
     val sleeveTree: SleeveTreeSnapshot = SleeveTreeSnapshot(),
-    val editHistories: Map<UInt, EditHistory> = emptyMap(),
+    @Contextual val editHistories: Map<UInt, EditHistory> = emptyMap(),
     val imageMetadata: List<ImageMetaSnapshot> = emptyList(),
     val embeddedAssets: List<EmbeddedAsset> = emptyList(),
-    val createdAt: Instant = Instant.now()
+    @Contextual val createdAt: Instant = Instant.now()
 )
 
 @Serializable
@@ -80,7 +81,7 @@ data class ImageMetaSnapshot(
     val imageName: String,
     val imageType: String,
     val checksum: ULong = 0u,
-    val exifDisplay: ExifDisplayMetaData = ExifDisplayMetaData()
+    @Contextual val exifDisplay: ExifDisplayMetaData = ExifDisplayMetaData()
 )
 
 @Serializable
@@ -114,7 +115,7 @@ data class ProjectBackup(
     val projectId: String,
     val projectName: String,
     val backupPath: String,
-    val createdAt: Instant = Instant.now(),
+    @Contextual val createdAt: Instant = Instant.now(),
     val packageVersion: Int = 1,
     val fileSize: Long = 0L
 )
@@ -123,7 +124,7 @@ data class ProjectBackup(
 data class PackageMigration(
     val fromVersion: Int,
     val toVersion: Int,
-    val appliedAt: Instant = Instant.now()
+    @Contextual val appliedAt: Instant = Instant.now()
 )
 
 enum class ProjectValidationError {
@@ -141,9 +142,9 @@ data class ProjectValidation(
 @Serializable
 data class ImageAdjustment(
     val imageId: UInt,
-    val pipelineParams: PipelineParams = PipelineParams(),
-    val displayTransform: DisplayTransform = DisplayTransform(),
-    val rawDecodeParams: RawDecodeParams = RawDecodeParams()
+    @Contextual val pipelineParams: PipelineParams = PipelineParams(),
+    @Contextual val displayTransform: DisplayTransform = DisplayTransform(),
+    @Contextual val rawDecodeParams: RawDecodeParams = RawDecodeParams()
 )
 
 @Serializable
