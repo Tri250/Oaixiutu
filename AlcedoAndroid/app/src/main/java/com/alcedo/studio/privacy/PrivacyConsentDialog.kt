@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 
 @Composable
 fun PrivacyConsentDialog(
@@ -21,7 +22,7 @@ fun PrivacyConsentDialog(
     AlertDialog(
         onDismissRequest = { /* Cannot dismiss - must make a choice */ },
         title = {
-            Text("Privacy & Data Preferences")
+            Text(stringRes { privacyTitle })
         },
         text = {
             Column(
@@ -29,14 +30,14 @@ fun PrivacyConsentDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "Alcedo Studio respects your privacy. Choose which features to enable:",
+                    stringRes { privacyBody },
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                // AI Processing
+                // AI Features
                 ConsentItem(
-                    title = "On-Device AI Processing",
-                    description = "Enable CLIP-based image search and AI-powered editing suggestions. All processing happens locally on your device.",
+                    title = stringRes { privacyAiFeaturesTitle },
+                    description = stringRes { privacyAiFeaturesDesc },
                     checked = aiProcessingConsent,
                     onCheckedChange = { aiProcessingConsent = it },
                     required = false
@@ -44,8 +45,8 @@ fun PrivacyConsentDialog(
 
                 // Crash Reports
                 ConsentItem(
-                    title = "Crash Reports",
-                    description = "Help us improve by sending anonymous crash reports. No personal data is included.",
+                    title = stringRes { privacyCrashReportsTitle },
+                    description = stringRes { privacyCrashReportsDesc },
                     checked = crashReportsConsent,
                     onCheckedChange = { crashReportsConsent = it },
                     required = false
@@ -53,8 +54,8 @@ fun PrivacyConsentDialog(
 
                 // Analytics
                 ConsentItem(
-                    title = "Usage Analytics",
-                    description = "Anonymous usage statistics to understand how features are used. No personal data is collected.",
+                    title = stringRes { privacyAnalyticsTitle },
+                    description = stringRes { privacyAnalyticsDesc },
                     checked = analyticsConsent,
                     onCheckedChange = { analyticsConsent = it },
                     required = false
@@ -63,13 +64,13 @@ fun PrivacyConsentDialog(
                 HorizontalDivider()
 
                 Text(
-                    "You can change these preferences at any time in Settings > Privacy.",
+                    stringRes { privacyChangeNote },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Text(
-                    "Your photos are processed locally and never uploaded to our servers. AI API keys (if you provide them) are stored encrypted on your device.",
+                    stringRes { privacyDataNote },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -86,7 +87,7 @@ fun PrivacyConsentDialog(
                 PrivacyManager.markFirstLaunchComplete()
                 onAccept(PrivacyManager.getConsentStatus())
             }) {
-                Text("Save Preferences")
+                Text(stringRes { privacySavePreferences })
             }
         }
     )
@@ -109,7 +110,7 @@ private fun ConsentItem(
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 if (required) {
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("(Required)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    Text(stringRes { privacyRequired }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 }
             }
             Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -326,6 +326,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    fun updateSigmoidShoulder(value: Float) {
+        _params.value = _params.value.copy(sigmoidShoulder = value)
+        recordTransaction(OperatorType.CONTRAST, "sigmoidShoulder", value)
+        regeneratePreview()
+    }
+
+    fun updateShadowBoundary(value: Float) {
+        _params.value = _params.value.copy(shadowBoundary = value)
+        recordTransaction(OperatorType.TONE_REGION, "shadowBoundary", value)
+        regeneratePreview()
+    }
+
     fun updateLensCorrection(k1: Float, k2: Float, k3: Float, p1: Float, p2: Float) {
         _params.value = _params.value.copy(lensK1 = k1, lensK2 = k2, lensK3 = k3, lensP1 = p1, lensP2 = p2)
         recordTransaction(OperatorType.GEOMETRY, "lensK1", k1)
@@ -335,6 +347,60 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateLut(enabled: Boolean, path: String) {
         _params.value = _params.value.copy(lutEnabled = enabled, lutPath = path)
         recordTransaction(OperatorType.LUT, "lutPath", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateGeometryRotate(value: Float) {
+        _params.value = _params.value.copy(geometryRotate = value)
+        recordTransaction(OperatorType.GEOMETRY, "geometryRotate", value)
+        regeneratePreview()
+    }
+
+    fun updateGeometryFlipH(flip: Boolean) {
+        _params.value = _params.value.copy(geometryFlipH = flip)
+        recordTransaction(OperatorType.GEOMETRY, "geometryFlipH", if (flip) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateGeometryFlipV(flip: Boolean) {
+        _params.value = _params.value.copy(geometryFlipV = flip)
+        recordTransaction(OperatorType.GEOMETRY, "geometryFlipV", if (flip) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateCrop(left: Float, top: Float, right: Float, bottom: Float) {
+        _params.value = _params.value.copy(cropLeft = left, cropTop = top, cropRight = right, cropBottom = bottom)
+        recordTransaction(OperatorType.GEOMETRY, "cropLeft", left)
+        regeneratePreview()
+    }
+
+    fun updatePerspective(horizontal: Float, vertical: Float) {
+        _params.value = _params.value.copy(perspectiveH = horizontal, perspectiveV = vertical)
+        recordTransaction(OperatorType.GEOMETRY, "perspectiveH", horizontal)
+        regeneratePreview()
+    }
+
+    fun updateVignette(strength: Float) {
+        _params.value = _params.value.copy(lensVignetteStrength = strength)
+        recordTransaction(OperatorType.GEOMETRY, "lensVignetteStrength", strength)
+        regeneratePreview()
+    }
+
+    fun updateSigmoidShoulder(value: Float) {
+        _params.value = _params.value.copy(sigmoidShoulder = value)
+        recordTransaction(OperatorType.CONTRAST, "sigmoidShoulder", value)
+        regeneratePreview()
+    }
+
+    fun updateShadowBoundary(value: Float) {
+        _params.value = _params.value.copy(shadowBoundary = value)
+        recordTransaction(OperatorType.TONE_REGION, "shadowBoundary", value)
+        regeneratePreview()
+    }
+
+    fun updateLutIntensity(intensity: Float) {
+        _params.value = _params.value.copy(lutIntensity = intensity)
+        recordTransaction(OperatorType.LUT, "lutIntensity", intensity)
         regeneratePreview()
     }
 
@@ -500,8 +566,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // Preview regeneration
     // ================================================================
 
+    private var previewJob: Job? = null
+
     fun regeneratePreview() {
-        viewModelScope.launch {
+        previewJob?.cancel()
+        previewJob = viewModelScope.launch {
+            delay(50) // 50ms debounce
             _isProcessing.value = true
             try {
                 val source = _originalBitmap.value
@@ -509,7 +579,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
                 }
             } catch (e: Throwable) {
-                android.util.Log.e("EditorVM", "regeneratePreview failed", e)
+                Log.e("EditorVM", "regeneratePreview failed", e)
             } finally {
                 _isProcessing.value = false
             }
@@ -670,6 +740,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "filmGrainIntensity" -> filmGrainIntensity
                 "halationIntensity" -> halationIntensity
                 "sigmoidContrast" -> sigmoidContrast
+                "geometryRotate" -> geometryRotate
+                "geometryFlipH" -> if (geometryFlipH) 1f else 0f
+                "geometryFlipV" -> if (geometryFlipV) 1f else 0f
+                "cropLeft" -> cropLeft
+                "perspectiveH" -> perspectiveH
+                "lensVignetteStrength" -> lensVignetteStrength
+                "sigmoidShoulder" -> sigmoidShoulder
+                "shadowBoundary" -> shadowBoundary
+                "lutIntensity" -> lutIntensity
                 else -> value
             }
         })))
@@ -730,6 +809,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "halationIntensity" -> reconstructed.copy(halationIntensity = floatValue)
                     "sigmoidContrast" -> reconstructed.copy(sigmoidContrast = floatValue)
                     "autoExposure" -> reconstructed.copy(exposure = floatValue)
+                    "geometryRotate" -> reconstructed.copy(geometryRotate = floatValue)
+                    "geometryFlipH" -> reconstructed.copy(geometryFlipH = floatValue != 0f)
+                    "geometryFlipV" -> reconstructed.copy(geometryFlipV = floatValue != 0f)
+                    "cropLeft" -> reconstructed.copy(cropLeft = floatValue)
+                    "perspectiveH" -> reconstructed.copy(perspectiveH = floatValue)
+                    "lensVignetteStrength" -> reconstructed.copy(lensVignetteStrength = floatValue)
+                    "sigmoidShoulder" -> reconstructed.copy(sigmoidShoulder = floatValue)
+                    "shadowBoundary" -> reconstructed.copy(shadowBoundary = floatValue)
+                    "lutIntensity" -> reconstructed.copy(lutIntensity = floatValue)
                     else -> reconstructed
                 }
             }
@@ -1111,7 +1199,10 @@ enum class EditorPanel(val labelKey: StringResources.() -> String) {
     GEOMETRY({ editorPanelGeometry }),
     EFFECTS({ editorPanelEffects }),
     RAW({ editorPanelRaw }),
-    HISTORY({ editorPanelHistory })
+    HISTORY({ editorPanelHistory }),
+    DISPLAY_TRANSFORM({ editorPanelDisplayTransform }),
+    LMT({ editorPanelLmt }),
+    INSPECTOR({ editorPanelInspector })
 }
 
 enum class ScopeType(val labelKey: StringResources.() -> String) {

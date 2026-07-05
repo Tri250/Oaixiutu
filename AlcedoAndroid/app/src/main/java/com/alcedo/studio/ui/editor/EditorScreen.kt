@@ -44,6 +44,7 @@ import com.alcedo.studio.viewmodel.EditorPanel
 import com.alcedo.studio.viewmodel.EditorViewModel
 import com.alcedo.studio.viewmodel.ScopeType
 import com.alcedo.studio.ui.common.LoadingOverlay
+import com.alcedo.studio.ui.common.LocalEditorEnabled
 import com.alcedo.studio.ui.editor.HlsProfilePanel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -92,20 +93,20 @@ fun EditorScreen(
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
-            title = { Text("未保存的修改") },
-            text = { Text("您有未保存的修改，是否保存？") },
+            title = { Text(stringRes { editorUnsavedTitle }) },
+            text = { Text(stringRes { editorUnsavedMessage }) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.saveVersion()
                     showUnsavedDialog = false
                     navController.popBackStack()
-                }) { Text("保存并退出") }
+                }) { Text(stringRes { editorSaveAndExit }) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     navController.popBackStack()
-                }) { Text("不保存退出") }
+                }) { Text(stringRes { editorDiscardAndExit }) }
             }
         )
     }
@@ -197,14 +198,16 @@ fun EditorScreen(
                     )
 
                     // 编辑器面板
-                    EditorPanelColumn(
-                        modifier = Modifier
-                            .width(360.dp)
-                            .fillMaxHeight(),
-                        selectedPanel = selectedPanel,
-                        onPanelSelected = { viewModel.updateSelectedPanel(it) },
-                        viewModel = viewModel
-                    )
+                    CompositionLocalProvider(LocalEditorEnabled provides !isProcessing) {
+                        EditorPanelColumn(
+                            modifier = Modifier
+                                .width(360.dp)
+                                .fillMaxHeight(),
+                            selectedPanel = selectedPanel,
+                            onPanelSelected = { viewModel.updateSelectedPanel(it) },
+                            viewModel = viewModel
+                        )
+                    }
                 }
             } else {
                 // 手机：垂直布局，预览/面板可调
@@ -255,6 +258,7 @@ fun EditorScreen(
                     }
 
                     // 可滑动的编辑器面板内容（HorizontalPager 替代纯标签导航）
+                    CompositionLocalProvider(LocalEditorEnabled provides !isProcessing) {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -285,9 +289,21 @@ fun EditorScreen(
                                 EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
                                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
                                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
+                                EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
+                                    params = viewModel.params.value,
+                                    onParamsChanged = { viewModel.updateParams(it) }
+                                )
+                                EditorPanel.LMT -> LmtPanel(
+                                    params = viewModel.params.value,
+                                    onParamsChanged = { viewModel.updateParams(it) }
+                                )
+                                EditorPanel.INSPECTOR -> ImageInspectorPanel(
+                                    image = viewModel.imageModel.value
+                                )
                             }
                         }
                     }
+                    } // CompositionLocalProvider
                 }
             }
 
@@ -683,6 +699,17 @@ private fun EditorPanelColumn(
                 EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
+                EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
+                    params = viewModel.params.value,
+                    onParamsChanged = { viewModel.updateParams(it) }
+                )
+                EditorPanel.LMT -> LmtPanel(
+                    params = viewModel.params.value,
+                    onParamsChanged = { viewModel.updateParams(it) }
+                )
+                EditorPanel.INSPECTOR -> ImageInspectorPanel(
+                    image = viewModel.imageModel.value
+                )
             }
         }
     }

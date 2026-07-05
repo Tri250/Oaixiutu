@@ -12,9 +12,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.PipelineParams
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.SectionHeader
 
 private val HUE_PROFILE_COLORS = listOf(
@@ -28,9 +31,16 @@ private val HUE_PROFILE_COLORS = listOf(
     Color(0xFFE91E63)  // Magenta
 )
 
-private val HUE_PROFILE_NAMES = listOf(
-    "Red", "Orange", "Yellow", "Green",
-    "Cyan", "Blue", "Purple", "Magenta"
+@Composable
+private fun hueProfileNames(): List<String> = listOf(
+    stringRes { editorColorRed },
+    stringRes { editorColorOrange },
+    stringRes { editorColorYellow },
+    stringRes { editorColorGreen },
+    stringRes { editorColorCyan },
+    stringRes { editorColorBlue },
+    stringRes { editorColorPurple },
+    stringRes { editorColorMagenta }
 )
 
 @Composable
@@ -40,13 +50,15 @@ fun HlsProfilePanel(
     modifier: Modifier = Modifier
 ) {
     var selectedProfile by remember { mutableIntStateOf(0) }
+    val profileNames = hueProfileNames()
+    val view = LocalView.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Hue ring indicator
-        SectionHeader(title = "Hue Profile") {
+        SectionHeader(title = stringRes { hlsProfileTitle }) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -69,11 +81,14 @@ fun HlsProfilePanel(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    HUE_PROFILE_NAMES.forEachIndexed { index, name ->
+                    profileNames.forEachIndexed { index, name ->
                         val isSelected = selectedProfile == index
                         FilterChip(
                             selected = isSelected,
-                            onClick = { selectedProfile = index },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                selectedProfile = index
+                            },
                             label = {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -99,11 +114,11 @@ fun HlsProfilePanel(
         }
 
         // Per-profile adjustments
-        SectionHeader(title = HUE_PROFILE_NAMES[selectedProfile]) {
+        SectionHeader(title = profileNames[selectedProfile]) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Hue shift
                 AdjustmentSlider(
-                    label = "Hue Shift",
+                    label = stringRes { hlsHueShift },
                     value = params.hslHueShift[selectedProfile],
                     range = -180f..180f,
                     onValueChange = {
@@ -117,7 +132,7 @@ fun HlsProfilePanel(
 
                 // Lightness
                 AdjustmentSlider(
-                    label = "Lightness",
+                    label = stringRes { hlsLightness },
                     value = params.hslLuminanceScale[selectedProfile],
                     range = 0f..2f,
                     onValueChange = {
@@ -130,7 +145,7 @@ fun HlsProfilePanel(
 
                 // Saturation
                 AdjustmentSlider(
-                    label = "Saturation",
+                    label = stringRes { hlsSaturation },
                     value = params.hslSaturationScale[selectedProfile],
                     range = 0f..2f,
                     onValueChange = {
@@ -144,10 +159,10 @@ fun HlsProfilePanel(
         }
 
         // Hue range per profile
-        SectionHeader(title = "Hue Range") {
+        SectionHeader(title = stringRes { hlsHueRange }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AdjustmentSlider(
-                    label = "Hue Range",
+                    label = stringRes { hlsHueRange },
                     value = params.hslHueWidth,
                     range = 10f..180f,
                     onValueChange = {
@@ -158,7 +173,7 @@ fun HlsProfilePanel(
                 )
 
                 // Summary of all profiles
-                HUE_PROFILE_NAMES.forEachIndexed { index, name ->
+                profileNames.forEachIndexed { index, name ->
                     val hueShift = params.hslHueShift[index]
                     val satScale = params.hslSaturationScale[index]
                     val lumScale = params.hslLuminanceScale[index]

@@ -23,7 +23,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.AlbumViewModel
-import com.alcedo.studio.service.AiService
+import com.alcedo.studio.domain.service.AiService
 import com.alcedo.studio.di.AppModule
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

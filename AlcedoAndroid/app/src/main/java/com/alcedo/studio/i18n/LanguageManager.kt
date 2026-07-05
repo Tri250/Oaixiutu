@@ -2,6 +2,8 @@ package com.alcedo.studio.i18n
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -52,6 +54,7 @@ object LanguageManager {
             ?.putBoolean(KEY_FOLLOW_SYSTEM, false)
             ?.putString(KEY_LANGUAGE_CODE, language.code)
             ?.apply()
+        applyLocaleToApp(language.code)
     }
 
     fun setFollowSystem(context: Context) {
@@ -71,6 +74,16 @@ object LanguageManager {
             _currentLanguage.value = systemLang
             Strings.update(getStringResources(systemLang))
         }
+    }
+
+    fun applyLocaleToApp(context: Context, languageCode: String) {
+        val appLocale = LocaleListCompat.forLanguageTags(languageCode)
+        AppCompatDelegate.setApplicationLocales(appLocale)
+    }
+
+    private fun applyLocaleToApp(languageCode: String) {
+        val appLocale = LocaleListCompat.forLanguageTags(languageCode)
+        AppCompatDelegate.setApplicationLocales(appLocale)
     }
 
     fun getStringResources(language: Language): StringResources {

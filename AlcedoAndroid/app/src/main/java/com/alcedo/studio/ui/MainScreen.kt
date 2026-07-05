@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavBackStackEntry
@@ -77,6 +78,7 @@ import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.ai.AiSearchScreen
 import com.alcedo.studio.ui.common.BackgroundTaskBar
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
 import com.alcedo.studio.ui.common.NavTransitions
@@ -147,6 +149,7 @@ fun MainScreen(
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
     val context = LocalContext.current
+    val view = LocalView.current
 
     // 通知权限请求 (Android 13+)
     val notificationPermissionState = rememberLauncherForActivityResult(
@@ -323,6 +326,7 @@ fun MainScreen(
                                         NavigationDrawerItem(
                                             selected = selected,
                                             onClick = {
+                                                HapticFeedback.click(view)
                                                 if (currentRoute != destination.route) {
                                                     navController.navigate(destination.route) {
                                                         popUpTo(MainDestination.ALBUM.route) {
@@ -408,9 +412,13 @@ private fun RowScope.AlcedoNavItem(
     labelKey: StringResources.() -> String
 ) {
     val label = stringRes(labelKey)
+    val view = LocalView.current
     NavigationBarItem(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            HapticFeedback.click(view)
+            onClick()
+        },
         icon = {
             AlcedoNavIcon(
                 selected = selected,
@@ -440,9 +448,13 @@ private fun AlcedoRailItem(
     labelKey: StringResources.() -> String
 ) {
     val label = stringRes(labelKey)
+    val view = LocalView.current
     NavigationRailItem(
         selected = selected,
-        onClick = onClick,
+        onClick = {
+            HapticFeedback.click(view)
+            onClick()
+        },
         icon = {
             AlcedoNavIcon(
                 selected = selected,

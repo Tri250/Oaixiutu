@@ -102,6 +102,10 @@ class ExportViewModel : ViewModel() {
         get() = _settings.value.isHdr
         set(value) { _settings.value = _settings.value.copy(isHdr = value) }
 
+    var hassebladWatermark: Boolean
+        get() = _settings.value.hassebladWatermark
+        set(value) { _settings.value = _settings.value.copy(hassebladWatermark = value) }
+
     var maxDimension: String
         get() = _settings.value.maxDimension?.toString() ?: ""
         set(value) { _settings.value = _settings.value.copy(maxDimension = value.toIntOrNull()) }
@@ -453,6 +457,7 @@ class ExportViewModel : ViewModel() {
             )
             try {
                 val items = _batchItems.value
+                val totalItems = items.size
                 val exportItems = mutableListOf<ExportService.ExportBatchItem>()
 
                 for ((index, item) in items.withIndex()) {
@@ -481,6 +486,14 @@ class ExportViewModel : ViewModel() {
                     }
                     _batchProgress.value = _batchProgress.value.copy(
                         currentItem = index + 1
+                    )
+                    // Also update the service's exportProgress during the decode phase
+                    val decodeFraction = (index + 1).toFloat() / totalItems
+                    exportService.updateDecodeProgress(
+                        totalItems = totalItems,
+                        currentIndex = index,
+                        currentItemName = image?.imageName ?: "Decoding...",
+                        decodeFraction = decodeFraction
                     )
                 }
 

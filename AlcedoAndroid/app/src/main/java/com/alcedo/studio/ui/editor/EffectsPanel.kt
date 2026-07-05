@@ -1,5 +1,7 @@
 package com.alcedo.studio.ui.editor
 
+import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -7,10 +9,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.EditorViewModel
+import java.io.File
 
 @Composable
 fun EffectsPanel(
@@ -18,20 +27,17 @@ fun EffectsPanel(
     modifier: Modifier = Modifier
 ) {
     val params by remember { viewModel.params }
-    var showLutBrowser by remember { mutableStateOf(false) }
-    var lutSearchQuery by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val view = LocalView.current
 
-    val sampleLuts = remember {
-        listOf(
-            "Cinematic Teal",
-            "Warm Vintage",
-            "Black & White",
-            "Film Emulation",
-            "Moody Blue",
-            "Golden Hour",
-            "Cross Process",
-            "Bleach Bypass"
-        )
+    val lutPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val realPath = copyLutToInternalStorage(context, uri)
+        if (realPath != null) {
+            viewModel.updateLut(true, realPath)
+        }
     }
 
     Column(
@@ -47,17 +53,20 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Film Grain",
+                        stringRes { editorSectionFilmGrain },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.updateFilmGrain(0f) },
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.updateFilmGrain(0f)
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Grain",
+                            contentDescription = stringRes { effectsResetGrain },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -65,7 +74,7 @@ fun EffectsPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Intensity",
+                    label = stringRes { editorIntensity },
                     value = params.filmGrainIntensity,
                     range = 0f..1f,
                     onValueChange = { viewModel.updateFilmGrain(it) },
@@ -83,17 +92,20 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Halation",
+                        stringRes { editorSectionHalation },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.updateHalation(0f, 0.8f, 10f, 0.7f) },
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.updateHalation(0f, 0.8f, 10f, 0.7f)
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Halation",
+                            contentDescription = stringRes { effectsResetHalation },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -101,7 +113,7 @@ fun EffectsPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Intensity",
+                    label = stringRes { editorIntensity },
                     value = params.halationIntensity,
                     range = 0f..1f,
                     onValueChange = {
@@ -113,7 +125,7 @@ fun EffectsPanel(
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Spread",
+                    label = stringRes { editorSpread },
                     value = params.halationSpread,
                     range = 0f..50f,
                     onValueChange = {
@@ -126,7 +138,7 @@ fun EffectsPanel(
                     valueDisplayTransform = { "%.0f".format(it) }
                 )
                 AdjustmentSlider(
-                    label = "Threshold",
+                    label = stringRes { editorThreshold },
                     value = params.halationThreshold,
                     range = 0f..1f,
                     onValueChange = {
@@ -138,7 +150,7 @@ fun EffectsPanel(
                     defaultValue = 0.8f
                 )
                 AdjustmentSlider(
-                    label = "Red Bias",
+                    label = stringRes { editorRedBias },
                     value = params.halationRedBias,
                     range = 0f..1f,
                     onValueChange = {
@@ -161,17 +173,20 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Sharpen",
+                        stringRes { editorSectionSharpen },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.updateSharpen(0f) },
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.updateSharpen(0f)
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Sharpen",
+                            contentDescription = stringRes { effectsResetSharpen },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -179,7 +194,7 @@ fun EffectsPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Amount",
+                    label = stringRes { editorAmount },
                     value = params.sharpenAmount,
                     range = 0f..2f,
                     onValueChange = { viewModel.updateSharpen(it) },
@@ -197,17 +212,20 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Clarity",
+                        stringRes { editorSectionClarity },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.updateClarity(0f) },
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.updateClarity(0f)
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Clarity",
+                            contentDescription = stringRes { effectsResetClarity },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -215,14 +233,14 @@ fun EffectsPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Amount",
+                    label = stringRes { editorAmount },
                     value = params.clarityAmount,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateClarity(it, params.clarityRadius) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Radius",
+                    label = stringRes { editorRadius },
                     value = params.clarityRadius,
                     range = 1f..50f,
                     onValueChange = { viewModel.updateClarity(params.clarityAmount, it) },
@@ -241,19 +259,20 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Vignette",
+                        stringRes { editorSectionVignette },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
                         onClick = {
+                            HapticFeedback.heavyClick(view)
                             viewModel.updateParams(params.copy(lensVignetteStrength = 0f))
                         },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Vignette",
+                            contentDescription = stringRes { effectsResetVignette },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -261,7 +280,7 @@ fun EffectsPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Strength",
+                    label = stringRes { effectsStrength },
                     value = params.lensVignetteStrength,
                     range = 0f..1f,
                     onValueChange = {
@@ -281,40 +300,48 @@ fun EffectsPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "LUT",
+                        stringRes { editorSectionLut },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
                             onClick = {
+                                HapticFeedback.heavyClick(view)
                                 viewModel.updateLut(false, "")
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Reset LUT",
+                                contentDescription = stringRes { effectsResetLut },
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
                             checked = params.lutEnabled,
-                            onCheckedChange = { viewModel.updateLut(it, params.lutPath) }
+                            onCheckedChange = {
+                                HapticFeedback.click(view)
+                                viewModel.updateLut(it, params.lutPath)
+                            }
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 if (params.lutEnabled) {
                     OutlinedButton(
-                        onClick = { showLutBrowser = true },
+                        onClick = {
+                            lutPickerLauncher.launch(
+                                arrayOf("*/*")
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            if (params.lutPath.isEmpty()) "Select LUT..."
+                            if (params.lutPath.isEmpty()) stringRes { editorSelectLut }
                             else params.lutPath.substringAfterLast('/')
                         )
                     }
@@ -322,46 +349,30 @@ fun EffectsPanel(
             }
         }
     }
+}
 
-    // LUT Browser Dialog
-    if (showLutBrowser) {
-        AlertDialog(
-            onDismissRequest = { showLutBrowser = false },
-            title = { Text("LUT Browser") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = lutSearchQuery,
-                        onValueChange = { lutSearchQuery = it },
-                        placeholder = { Text("Search LUTs...") },
-                        modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        singleLine = true
-                    )
-                    val filteredLuts = sampleLuts.filter {
-                        lutSearchQuery.isEmpty() || it.contains(lutSearchQuery, ignoreCase = true)
-                    }
-                    filteredLuts.forEach { lutName ->
-                        ListItem(
-                            headlineContent = { Text(lutName) },
-                            modifier = Modifier.fillMaxWidth(),
-                            trailingContent = {
-                                IconButton(onClick = {
-                                    viewModel.updateLut(true, lutName)
-                                    showLutBrowser = false
-                                }) {
-                                    Icon(Icons.Default.Check, contentDescription = "Select")
-                                }
-                            }
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLutBrowser = false }) {
-                    Text("Close")
-                }
+/**
+ * Copy a LUT file from a content URI to the app's internal storage and return
+ * the absolute path. Returns null if the copy fails.
+ */
+private fun copyLutToInternalStorage(context: Context, uri: Uri): String? {
+    return try {
+        val lutsDir = File(context.filesDir, "luts")
+        if (!lutsDir.exists()) lutsDir.mkdirs()
+
+        // Derive a file name from the URI or use a timestamp-based name
+        val fileName = uri.lastPathSegment?.substringAfterLast('/')
+            ?: "lut_${System.currentTimeMillis()}.cube"
+
+        val outFile = File(lutsDir, fileName)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            outFile.outputStream().use { output ->
+                input.copyTo(output)
             }
-        )
+        } ?: return null
+
+        outFile.absolutePath
+    } catch (e: Exception) {
+        null
     }
 }

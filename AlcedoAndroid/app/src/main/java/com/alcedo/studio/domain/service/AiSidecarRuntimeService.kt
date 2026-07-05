@@ -45,6 +45,7 @@ class AiSidecarRuntimeService(
     }
 
     fun shutdown() {
+        clipEngine.unloadModel()
         _state.value = RuntimeState.IDLE
         _activeProvider.value = null
     }

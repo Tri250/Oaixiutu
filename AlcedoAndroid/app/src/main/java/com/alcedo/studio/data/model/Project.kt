@@ -238,7 +238,8 @@ data class ExportSettings(
     val rating: Int = 0,
     val tags: List<String> = emptyList(),
     val outputPath: String = "",
-    val sourceExifPath: String? = null
+    val sourceExifPath: String? = null,
+    val hassebladWatermark: Boolean = false
 )
 
 enum class ExportFormat {
@@ -331,10 +332,19 @@ data class PipelineParams(
     // LUT
     val lutPath: String = "",
     val lutEnabled: Boolean = false,
+    val lutIntensity: Float = 100f,
 
     // Geometry
     val geometryRotate: Float = 0f,
     val geometryScale: Float = 1f,
+    val geometryFlipH: Boolean = false,
+    val geometryFlipV: Boolean = false,
+    val cropLeft: Float = 0f,
+    val cropTop: Float = 0f,
+    val cropRight: Float = 1f,
+    val cropBottom: Float = 1f,
+    val perspectiveH: Float = 0f,
+    val perspectiveV: Float = 0f,
     val geometryCropLeft: Float = 0f,
     val geometryCropTop: Float = 0f,
     val geometryCropRight: Float = 1f,
@@ -367,8 +377,28 @@ data class DisplayTransform(
     val colorScience: ColorScience = ColorScience.ACES20,
     val eotf: EOTF = EOTF.SRGB,
     val peakLuminance: Float = 100f,
-    val displayColorSpace: ColorSpace = ColorSpace.SRGB
+    val displayColorSpace: ColorSpace = ColorSpace.SRGB,
+    val openDrtLook: OpenDrtLook = OpenDrtLook.STANDARD,
+    val openDrtTonescale: OpenDrtTonescale = OpenDrtTonescale.STANDARD
 )
+
+enum class OpenDrtLook(val label: String) {
+    STANDARD("Standard"),
+    ARRIBA("Arriba"),
+    SYLVAN("Sylvan"),
+    COLORFUL("Colorful"),
+    AERY("Aery"),
+    DYSTOPIC("Dystopic"),
+    UMBRA("Umbra")
+}
+
+enum class OpenDrtTonescale(val label: String) {
+    STANDARD("Standard"),
+    SOFT("Soft"),
+    MEDIUM("Medium"),
+    HARD("Hard"),
+    FILMIC("Filmic")
+}
 
 enum class ColorScience {
     ACES20, OPENDRT, LINEAR

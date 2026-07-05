@@ -111,6 +111,9 @@ interface StringResources {
     val editorPanelEffects: String
     val editorPanelRaw: String
     val editorPanelHistory: String
+    val editorPanelDisplayTransform: String
+    val editorPanelLmt: String
+    val editorPanelInspector: String
     val editorUndo: String
     val editorRedo: String
     val editorCompare: String
@@ -149,6 +152,14 @@ interface StringResources {
     val editorToneCurveRed: String
     val editorToneCurveGreen: String
     val editorToneCurveBlue: String
+    val toneCurveReset: String
+    val toneCurveHighlights: String
+    val toneCurveLights: String
+    val toneCurveDarks: String
+    val toneCurveShadows: String
+    val toneCurveSigmoidContrast: String
+    val toneCurvePointMode: String
+    val toneCurveParametricMode: String
 
     // Color panel
     val editorColorWheels: String
@@ -156,12 +167,18 @@ interface StringResources {
     val editorGamma: String
     val editorGain: String
     val editorReset: String // "Reset {wheel}"
+    val colorResetWheels: String
     val editorHsl: String
+    val colorResetHsl: String
     val editorHue: String
     val editorLuminance: String
     val editorChannelMixer: String
+    val colorResetMixer: String
     val editorMonochrome: String
     val editorOutput: String
+    val editorOutputR: String
+    val editorOutputG: String
+    val editorOutputB: String
 
     // HSL channel names
     val editorColorRed: String
@@ -173,37 +190,62 @@ interface StringResources {
     val editorColorPurple: String
     val editorColorMagenta: String
 
+    // HSL Profile panel
+    val hlsProfileTitle: String
+    val hlsHueShift: String
+    val hlsLightness: String
+    val hlsSaturation: String
+    val hlsHueRange: String
+
     // Geometry panel
     val editorSectionTransform: String
+    val geometryResetTransform: String
     val editorRotate: String
     val editorFlipH: String
     val editorFlipV: String
+    val geometryResetRotation: String
     val editorAutoStraighten: String
     val editorSectionCrop: String
+    val geometryResetCrop: String
     val editorAspectRatio: String
     val editorCropLeft: String
     val editorCropTop: String
     val editorCropRight: String
     val editorCropBottom: String
     val editorSectionPerspective: String
+    val geometryResetPerspective: String
     val editorHorizontal: String
     val editorVertical: String
     val editorSectionLensCorrection: String
+    val geometryResetLens: String
     val editorDistortion: String
+    val geometryDistortionK1: String
+    val geometryK2: String
     val editorVignette: String
+    val ratio2_1: String
+    val ratio3_1: String
+    val ratio9_16: String
 
     // Effects panel
     val editorSectionFilmGrain: String
+    val effectsResetGrain: String
     val editorIntensity: String
     val editorSectionHalation: String
+    val effectsResetHalation: String
     val editorSpread: String
     val editorThreshold: String
     val editorRedBias: String
     val editorSectionSharpen: String
+    val effectsResetSharpen: String
     val editorAmount: String
     val editorSectionClarity: String
+    val effectsResetClarity: String
     val editorRadius: String
+    val editorSectionVignette: String
+    val effectsResetVignette: String
+    val effectsStrength: String
     val editorSectionLut: String
+    val effectsResetLut: String
     val editorSelectLut: String
     val editorLutBrowser: String
     val editorSearchLuts: String
@@ -232,10 +274,23 @@ interface StringResources {
 
     // History panel
     val editorHistory: String
+    val historyVersions: String
+    val historyUndo: String
+    val historyRedo: String
+    val editorCloneHistory: String
+    val historyNewVersion: String
+    val historyVersionName: String
+    val historyCreate: String
+    val historyCancel: String
+    val historyRename: String
+    val historyDelete: String
+    val historyRecentEdits: String
+    val historySwitchToVersion: String
+    val historyDeleteVersionTitle: String
+    val historyDeleteVersionConfirm: String
     val editorCreateVersion: String
     val editorDeleteVersion: String
     val editorRenameVersion: String
-    val editorCloneHistory: String
 
     // ── Export ──────────────────────────────────────────────────────────
     val exportTitle: String
@@ -267,6 +322,14 @@ interface StringResources {
     val exportSuccess: String // "Export successful: {path}"
     val exportFailed: String // "Export failed: {message}"
     val exportBatchResult: String // "Batch complete: {success} succeeded, {failed} failed"
+    val exportHasselbladWatermark: String
+    val exportWatermarkDescription: String
+
+    // ── Accessibility ───────────────────────────────────────────────────
+    val accColorWheel: String
+    val accToneCurve: String
+    val accCropOverlay: String
+    val accCompareView: String
 
     // ── Additional Export / UX ──────────────────────────────────────────
     val compareBefore: String
@@ -483,6 +546,7 @@ interface StringResources {
     val editorUnsavedTitle: String
     val editorUnsavedMessage: String
     val editorSaveAndExit: String
+    val editorDiscardAndExit: String
     val editorExitWithoutSave: String
     val editorAutoEnhance: String
     val editorPresets: String
@@ -555,6 +619,78 @@ interface StringResources {
     val descriptionOptional: String
     val create: String
     val renameCollection: String
+
+    // Editor compare
+    val editorCompareBefore: String
+    val editorCompareAfter: String
+
+    // Display Transform panel
+    val displayTransformOdtMethod: String
+    val displayTransformOutputColorSpace: String
+    val displayTransformPeakLuminance: String
+    val displayTransformOpenDrtLook: String
+    val displayTransformOpenDrtTonescale: String
+    val displayTransformCreativeWhitePoint: String
+
+    // LMT panel
+    val lmtTitle: String
+    val lmtImportLut: String
+    val lmtActiveLut: String
+    val lmtIntensity: String
+    val lmtBuiltInPresets: String
+
+    // Image Inspector panel
+    val inspectorNoImage: String
+    val inspectorFileInfo: String
+    val inspectorExifData: String
+    val inspectorRating: String
+    val inspectorTags: String
+    val inspectorAiAnalysis: String
+    val inspectorNoExif: String
+    val inspectorClear: String
+    val inspectorAddTag: String
+    val inspectorAdd: String
+    val inspectorQualityScore: String
+
+    // Common components
+    val loadingDefault: String
+    val loadingCancel: String
+    val dialogConfirm: String
+    val dialogCancel: String
+    val dialogDismiss: String
+    val dialogRetry: String
+    val dialogOk: String
+    val progressCancel: String
+    val progressRemaining: String
+    val etaRemaining: String
+    val sectionCollapse: String
+    val sectionExpand: String
+    val sliderReset: String
+    val compareOriginal: String
+    val compareEdited: String
+    val compareBefore: String
+    val compareAfter: String
+
+    // Background task bar
+    val tasksCompleted: String // "{count} tasks completed"
+    val switchVersionTitle: String
+    val switchVersionMessage: String
+    val cloneHistoryTitle: String
+    val cloneHistoryMessage: String
+
+    // Privacy
+    val privacyTitle: String
+    val privacyBody: String
+    val privacyAnalyticsTitle: String
+    val privacyAnalyticsDesc: String
+    val privacyAiFeaturesTitle: String
+    val privacyAiFeaturesDesc: String
+    val privacyCrashReportsTitle: String
+    val privacyCrashReportsDesc: String
+    val privacyRequired: String
+    val privacySavePreferences: String
+    val privacyChangeNote: String
+    val privacyDataNote: String
 }
 
 /**

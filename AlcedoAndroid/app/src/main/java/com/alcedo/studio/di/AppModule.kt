@@ -10,7 +10,7 @@ import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.service.RenderService
 import com.alcedo.studio.service.SleeveFilterService as AppSleeveFilterService
 import com.alcedo.studio.service.ExportService as AppExportService
-import com.alcedo.studio.service.AiService as AppAiService
+// Old AiService in service package has been removed; domain.service.AiService is used everywhere
 
 object AppModule {
     private var _appContext: Context? = null
@@ -174,9 +174,7 @@ object AppModule {
         AppExportService(this.context)
     }
 
-    val appAiService: AppAiService by lazy {
-        AppAiService(this.context)
-    }
+    // appAiService removed — domain.service.AiService (aiService) is the sole implementation
 
     // DAOs from data.dao package
     val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }

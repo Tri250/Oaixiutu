@@ -1,148 +1,175 @@
 package com.alcedo.studio.ui.editor
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
+
+enum class CompareMode {
+    SPLIT,
+    ONION_SKIN,
+    SIDE_BY_SIDE
+}
 
 @Composable
 fun CompareView(
-    originalBitmap: ImageBitmap?,
-    editedBitmap: ImageBitmap?,
-    modifier: Modifier = Modifier,
-    onCompareStart: () -> Unit = {},
-    onCompareEnd: () -> Unit = {}
+    originalImage: android.graphics.Bitmap?,
+    editedImage: android.graphics.Bitmap?,
+    compareMode: CompareMode,
+    modifier: Modifier = Modifier
 ) {
-    var sliderPosition by remember { mutableFloatStateOf(0.5f) }
-    var isActive by remember { mutableStateOf(true) }
-    val textMeasurer = rememberTextMeasurer()
-    val textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+    if (originalImage == null || editedImage == null) return
 
-    LaunchedEffect(isActive) {
-        if (isActive) onCompareStart() else onCompareEnd()
-    }
+    var splitPosition by remember { mutableFloatStateOf(0.5f) }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // Layer 1: Original image (full background) — "Before"
-        if (originalBitmap != null) {
-            Image(
-                bitmap = originalBitmap,
-                contentDescription = "Original",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Labels
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                stringRes { compareOriginal },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                stringRes { compareEdited },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        // Layer 2: Edited image clipped to the left of the slider — "After"
-        if (editedBitmap != null) {
-            Image(
-                bitmap = editedBitmap,
-                contentDescription = "Edited",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawWithContent {
-                        clipRect(0f, 0f, size.width * sliderPosition, size.height) {
-                            this@drawWithContent.drawContent()
-                        }
-                    },
-                contentScale = ContentScale.Fit
-            )
-        }
-
-        // Layer 3: Drag interaction area
-        Box(
+        // Compare canvas
+        Canvas(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .aspectRatio(
+                    originalImage.width.toFloat() / originalImage.height.toFloat()
+                )
+                .semantics {
+                    contentDescription = stringRes { accCompareView }
+                    role = Role.Slider
+                    stateDescription = "Split at ${(splitPosition * 100).toInt()}%"
+                }
                 .pointerInput(Unit) {
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        change.consume()
-                        sliderPosition = (sliderPosition + dragAmount / size.width).coerceIn(0f, 1f)
+                    detectDragGestures { change, _ ->
+                        splitPosition = (change.position.x / size.width).coerceIn(0f, 1f)
                     }
                 }
-        )
+        ) {
+            val imageWidth = size.width
+            val imageHeight = size.height
 
-        // Layer 4: Slider visual (divider line, handle, labels)
-        val primaryColor = MaterialTheme.colorScheme.primary
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val x = size.width * sliderPosition
+            when (compareMode) {
+                CompareMode.SPLIT -> {
+                    // Draw edited image first (full)
+                    drawImage(
+                        image = editedImage.asComposeImageBitmap(),
+                        dstSize = Size(imageWidth, imageHeight)
+                    )
+                    // Draw original on the left side
+                    clipRect(0f, 0f, imageWidth * splitPosition, imageHeight) {
+                        drawImage(
+                            image = originalImage.asComposeImageBitmap(),
+                            dstSize = Size(imageWidth, imageHeight)
+                        )
+                    }
+                    // Draw split line
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(imageWidth * splitPosition, 0f),
+                        end = Offset(imageWidth * splitPosition, imageHeight),
+                        strokeWidth = 2f,
+                        blendMode = BlendMode.SrcOver
+                    )
+                }
+                CompareMode.ONION_SKIN -> {
+                    drawImage(
+                        image = originalImage.asComposeImageBitmap(),
+                        dstSize = Size(imageWidth, imageHeight)
+                    )
+                    drawImage(
+                        image = editedImage.asComposeImageBitmap(),
+                        dstSize = Size(imageWidth, imageHeight),
+                        alpha = 1f - splitPosition
+                    )
+                }
+                CompareMode.SIDE_BY_SIDE -> {
+                    val halfWidth = imageWidth / 2f
+                    clipRect(0f, 0f, halfWidth, imageHeight) {
+                        drawImage(
+                            image = originalImage.asComposeImageBitmap(),
+                            dstSize = Size(imageWidth, imageHeight)
+                        )
+                    }
+                    clipRect(halfWidth, 0f, imageWidth, imageHeight) {
+                        drawImage(
+                            image = editedImage.asComposeImageBitmap(),
+                            dstSize = Size(imageWidth, imageHeight)
+                        )
+                    }
+                    // Divider line
+                    drawLine(
+                        color = Color.White,
+                        start = Offset(halfWidth, 0f),
+                        end = Offset(halfWidth, imageHeight),
+                        strokeWidth = 2f,
+                        blendMode = BlendMode.SrcOver
+                    )
+                }
+            }
+        }
 
-            // Vertical divider line
-            drawLine(
-                color = Color.White,
-                start = Offset(x, 0f),
-                end = Offset(x, size.height),
-                strokeWidth = 3f
-            )
-
-            // Handle circle — outer ring
-            drawCircle(
-                color = Color.White,
-                radius = 20f,
-                center = Offset(x, size.height / 2f)
-            )
-            // Handle circle — inner fill
-            drawCircle(
-                color = primaryColor,
-                radius = 16f,
-                center = Offset(x, size.height / 2f)
-            )
-            // Handle arrows
-            drawLine(
-                color = Color.White,
-                start = Offset(x - 8f, size.height / 2f),
-                end = Offset(x + 8f, size.height / 2f),
-                strokeWidth = 2f
-            )
-
-            // "After" label (bottom-left — where the edited image is visible)
-            val afterLayout = textMeasurer.measure("After", textStyle)
-            drawRect(
-                color = Color.Black.copy(alpha = 0.5f),
-                topLeft = Offset(8f, size.height - 40f),
-                size = Size(afterLayout.size.width + 16f, afterLayout.size.height + 8f)
-            )
-            drawText(
-                textMeasurer = textMeasurer,
-                text = "After",
-                topLeft = Offset(16f, size.height - 36f),
-                style = textStyle
-            )
-
-            // "Before" label (bottom-right — where the original image is visible)
-            val beforeLayout = textMeasurer.measure("Before", textStyle)
-            drawRect(
-                color = Color.Black.copy(alpha = 0.5f),
-                topLeft = Offset(
-                    size.width - beforeLayout.size.width - 24f,
-                    size.height - 40f
-                ),
-                size = Size(beforeLayout.size.width + 16f, beforeLayout.size.height + 8f)
-            )
-            drawText(
-                textMeasurer = textMeasurer,
-                text = "Before",
-                topLeft = Offset(
-                    size.width - beforeLayout.size.width - 16f,
-                    size.height - 36f
-                ),
-                style = textStyle
-            )
+        // Labels below
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (compareMode == CompareMode.SIDE_BY_SIDE)
+                Arrangement.SpaceBetween else Arrangement.Center
+        ) {
+            if (compareMode == CompareMode.SIDE_BY_SIDE) {
+                Text(
+                    stringRes { compareBefore },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    stringRes { compareAfter },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "${(splitPosition * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
+
+private fun android.graphics.Bitmap.asComposeImageBitmap() =
+    androidx.compose.ui.graphics.asImageBitmap()

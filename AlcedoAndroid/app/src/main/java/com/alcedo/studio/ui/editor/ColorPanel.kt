@@ -12,7 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.EditorViewModel
 
@@ -54,6 +57,7 @@ private fun ColorWheelsSection(
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
     var selectedWheel by remember { mutableStateOf(ColorWheelType.LIFT) }
+    val view = LocalView.current
 
     Column(modifier = Modifier.padding(12.dp)) {
         Row(
@@ -62,17 +66,20 @@ private fun ColorWheelsSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Color Wheels",
+                stringRes { editorColorWheels },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
-                onClick = { viewModel.resetColorWheels() },
+                onClick = {
+                    HapticFeedback.heavyClick(view)
+                    viewModel.resetColorWheels()
+                },
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     Icons.Default.Refresh,
-                    contentDescription = "Reset Wheels",
+                    contentDescription = stringRes { colorResetWheels },
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -91,8 +98,11 @@ private fun ColorWheelsSection(
             ColorWheelType.entries.forEach { type ->
                 FilterChip(
                     selected = selectedWheel == type,
-                    onClick = { selectedWheel = type },
-                    label = { Text(type.label) }
+                    onClick = {
+                        HapticFeedback.click(view)
+                        selectedWheel = type
+                    },
+                    label = { Text(type.label()) }
                 )
             }
         }
@@ -195,6 +205,7 @@ private fun ColorWheelsSection(
                         Slider(
                             value = value,
                             onValueChange = { newVal ->
+                                HapticFeedback.tick(view)
                                 when (selectedWheel) {
                                     ColorWheelType.LIFT -> {
                                         val arr = floatArrayOf(
@@ -235,6 +246,7 @@ private fun ColorWheelsSection(
         // Reset button for current wheel
         OutlinedButton(
             onClick = {
+                HapticFeedback.heavyClick(view)
                 when (selectedWheel) {
                     ColorWheelType.LIFT -> viewModel.updateColorWheelLift(floatArrayOf(0f, 0f, 0f))
                     ColorWheelType.GAMMA -> viewModel.updateColorWheelGamma(floatArrayOf(1f, 1f, 1f))
@@ -245,7 +257,7 @@ private fun ColorWheelsSection(
         ) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Reset ${selectedWheel.label}")
+            Text(stringRes { editorReset }.format(selectedWheel.label()))
         }
     }
 }
@@ -259,10 +271,18 @@ private fun HslSection(
     viewModel: EditorViewModel,
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
-    val hslChannels = listOf(
-        "Red" to 0, "Orange" to 1, "Yellow" to 2, "Green" to 3,
-        "Cyan" to 4, "Blue" to 5, "Purple" to 6, "Magenta" to 7
+    val view = LocalView.current
+    val hslChannelNames = listOf(
+        stringRes { editorColorRed },
+        stringRes { editorColorOrange },
+        stringRes { editorColorYellow },
+        stringRes { editorColorGreen },
+        stringRes { editorColorCyan },
+        stringRes { editorColorBlue },
+        stringRes { editorColorPurple },
+        stringRes { editorColorMagenta }
     )
+    val hslChannelIndices = listOf(0, 1, 2, 3, 4, 5, 6, 7)
 
     var expandedChannel by remember { mutableStateOf(-1) }
 
@@ -273,17 +293,20 @@ private fun HslSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "HSL",
+                stringRes { editorHsl },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
-                onClick = { viewModel.resetHsl() },
+                onClick = {
+                    HapticFeedback.heavyClick(view)
+                    viewModel.resetHsl()
+                },
                 modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     Icons.Default.Refresh,
-                    contentDescription = "Reset HSL",
+                    contentDescription = stringRes { colorResetHsl },
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -304,7 +327,8 @@ private fun HslSection(
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            hslChannels.forEach { (name, index) ->
+            hslChannelNames.forEachIndexed { idx, name ->
+                val index = hslChannelIndices[idx]
                 val isExpanded = expandedChannel == index
 
                 Card(
@@ -344,7 +368,7 @@ private fun HslSection(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             AdjustmentSlider(
-                                label = "Hue",
+                                label = stringRes { editorHue },
                                 value = params.hslHueShift[index],
                                 range = -180f..180f,
                                 onValueChange = { viewModel.updateHslHueShift(index, it) },
@@ -352,14 +376,14 @@ private fun HslSection(
                                 valueDisplayTransform = { "%.0f°".format(it) }
                             )
                             AdjustmentSlider(
-                                label = "Saturation",
+                                label = stringRes { editorSaturation },
                                 value = params.hslSaturationScale[index],
                                 range = 0f..2f,
                                 onValueChange = { viewModel.updateHslSaturationScale(index, it) },
                                 defaultValue = 1f
                             )
                             AdjustmentSlider(
-                                label = "Luminance",
+                                label = stringRes { editorLuminance },
                                 value = params.hslLuminanceScale[index],
                                 range = 0f..2f,
                                 onValueChange = { viewModel.updateHslLuminanceScale(index, it) },
@@ -382,6 +406,13 @@ private fun ChannelMixerSection(
     viewModel: EditorViewModel,
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
+    val view = LocalView.current
+    val outputLabels = listOf(
+        stringRes { editorOutputR },
+        stringRes { editorOutputG },
+        stringRes { editorOutputB }
+    )
+
     Column(modifier = Modifier.padding(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -389,12 +420,13 @@ private fun ChannelMixerSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Channel Mixer",
+                stringRes { editorChannelMixer },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
                 onClick = {
+                    HapticFeedback.heavyClick(view)
                     viewModel.updateChannelMixer(
                         floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f),
                         false
@@ -404,7 +436,7 @@ private fun ChannelMixerSection(
             ) {
                 Icon(
                     Icons.Default.Refresh,
-                    contentDescription = "Reset Mixer",
+                    contentDescription = stringRes { colorResetMixer },
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -420,15 +452,15 @@ private fun ChannelMixerSection(
                     viewModel.updateChannelMixer(params.channelMixerMatrix, it)
                 }
             )
-            Text("Monochrome", style = MaterialTheme.typography.bodyMedium)
+            Text(stringRes { editorMonochrome }, style = MaterialTheme.typography.bodyMedium)
         }
 
         val labels = listOf("R", "G", "B")
         val matrix = params.channelMixerMatrix
 
-        labels.forEachIndexed { row, rowLabel ->
+        outputLabels.forEachIndexed { row, rowLabel ->
             Text(
-                "Output $rowLabel",
+                rowLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -446,6 +478,7 @@ private fun ChannelMixerSection(
                         Slider(
                             value = matrix[row * 3 + col],
                             onValueChange = {
+                                HapticFeedback.tick(view)
                                 val newMatrix = matrix.clone()
                                 newMatrix[row * 3 + col] = it
                                 viewModel.updateChannelMixer(newMatrix, params.channelMixerMonochrome)
@@ -460,8 +493,15 @@ private fun ChannelMixerSection(
     }
 }
 
-enum class ColorWheelType(val label: String) {
-    LIFT("Lift"),
-    GAMMA("Gamma"),
-    GAIN("Gain")
+enum class ColorWheelType {
+    LIFT,
+    GAMMA,
+    GAIN;
+
+    @androidx.compose.runtime.Composable
+    fun label(): String = when (this) {
+        LIFT -> stringRes { editorLift }
+        GAMMA -> stringRes { editorGamma }
+        GAIN -> stringRes { editorGain }
+    }
 }

@@ -1,7 +1,8 @@
 package com.alcedo.studio.ui.editor
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -10,215 +11,209 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.alcedo.studio.data.model.ImageModel
-import com.alcedo.studio.ui.common.CollapsibleSection
+import com.alcedo.studio.data.model.ImageMetadata
+import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.common.LiquidGlassSurface
 
 @Composable
 fun ImageInspectorPanel(
-    image: ImageModel?,
-    modifier: Modifier = Modifier,
-    onRate: ((Int) -> Unit)? = null,
-    onTag: ((String) -> Unit)? = null,
-    aiDescription: String = "",
-    aiScore: Float? = null
+    metadata: ImageMetadata?,
+    rating: Int,
+    onRatingChanged: (Int) -> Unit,
+    tags: List<String>,
+    onTagsChanged: (List<String>) -> Unit,
+    aiAnalysis: String?,
+    modifier: Modifier = Modifier
 ) {
-    if (image == null) {
+    var newTagText by remember { mutableStateOf("") }
+
+    if (metadata == null) {
         Box(
-            modifier = modifier.fillMaxSize(),
+            modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "No image selected",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                stringRes { inspectorNoImage },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         return
     }
 
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // File Info
-        CollapsibleSection(title = "File Info") {
-            FileInfoRow("Name", image.imageName)
-            FileInfoRow("Path", image.imagePath, maxLines = 2)
-            FileInfoRow("Size", image.exifDisplay.fileSize.ifEmpty { "${image.fileSize} bytes" })
-            FileInfoRow("Dimensions", image.exifDisplay.imageSize.ifEmpty {
-                if (image.width > 0 && image.height > 0) "${image.width} x ${image.height}" else ""
-            })
-            FileInfoRow("Format", image.mimeType.ifEmpty { image.imageType.name })
-            FileInfoRow("Type", image.imageType.name)
+        // ── File Info ──────────────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    stringRes { inspectorFileInfo },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                metadata.fileName?.let {
+                    InspectorRow("File", it)
+                }
+                metadata.fileSize?.let {
+                    InspectorRow("Size", formatFileSize(it))
+                }
+                metadata.dimensions?.let {
+                    InspectorRow("Dimensions", it)
+                }
+                metadata.format?.let {
+                    InspectorRow("Format", it)
+                }
+            }
         }
 
-        HorizontalDivider()
-
-        // EXIF Data
-        if (image.hasExif || image.hasExifDisplay) {
-            CollapsibleSection(title = "EXIF Data") {
-                val exif = image.exifDisplay
-                if (exif.cameraMake.isNotEmpty() || exif.cameraModel.isNotEmpty()) {
-                    FileInfoRow("Camera", "${exif.cameraMake} ${exif.cameraModel}".trim())
-                }
-                if (exif.lensModel.isNotEmpty()) {
-                    FileInfoRow("Lens", exif.lensModel)
-                }
-                if (exif.aperture.isNotEmpty()) {
-                    FileInfoRow("Aperture", "f/${exif.aperture}")
-                }
-                if (exif.shutterSpeed.isNotEmpty()) {
-                    FileInfoRow("Shutter", exif.shutterSpeed)
-                }
-                if (exif.iso.isNotEmpty()) {
-                    FileInfoRow("ISO", exif.iso)
-                }
-                if (exif.focalLength.isNotEmpty()) {
-                    FileInfoRow("Focal Length", "${exif.focalLength}mm")
-                }
-                if (exif.captureDate.isNotEmpty()) {
-                    FileInfoRow("Captured", exif.captureDate)
-                }
-
-                if (exif.cameraMake.isEmpty() && exif.cameraModel.isEmpty() && exif.lensModel.isEmpty()) {
+        // ── EXIF Data ─────────────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    stringRes { inspectorExifData },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                if (metadata.exifData.isEmpty()) {
                     Text(
-                        "No EXIF data available",
+                        stringRes { inspectorNoExif },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            }
-
-            HorizontalDivider()
-        }
-
-        // Rating
-        CollapsibleSection(title = "Rating") {
-            var currentRating by remember { mutableStateOf(0) }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                repeat(5) { index ->
-                    IconButton(
-                        onClick = {
-                            currentRating = index + 1
-                            onRate?.invoke(index + 1)
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            if (index < currentRating) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "Rate ${index + 1}",
-                            modifier = Modifier.size(20.dp),
-                            tint = if (index < currentRating) Color(0xFFFFD700)
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (currentRating > 0) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = {
-                        currentRating = 0
-                        onRate?.invoke(0)
-                    }) {
-                        Text("Clear", style = MaterialTheme.typography.labelSmall)
+                } else {
+                    metadata.exifData.forEach { (key, value) ->
+                        InspectorRow(key, value)
                     }
                 }
             }
         }
 
-        HorizontalDivider()
-
-        // Tags
-        CollapsibleSection(title = "Tags") {
-            var tagText by remember { mutableStateOf("") }
-            val tags = remember { mutableStateListOf<String>() }
-
-            if (tags.isNotEmpty()) {
-                WrapContentRow(
-                    items = tags.toList(),
-                    onRemove = { tags.remove(it) }
+        // ── Rating ─────────────────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    stringRes { inspectorRating },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            OutlinedTextField(
-                value = tagText,
-                onValueChange = { tagText = it },
-                label = { Text("Add tag") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    if (tagText.isNotEmpty()) {
-                        IconButton(onClick = {
-                            if (tagText.isNotBlank() && tagText !in tags) {
-                                tags.add(tagText.trim())
-                                onTag?.invoke(tagText.trim())
-                            }
-                            tagText = ""
-                        }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add")
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    (1..5).forEach { star ->
+                        IconButton(
+                            onClick = { onRatingChanged(if (rating == star) 0 else star) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                if (star <= rating) Icons.Default.Star else Icons.Default.StarOutline,
+                                contentDescription = null,
+                                tint = if (star <= rating) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
-            )
+            }
         }
 
-        HorizontalDivider()
-
-        // AI Analysis
-        if (aiDescription.isNotEmpty() || aiScore != null) {
-            CollapsibleSection(title = "AI Analysis") {
-                if (aiDescription.isNotEmpty()) {
+        // ── Tags ───────────────────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = aiDescription,
-                        style = MaterialTheme.typography.bodySmall,
+                        stringRes { inspectorTags },
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                }
-                if (aiScore != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Quality Score: ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "%.1f".format(aiScore * 100),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = when {
-                                aiScore >= 0.8f -> Color(0xFF4CAF50)
-                                aiScore >= 0.5f -> Color(0xFFFFA726)
-                                else -> Color(0xFFEF5350)
-                            }
-                        )
-                        LinearProgressIndicator(
-                            progress = { aiScore },
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 8.dp)
-                                .height(4.dp),
-                        )
+                    if (tags.isNotEmpty()) {
+                        TextButton(onClick = { onTagsChanged(emptyList()) }) {
+                            Text(stringRes { inspectorClear })
+                        }
                     }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Tag chips
+                if (tags.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        tags.forEach { tag ->
+                            InputChip(
+                                selected = true,
+                                onClick = { onTagsChanged(tags - tag) },
+                                label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                // Add tag input
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newTagText,
+                        onValueChange = { newTagText = it },
+                        placeholder = { Text(stringRes { inspectorAddTag }) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = {
+                            if (newTagText.isNotBlank() && newTagText !in tags) {
+                                onTagsChanged(tags + newTagText.trim())
+                                newTagText = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = stringRes { inspectorAdd })
+                    }
+                }
+            }
+        }
+
+        // ── AI Analysis ────────────────────────────────────────────
+        if (aiAnalysis != null) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        stringRes { inspectorAiAnalysis },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        aiAnalysis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -226,8 +221,7 @@ fun ImageInspectorPanel(
 }
 
 @Composable
-private fun FileInfoRow(label: String, value: String, maxLines: Int = 1) {
-    if (value.isEmpty()) return
+private fun InspectorRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -235,47 +229,29 @@ private fun FileInfoRow(label: String, value: String, maxLines: Int = 1) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = label,
+            label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(0.35f)
+            modifier = Modifier.weight(0.4f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = value,
+            value,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(0.65f)
+            modifier = Modifier.weight(0.6f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun WrapContentRow(
-    items: List<String>,
-    onRemove: (String) -> Unit
-) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items.forEach { tag ->
-            InputChip(
-                selected = false,
-                onClick = {},
-                label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
-                trailingIcon = {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Remove",
-                        modifier = Modifier.size(12.dp)
-                    )
-                },
-                modifier = Modifier.height(28.dp)
-            )
-        }
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
+        bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+        bytes >= 1_000 -> "%.1f KB".format(bytes / 1_000.0)
+        else -> "$bytes B"
     }
 }

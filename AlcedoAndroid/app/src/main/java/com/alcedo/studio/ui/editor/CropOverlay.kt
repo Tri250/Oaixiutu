@@ -12,6 +12,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.alcedo.studio.i18n.stringRes
 import kotlin.math.*
 
 data class CropRect(
@@ -22,13 +28,27 @@ data class CropRect(
     val rotation: Float = 0f
 )
 
-enum class AspectRatio(val label: String, val ratio: Float?) {
-    FREE("Free", null),
-    ONE_ONE("1:1", 1f),
-    FOUR_THREE("4:3", 4f / 3f),
-    THREE_TWO("3:2", 3f / 2f),
-    SIXTEEN_NINE("16:9", 16f / 9f),
-    TWO_ONE("2:1", 2f)
+enum class AspectRatio(val ratio: Float?) {
+    FREE(null),
+    ONE_ONE(1f),
+    FOUR_THREE(4f / 3f),
+    THREE_TWO(3f / 2f),
+    SIXTEEN_NINE(16f / 9f),
+    TWO_ONE(2f),
+    THREE_ONE(3f),
+    NINE_SIXTEEN(9f / 16f);
+
+    @androidx.compose.runtime.Composable
+    fun label(): String = when (this) {
+        FREE -> stringRes { ratioFree }
+        ONE_ONE -> stringRes { ratio1_1 }
+        FOUR_THREE -> stringRes { ratio4_3 }
+        THREE_TWO -> stringRes { ratio3_2 }
+        SIXTEEN_NINE -> stringRes { ratio16_9 }
+        TWO_ONE -> stringRes { ratio2_1 }
+        THREE_ONE -> stringRes { ratio3_1 }
+        NINE_SIXTEEN -> stringRes { ratio9_16 }
+    }
 }
 
 @Composable
@@ -45,6 +65,11 @@ fun CropOverlay(
     Canvas(
         modifier = modifier
             .fillMaxSize()
+            .semantics {
+                contentDescription = stringRes { accCropOverlay }
+                role = Role.Slider
+                stateDescription = "Crop: L=${(cropRect.left * 100).toInt()}%, T=${(cropRect.top * 100).toInt()}%, R=${(cropRect.right * 100).toInt()}%, B=${(cropRect.bottom * 100).toInt()}%"
+            }
             .pointerInput(aspectRatio) {
                 detectDragGestures(
                     onDragStart = { startOffset ->

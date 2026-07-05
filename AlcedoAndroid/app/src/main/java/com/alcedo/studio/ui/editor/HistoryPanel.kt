@@ -8,10 +8,14 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.EditHistory
 import com.alcedo.studio.data.model.Version
+import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.EditorViewModel
 import java.time.format.DateTimeFormatter
@@ -24,6 +28,8 @@ fun HistoryPanel(
     val history by viewModel.history.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val view = LocalView.current
+    val context = LocalContext.current
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var newVersionName by remember { mutableStateOf("") }
@@ -52,37 +58,46 @@ fun HistoryPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Versions (${orderedVersions.size})",
+                        "${stringRes { historyVersions }} (${orderedVersions.size})",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Row {
                         IconButton(
-                            onClick = { viewModel.undo() },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                viewModel.undo()
+                            },
                             enabled = canUndo
                         ) {
                             Icon(
                                 Icons.Default.Undo,
-                                contentDescription = "Undo",
+                                contentDescription = stringRes { historyUndo },
                                 tint = if (canUndo) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.redo() },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                viewModel.redo()
+                            },
                             enabled = canRedo
                         ) {
                             Icon(
                                 Icons.Default.Redo,
-                                contentDescription = "Redo",
+                                contentDescription = stringRes { historyRedo },
                                 tint = if (canRedo) MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                             )
                         }
-                        IconButton(onClick = { viewModel.cloneHistory() }) {
+                        IconButton(onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.cloneHistory()
+                        }) {
                             Icon(
                                 Icons.Default.ContentCopy,
-                                contentDescription = "Clone History",
+                                contentDescription = stringRes { editorCloneHistory },
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -100,7 +115,7 @@ fun HistoryPanel(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("New Version")
+                    Text(stringRes { historyNewVersion })
                 }
             }
         }
@@ -122,7 +137,7 @@ fun HistoryPanel(
                             if (isActive) {
                                 Icon(
                                     Icons.Default.CheckCircle,
-                                    contentDescription = "Active",
+                                    contentDescription = stringRes { active },
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -134,11 +149,11 @@ fun HistoryPanel(
                                     onValueChange = { renameText = it },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Version name") }
+                                    label = { Text(stringRes { historyVersionName }) }
                                 )
                             } else {
                                 Text(
-                                    text = version.displayName.ifEmpty { "Version" },
+                                    text = version.displayName.ifEmpty { stringRes { historyVersions } },
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -156,7 +171,7 @@ fun HistoryPanel(
                             ) {
                                 Icon(
                                     Icons.Default.Check,
-                                    contentDescription = "Confirm",
+                                    contentDescription = stringRes { confirm },
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -166,7 +181,7 @@ fun HistoryPanel(
                             ) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Cancel",
+                                    contentDescription = stringRes { historyCancel },
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -180,7 +195,7 @@ fun HistoryPanel(
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
-                                    contentDescription = "Rename",
+                                    contentDescription = stringRes { historyRename },
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -190,7 +205,7 @@ fun HistoryPanel(
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Delete",
+                                    contentDescription = stringRes { historyDelete },
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -211,7 +226,7 @@ fun HistoryPanel(
                         HorizontalDivider()
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Recent edits:",
+                            stringRes { historyRecentEdits },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -238,7 +253,7 @@ fun HistoryPanel(
                             onClick = { viewModel.switchVersion(version.versionId) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Switch to this version")
+                            Text(stringRes { historySwitchToVersion })
                         }
                     }
                 }
@@ -250,28 +265,29 @@ fun HistoryPanel(
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
-            title = { Text("Create New Version") },
+            title = { Text(stringRes { historyNewVersion }) },
             text = {
                 OutlinedTextField(
                     value = newVersionName,
                     onValueChange = { newVersionName = it },
-                    label = { Text("Version name") },
-                    placeholder = { Text("Version ${orderedVersions.size + 1}") },
+                    label = { Text(stringRes { historyVersionName }) },
+                    placeholder = { Text("${stringRes { historyVersions }} ${orderedVersions.size + 1}") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 Button(onClick = {
-                    viewModel.createVersion(newVersionName.ifEmpty { "Version ${orderedVersions.size + 1}" })
+                    HapticFeedback.success(context)
+                    viewModel.createVersion(newVersionName.ifEmpty { "${stringRes { historyVersions }} ${orderedVersions.size + 1}" })
                     showCreateDialog = false
                 }) {
-                    Text("Create")
+                    Text(stringRes { historyCreate })
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) {
-                    Text("Cancel")
+                    Text(stringRes { historyCancel })
                 }
             }
         )
@@ -281,11 +297,12 @@ fun HistoryPanel(
     if (deleteConfirmId != null) {
         AlertDialog(
             onDismissRequest = { deleteConfirmId = null },
-            title = { Text("Delete Version") },
-            text = { Text("Are you sure you want to delete this version? This action cannot be undone.") },
+            title = { Text(stringRes { historyDeleteVersionTitle }) },
+            text = { Text(stringRes { historyDeleteVersionConfirm }) },
             confirmButton = {
                 Button(
                     onClick = {
+                        HapticFeedback.heavyClick(view)
                         viewModel.deleteVersion(deleteConfirmId!!)
                         deleteConfirmId = null
                     },
@@ -293,12 +310,12 @@ fun HistoryPanel(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Delete")
+                    Text(stringRes { historyDelete })
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deleteConfirmId = null }) {
-                    Text("Cancel")
+                    Text(stringRes { historyCancel })
                 }
             }
         )

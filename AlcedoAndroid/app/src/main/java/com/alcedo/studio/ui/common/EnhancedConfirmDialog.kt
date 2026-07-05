@@ -1,70 +1,51 @@
 package com.alcedo.studio.ui.common
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
-
-enum class ConfirmDialogType {
-    NORMAL, WARNING, DANGER
-}
+import com.alcedo.studio.i18n.stringRes
 
 @Composable
 fun EnhancedConfirmDialog(
     title: String,
     message: String,
-    confirmText: String = "Confirm",
-    cancelText: String = "Cancel",
-    type: ConfirmDialogType = ConfirmDialogType.NORMAL,
-    icon: ImageVector? = when(type) {
-        ConfirmDialogType.WARNING -> Icons.Default.Warning
-        ConfirmDialogType.DANGER -> Icons.Default.Delete
-        else -> null
-    },
+    details: String? = null,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    confirmLabel: String? = null,
+    dismissLabel: String? = null,
+    destructive: Boolean = false
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = if (icon != null) {
-            {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = when(type) {
-                        ConfirmDialogType.DANGER -> MaterialTheme.colorScheme.error
-                        ConfirmDialogType.WARNING -> Color(0xFFFF9800)
-                        else -> MaterialTheme.colorScheme.primary
-                    },
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        } else null,
         title = { Text(title) },
-        text = { Text(message) },
-        confirmButton = {
-            TextButton(
-                onClick = onConfirm,
-                colors = if (type == ConfirmDialogType.DANGER) {
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(message)
+                if (details != null) {
+                    Text(
+                        details,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                } else ButtonDefaults.textButtonColors()
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = if (destructive) ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                ) else ButtonDefaults.buttonColors()
             ) {
-                Text(confirmText)
+                Text(confirmLabel ?: stringRes { dialogConfirm })
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(cancelText)
+                Text(dismissLabel ?: stringRes { dialogCancel })
             }
-        },
-        shape = MaterialTheme.shapes.large
+        }
     )
 }

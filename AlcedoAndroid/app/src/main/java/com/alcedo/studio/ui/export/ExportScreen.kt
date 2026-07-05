@@ -20,6 +20,8 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ProgressBar
+import com.alcedo.studio.ui.theme.AlcedoThemeVariant
+import com.alcedo.studio.ui.theme.ThemeManager
 import com.alcedo.studio.viewmodel.ExportViewModel
 import kotlinx.coroutines.launch
 
@@ -35,6 +37,14 @@ fun ExportScreen(
     val lastResult by viewModel.lastResult.collectAsStateWithLifecycle()
     val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
+
+    // Initialize Hasselblad watermark default based on theme variant
+    val themeVariant by ThemeManager.themeVariant.collectAsStateWithLifecycle()
+    LaunchedEffect(themeVariant) {
+        if (viewModel.hassebladWatermark != (themeVariant == AlcedoThemeVariant.HASSELBLAD)) {
+            viewModel.hassebladWatermark = themeVariant == AlcedoThemeVariant.HASSELBLAD
+        }
+    }
 
     // Snackbar host state for result feedback
     val snackbarHostState = remember { SnackbarHostState() }
@@ -174,6 +184,22 @@ fun ExportScreen(
                 }
             }
 
+            // Hasselblad Watermark
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = viewModel.hassebladWatermark,
+                    onCheckedChange = { viewModel.hassebladWatermark = it }
+                )
+                Column {
+                    Text(stringRes { exportHasselbladWatermark }, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringRes { exportWatermarkDescription },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // Max dimension (unified)
             OutlinedTextField(
                 value = viewModel.maxDimension,
@@ -283,6 +309,17 @@ fun ExportScreen(
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        // ETA display
+                        if (isExporting && progress.etaMillis > 0) {
+                            val etaFormatted = formatEta(progress.etaMillis)
+                            Text(
+                                stringRes { exportEta }.format(etaFormatted),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
                         // Per-item progress
                         if (progress.currentItemName.isNotEmpty()) {
@@ -394,5 +431,14 @@ fun ExportScreen(
                 Text(stringRes { exportImage })
             }
         }
+    }
+}
+
+private fun formatEta(millis: Long): String {
+    val seconds = millis / 1000
+    return when {
+        seconds < 60 -> "${seconds}s"
+        seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+        else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
     }
 }

@@ -249,6 +249,24 @@ class ModelDownloadService(private val context: Context) {
         downloadJobs.remove(modelId)
     }
 
+    /**
+     * Resume a paused download by re-downloading from scratch.
+     * Range-request resume is not yet supported.
+     */
+    suspend fun resumeModelDownload(
+        modelId: String,
+        onProgress: (Float) -> Unit = {}
+    ): Boolean {
+        val model = _models.value.find { it.modelId == modelId } ?: return false
+        if (model.downloadStatus != ModelDownloadStatus.PAUSED) return false
+
+        // Clean up any partial temp file before re-downloading
+        val tempFile = File(getModelFile(modelId).absolutePath + ".tmp")
+        if (tempFile.exists()) tempFile.delete()
+
+        return downloadModel(modelId, onProgress)
+    }
+
     // ── Activation ──
 
     suspend fun activateModel(modelId: String): Boolean {

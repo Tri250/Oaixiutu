@@ -11,6 +11,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.alcedo.studio.i18n.stringRes
 import kotlin.math.*
 
 data class CurvePoint(val x: Float, val y: Float)
@@ -44,6 +50,11 @@ fun ToneCurveView(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
+            .semantics {
+                contentDescription = stringRes { accToneCurve }.format(controlPoints.size)
+                role = Role.Slider
+                stateDescription = "${controlPoints.size} control points"
+            }
             .pointerInput(controlPoints) {
                 detectDragGestures(
                     onDragStart = { startOffset ->

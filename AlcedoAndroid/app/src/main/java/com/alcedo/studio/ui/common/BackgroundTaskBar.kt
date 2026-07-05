@@ -20,6 +20,7 @@ import com.alcedo.studio.domain.service.TaskSnapshot
 import com.alcedo.studio.domain.service.TaskStatus
 import com.alcedo.studio.domain.service.TaskType
 import com.alcedo.studio.i18n.stringRes
+import kotlinx.coroutines.delay
 
 @Composable
 fun BackgroundTaskBar(
@@ -35,9 +36,28 @@ fun BackgroundTaskBar(
         it.status == TaskStatus.COMPLETED || it.status == TaskStatus.FAILED || it.status == TaskStatus.CANCELLED
     }
 
-    if (runningTasks.isEmpty()) return
+    // Only return when BOTH running and completed tasks are empty
+    if (runningTasks.isEmpty() && completedTasks.isEmpty()) return
 
     var isExpanded by remember { mutableStateOf(false) }
+    var isVisible by remember { mutableStateOf(true) }
+
+    // Auto-dismiss completed tasks after 5 seconds (but keep bar visible until then)
+    LaunchedEffect(runningTasks.isEmpty(), completedTasks.isNotEmpty()) {
+        if (runningTasks.isEmpty() && completedTasks.isNotEmpty()) {
+            delay(5000)
+            isVisible = false
+        }
+    }
+
+    // Reset visibility when new tasks start
+    LaunchedEffect(runningTasks.isNotEmpty()) {
+        if (runningTasks.isNotEmpty()) {
+            isVisible = true
+        }
+    }
+
+    if (!isVisible) return
 
     Column(modifier = modifier) {
         // Expandable popover
@@ -64,7 +84,8 @@ fun BackgroundTaskBar(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(onClick = { isExpanded = false }) {
-                            Icon(Icons.Default.ExpandMore, contentDescription = stringRes { collapse })
+                            // When expanded, show ExpandLess (up arrow) to collapse
+                            Icon(Icons.Default.ExpandLess, contentDescription = stringRes { collapse })
                         }
                     }
 
@@ -118,53 +139,68 @@ fun BackgroundTaskBar(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Task type icon
-                Icon(
-                    taskTypeIcon(runningTasks.firstOrNull()?.type),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Summary
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (runningTasks.size == 1) runningTasks.first().title
-                        else stringRes { activeTasks }.format(runningTasks.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                if (runningTasks.isNotEmpty()) {
+                    // Running tasks mode
+                    Icon(
+                        taskTypeIcon(runningTasks.firstOrNull()?.type),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
-                    if (runningTasks.size == 1 && runningTasks.first().progress > 0f) {
-                        LinearProgressIndicator(
-                            progress = { runningTasks.first().progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .clip(RoundedCornerShape(2.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (runningTasks.size == 1) runningTasks.first().title
+                            else stringRes { activeTasks }.format(runningTasks.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (runningTasks.size == 1 && runningTasks.first().progress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { runningTasks.first().progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val avgProgress = runningTasks.map { it.progress }.average().toFloat()
+                    Text(
+                        "${(avgProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    // All tasks completed – show completion summary
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = Color(0xFF4CAF50)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringRes { tasksCompleted }.format(completedTasks.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Overall progress
-                val avgProgress = if (runningTasks.isNotEmpty()) {
-                    runningTasks.map { it.progress }.average().toFloat()
-                } else 0f
-
-                Text(
-                    "${(avgProgress * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
                 IconButton(onClick = { isExpanded = !isExpanded }) {
                     Icon(
-                        if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                        // When expanded show ExpandLess (up), when collapsed show ExpandMore (down)
+                        if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = if (isExpanded) stringRes { collapse } else stringRes { expand }
                     )
                 }
@@ -277,5 +313,3 @@ private fun taskTypeIcon(type: TaskType?) = when (type) {
     TaskType.SEMANTIC_INDEXING -> Icons.Default.Search
     null -> Icons.Default.Pending
 }
-
-

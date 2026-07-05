@@ -16,7 +16,8 @@ import com.alcedo.studio.viewmodel.EditorViewModel
 @Composable
 fun BasicPanel(
     viewModel: EditorViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val params by remember { viewModel.params }
 
@@ -44,6 +45,8 @@ fun BasicPanel(
                             viewModel.updateHighlights(0f)
                             viewModel.updateShadows(0f)
                             viewModel.updateMidtones(0f)
+                            viewModel.updateSigmoidShoulder(0.5f)
+                            viewModel.updateShadowBoundary(0.25f)
                         },
                         modifier = Modifier.size(48.dp)
                     ) {
@@ -85,10 +88,10 @@ fun BasicPanel(
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = stringRes { editorWhites },
+                    label = "Sigmoid Shoulder",
                     value = params.sigmoidShoulder,
                     range = 0f..1f,
-                    onValueChange = { viewModel.updateSigmoidContrast(it) },
+                    onValueChange = { viewModel.updateSigmoidShoulder(it) },
                     defaultValue = 0.5f
                 )
                 AdjustmentSlider(
@@ -96,7 +99,7 @@ fun BasicPanel(
                     value = params.shadowBoundary,
                     range = 0f..0.5f,
                     onValueChange = {
-                        viewModel.updateParams(params.copy(shadowBoundary = it))
+                        viewModel.updateShadowBoundary(it)
                     },
                     defaultValue = 0.25f
                 )

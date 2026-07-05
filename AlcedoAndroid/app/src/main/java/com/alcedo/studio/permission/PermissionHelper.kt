@@ -47,8 +47,18 @@ object PermissionHelper {
 
     // Get the correct permissions based on API level
     fun getReadMediaPermissions(): List<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Use granular media permissions
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+: Include READ_MEDIA_VISUAL_USER_SELECTED for partial access support.
+            // When requesting together, the system handles the "Select photos" flow:
+            // - User grants full access → READ_MEDIA_IMAGES + READ_MEDIA_VIDEO granted
+            // - User selects "Select photos" → READ_MEDIA_VISUAL_USER_SELECTED granted only
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13: Use granular media permissions
             listOf(
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.READ_MEDIA_VIDEO
@@ -88,8 +98,60 @@ object PermissionHelper {
         return permissions.all { hasPermission(context, it) }
     }
 
+    /**
+     * 检查是否有媒体读取访问权限（完整或部分）。
+     * - 完整访问：READ_MEDIA_IMAGES + READ_MEDIA_VIDEO 均已授予
+     * - 部分访问（Android 14+）：仅 READ_MEDIA_VISUAL_USER_SELECTED 已授予
+     * 两种情况均返回 true。调用方可通过 [isLimitedAccess] 区分是否为受限访问。
+     */
     fun hasReadMediaAccess(context: Context): Boolean {
-        return hasAllPermissions(context, getReadMediaPermissions())
+        if (hasAllPermissions(context, getFullReadMediaPermissions())) {
+            return true
+        }
+        // Android 14+: 用户选择了"选择照片"，仅授予了 READ_MEDIA_VISUAL_USER_SELECTED
+        return hasPartialMediaAccess(context)
+    }
+
+    /**
+     * 返回完整媒体访问所需的权限列表（不含 READ_MEDIA_VISUAL_USER_SELECTED）。
+     */
+    private fun getFullReadMediaPermissions(): List<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            listOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        }
+    }
+
+    /**
+     * 检查是否仅有部分媒体访问权限。
+     * 在 Android 14+ 上，当 READ_MEDIA_VISUAL_USER_SELECTED 已授予，
+     * 但 READ_MEDIA_IMAGES 未授予时，返回 true。
+     * 低于 Android 14 的设备始终返回 false。
+     */
+    fun hasPartialMediaAccess(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return hasPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) &&
+                    !hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+        }
+        return false
+    }
+
+    /**
+     * 检查是否处于受限访问状态（用户在权限对话框中选择了"选择照片"）。
+     * 即 READ_MEDIA_VISUAL_USER_SELECTED 已授予，但 READ_MEDIA_IMAGES 未授予。
+     * 这与 [hasPartialMediaAccess] 语义一致，提供更具描述性的命名。
+     */
+    fun isLimitedAccess(context: Context): Boolean {
+        return hasPartialMediaAccess(context)
     }
 
     fun hasWriteAccess(context: Context): Boolean {

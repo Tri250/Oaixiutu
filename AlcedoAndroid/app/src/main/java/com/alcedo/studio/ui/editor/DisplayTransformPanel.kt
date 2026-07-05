@@ -6,32 +6,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import com.alcedo.studio.data.model.PipelineParams
+import com.alcedo.studio.data.model.*
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.SectionHeader
 
 enum class OdtMethod { ACES, OPENDRT }
 
 enum class OutputColorSpace { SRGB, P3, REC2020 }
-
-enum class OpenDrtLook(val label: String) {
-    STANDARD("Standard"),
-    ARRIBA("Arriba"),
-    SYLVAN("Sylvan"),
-    COLORFUL("Colorful"),
-    AERY("Aery"),
-    DYSTOPIC("Dystopic"),
-    UMBRA("Umbra")
-}
-
-enum class OpenDrtTonescale(val label: String) {
-    STANDARD("Standard"),
-    SOFT("Soft"),
-    MEDIUM("Medium"),
-    HARD("Hard"),
-    FILMIC("Filmic")
-}
 
 enum class CreativeWhitePoint(val label: String, val cct: Int) {
     D93("D93", 9300),
@@ -48,11 +33,21 @@ fun DisplayTransformPanel(
     onParamsChanged: (PipelineParams) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var odtMethod by remember { mutableStateOf(OdtMethod.ACES) }
-    var outputColorSpace by remember { mutableStateOf(OutputColorSpace.SRGB) }
-    var openDrtLook by remember { mutableStateOf(OpenDrtLook.STANDARD) }
-    var openDrtTonescale by remember { mutableStateOf(OpenDrtTonescale.STANDARD) }
+    val odtMethod = when (params.displayTransform.colorScience) {
+        ColorScience.OPENDRT -> OdtMethod.OPENDRT
+        else -> OdtMethod.ACES
+    }
+
+    val outputColorSpace = when (params.displayTransform.displayColorSpace) {
+        ColorSpace.DISPLAY_P3 -> OutputColorSpace.P3
+        ColorSpace.REC2020 -> OutputColorSpace.REC2020
+        else -> OutputColorSpace.SRGB
+    }
+
+    val openDrtLook = params.displayTransform.openDrtLook
+    val openDrtTonescale = params.displayTransform.openDrtTonescale
     var creativeWhitePoint by remember { mutableStateOf(CreativeWhitePoint.D65) }
+    val view = LocalView.current
 
     Column(
         modifier = modifier
@@ -61,13 +56,26 @@ fun DisplayTransformPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // ODT Method
-        SectionHeader(title = "ODT Method") {
+        SectionHeader(title = stringRes { displayTransformOdtMethod }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OdtMethod.entries.forEach { method ->
                         FilterChip(
                             selected = odtMethod == method,
-                            onClick = { odtMethod = method },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                val newColorScience = when (method) {
+                                    OdtMethod.ACES -> ColorScience.ACES20
+                                    OdtMethod.OPENDRT -> ColorScience.OPENDRT
+                                }
+                                onParamsChanged(
+                                    params.copy(
+                                        displayTransform = params.displayTransform.copy(
+                                            colorScience = newColorScience
+                                        )
+                                    )
+                                )
+                            },
                             label = { Text(method.name, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
@@ -76,13 +84,27 @@ fun DisplayTransformPanel(
         }
 
         // Output Color Space
-        SectionHeader(title = "Output Color Space") {
+        SectionHeader(title = stringRes { displayTransformOutputColorSpace }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutputColorSpace.entries.forEach { cs ->
                         FilterChip(
                             selected = outputColorSpace == cs,
-                            onClick = { outputColorSpace = cs },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                val newColorSpace = when (cs) {
+                                    OutputColorSpace.SRGB -> ColorSpace.SRGB
+                                    OutputColorSpace.P3 -> ColorSpace.DISPLAY_P3
+                                    OutputColorSpace.REC2020 -> ColorSpace.REC2020
+                                }
+                                onParamsChanged(
+                                    params.copy(
+                                        displayTransform = params.displayTransform.copy(
+                                            displayColorSpace = newColorSpace
+                                        )
+                                    )
+                                )
+                            },
                             label = { Text(cs.name, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
@@ -91,9 +113,9 @@ fun DisplayTransformPanel(
         }
 
         // Peak Luminance
-        SectionHeader(title = "Peak Luminance") {
+        SectionHeader(title = stringRes { displayTransformPeakLuminance }) {
             AdjustmentSlider(
-                label = "Peak Luminance",
+                label = stringRes { displayTransformPeakLuminance },
                 value = params.displayTransform.peakLuminance,
                 range = 50f..1000f,
                 onValueChange = {
@@ -110,16 +132,25 @@ fun DisplayTransformPanel(
 
         // OpenDRT settings (only shown when ODT method is OpenDRT)
         if (odtMethod == OdtMethod.OPENDRT) {
-            SectionHeader(title = "OpenDRT Look") {
+            SectionHeader(title = stringRes { displayTransformOpenDrtLook }) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        OpenDrtLook.entries.forEach { look ->
+                        com.alcedo.studio.data.model.OpenDrtLook.entries.forEach { look ->
                             FilterChip(
                                 selected = openDrtLook == look,
-                                onClick = { openDrtLook = look },
+                                onClick = {
+                                    HapticFeedback.click(view)
+                                    onParamsChanged(
+                                        params.copy(
+                                            displayTransform = params.displayTransform.copy(
+                                                openDrtLook = look
+                                            )
+                                        )
+                                    )
+                                },
                                 label = { Text(look.label, style = MaterialTheme.typography.labelSmall) }
                             )
                         }
@@ -127,16 +158,25 @@ fun DisplayTransformPanel(
                 }
             }
 
-            SectionHeader(title = "OpenDRT Tonescale") {
+            SectionHeader(title = stringRes { displayTransformOpenDrtTonescale }) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        OpenDrtTonescale.entries.forEach { ts ->
+                        com.alcedo.studio.data.model.OpenDrtTonescale.entries.forEach { ts ->
                             FilterChip(
                                 selected = openDrtTonescale == ts,
-                                onClick = { openDrtTonescale = ts },
+                                onClick = {
+                                    HapticFeedback.click(view)
+                                    onParamsChanged(
+                                        params.copy(
+                                            displayTransform = params.displayTransform.copy(
+                                                openDrtTonescale = ts
+                                            )
+                                        )
+                                    )
+                                },
                                 label = { Text(ts.label, style = MaterialTheme.typography.labelSmall) }
                             )
                         }
@@ -146,7 +186,7 @@ fun DisplayTransformPanel(
         }
 
         // Creative White Point
-        SectionHeader(title = "Creative White Point") {
+        SectionHeader(title = stringRes { displayTransformCreativeWhitePoint }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -156,6 +196,7 @@ fun DisplayTransformPanel(
                         FilterChip(
                             selected = creativeWhitePoint == wp,
                             onClick = {
+                                HapticFeedback.click(view)
                                 creativeWhitePoint = wp
                                 onParamsChanged(
                                     params.copy(whiteBalanceTemp = wp.cct.toFloat())

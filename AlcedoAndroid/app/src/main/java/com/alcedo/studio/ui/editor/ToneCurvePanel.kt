@@ -7,8 +7,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
+import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.EditorViewModel
 
@@ -20,6 +23,7 @@ fun ToneCurvePanel(
     val params by remember { viewModel.params }
     var selectedChannel by remember { mutableStateOf(CurveChannel.RGB) }
     var curveMode by remember { mutableStateOf(ToneCurveMode.POINT) }
+    val view = LocalView.current
 
     val controlPoints = remember(params.toneCurveX, params.toneCurveY) {
         val count = params.toneCurvePoints
@@ -41,17 +45,20 @@ fun ToneCurvePanel(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
                     Text(
-                        "Tone Curve",
+                        stringRes { editorToneCurve },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.resetToneCurve() },
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.resetToneCurve()
+                        },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Curve",
+                            contentDescription = stringRes { toneCurveReset },
                             modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -68,8 +75,11 @@ fun ToneCurvePanel(
                     ToneCurveMode.entries.forEach { mode ->
                         FilterChip(
                             selected = curveMode == mode,
-                            onClick = { curveMode = mode },
-                            label = { Text(mode.label) }
+                            onClick = {
+                                HapticFeedback.click(view)
+                                curveMode = mode
+                            },
+                            label = { Text(mode.label()) }
                         )
                     }
                 }
@@ -90,7 +100,10 @@ fun ToneCurvePanel(
                             CurveChannel.BLUE -> Color(0xFF4488FF)
                         }
                         AssistChip(
-                            onClick = { selectedChannel = ch },
+                            onClick = {
+                                HapticFeedback.click(view)
+                                selectedChannel = ch
+                            },
                             label = {
                                 Text(
                                     ch.name,
@@ -125,14 +138,14 @@ fun ToneCurvePanel(
                         // Parametric curve sliders
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             AdjustmentSlider(
-                                label = "Highlights",
+                                label = stringRes { toneCurveHighlights },
                                 value = params.highlights,
                                 range = -1f..1f,
                                 onValueChange = { viewModel.updateHighlights(it) },
                                 defaultValue = 0f
                             )
                             AdjustmentSlider(
-                                label = "Lights",
+                                label = stringRes { toneCurveLights },
                                 value = params.sigmoidShoulder,
                                 range = 0f..1f,
                                 onValueChange = {
@@ -141,7 +154,7 @@ fun ToneCurvePanel(
                                 defaultValue = 0.5f
                             )
                             AdjustmentSlider(
-                                label = "Darks",
+                                label = stringRes { toneCurveDarks },
                                 value = params.sigmoidPivot,
                                 range = 0f..1f,
                                 onValueChange = {
@@ -150,14 +163,14 @@ fun ToneCurvePanel(
                                 defaultValue = 0.18f
                             )
                             AdjustmentSlider(
-                                label = "Shadows",
+                                label = stringRes { toneCurveShadows },
                                 value = params.shadows,
                                 range = -1f..1f,
                                 onValueChange = { viewModel.updateShadows(it) },
                                 defaultValue = 0f
                             )
                             AdjustmentSlider(
-                                label = "Sigmoid Contrast",
+                                label = stringRes { toneCurveSigmoidContrast },
                                 value = params.sigmoidContrast,
                                 range = 0f..2f,
                                 onValueChange = { viewModel.updateSigmoidContrast(it) },
@@ -171,17 +184,26 @@ fun ToneCurvePanel(
 
         // ── Reset Curve Button ─────────────────────────────────────
         OutlinedButton(
-            onClick = { viewModel.resetToneCurve() },
+            onClick = {
+                HapticFeedback.heavyClick(view)
+                viewModel.resetToneCurve()
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Reset Curve")
+            Text(stringRes { toneCurveReset })
         }
     }
 }
 
-enum class ToneCurveMode(val label: String) {
-    POINT("Point"),
-    PARAMETRIC("Parametric")
+enum class ToneCurveMode {
+    POINT,
+    PARAMETRIC;
+
+    @androidx.compose.runtime.Composable
+    fun label(): String = when (this) {
+        POINT -> stringRes { toneCurvePointMode }
+        PARAMETRIC -> stringRes { toneCurveParametricMode }
+    }
 }

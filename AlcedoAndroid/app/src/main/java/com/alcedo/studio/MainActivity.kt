@@ -18,10 +18,12 @@ import com.alcedo.studio.i18n.LanguageManager
 import com.alcedo.studio.ui.theme.ThemeManager
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
 
         // Validate incoming intent data
@@ -37,8 +39,11 @@ class MainActivity : ComponentActivity() {
         }
 
         // Initialize managers
+        var isReady by mutableStateOf(false)
+        splashScreen.setKeepOnScreenCondition { !isReady }
         try { ThemeManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "ThemeManager init failed", e) }
         try { LanguageManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "LanguageManager init failed", e) }
+        isReady = true
 
         try { enableEdgeToEdge() } catch (e: Throwable) { Log.e("MainActivity", "enableEdgeToEdge failed", e) }
         setContent {

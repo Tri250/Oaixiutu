@@ -498,6 +498,21 @@ class AiService(private val context: Context) {
 
     // ── Task Management ──
 
+    /**
+     * Launch a tracked coroutine job. The job is added to [activeJobs] before
+     * execution and removed when the coroutine completes (success, failure, or cancellation).
+     *
+     * @param taskId Unique task identifier used for progress tracking and cancellation
+     * @param block The work to perform — runs on [Dispatchers.IO] by default
+     * @return The [Job] handle
+     */
+    private fun launchTracked(taskId: String, block: suspend CoroutineScope.() -> Unit): Job {
+        val job = scope.launch(block = block)
+        activeJobs[taskId] = job
+        job.invokeOnCompletion { activeJobs.remove(taskId) }
+        return job
+    }
+
     fun cancelTask(taskId: String) {
         activeJobs[taskId]?.cancel()
         activeJobs.remove(taskId)
@@ -508,6 +523,44 @@ class AiService(private val context: Context) {
         activeJobs.values.forEach { it.cancel() }
         activeJobs.clear()
         _taskProgress.value = emptyMap()
+    }
+
+    /**
+     * Fire-and-forget label generation with automatic job tracking.
+     * Use [cancelTask] with the returned taskId to cancel.
+     */
+    fun startLabelGeneration(imageId: UInt, bitmap: Bitmap, modelId: String? = null): String {
+        val taskId = "label-gen-$imageId"
+        launchTracked(taskId) {
+            generateLabels(imageId, bitmap, modelId)
+        }
+        return taskId
+    }
+
+    /**
+     * Fire-and-forget embedding generation with automatic job tracking.
+     * Use [cancelTask] with the returned taskId to cancel.
+     */
+    fun startEmbeddingGeneration(imageId: UInt, bitmap: Bitmap, modelId: String? = null): String {
+        val taskId = "embed-gen-$imageId"
+        launchTracked(taskId) {
+            generateEmbedding(imageId, bitmap, modelId)
+        }
+        return taskId
+    }
+
+    /**
+     * Fire-and-forget image indexing with automatic job tracking.
+     * Use [cancelTask] with the returned taskId to cancel.
+     */
+    fun startIndexImage(imageId: UInt, bitmap: Bitmap, modelId: String? = null): String {
+        val taskId = "index-$imageId"
+        launchTracked(taskId) {
+            val activeModelId = modelId ?: getActiveModel()?.modelId ?: "mobileclip-s2"
+            val embedding = generateEmbedding(imageId, bitmap, activeModelId)
+            indexImage(imageId, embedding, activeModelId)
+        }
+        return taskId
     }
 
     // ── Rating (delegated to AiRatingService) ──

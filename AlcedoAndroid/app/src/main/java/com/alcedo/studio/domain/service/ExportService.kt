@@ -3,7 +3,12 @@ package com.alcedo.studio.domain.service
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorSpace as AndroidColorSpace
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Typeface
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
@@ -40,6 +45,8 @@ class ExportService(private val context: Context) {
     private val _exportProgress = MutableStateFlow(ExportProgress())
     val exportProgress: StateFlow<ExportProgress> = _exportProgress.asStateFlow()
 
+    private var exportStartTime: Long = 0L
+
     data class ExportProgress(
         val totalItems: Int = 0,
         val completedItems: Int = 0,
@@ -49,7 +56,8 @@ class ExportService(private val context: Context) {
         val currentItemName: String = "",
         val currentItemProgress: Float = 0f,
         val overallProgress: Float = 0f,
-        val status: ExportStatus = ExportStatus.IDLE
+        val status: ExportStatus = ExportStatus.IDLE,
+        val etaMillis: Long = 0L
     ) {
         val isRunning: Boolean get() = status == ExportStatus.EXPORTING
     }
@@ -78,6 +86,7 @@ class ExportService(private val context: Context) {
         processedBitmap: Bitmap? = null
     ): ExportResult = withContext(Dispatchers.IO) {
         try {
+            exportStartTime = System.currentTimeMillis()
             _exportProgress.value = ExportProgress(
                 totalItems = 1,
                 currentItemIndex = 0,
@@ -98,12 +107,20 @@ class ExportService(private val context: Context) {
             val resized = applyDimensionLimit(converted, settings)
             updateItemProgress(0.3f)
 
+            // 2b. Apply Hasselblad watermark if enabled
+            val watermarked = if (settings.hassebladWatermark) {
+                applyHasselbladWatermark(resized)
+            } else {
+                resized
+            }
+            updateItemProgress(0.35f)
+
             // 3. Create output file
             val outputFile = createOutputFile(settings)
             updateItemProgress(0.4f)
 
             // 4. Write image data
-            val writeSuccess = writeImage(resized, outputFile, settings)
+            val writeSuccess = writeImage(watermarked, outputFile, settings)
             updateItemProgress(0.7f)
 
             if (!writeSuccess) {
@@ -137,7 +154,8 @@ class ExportService(private val context: Context) {
 
             // Recycle intermediate bitmaps if we created them
             if (converted !== bitmap && converted !== resized) converted.recycle()
-            if (resized !== bitmap && resized !== converted) resized.recycle()
+            if (resized !== bitmap && resized !== converted && resized !== watermarked) resized.recycle()
+            if (watermarked !== resized && watermarked !== bitmap) watermarked.recycle()
             if (processedBitmap == null && bitmap !== converted && bitmap !== resized) bitmap.recycle()
 
             val uri = try {
@@ -211,6 +229,7 @@ class ExportService(private val context: Context) {
         val successCount = AtomicInteger(0)
         val failureCount = AtomicInteger(0)
         val results = ConcurrentLinkedQueue<ExportResult>()
+        val startTime = System.currentTimeMillis()
 
         _exportProgress.value = ExportProgress(
             totalItems = total,
@@ -242,11 +261,16 @@ class ExportService(private val context: Context) {
                     }
 
                     val done = completedCount.incrementAndGet()
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val eta = if (done > 0 && total > done) {
+                        (elapsed * (total - done) / done)
+                    } else 0L
                     _exportProgress.value = _exportProgress.value.copy(
                         completedItems = done,
                         successCount = successCount.get(),
                         failureCount = failureCount.get(),
                         overallProgress = done.toFloat() / total,
+                        etaMillis = eta,
                         status = if (done >= total) {
                             if (cancelFlag.get()) ExportStatus.CANCELLED else ExportStatus.COMPLETED
                         } else ExportStatus.EXPORTING
@@ -384,6 +408,58 @@ class ExportService(private val context: Context) {
     private fun linearToSrgb(c: Float): Float {
         return if (c <= 0.0031308f) 12.92f * c
         else 1.055f * c.let { Math.pow(it.toDouble(), 1.0 / 2.4).toFloat() } - 0.055f
+    }
+
+    // ================================================================
+    // Hasselblad Watermark
+    // ================================================================
+
+    private fun applyHasselbladWatermark(bitmap: Bitmap): Bitmap {
+        val watermarked = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(watermarked)
+        drawHasselbladWatermark(canvas, watermarked)
+        return watermarked
+    }
+
+    private fun drawHasselbladWatermark(canvas: Canvas, bitmap: Bitmap) {
+        val paint = Paint().apply {
+            color = Color.WHITE
+            alpha = 180
+            textSize = bitmap.width * 0.015f
+            typeface = Typeface.SERIF
+            isAntiAlias = true
+        }
+        val shadowPaint = Paint().apply {
+            color = Color.BLACK
+            alpha = 120
+            textSize = bitmap.width * 0.015f
+            typeface = Typeface.SERIF
+            isAntiAlias = true
+        }
+        val text = "HASSELBLAD"
+        val margin = bitmap.width * 0.03f
+        val x = bitmap.width - margin - paint.measureText(text)
+        val y = bitmap.height - margin
+        // Shadow
+        canvas.drawText(text, x + 2f, y + 2f, shadowPaint)
+        // Main text
+        canvas.drawText(text, x, y, paint)
+        // "H" icon before text
+        val hSize = bitmap.width * 0.018f
+        val hX = x - hSize - paint.measureText(" ")
+        val hY = y - hSize * 0.7f
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = hSize * 0.08f
+        val path = Path().apply {
+            moveTo(hX, hY + hSize)
+            lineTo(hX, hY)
+            lineTo(hX + hSize * 0.5f, hY + hSize * 0.4f)
+            lineTo(hX + hSize, hY)
+            lineTo(hX + hSize, hY + hSize)
+        }
+        canvas.drawPath(path, paint)
+        // Reset paint style
+        paint.style = Paint.Style.FILL
     }
 
     // ================================================================
@@ -1538,7 +1614,12 @@ class ExportService(private val context: Context) {
 
     private fun updateItemProgress(progress: Float) {
         val current = _exportProgress.value
-        _exportProgress.value = current.copy(currentItemProgress = progress)
+        val elapsed = if (exportStartTime > 0) System.currentTimeMillis() - exportStartTime else 0L
+        val eta = if (progress > 0f && progress < 1f && current.totalItems > 0) {
+            val overallProgress = (current.completedItems.toFloat() + progress) / current.totalItems
+            if (overallProgress > 0f) (elapsed * (1.0 - overallProgress) / overallProgress).toLong() else 0L
+        } else if (progress >= 1f) 0L else 0L
+        _exportProgress.value = current.copy(currentItemProgress = progress, etaMillis = eta)
     }
 
     // ================================================================
@@ -1553,6 +1634,27 @@ class ExportService(private val context: Context) {
     fun resetProgress() {
         cancelFlag.set(false)
         _exportProgress.value = ExportProgress()
+    }
+
+    /**
+     * Update progress during the decode/preparation phase of batch export.
+     * This allows the UI to show progress before actual export begins.
+     */
+    fun updateDecodeProgress(
+        totalItems: Int,
+        currentIndex: Int,
+        currentItemName: String,
+        decodeFraction: Float
+    ) {
+        _exportProgress.value = _exportProgress.value.copy(
+            totalItems = totalItems,
+            completedItems = 0,
+            currentItemIndex = currentIndex,
+            currentItemName = currentItemName,
+            currentItemProgress = decodeFraction,
+            overallProgress = decodeFraction * 0.5f,
+            status = ExportStatus.EXPORTING
+        )
     }
 
     // ================================================================

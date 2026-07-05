@@ -12,7 +12,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 import kotlin.math.*
 
 /**
@@ -69,6 +77,17 @@ fun CdlColorWheel(
         Box(
             modifier = Modifier
                 .size(wheelSizeDp)
+                .semantics {
+                    contentDescription = stringRes { accColorWheel }
+                    role = Role.Slider
+                    stateDescription = "R: ${"%.2f".format(r)}, G: ${"%.2f".format(g)}, B: ${"%.2f".format(b)}"
+                    customActions = listOf(
+                        CustomAccessibilityAction("Reset color wheel") {
+                            onColorChanged(neutral, neutral, neutral)
+                            true
+                        }
+                    )
+                }
                 .pointerInput(wheelType) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -364,216 +383,4 @@ private fun emitColorChange(
     onColorChanged(rgb[0], rgb[1], rgb[2])
 }
 
-/**
- * Legacy HSV color wheel (kept for backward compatibility).
- */
-@Composable
-fun ColorWheelView(
-    hue: Float,
-    saturation: Float,
-    brightness: Float,
-    onHueChanged: (Float) -> Unit,
-    onSaturationChanged: (Float) -> Unit,
-    onBrightnessChanged: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-    wheelSize: Float = 200f,
-    mode: ColorWheelMode = ColorWheelMode.HUE_RING_WITH_TRIANGLE
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(wheelSize.dp)
-                .pointerInput(mode) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            val radius = size.width / 2f * 0.85f
-                            val dx = offset.x - center.x
-                            val dy = offset.y - center.y
-                            val dist = sqrt(dx * dx + dy * dy)
 
-                            when (mode) {
-                                ColorWheelMode.HUE_RING_WITH_TRIANGLE -> {
-                                    if (dist > radius * 0.6f) {
-                                        val angle = (atan2(dy, dx) * 180f / PI.toFloat() + 360f) % 360f
-                                        onHueChanged(angle)
-                                    } else {
-                                        val relX = (dx / radius + 1f) / 2f
-                                        val relY = (dy / radius + 1f) / 2f
-                                        onSaturationChanged(relX.coerceIn(0f, 1f))
-                                        onBrightnessChanged(relY.coerceIn(0f, 1f))
-                                    }
-                                }
-                                ColorWheelMode.FULL_WHEEL -> {
-                                    val angle = (atan2(dy, dx) * 180f / PI.toFloat() + 360f) % 360f
-                                    val normalizedDist = (dist / radius).coerceIn(0f, 1f)
-                                    onHueChanged(angle)
-                                    onSaturationChanged(normalizedDist)
-                                }
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            val radius = size.width / 2f * 0.85f
-                            val dx = change.position.x - center.x
-                            val dy = change.position.y - center.y
-                            val dist = sqrt(dx * dx + dy * dy)
-
-                            when (mode) {
-                                ColorWheelMode.HUE_RING_WITH_TRIANGLE -> {
-                                    if (dist > radius * 0.6f) {
-                                        val angle = (atan2(dy, dx) * 180f / PI.toFloat() + 360f) % 360f
-                                        onHueChanged(angle)
-                                    } else {
-                                        val relX = (dx / radius + 1f) / 2f
-                                        val relY = (dy / radius + 1f) / 2f
-                                        onSaturationChanged(relX.coerceIn(0f, 1f))
-                                        onBrightnessChanged(relY.coerceIn(0f, 1f))
-                                    }
-                                }
-                                ColorWheelMode.FULL_WHEEL -> {
-                                    val angle = (atan2(dy, dx) * 180f / PI.toFloat() + 360f) % 360f
-                                    val normalizedDist = (dist / radius).coerceIn(0f, 1f)
-                                    onHueChanged(angle)
-                                    onSaturationChanged(normalizedDist)
-                                }
-                            }
-                        }
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            onHueChanged(0f)
-                            onSaturationChanged(0.5f)
-                            onBrightnessChanged(0.5f)
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val radius = size.width / 2f * 0.85f
-                val innerRadius = radius * 0.6f
-
-                when (mode) {
-                    ColorWheelMode.HUE_RING_WITH_TRIANGLE -> {
-                        drawHueRing(center, radius, innerRadius)
-                        val sbCenter = center
-                        val sbRadius = innerRadius * 0.9f
-                        drawSBTriangle(sbCenter, sbRadius, hue)
-
-                        val hueAngle = Math.toRadians(hue.toDouble())
-                        val huePos = Offset(
-                            center.x + (radius + innerRadius) / 2f * cos(hueAngle).toFloat(),
-                            center.y + (radius + innerRadius) / 2f * sin(hueAngle).toFloat()
-                        )
-                        drawCircle(Color.White, radius = 6f, center = huePos, style = Stroke(width = 2f))
-                        drawCircle(Color.Black, radius = 4f, center = huePos, style = Stroke(width = 1f))
-
-                        val sbX = sbCenter.x + (saturation - 0.5f) * 2f * sbRadius
-                        val sbY = sbCenter.y + (brightness - 0.5f) * 2f * sbRadius
-                        drawCircle(Color.White, radius = 5f, center = Offset(sbX, sbY), style = Stroke(width = 2f))
-                        drawCircle(Color.Black, radius = 3f, center = Offset(sbX, sbY), style = Stroke(width = 1f))
-                    }
-                    ColorWheelMode.FULL_WHEEL -> {
-                        drawHueCircle(center, radius)
-                        val hueAngle = Math.toRadians(hue.toDouble())
-                        val indicatorDist = radius * saturation
-                        val indicatorPos = Offset(
-                            center.x + indicatorDist * cos(hueAngle).toFloat(),
-                            center.y + indicatorDist * sin(hueAngle).toFloat()
-                        )
-                        drawCircle(Color.White, radius = 6f, center = indicatorPos, style = Stroke(width = 2.5f))
-                        drawCircle(Color.Black, radius = 4f, center = indicatorPos, style = Stroke(width = 1.5f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawHueRing(center: Offset, outerRadius: Float, innerRadius: Float) {
-    val steps = 360
-    val sweepAngle = 360f / steps
-    for (i in 0 until steps) {
-        val hue = i.toFloat()
-        val color = Color.hsv(hue, 1f, 1f)
-        drawArc(
-            color = color,
-            startAngle = (hue - sweepAngle / 2f - 90f),
-            sweepAngle = sweepAngle,
-            useCenter = true,
-            topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
-            size = Size(outerRadius * 2, outerRadius * 2),
-            style = Fill
-        )
-    }
-    drawCircle(Color.Transparent, radius = innerRadius, center = center, blendMode = BlendMode.Clear)
-    drawCircle(Color.White.copy(alpha = 0.3f), radius = outerRadius, center = center, style = Stroke(width = 1f))
-    drawCircle(Color.White.copy(alpha = 0.3f), radius = innerRadius, center = center, style = Stroke(width = 1f))
-}
-
-private fun DrawScope.drawSBTriangle(center: Offset, radius: Float, hue: Float) {
-    val hueColor = Color.hsv(hue, 1f, 1f)
-    val white = Color.White
-    val black = Color.Black
-    val steps = 50
-    for (i in 0..steps) {
-        val t = i.toFloat() / steps
-        val y = center.y - radius + t * radius * 2f
-        val lineWidth = (1f - abs(t - 0.5f) * 2f) * radius * 2f
-        val left = center.x - lineWidth / 2f
-        val right = center.x + lineWidth / 2f
-        for (j in 0 until steps) {
-            val s = j.toFloat() / steps
-            val x = left + (right - left) * s / steps * steps
-            val color = lerp(lerp(white, hueColor, s), black, t)
-            drawLine(
-                color = color,
-                start = Offset(x, y),
-                end = Offset(x + (right - left) / steps, y),
-                strokeWidth = (radius * 2f / steps) + 1f
-            )
-        }
-    }
-}
-
-private fun DrawScope.drawHueCircle(center: Offset, radius: Float) {
-    val steps = 360
-    for (i in 0 until steps) {
-        for (j in 0..20) {
-            val hue = i.toFloat()
-            val sat = j.toFloat() / 20f
-            val color = Color.hsv(hue, sat, 1f)
-            val dist = radius * sat
-            val angle = Math.toRadians((hue - 90).toDouble())
-            drawCircle(
-                color = color,
-                radius = 2f,
-                center = Offset(
-                    center.x + dist * cos(angle).toFloat(),
-                    center.y + dist * sin(angle).toFloat()
-                )
-            )
-        }
-    }
-}
-
-private fun lerp(a: Color, b: Color, t: Float): Color {
-    return Color(
-        red = a.red + (b.red - a.red) * t,
-        green = a.green + (b.green - a.green) * t,
-        blue = a.blue + (b.blue - a.blue) * t,
-        alpha = a.alpha + (b.alpha - a.alpha) * t
-    )
-}
-
-enum class ColorWheelMode {
-    HUE_RING_WITH_TRIANGLE,
-    FULL_WHEEL
-}
