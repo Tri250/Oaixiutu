@@ -3,17 +3,13 @@
 #include <cmath>
 #include <algorithm>
 
-namespace alcedo {
-
-CVCvtColorOp::CVCvtColorOp() = default;
-
-CVCvtColorOp::CVCvtColorOp(Code code) : code_(code) {}
+namespace {
 
 // ============================================================
 // RGB ↔ HSV conversion
 // ============================================================
 
-static void RGB2HSV(float r, float g, float b, float& h, float& s, float& v) {
+static void do_RGB2HSV(float r, float g, float b, float& h, float& s, float& v) {
     float mx = std::max({r, g, b});
     float mn = std::min({r, g, b});
     float delta = mx - mn;
@@ -39,7 +35,7 @@ static void RGB2HSV(float r, float g, float b, float& h, float& s, float& v) {
     h /= 6.0f; // Normalize to [0,1]
 }
 
-static void HSV2RGB(float h, float s, float v, float& r, float& g, float& b) {
+static void do_HSV2RGB(float h, float s, float v, float& r, float& g, float& b) {
     if (s < 1e-10f) {
         r = g = b = v;
         return;
@@ -70,35 +66,47 @@ static void HSV2RGB(float h, float s, float v, float& r, float& g, float& b) {
 // RGB ↔ Lab (using Oklab as approximation for CIE Lab)
 // ============================================================
 
-static void RGB2Lab(float r, float g, float b, float& L, float& a, float& lv) {
-    OklabCvt::Oklab lab = OklabCvt::LinearRGB2Oklab(r, g, b);
+static void do_RGB2Lab(float r, float g, float b, float& L, float& a, float& lv) {
+    alcedo::OklabCvt::Oklab lab = alcedo::OklabCvt::LinearRGB2Oklab(r, g, b);
     L = lab.l;
     a = lab.a;
     lv = lab.b;
 }
 
-static void Lab2RGB(float L, float a, float lv, float& r, float& g, float& b) {
-    OklabCvt::Oklab lab{L, a, lv};
-    OklabCvt::Oklab2LinearRGB(lab, &r, &g, &b);
+static void do_Lab2RGB(float L, float a, float lv, float& r, float& g, float& b) {
+    alcedo::OklabCvt::Oklab lab{L, a, lv};
+    alcedo::OklabCvt::Oklab2LinearRGB(lab, &r, &g, &b);
 }
 
 // ============================================================
 // RGB ↔ YCrCb (ITU-R BT.601)
 // ============================================================
 
-static void RGB2YCrCb(float r, float g, float b, float& Y, float& Cr, float& Cb) {
+static void do_RGB2YCrCb(float r, float g, float b, float& Y, float& Cr, float& Cb) {
     Y  = 0.299f * r + 0.587f * g + 0.114f * b;
     Cr = (r - Y) * 0.713f + 0.5f;
     Cb = (b - Y) * 0.564f + 0.5f;
 }
 
-static void YCrCb2RGB(float Y, float Cr, float Cb, float& r, float& g, float& b) {
+static float clamp_v(float v, float lo, float hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+static void do_YCrCb2RGB(float Y, float Cr, float Cb, float& r, float& g, float& b) {
     Cr -= 0.5f;
     Cb -= 0.5f;
-    r = std::clamp(Y + 1.403f * Cr, 0.0f, 1.0f);
-    g = std::clamp(Y - 0.714f * Cr - 0.344f * Cb, 0.0f, 1.0f);
-    b = std::clamp(Y + 1.773f * Cb, 0.0f, 1.0f);
+    r = clamp_v(Y + 1.403f * Cr, 0.0f, 1.0f);
+    g = clamp_v(Y - 0.714f * Cr - 0.344f * Cb, 0.0f, 1.0f);
+    b = clamp_v(Y + 1.773f * Cb, 0.0f, 1.0f);
 }
+
+} // namespace
+
+namespace alcedo {
+
+CVCvtColorOp::CVCvtColorOp() = default;
+
+CVCvtColorOp::CVCvtColorOp(Code code) : code_(code) {}
 
 // ============================================================
 // ApplyImpl
@@ -122,7 +130,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float h, s, v;
-                RGB2HSV(pixels[idx], pixels[idx + 1], pixels[idx + 2], h, s, v);
+                do_RGB2HSV(pixels[idx], pixels[idx + 1], pixels[idx + 2], h, s, v);
                 pixels[idx]     = h;
                 pixels[idx + 1] = s;
                 pixels[idx + 2] = v;
@@ -134,7 +142,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float r, g, b;
-                HSV2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
+                do_HSV2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
                 pixels[idx]     = r;
                 pixels[idx + 1] = g;
                 pixels[idx + 2] = b;
@@ -146,7 +154,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float L, a, lv;
-                RGB2Lab(pixels[idx], pixels[idx + 1], pixels[idx + 2], L, a, lv);
+                do_RGB2Lab(pixels[idx], pixels[idx + 1], pixels[idx + 2], L, a, lv);
                 pixels[idx]     = L;
                 pixels[idx + 1] = a;
                 pixels[idx + 2] = lv;
@@ -158,7 +166,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float r, g, b;
-                Lab2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
+                do_Lab2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
                 pixels[idx]     = r;
                 pixels[idx + 1] = g;
                 pixels[idx + 2] = b;
@@ -170,7 +178,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float Y, Cr, Cb;
-                RGB2YCrCb(pixels[idx], pixels[idx + 1], pixels[idx + 2], Y, Cr, Cb);
+                do_RGB2YCrCb(pixels[idx], pixels[idx + 1], pixels[idx + 2], Y, Cr, Cb);
                 pixels[idx]     = Y;
                 pixels[idx + 1] = Cr;
                 pixels[idx + 2] = Cb;
@@ -182,7 +190,7 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
                 float r, g, b;
-                YCrCb2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
+                do_YCrCb2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
                 pixels[idx]     = r;
                 pixels[idx + 1] = g;
                 pixels[idx + 2] = b;

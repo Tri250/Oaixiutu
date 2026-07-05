@@ -48,7 +48,7 @@ android {
             storeFile = keystorePath?.let { file(it) }
             storePassword = keystorePassword ?: System.getenv("ALCEDO_KEYSTORE_PASSWORD")
             this.keyAlias = keyAlias ?: System.getenv("ALCEDO_KEY_ALIAS")
-            keyPassword = keyPassword ?: System.getenv("ALCEDO_KEY_PASSWORD")
+            this.keyPassword = keyPassword ?: System.getenv("ALCEDO_KEY_PASSWORD")
         }
     }
 
@@ -174,7 +174,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     // ── Database Encryption (SQLCipher) ────────────────────────────
-    implementation("net.zetetic:android-database-sqlcipher:4.5.6")
+    implementation("net.zetetic:sqlcipher-android:4.5.6")
     implementation("androidx.sqlite:sqlite-ktx:2.4.0")
 
     // ── Serialization ──────────────────────────────────────────────

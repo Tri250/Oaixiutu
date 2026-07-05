@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(
-                                    if (showBottomBar) Modifier.consumeWindowInsets(padding)
+                                    if (showBottomBar) Modifier.windowInsetsPadding(WindowInsets(0))
                                     else Modifier
                                 )
                         ) {
@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("ai_rating/{imageId}") { backStackEntry ->
                                 val imageId = backStackEntry.arguments?.getString("imageId") ?: ""
-                                AiRatingScreen(navController = navController, imageId = imageId)
+                                AiRatingScreen(navController = navController)
                             }
                         }
                     }

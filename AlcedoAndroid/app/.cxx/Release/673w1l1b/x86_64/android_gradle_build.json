@@ -1,0 +1,38 @@
+{
+  "buildFiles": [
+    "/workspace/AlcedoAndroid/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/root/.android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/root/.android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/workspace/AlcedoAndroid/app/.cxx/Release/673w1l1b/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "alcedo::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "x86_64",
+      "artifactName": "alcedo",
+      "output": "/workspace/AlcedoAndroid/app/build/intermediates/cxx/Release/673w1l1b/obj/x86_64/libalcedo.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/root/.android/sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/root/.android/sdk/ndk/26.3.11579264/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

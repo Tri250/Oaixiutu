@@ -7,6 +7,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <list>
 
 namespace alcedo {
 

@@ -67,6 +67,37 @@ struct DecodeTask {
             return static_cast<int>(priority) > static_cast<int>(other.priority);
         return task_id > other.task_id; // FIFO within same priority
     }
+
+    DecodeTask() = default;
+    DecodeTask(const DecodeTask& other)
+        : task_id(other.task_id), type(other.type), priority(other.priority),
+          file_path(other.file_path), file_data(other.file_data),
+          use_memory_data(other.use_memory_data),
+          progress(other.progress.load()), cancelled(other.cancelled.load()),
+          current_stage(other.current_stage), on_complete(other.on_complete),
+          enqueue_time(other.enqueue_time), start_time(other.start_time),
+          end_time(other.end_time), user_data(other.user_data),
+          options(other.options) {}
+    DecodeTask& operator=(const DecodeTask& other) {
+        if (this != &other) {
+            task_id = other.task_id;
+            type = other.type;
+            priority = other.priority;
+            file_path = other.file_path;
+            file_data = other.file_data;
+            use_memory_data = other.use_memory_data;
+            progress.store(other.progress.load());
+            cancelled.store(other.cancelled.load());
+            current_stage = other.current_stage;
+            on_complete = other.on_complete;
+            enqueue_time = other.enqueue_time;
+            start_time = other.start_time;
+            end_time = other.end_time;
+            user_data = other.user_data;
+            options = other.options;
+        }
+        return *this;
+    }
 };
 
 // ============================================================

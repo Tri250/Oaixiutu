@@ -1,5 +1,6 @@
 package com.alcedo.studio.domain.repository
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.domain.service.SleeveFilterService
@@ -318,7 +319,7 @@ class SleeveRepository(
     }
 
     suspend fun ftsSearchElements(query: String): List<SleeveElement> = withContext(Dispatchers.IO) {
-        val entities = elementDao.ftsSearchElements(query)
+        val entities = elementDao.ftsSearchElements(SimpleSQLiteQuery(query, null))
         entities.map { entity ->
             val file = if (entity.elementType == 0) fileDao.getFileByElementId(entity.elementId) else null
             val folder = if (entity.elementType == 1) folderDao.getFolderByElementId(entity.elementId) else null

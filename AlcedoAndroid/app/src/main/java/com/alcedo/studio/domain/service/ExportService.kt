@@ -37,7 +37,7 @@ class ExportService(private val context: Context) {
     // ================================================================
 
     private val _exportProgress = MutableStateFlow(ExportProgress())
-    val exportProgress: Flow<ExportProgress> = _exportProgress.asStateFlow()
+    val exportProgress: StateFlow<ExportProgress> = _exportProgress.asStateFlow()
 
     data class ExportProgress(
         val totalItems: Int = 0,

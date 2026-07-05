@@ -19,7 +19,7 @@ enum class BuiltInLutPreset(val displayName: String) {
     ILFORD_HP5("Ilford HP5"),
     KODAK_EKTAR("Kodak Ektar"),
     FUJI_VELVIA("Fuji Velvia"),
-    CINE STILL("CineStill 800T"),
+    CINE_STILL("CineStill 800T"),
     KODACHROME("Kodachrome 64")
 }
 

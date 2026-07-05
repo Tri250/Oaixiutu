@@ -1,6 +1,7 @@
 #include "crash_handler.h"
 
 #include <execinfo.h>
+#include <unwind.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <mutex>
@@ -113,10 +114,14 @@ void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
     ALOGE("AlcedoCrash", "Signal code: %d", info->si_code);
 
     // Decode si_code for common signals
-    if (sig == SIGSEGV || sig == SIGBUS) {
+    if (sig == SIGSEGV) {
         switch (info->si_code) {
             case SEGV_MAPERR:  ALOGE("AlcedoCrash", "Reason: Address not mapped to object"); break;
             case SEGV_ACCERR:  ALOGE("AlcedoCrash", "Reason: Invalid permissions for mapped object"); break;
+            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+        }
+    } else if (sig == SIGBUS) {
+        switch (info->si_code) {
             case BUS_ADRALN:   ALOGE("AlcedoCrash", "Reason: Invalid address alignment"); break;
             case BUS_ADRERR:   ALOGE("AlcedoCrash", "Reason: Nonexistent physical address"); break;
             case BUS_OBJERR:   ALOGE("AlcedoCrash", "Reason: Object-specific hardware error"); break;
@@ -178,28 +183,39 @@ void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
 #endif
 }
 
+struct BacktraceState {
+    void** current;
+    void** end;
+};
+
+static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void* arg) {
+    BacktraceState* state = static_cast<BacktraceState*>(arg);
+    uintptr_t pc = _Unwind_GetIP(context);
+    if (pc) {
+        if (state->current == state->end) {
+            return _URC_END_OF_STACK;
+        } else {
+            *state->current++ = reinterpret_cast<void*>(pc);
+        }
+    }
+    return _URC_NO_REASON;
+}
+
 void CrashHandler::DumpCallstack() {
     ALOGE("AlcedoCrash", "--- Callstack ---");
 
     void* buffer[64];
-    int size = backtrace(buffer, 64);
+    BacktraceState state = { buffer, buffer + 64 };
+    _Unwind_Backtrace(unwind_callback, &state);
 
+    int size = static_cast<int>(state.current - buffer);
     if (size <= 0) {
-        ALOGE("AlcedoCrash", "backtrace() returned no frames");
+        ALOGE("AlcedoCrash", "no frames");
         return;
     }
 
-    char** symbols = backtrace_symbols(buffer, size);
-    if (symbols) {
-        for (int i = 0; i < size; ++i) {
-            ALOGE("AlcedoCrash", "  #%02d %s", i, symbols[i]);
-        }
-        free(symbols);
-    } else {
-        ALOGE("AlcedoCrash", "backtrace_symbols() failed, dumping raw addresses:");
-        for (int i = 0; i < size; ++i) {
-            ALOGE("AlcedoCrash", "  #%02d %p", i, buffer[i]);
-        }
+    for (int i = 0; i < size; ++i) {
+        ALOGE("AlcedoCrash", "  #%02d %p", i, buffer[i]);
     }
 }
 

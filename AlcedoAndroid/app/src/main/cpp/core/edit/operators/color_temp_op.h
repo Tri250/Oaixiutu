@@ -16,8 +16,8 @@ public:
     void ApplyImpl(float* pixels, int width, int height, int channels);
     OperatorType GetTypeImpl() const { return OperatorType::COLOR_TEMP; }
 
-    void SetCustomCCT(float cct) { custom_cct_ = std::clamp(cct, 2000.0f, 15000.0f); }
-    void SetCustomTint(float tint) { custom_tint_ = std::clamp(tint, -150.0f, 150.0f); }
+    void SetCustomCCT(float cct) { custom_cct_ = cct < 2000.0f ? 2000.0f : (cct > 15000.0f ? 15000.0f : cct); }
+    void SetCustomTint(float tint) { custom_tint_ = tint < -150.0f ? -150.0f : (tint > 150.0f ? 150.0f : tint); }
     void SetMode(Mode mode) { mode_ = mode; }
 
     float GetCCT() const { return custom_cct_; }

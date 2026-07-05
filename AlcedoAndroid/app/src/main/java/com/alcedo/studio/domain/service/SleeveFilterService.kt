@@ -1,5 +1,6 @@
 package com.alcedo.studio.domain.service
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.Dispatchers
@@ -152,7 +153,7 @@ class SleeveFilterService(
         page: Int = 0,
         pageSize: Int = 50
     ): FilterResult = withContext(Dispatchers.IO) {
-        val imageIds = labelDao.ftsSearchImageIdsByLabel(labelQuery)
+        val imageIds = labelDao.ftsSearchImageIdsByLabel(SimpleSQLiteQuery(labelQuery, null))
         val totalCount = imageIds.size
         val offset = page * pageSize
         val paged = imageIds.drop(offset).take(pageSize)
@@ -210,7 +211,7 @@ class SleeveFilterService(
                 }
                 else -> {
                     // For other filters, search by name FTS
-                    elementDao.ftsSearchElements(filter.getPredicate()).map { it.elementId }.toSet()
+                    elementDao.ftsSearchElements(SimpleSQLiteQuery(filter.getPredicate(), null)).map { it.elementId }.toSet()
                 }
             }
         }

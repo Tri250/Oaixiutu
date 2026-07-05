@@ -119,8 +119,7 @@ public:
     // Helper: detect file type from magic bytes
     static std::string detect_file_type(const uint8_t* buffer, size_t size);
 
-private:
-    // TIFF/EXIF internal parsing
+    // TIFF/EXIF internal parsing (used by free functions in .cpp)
     static bool parse_tiff_header(const uint8_t* data, size_t size, bool& little_endian, uint32_t& ifd0_offset);
     static bool parse_ifd_entry(const uint8_t* data, size_t size, bool little_endian,
                                 uint32_t ifd_offset, uint16_t entry_index,
@@ -128,6 +127,7 @@ private:
     static bool parse_ifd(const uint8_t* data, size_t size, bool little_endian,
                           uint32_t ifd_offset, ExifData& out_data);
 
+private:
     // XMP parsing
     static bool parse_xmp_packet(const std::string& xmp_data, ExifData& out_data);
 

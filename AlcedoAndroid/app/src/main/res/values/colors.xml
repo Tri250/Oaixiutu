@@ -4,7 +4,7 @@
     <color name="ic_launcher_foreground">#FF7A3D</color>
     <!-- Hasselblad Orange palette -->
     <color name="hasselblad_orange">#FFFF7A3D</color>
-    <color name="hasselblad_orange_light">#FFFB999</color>
+    <color name="hasselblad_orange_light">#FFFBB999</color>
     <color name="hasselblad_orange_dark">#FF8B4E2C</color>
     <color name="hasselblad_amber">#FFFF9100</color>
     <color name="hasselblad_warm_gray">#FFA09286</color>

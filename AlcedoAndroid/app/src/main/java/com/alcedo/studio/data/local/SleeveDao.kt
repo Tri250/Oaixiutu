@@ -1,6 +1,8 @@
 package com.alcedo.studio.data.local
 
 import androidx.room.*
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.flow.Flow
 
@@ -97,14 +99,9 @@ interface SleeveElementDao {
     @Query("SELECT COUNT(*) FROM sleeve_elements WHERE element_type = 1")
     suspend fun getTotalFolderCount(): Int
 
-    // FTS queries
-    @Query("""
-        SELECT sleeve_elements.* FROM sleeve_elements
-        INNER JOIN element_name_fts ON sleeve_elements.element_id = element_name_fts.docid
-        WHERE element_name_fts.element_name MATCH :query
-        ORDER BY element_name ASC
-    """)
-    suspend fun ftsSearchElements(query: String): List<SleeveElementEntity>
+    // FTS queries - use RawQuery to avoid Room compile-time validation of FTS virtual tables
+    @RawQuery(observedEntities = [SleeveElementEntity::class])
+    suspend fun ftsSearchElements(query: SupportSQLiteQuery): List<SleeveElementEntity>
 
     // FTS insert/update/delete helpers
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -119,9 +116,9 @@ interface SleeveElementDao {
     // Hierarchy queries
     @Query("""
         WITH RECURSIVE ancestors AS (
-            SELECT element_id, parent_id, element_name, element_type FROM sleeve_elements WHERE element_id = :elementId
+            SELECT * FROM sleeve_elements WHERE element_id = :elementId
             UNION ALL
-            SELECT e.element_id, e.parent_id, e.element_name, e.element_type 
+            SELECT e.* 
             FROM sleeve_elements e INNER JOIN ancestors a ON e.element_id = a.parent_id
         )
         SELECT * FROM ancestors WHERE element_id != :elementId
@@ -552,20 +549,11 @@ interface SemanticLabelDao {
     suspend fun getLabelFrequencyAll(): List<LabelFrequencyResult>
 
     // FTS label search
-    @Query("""
-        SELECT DISTINCT semantic_labels.* FROM semantic_labels
-        INNER JOIN label_fts ON semantic_labels.rowid = label_fts.docid
-        WHERE label_fts.label MATCH :query
-        ORDER BY confidence DESC
-    """)
-    suspend fun ftsSearchLabels(query: String): List<SemanticLabelEntity>
+    @RawQuery(observedEntities = [SemanticLabelEntity::class])
+    suspend fun ftsSearchLabels(query: SupportSQLiteQuery): List<SemanticLabelEntity>
 
-    @Query("""
-        SELECT DISTINCT image_id FROM semantic_labels sl
-        INNER JOIN label_fts ON sl.rowid = label_fts.docid
-        WHERE label_fts.label MATCH :query
-    """)
-    suspend fun ftsSearchImageIdsByLabel(query: String): List<Long>
+    @RawQuery(observedEntities = [SemanticLabelEntity::class])
+    suspend fun ftsSearchImageIdsByLabel(query: SupportSQLiteQuery): List<Long>
 
     @Query("SELECT COUNT(DISTINCT label) FROM semantic_labels")
     suspend fun getDistinctLabelCount(): Int
@@ -1168,7 +1156,7 @@ interface SemanticLabelV2Dao {
     suspend fun getFileIdsByLabels(labels: List<String>): List<Long>
 
     @Query("""
-        SELECT primary_label, COUNT(*) as cnt FROM semantic_labels_v2 
+        SELECT primary_label as label, COUNT(*) as cnt FROM semantic_labels_v2 
         GROUP BY primary_label ORDER BY cnt DESC LIMIT :limit
     """)
     suspend fun getLabelFrequency(limit: Int): List<LabelFrequencyResult>

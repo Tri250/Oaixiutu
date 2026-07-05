@@ -38,7 +38,6 @@ public:
         GBRG = 3
     };
 
-private:
     struct BayerInfo {
         int red_row, red_col;
         int green1_row, green1_col;
@@ -48,6 +47,8 @@ private:
     static BayerInfo get_bayer_info(int pattern);
     static bool is_same_color(int y1, int x1, int y2, int x2, const BayerInfo& info);
     static int color_at(int y, int x, const BayerInfo& info);
+
+private:
 };
 
 } // namespace alcedo

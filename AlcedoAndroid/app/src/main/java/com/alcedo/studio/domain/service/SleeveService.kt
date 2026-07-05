@@ -436,7 +436,7 @@ class SleeveService(
     }
 
     suspend fun ftsSearchElements(query: String): List<SleeveElementEntity> = withContext(Dispatchers.IO) {
-        elementDao.ftsSearchElements(query)
+        elementDao.ftsSearchElements(SimpleSQLiteQuery(query, null))
     }
 
     // ================================================================

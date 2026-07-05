@@ -13,7 +13,7 @@ import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.dao.AiEmbeddingDao
 import android.util.Log
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportFactory
 import java.io.File
 import java.security.SecureRandom
 

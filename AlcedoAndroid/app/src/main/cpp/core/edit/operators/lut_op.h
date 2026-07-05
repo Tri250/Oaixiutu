@@ -33,10 +33,11 @@ public:
                                 float*& lut_data, int& lut_size);
     static void free_parsed_lut(float* lut_data);
 
-private:
     static float trilinear_lookup(const float* lut_data, int size,
                                   float r, float g, float b);
     static float clamp(float v, float lo, float hi);
+
+private:
 };
 
 } // namespace alcedo

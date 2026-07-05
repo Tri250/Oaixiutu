@@ -1,6 +1,7 @@
 package com.alcedo.studio.domain.service
 
 import android.content.Context
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.alcedo.studio.data.local.*
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.*
@@ -101,7 +102,7 @@ class SearchService(
         }
 
         // 2. FTS search on element names
-        val ftsResults = elementDao.ftsSearchElements(query.rawQuery)
+        val ftsResults = elementDao.ftsSearchElements(SimpleSQLiteQuery(query.rawQuery, null))
         results.addAll(ftsResults.map { element ->
             val image = allImages.find { it.imageId == element.elementId }
             RankedSearchResult(

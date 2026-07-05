@@ -1,4 +1,5 @@
 #include "crop_rotate_op.h"
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <cstring>
