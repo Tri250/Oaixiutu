@@ -615,7 +615,11 @@ class ThumbnailService(
     )
 
     init {
-        startAnalysisQueueProcessor()
+        try {
+            startAnalysisQueueProcessor()
+        } catch (e: Throwable) {
+            android.util.Log.e("ThumbnailService", "init: startAnalysisQueueProcessor failed", e)
+        }
     }
 
     /**

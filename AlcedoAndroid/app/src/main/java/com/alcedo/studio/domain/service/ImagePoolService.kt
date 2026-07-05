@@ -53,8 +53,16 @@ class ImagePoolService(private val context: Context) : ComponentCallbacks2 {
     private var isCriticalMemory = false
 
     init {
-        context.registerComponentCallbacks(this)
-        startMemoryMonitor()
+        try {
+            context.registerComponentCallbacks(this)
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "registerComponentCallbacks failed", e)
+        }
+        try {
+            startMemoryMonitor()
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "startMemoryMonitor failed", e)
+        }
     }
 
     data class PoolEntry(

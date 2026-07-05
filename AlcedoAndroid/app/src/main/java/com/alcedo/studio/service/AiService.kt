@@ -98,28 +98,38 @@ class AiService(private val context: Context) {
     )
 
     init {
-        // Register default model profiles
-        registerModel(AiModelProfile(
-            modelId = "jina-clip-v2",
-            modelName = "Jina CLIP v2",
-            modelType = AiModelType.CLIP,
-            description = "Lightweight multilingual CLIP model for image tagging and search"
-        ))
-        registerModel(AiModelProfile(
-            modelId = "siglip2",
-            modelName = "SigLIP 2",
-            modelType = AiModelType.SIGLIP,
-            description = "Google SigLIP 2 for zero-shot image classification"
-        ))
-        registerModel(AiModelProfile(
-            modelId = "mobileclip-s2",
-            modelName = "MobileCLIP S2",
-            modelType = AiModelType.CLIP,
-            description = "Apple MobileCLIP optimized for on-device inference"
-        ))
+        // Catalog registration wrapped so any failure cannot crash app startup.
+        try {
+            // Register default model profiles
+            registerModel(AiModelProfile(
+                modelId = "jina-clip-v2",
+                modelName = "Jina CLIP v2",
+                modelType = AiModelType.CLIP,
+                description = "Lightweight multilingual CLIP model for image tagging and search"
+            ))
+            registerModel(AiModelProfile(
+                modelId = "siglip2",
+                modelName = "SigLIP 2",
+                modelType = AiModelType.SIGLIP,
+                description = "Google SigLIP 2 for zero-shot image classification"
+            ))
+            registerModel(AiModelProfile(
+                modelId = "mobileclip-s2",
+                modelName = "MobileCLIP S2",
+                modelType = AiModelType.CLIP,
+                description = "Apple MobileCLIP optimized for on-device inference"
+            ))
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "init: model catalog registration failed", e)
+        }
 
-        // Initialize HNSW index
-        hnswIndexHandle = AiNdkBridge.hnswCreateIndex(DEFAULT_EMBEDDING_DIM)
+        try {
+            // Initialize HNSW index (AiNdkBridge already returns 0L on failure)
+            hnswIndexHandle = AiNdkBridge.hnswCreateIndex(DEFAULT_EMBEDDING_DIM)
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "init: HNSW index creation failed", e)
+            hnswIndexHandle = 0L
+        }
     }
 
     // ================================================================

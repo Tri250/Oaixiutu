@@ -150,11 +150,16 @@ class ThumbnailDiskCache(
     private val currentEntryCount = AtomicInteger(0)
 
     init {
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
+        try {
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+            loadJournal()
+            calculateCurrentSize()
+        } catch (e: Throwable) {
+            // Disk cache initialization must never crash the app.
+            android.util.Log.e("ThumbnailDiskCache", "init failed", e)
         }
-        loadJournal()
-        calculateCurrentSize()
     }
 
     // ================================================================

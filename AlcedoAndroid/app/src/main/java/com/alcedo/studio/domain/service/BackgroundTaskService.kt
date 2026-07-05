@@ -97,11 +97,15 @@ class BackgroundTaskService(private val context: Context) {
     private val _activeCount = MutableStateFlow(0)
     val activeCount: StateFlow<Int> = _activeCount.asStateFlow()
 
-    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
 
     init {
-        createNotificationChannel()
-        startWorker()
+        try {
+            createNotificationChannel()
+            startWorker()
+        } catch (e: Throwable) {
+            android.util.Log.e("BackgroundTaskService", "init failed", e)
+        }
     }
 
     // ── Task Executor Registration ──
@@ -358,14 +362,14 @@ class BackgroundTaskService(private val context: Context) {
             ).apply {
                 description = "Notifications for background tasks"
             }
-            notificationManager.createNotificationChannel(channel)
+            notificationManager?.createNotificationChannel(channel)
         }
     }
 
     private fun showNotification(task: BackgroundTask) {
         val notificationId = getNotificationId(task.taskId)
         val notification = buildNotification(task, task.progress)
-        notificationManager.notify(notificationId, notification)
+        notificationManager?.notify(notificationId, notification)
     }
 
     /**
@@ -390,7 +394,7 @@ class BackgroundTaskService(private val context: Context) {
     private fun updateNotification(task: BackgroundTask) {
         val notificationId = getNotificationId(task.taskId)
         val notification = buildNotification(task, task.progress)
-        notificationManager.notify(notificationId, notification)
+        notificationManager?.notify(notificationId, notification)
     }
 
     private fun completeNotification(task: BackgroundTask) {
@@ -403,7 +407,7 @@ class BackgroundTaskService(private val context: Context) {
             .setProgress(0, 0, false)
             .setAutoCancel(true)
             .build()
-        notificationManager.notify(notificationId, notification)
+        notificationManager?.notify(notificationId, notification)
     }
 
     private fun failNotification(task: BackgroundTask) {
@@ -415,12 +419,12 @@ class BackgroundTaskService(private val context: Context) {
             .setOngoing(false)
             .setAutoCancel(true)
             .build()
-        notificationManager.notify(notificationId, notification)
+        notificationManager?.notify(notificationId, notification)
     }
 
     private fun cancelNotification(taskId: String) {
         val notificationId = getNotificationId(taskId)
-        notificationManager.cancel(notificationId)
+        notificationManager?.cancel(notificationId)
     }
 
     private fun buildNotification(task: BackgroundTask, progress: Float): android.app.Notification {
@@ -498,6 +502,6 @@ class BackgroundTaskService(private val context: Context) {
     fun shutdown() {
         cancelAll()
         scope.cancel()
-        notificationManager.cancelAll()
+        notificationManager?.cancelAll()
     }
 }

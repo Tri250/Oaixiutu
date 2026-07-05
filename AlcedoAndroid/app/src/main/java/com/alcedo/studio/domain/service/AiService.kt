@@ -101,29 +101,40 @@ class AiService(private val context: Context) {
     )
 
     init {
-        // Register default model profiles
-        modelCatalog["jina-clip-v2"] = AiModelProfile(
-            modelId = "jina-clip-v2",
-            modelName = "Jina CLIP v2",
-            modelType = AiModelType.CLIP,
-            description = "Lightweight multilingual CLIP model for image tagging and search"
-        )
-        modelCatalog["siglip2"] = AiModelProfile(
-            modelId = "siglip2",
-            modelName = "SigLIP 2",
-            modelType = AiModelType.SIGLIP,
-            description = "Google SigLIP 2 for zero-shot image classification"
-        )
-        modelCatalog["mobileclip-s2"] = AiModelProfile(
-            modelId = "mobileclip-s2",
-            modelName = "MobileCLIP S2",
-            modelType = AiModelType.CLIP,
-            description = "Apple MobileCLIP optimized for on-device inference"
-        )
-        modelCatalogFlow.value = modelCatalog.values.toList()
+        // Initialize HNSW index first (failsafe). Catalog registration is wrapped
+        // in a try-catch so any unexpected failure cannot crash app startup.
+        try {
+            // Register default model profiles
+            modelCatalog["jina-clip-v2"] = AiModelProfile(
+                modelId = "jina-clip-v2",
+                modelName = "Jina CLIP v2",
+                modelType = AiModelType.CLIP,
+                description = "Lightweight multilingual CLIP model for image tagging and search"
+            )
+            modelCatalog["siglip2"] = AiModelProfile(
+                modelId = "siglip2",
+                modelName = "SigLIP 2",
+                modelType = AiModelType.SIGLIP,
+                description = "Google SigLIP 2 for zero-shot image classification"
+            )
+            modelCatalog["mobileclip-s2"] = AiModelProfile(
+                modelId = "mobileclip-s2",
+                modelName = "MobileCLIP S2",
+                modelType = AiModelType.CLIP,
+                description = "Apple MobileCLIP optimized for on-device inference"
+            )
+            modelCatalogFlow.value = modelCatalog.values.toList()
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "init: model catalog registration failed", e)
+        }
 
-        // Initialize HNSW index
-        hnswIndexHandle = AiNdkBridge.hnswCreateIndex(DEFAULT_EMBEDDING_DIM)
+        try {
+            // Initialize HNSW index (AiNdkBridge already returns 0L on failure)
+            hnswIndexHandle = AiNdkBridge.hnswCreateIndex(DEFAULT_EMBEDDING_DIM)
+        } catch (e: Throwable) {
+            android.util.Log.e(TAG, "init: HNSW index creation failed", e)
+            hnswIndexHandle = 0L
+        }
     }
 
     // ── Model Catalog ──

@@ -127,7 +127,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private var snapshotHandle: Long = 0
 
     init {
-        loadImage()
+        try {
+            loadImage()
+        } catch (e: Throwable) {
+            // Swallow startup failures; editor will simply show empty state.
+        }
     }
 
     // ================================================================
