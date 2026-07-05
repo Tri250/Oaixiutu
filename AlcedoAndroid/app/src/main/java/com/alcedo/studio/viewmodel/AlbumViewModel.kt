@@ -449,13 +449,18 @@ class AlbumViewModel : ViewModel() {
                 _filteredImages.value = matchedImages
             } catch (_: Exception) {
                 // Fallback to name-based search
-                val allImages = imageRepository.getAllImages()
-                _filteredImages.value = allImages.filter {
-                    it.imageName.contains(query, ignoreCase = true) ||
-                    it.imagePath.contains(query, ignoreCase = true)
+                try {
+                    val allImages = imageRepository.getAllImages()
+                    _filteredImages.value = allImages.filter {
+                        it.imageName.contains(query, ignoreCase = true) ||
+                        it.imagePath.contains(query, ignoreCase = true)
+                    }
+                } catch (_: Exception) {
+                    _filteredImages.value = emptyList()
                 }
+            } finally {
+                _isSearching.value = false
             }
-            _isSearching.value = false
         }
     }
 
@@ -470,8 +475,9 @@ class AlbumViewModel : ViewModel() {
                 _filteredImages.value = allImages.filter { it.imageId in imageIds }
             } catch (_: Exception) {
                 _filteredImages.value = emptyList()
+            } finally {
+                _isSearching.value = false
             }
-            _isSearching.value = false
         }
     }
 
@@ -504,7 +510,11 @@ class AlbumViewModel : ViewModel() {
 
     fun setSortMode(mode: SortMode) {
         _sortMode.value = mode
-        applyCurrentSortAndFilter(_filteredImages.value.ifEmpty { _images.value })
+        // Re-apply sort/filter on the original image list, not on the
+        // (possibly empty due to filtering) filtered list. Using _images
+        // avoids the bug where a legitimate empty filter result causes
+        // setSortMode to fall back to showing all images.
+        applyCurrentSortAndFilter(_images.value)
     }
 
     private fun applyCurrentSortAndFilter(images: List<ImageModel>) {

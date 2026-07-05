@@ -455,15 +455,16 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun regeneratePreview() {
         viewModelScope.launch {
+            _isProcessing.value = true
             try {
-                _isProcessing.value = true
                 val source = _originalBitmap.value
                 if (source != null) {
                     _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
                 }
-                _isProcessing.value = false
             } catch (e: Throwable) {
-                android.util.Log.e("EditorVM", "Coroutine failed", e)
+                android.util.Log.e("EditorVM", "regeneratePreview failed", e)
+            } finally {
+                _isProcessing.value = false
             }
         }
     }

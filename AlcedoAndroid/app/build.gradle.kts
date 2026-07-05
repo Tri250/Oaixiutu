@@ -16,8 +16,8 @@ android {
         applicationId = "com.alcedo.studio"
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.1.4"
+        versionCode = 6
+        versionName = "1.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -140,8 +140,7 @@ android {
     ndkVersion = "26.3.11579264"
 
     // ── R8 Full Mode Configuration ────────────────────────────────
-    // Enable R8 full mode for aggressive optimization
-    // (enabled by default when isMinifyEnabled = true)
+    // R8 full mode is disabled via gradle.properties to reduce memory
 }
 
 dependencies {
