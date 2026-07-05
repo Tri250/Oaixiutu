@@ -143,14 +143,15 @@ class ClipInferenceEngine(private val context: Context) {
             }
 
             // Load sessions
+            val env = ortEnv ?: return@withContext false
             if (visionModelFile != null && textModelFile != null) {
                 // Separate vision and text encoder files
-                visionSession = ortEnv!!.createSession(visionModelFile.absolutePath, sessionOptions)
-                textSession = ortEnv!!.createSession(textModelFile.absolutePath, sessionOptions)
+                visionSession = env.createSession(visionModelFile.absolutePath, sessionOptions)
+                textSession = env.createSession(textModelFile.absolutePath, sessionOptions)
                 Log.i(TAG, "Loaded separate vision/text encoders for $modelId")
             } else if (singleModelFile.exists()) {
                 // Single ONNX model file - use it for both sessions
-                visionSession = ortEnv!!.createSession(singleModelFile.absolutePath, sessionOptions)
+                visionSession = env.createSession(singleModelFile.absolutePath, sessionOptions)
                 textSession = visionSession // Same session for both
                 Log.i(TAG, "Loaded single ONNX model for $modelId")
             } else {
@@ -195,14 +196,16 @@ class ClipInferenceEngine(private val context: Context) {
             }
 
             try {
-                val config = activeModelConfig!!
-                val inputTensor = preprocessImage(bitmap, config.imageSize)
+                val config = activeModelConfig ?: return FloatArray(embeddingDim)
+                val env = ortEnv ?: return FloatArray(embeddingDim)
+                val inputTensor = preprocessImage(bitmap, config.imageSize, env)
 
-                val inputName = resolveVisionInputName(visionSession!!)
+                val session = visionSession ?: return FloatArray(embeddingDim)
+                val inputName = resolveVisionInputName(session)
                 val inputMap = mapOf(inputName to inputTensor)
 
-                val output = visionSession!!.run(inputMap)
-                val outputTensor = output[0].value as Array<FloatArray>
+                val output = session.run(inputMap)
+                val outputTensor = output[0].value as? Array<FloatArray> ?: return FloatArray(embeddingDim)
 
                 val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)
@@ -235,18 +238,19 @@ class ClipInferenceEngine(private val context: Context) {
                     attentionMask[i] = if (tokenIds[i] != ClipTokenizer.PAD_TOKEN.toLong()) 1L else 0L
                 }
 
-                val inputIdsTensor = OnnxTensor.createTensor(ortEnv!!, arrayOf(tokenIds))
-                val attentionMaskTensor = OnnxTensor.createTensor(ortEnv!!, arrayOf(attentionMask))
+                val env = ortEnv ?: return FloatArray(embeddingDim)
+                val inputIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenIds))
+                val attentionMaskTensor = OnnxTensor.createTensor(env, arrayOf(attentionMask))
 
-                val inputNames = resolveTextInputNames(textSession!!)
+                val session = textSession ?: return FloatArray(embeddingDim)
+                val inputNames = resolveTextInputNames(session)
                 val inputMap = mutableMapOf<String, OnnxTensor>()
                 inputMap[inputNames.first] = inputIdsTensor
-                if (inputNames.second != null) {
-                    inputMap[inputNames.second!!] = attentionMaskTensor
-                }
+                val attentionName = inputNames.second ?: return FloatArray(embeddingDim)
+                inputMap[attentionName] = attentionMaskTensor
 
-                val output = textSession!!.run(inputMap)
-                val outputTensor = output[0].value as Array<FloatArray>
+                val output = session.run(inputMap)
+                val outputTensor = output[0].value as? Array<FloatArray> ?: return FloatArray(embeddingDim)
 
                 val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)
@@ -374,7 +378,7 @@ class ClipInferenceEngine(private val context: Context) {
      * 3. Normalize with CLIP mean/std
      * 4. Convert to NCHW FloatBuffer tensor [1, 3, imageSize, imageSize]
      */
-    private fun preprocessImage(bitmap: Bitmap, imageSize: Int): OnnxTensor {
+    private fun preprocessImage(bitmap: Bitmap, imageSize: Int, env: OrtEnvironment): OnnxTensor {
         // Center-crop to square
         val size = minOf(bitmap.width, bitmap.height)
         val x = (bitmap.width - size) / 2
@@ -416,7 +420,7 @@ class ClipInferenceEngine(private val context: Context) {
         floatBuffer.rewind()
 
         val shape = longArrayOf(1, 3, imageSize.toLong(), imageSize.toLong())
-        return OnnxTensor.createTensor(ortEnv!!, floatBuffer, shape)
+        return OnnxTensor.createTensor(env, floatBuffer, shape)
     }
 
     private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {

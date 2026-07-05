@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.EditorViewModel
@@ -32,7 +33,7 @@ fun BasicPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Light",
+                        stringRes { editorSectionLight },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -44,54 +45,54 @@ fun BasicPanel(
                             viewModel.updateShadows(0f)
                             viewModel.updateMidtones(0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Light",
-                            modifier = Modifier.size(14.dp),
+                            contentDescription = stringRes { editorResetLight },
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Exposure",
+                    label = stringRes { editorExposure },
                     value = params.exposure,
                     range = -5f..5f,
                     onValueChange = { viewModel.updateExposure(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Contrast",
+                    label = stringRes { editorContrast },
                     value = params.contrast,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateContrast(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Highlights",
+                    label = stringRes { editorHighlights },
                     value = params.highlights,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateHighlights(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Shadows",
+                    label = stringRes { editorShadows },
                     value = params.shadows,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateShadows(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Whites",
+                    label = stringRes { editorWhites },
                     value = params.sigmoidShoulder,
                     range = 0f..1f,
                     onValueChange = { viewModel.updateSigmoidContrast(it) },
                     defaultValue = 0.5f
                 )
                 AdjustmentSlider(
-                    label = "Blacks",
+                    label = stringRes { editorBlacks },
                     value = params.shadowBoundary,
                     range = 0f..0.5f,
                     onValueChange = {
@@ -100,7 +101,7 @@ fun BasicPanel(
                     defaultValue = 0.25f
                 )
                 AdjustmentSlider(
-                    label = "Midtones",
+                    label = stringRes { editorMidtones },
                     value = params.midtones,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateMidtones(it) },
@@ -118,7 +119,7 @@ fun BasicPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "White Balance",
+                        stringRes { editorSectionWhiteBalance },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -126,19 +127,19 @@ fun BasicPanel(
                         onClick = {
                             viewModel.updateWhiteBalance(6500f, 0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset WB",
-                            modifier = Modifier.size(14.dp),
+                            contentDescription = stringRes { editorResetWb },
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Temperature",
+                    label = stringRes { editorTemperature },
                     value = params.whiteBalanceTemp,
                     range = 2000f..15000f,
                     onValueChange = { viewModel.updateWhiteBalance(it, params.whiteBalanceTint) },
@@ -146,7 +147,7 @@ fun BasicPanel(
                     valueDisplayTransform = { "%.0fK".format(it) }
                 )
                 AdjustmentSlider(
-                    label = "Tint",
+                    label = stringRes { editorTint },
                     value = params.whiteBalanceTint,
                     range = -100f..100f,
                     onValueChange = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, it) },
@@ -164,7 +165,7 @@ fun BasicPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Presence",
+                        stringRes { editorPresence },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -174,33 +175,33 @@ fun BasicPanel(
                             viewModel.updateVibrance(0f)
                             viewModel.updateSaturation(0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Presence",
-                            modifier = Modifier.size(14.dp),
+                            contentDescription = stringRes { editorResetPresence },
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Clarity",
+                    label = stringRes { editorSectionClarity },
                     value = params.clarityAmount,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateClarity(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Vibrance",
+                    label = stringRes { editorVibrance },
                     value = params.vibrance,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateVibrance(it) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Saturation",
+                    label = stringRes { editorSaturation },
                     value = params.saturation,
                     range = -1f..1f,
                     onValueChange = { viewModel.updateSaturation(it) },
@@ -218,7 +219,7 @@ fun BasicPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Split Toning",
+                        stringRes { editorSectionSplitToning },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -226,19 +227,19 @@ fun BasicPanel(
                         onClick = {
                             viewModel.updateTint(0f, 0f, 0f, 0f, 0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
-                            contentDescription = "Reset Split Tone",
-                            modifier = Modifier.size(14.dp),
+                            contentDescription = stringRes { editorResetSplitTone },
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
-                    label = "Highlight Hue",
+                    label = stringRes { editorHighlightHue },
                     value = params.tintHighlightHue,
                     range = 0f..360f,
                     onValueChange = {
@@ -252,7 +253,7 @@ fun BasicPanel(
                     valueDisplayTransform = { "%.0f°".format(it) }
                 )
                 AdjustmentSlider(
-                    label = "Highlight Strength",
+                    label = stringRes { editorHighlightStrength },
                     value = params.tintHighlightStrength,
                     range = 0f..1f,
                     onValueChange = {
@@ -265,7 +266,7 @@ fun BasicPanel(
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Shadow Hue",
+                    label = stringRes { editorShadowHue },
                     value = params.tintShadowHue,
                     range = 0f..360f,
                     onValueChange = {
@@ -279,7 +280,7 @@ fun BasicPanel(
                     valueDisplayTransform = { "%.0f°".format(it) }
                 )
                 AdjustmentSlider(
-                    label = "Shadow Strength",
+                    label = stringRes { editorShadowStrength },
                     value = params.tintShadowStrength,
                     range = 0f..1f,
                     onValueChange = {
@@ -292,7 +293,7 @@ fun BasicPanel(
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
-                    label = "Balance",
+                    label = stringRes { editorBalance },
                     value = params.tintBalance,
                     range = -1f..1f,
                     onValueChange = {

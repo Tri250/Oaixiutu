@@ -319,7 +319,12 @@ class SleeveRepository(
     }
 
     suspend fun ftsSearchElements(query: String): List<SleeveElement> = withContext(Dispatchers.IO) {
-        val entities = elementDao.ftsSearchElements(SimpleSQLiteQuery(query, null))
+        val sanitized = query.replace("\"", "\"\"").replace("'", "''").trim()
+        val entities = if (sanitized.isEmpty()) emptyList()
+        else elementDao.ftsSearchElements(SimpleSQLiteQuery(
+            "SELECT * FROM element_fts WHERE element_fts MATCH ?",
+            arrayOf("\"$sanitized\"")
+        ))
         entities.map { entity ->
             val file = if (entity.elementType == 0) fileDao.getFileByElementId(entity.elementId) else null
             val folder = if (entity.elementType == 1) folderDao.getFolderByElementId(entity.elementId) else null

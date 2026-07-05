@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.animateItemPlacement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -34,6 +35,7 @@ import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.common.ShimmerEffect
 import com.alcedo.studio.viewmodel.AlbumViewModel
+import org.json.JSONArray
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +54,9 @@ fun AiSearchScreen(
     var inputText by remember { mutableStateOf("") }
     var searchHistory by remember { mutableStateOf(loadSearchHistory()) }
     val context = LocalContext.current
+
+    // 长按预览的图片状态
+    var previewImage by remember { mutableStateOf<ImageModel?>(null) }
 
     // Suggestions from AI
     val suggestions = remember {
@@ -210,9 +215,10 @@ fun AiSearchScreen(
                             similarity = searchResults.find { it.imageId == image.imageId }?.score,
                             onClick = { navController.navigate("editor/${image.imageId}") },
                             onLongClick = {
-                                // 长按预览大图
-                                navController.navigate("editor/${image.imageId}")
-                            }
+                                // 长按预览大图，不再跳转到编辑器
+                                previewImage = image
+                            },
+                            modifier = Modifier.animateItemPlacement()
                         )
                     }
                 }
@@ -265,10 +271,12 @@ fun AiSearchScreen(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
-                                modifier = Modifier.clickable {
-                                    inputText = query
-                                    albumViewModel.onSearchQueryChange(query)
-                                }
+                                modifier = Modifier
+                                    .animateItemPlacement()
+                                    .clickable {
+                                        inputText = query
+                                        albumViewModel.onSearchQueryChange(query)
+                                    }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -325,6 +333,55 @@ fun AiSearchScreen(
                 }
             }
         }
+
+        // 长按预览对话框
+        previewImage?.let { image ->
+            AlertDialog(
+                onDismissRequest = { previewImage = null },
+                title = {
+                    Text(
+                        image.imageName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                text = {
+                    val previewBitmap = albumViewModel.getThumbnail(image.imageId)
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (previewBitmap != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = previewBitmap.asImageBitmap(),
+                                contentDescription = image.imageName,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 320.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Text(
+                                image.imageName.take(1).uppercase(),
+                                style = MaterialTheme.typography.displayMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        previewImage = null
+                        navController.navigate("editor/${image.imageId}")
+                    }) { Text("编辑") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { previewImage = null }) {
+                        Text(stringRes { cancel })
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -347,10 +404,11 @@ private fun SearchResultCard(
     thumbnailBitmap: android.graphics.Bitmap?,
     similarity: Float?,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier.combinedClickable(
+        modifier = modifier.combinedClickable(
             onClick = onClick,
             onLongClick = onLongClick
         ),
@@ -424,28 +482,39 @@ private fun SearchResultCard(
 }
 
 // ── Search history persistence ──────────────────────────────
+// 使用 JSONArray 替代 StringSet 保留插入顺序（StringSet 不保证顺序，会导致历史排序错乱）
 private const val HISTORY_PREFS = "ai_search_history"
-private const val KEY_HISTORY = "search_queries"
+private const val KEY_HISTORY = "search_queries_json"
+private const val MAX_HISTORY_SIZE = 20
 
 private fun loadSearchHistory(): List<String> {
     return try {
         val prefs = com.alcedo.studio.di.AppModule.context.getSharedPreferences(HISTORY_PREFS, 0)
-        prefs.getStringSet(KEY_HISTORY, emptySet())?.toList()?.reversed() ?: emptyList()
+        val json = prefs.getString(KEY_HISTORY, null) ?: return emptyList()
+        val array = JSONArray(json)
+        val result = ArrayList<String>(array.length())
+        for (i in 0 until array.length()) {
+            array.optString(i).takeIf { it.isNotEmpty() }?.let { result.add(it) }
+        }
+        result
     } catch (_: Exception) { emptyList() }
 }
 
 private fun saveSearchHistory(current: List<String>, newQuery: String): List<String> {
-    val updated = (listOf(newQuery) + current.filter { it != newQuery }).take(20)
+    // 去重后置顶，限制最大条数，保持插入顺序
+    val updated = (listOf(newQuery) + current.filter { it != newQuery }).take(MAX_HISTORY_SIZE)
     try {
         val prefs = com.alcedo.studio.di.AppModule.context.getSharedPreferences(HISTORY_PREFS, 0)
-        prefs.edit().putStringSet(KEY_HISTORY, updated.toSet()).apply()
+        val array = JSONArray()
+        updated.forEach { array.put(it) }
+        prefs.edit().putString(KEY_HISTORY, array.toString()).apply()
     } catch (_: Exception) {}
     return updated
 }
 
 private fun clearSearchHistory(context: android.content.Context) {
     try {
-        context.getSharedPreferences(HISTORY_PREFS, 0).edit().clear().apply()
+        context.getSharedPreferences(HISTORY_PREFS, 0).edit().remove(KEY_HISTORY).apply()
     } catch (_: Exception) {}
 }
 

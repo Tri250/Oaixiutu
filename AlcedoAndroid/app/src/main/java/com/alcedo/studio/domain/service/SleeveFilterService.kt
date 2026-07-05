@@ -153,7 +153,12 @@ class SleeveFilterService(
         page: Int = 0,
         pageSize: Int = 50
     ): FilterResult = withContext(Dispatchers.IO) {
-        val imageIds = labelDao.ftsSearchImageIdsByLabel(SimpleSQLiteQuery(labelQuery, null))
+        val sanitized = labelQuery.replace("\"", "\"\"").replace("'", "''").trim()
+        val imageIds = if (sanitized.isEmpty()) emptyList()
+        else labelDao.ftsSearchImageIdsByLabel(SimpleSQLiteQuery(
+            "SELECT DISTINCT image_id FROM semantic_labels WHERE label LIKE '%' || ? || '%'",
+            arrayOf(sanitized)
+        ))
         val totalCount = imageIds.size
         val offset = page * pageSize
         val paged = imageIds.drop(offset).take(pageSize)
@@ -211,7 +216,7 @@ class SleeveFilterService(
                 }
                 else -> {
                     // For other filters, search by name FTS
-                    elementDao.ftsSearchElements(SimpleSQLiteQuery(filter.getPredicate(), null)).map { it.elementId }.toSet()
+                    elementDao.ftsSearchElements(SimpleSQLiteQuery(filter.getPredicate(), filter.getBindArgs())).map { it.elementId }.toSet()
                 }
             }
         }
@@ -444,27 +449,42 @@ class SleeveFilterService(
         filterCombined(combo, page, pageSize)
     }
 
-    private fun createEvaluationContext(): FilterEvaluationContext {
+    private suspend fun createEvaluationContext(): FilterEvaluationContext {
+        // 预加载全部图像元数据，供叶子节点同步评估时使用
+        val metadataCache = metadataDao.getAllMetadata().associateBy { it.imageId }
         return object : FilterEvaluationContext {
             private val ratingCache = mutableMapOf<Long, Int>()
             private val labelCache = mutableMapOf<Long, List<String>>()
             private val collectionCache = mutableMapOf<Long, Set<Long>>()
 
             override fun evaluateLeaf(imageId: Long, filter: SleeveFilter): Boolean {
+                val imageMeta = metadataCache[imageId] ?: return false
                 return when (filter) {
                     is RatingFilterNode -> {
                         val rating = ratingCache[imageId] ?: 0
                         rating in filter.minRating..filter.maxRating
                     }
                     is DateRangeFilterNode -> {
-                        // Simplified - in production would query metadata
-                        true
+                        imageMeta.captureDate in filter.from..filter.to
                     }
                     is CameraFilterNode -> {
-                        true // Would check against metadataDao
+                        val hasCondition = filter.cameraMake != null || filter.cameraModel != null
+                        if (!hasCondition) {
+                            true
+                        } else {
+                            val makeMatch = filter.cameraMake?.let {
+                                imageMeta.cameraMake.contains(it, ignoreCase = true)
+                            } ?: false
+                            val modelMatch = filter.cameraModel?.let {
+                                imageMeta.cameraModel.contains(it, ignoreCase = true)
+                            } ?: false
+                            makeMatch || modelMatch
+                        }
                     }
                     is LensFilterNode -> {
-                        true // Would check against metadataDao
+                        filter.lensModel?.let {
+                            imageMeta.lensModel.contains(it, ignoreCase = true)
+                        } ?: true
                     }
                     is TagFilterNode -> {
                         val labels = labelCache[imageId] ?: emptyList()
@@ -475,7 +495,16 @@ class SleeveFilterService(
                         filter.collectionId in collections
                     }
                     is FileTypeFilterNode -> {
-                        true // Would check against metadataDao
+                        if (filter.imageTypes.isEmpty()) {
+                            true
+                        } else {
+                            val typeName = ImageType.entries
+                                .getOrElse(imageMeta.imageType) { ImageType.DEFAULT }.name
+                            filter.imageTypes.any { type ->
+                                type.equals(typeName, ignoreCase = true) ||
+                                    imageMeta.imageName.endsWith(".$type", ignoreCase = true)
+                            }
+                        }
                     }
                     else -> {
                         // Default: cannot evaluate without DB access

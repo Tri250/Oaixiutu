@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.alcedo.studio.BuildConfig
+import com.alcedo.studio.i18n.stringRes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,10 +47,10 @@ fun AboutPage(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("About") },
+                title = { Text(stringRes { about }) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
                     }
                 }
             )

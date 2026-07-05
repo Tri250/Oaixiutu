@@ -24,6 +24,8 @@ import com.alcedo.studio.ui.album.SortMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 
 class AlbumViewModel : ViewModel() {
@@ -39,6 +41,7 @@ class AlbumViewModel : ViewModel() {
     private val thumbnailService by lazy { AppModule.thumbnailService }
     private val searchService by lazy { AppModule.searchService }
     private val aiService by lazy { AppModule.aiService }
+    private val exportService by lazy { AppModule.exportService }
 
     // ── Image list state ──
 
@@ -83,6 +86,19 @@ class AlbumViewModel : ViewModel() {
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching
+
+    // ── Permission error ──
+
+    private val _permissionError = MutableStateFlow<String?>(null)
+    val permissionError: StateFlow<String?> = _permissionError.asStateFlow()
+
+    fun setPermissionError(message: String?) {
+        _permissionError.value = message
+    }
+
+    fun clearPermissionError() {
+        _permissionError.value = null
+    }
 
     // ── Sort & Filter ──
 
@@ -784,7 +800,10 @@ class AlbumViewModel : ViewModel() {
     fun deleteSelected() {
         viewModelScope.launch {
             try {
-                _selectedImages.value.forEach { imageRepository.deleteImage(it) }
+                val ids = _selectedImages.value.toList()
+                ids.map { id ->
+                    async { imageRepository.deleteImage(id) }
+                }.awaitAll()
                 clearSelection()
                 loadImages()
                 loadFolders()
@@ -925,6 +944,27 @@ class AlbumViewModel : ViewModel() {
         return _filteredImages.value
             .filter { it.imageId in selected }
             .map { it.imagePath }
+    }
+
+    private val _batchExportResult = MutableStateFlow<ExportService.ExportBatchResult?>(null)
+    val batchExportResult: StateFlow<ExportService.ExportBatchResult?> = _batchExportResult.asStateFlow()
+
+    /** 批量导出选中图片 */
+    fun exportBatchByIds(ids: List<Long>, settings: ExportSettings) {
+        viewModelScope.launch {
+            try {
+                val items = ids.mapNotNull { id ->
+                    imageRepository.getImage(id)?.let {
+                        ExportService.ExportBatchItem(sourcePath = it.imagePath)
+                    }
+                }
+                if (items.isNotEmpty()) {
+                    _batchExportResult.value = exportService.exportBatch(items, settings)
+                }
+            } catch (e: Throwable) {
+                Log.e("AlbumVM", "Batch export failed", e)
+            }
+        }
     }
 
     // ================================================================

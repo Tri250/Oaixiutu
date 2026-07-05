@@ -21,6 +21,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ProgressBar
 import com.alcedo.studio.viewmodel.ExportViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,9 +36,9 @@ fun ExportScreen(
     val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
 
-    // Show result snackbar
-    var showResultSnack by remember { mutableStateOf(false) }
-    var resultMessage by remember { mutableStateOf("") }
+    // Snackbar host state for result feedback
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Directory picker for output path
     val directoryPickerLauncher = rememberLauncherForActivityResult(
@@ -65,17 +66,20 @@ fun ExportScreen(
     LaunchedEffect(lastResult, batchResult) {
         when {
             lastResult is ExportService.ExportResult.Success -> {
-                resultMessage = Strings.current.exportSuccess.format((lastResult as ExportService.ExportResult.Success).filePath)
-                showResultSnack = true
+                snackbarHostState.showSnackbar(
+                    Strings.current.exportSuccess.format((lastResult as ExportService.ExportResult.Success).filePath)
+                )
             }
             lastResult is ExportService.ExportResult.Error -> {
-                resultMessage = Strings.current.exportFailed.format((lastResult as ExportService.ExportResult.Error).message)
-                showResultSnack = true
+                snackbarHostState.showSnackbar(
+                    Strings.current.exportFailed.format((lastResult as ExportService.ExportResult.Error).message)
+                )
             }
             batchResult != null -> {
                 val br = batchResult!!
-                resultMessage = Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
-                showResultSnack = true
+                snackbarHostState.showSnackbar(
+                    Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
+                )
             }
         }
     }
@@ -91,20 +95,7 @@ fun ExportScreen(
                 }
             )
         },
-        snackbarHost = {
-            if (showResultSnack) {
-                Snackbar(
-                    action = {
-                        TextButton(onClick = { showResultSnack = false }) {
-                            Text(stringRes { ok })
-                        }
-                    },
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(resultMessage, maxLines = 2)
-                }
-            }
-        }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier

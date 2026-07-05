@@ -458,7 +458,17 @@ class ExportViewModel : ViewModel() {
                 for ((index, item) in items.withIndex()) {
                     val image = imageRepository.getImage(item.imageId)
                     if (image != null) {
-                        val bitmap = BitmapFactory.decodeFile(image.imagePath)
+                        val options = BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                            BitmapFactory.decodeFile(image.imagePath, this)
+                            inSampleSize = calculateInSampleSize(
+                                outWidth, outHeight,
+                                _settings.value.maxWidth ?: 4096,
+                                _settings.value.maxHeight ?: 4096
+                            )
+                            inJustDecodeBounds = false
+                        }
+                        val bitmap = BitmapFactory.decodeFile(image.imagePath, options)
                         if (bitmap != null) {
                             val processed = pipelineService.applyPipeline(bitmap, item.params)
                             exportItems.add(

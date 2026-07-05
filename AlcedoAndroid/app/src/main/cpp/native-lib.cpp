@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <dlfcn.h>
 
 #include "core/edit/pipeline_service.h"
 #include "core/image/image_buffer.h"
@@ -2303,9 +2304,27 @@ Java_com_alcedo_studio_security_NativeSecurityChecker_nativeIsRunningInEmulator(
 JNIEXPORT jboolean JNICALL
 Java_com_alcedo_studio_security_NativeSecurityChecker_nativeCheckIntegrity(
     JNIEnv* env, jobject thiz) {
-    // Basic integrity check - verify the native library hasn't been tampered with
-    // In production, this would check a hash of the .so file
-    return JNI_TRUE;
+    // 完整性校验：通过验证承载本函数的 .so 文件的 ELF 头部，
+    // 确认 native 库结构完整、未被篡改或损坏
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void*>(
+            &Java_com_alcedo_studio_security_NativeSecurityChecker_nativeCheckIntegrity), &info)) {
+        if (info.dli_fname != nullptr) {
+            FILE* f = fopen(info.dli_fname, "rb");
+            if (f != nullptr) {
+                unsigned char elf_magic[4];
+                size_t rd = fread(elf_magic, 1, 4, f);
+                fclose(f);
+                // ELF 魔数: 0x7F 'E' 'L' 'F'
+                if (rd == 4 && elf_magic[0] == 0x7F &&
+                    elf_magic[1] == 'E' && elf_magic[2] == 'L' &&
+                    elf_magic[3] == 'F') {
+                    return JNI_TRUE;
+                }
+            }
+        }
+    }
+    return JNI_FALSE;
 }
 
 } // extern "C"

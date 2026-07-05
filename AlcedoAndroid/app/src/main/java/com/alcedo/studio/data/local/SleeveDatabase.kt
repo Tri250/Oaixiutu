@@ -276,7 +276,9 @@ abstract class SleeveDatabase : RoomDatabase() {
                 keyGenerator.generateKey()
             }
 
-            val secretKey = (keyStore.getEntry(alias, null) as KeyStore.SecretKeyEntry).secretKey
+            val entry = keyStore.getEntry(alias, null) as? KeyStore.SecretKeyEntry
+                ?: throw IllegalStateException("KeyStore entry type mismatch for $alias")
+            val secretKey = entry.secretKey
             // Sign a fixed message to derive a deterministic 32-byte passphrase.
             // The keystore key is non-exportable, but signing operations are permitted.
             val mac = Mac.getInstance("HmacSHA256")

@@ -501,6 +501,60 @@ interface StringResources {
     val statsNoLensData: String
     val statsNoRatingData: String
     val statsNoTagsData: String
+
+    // ── Additional UI strings ─────────────────────────────────────────
+    val backgroundTasks: String
+    val collapse: String
+    val expand: String
+    val completed: String
+    val activeTasks: String // "{count} active tasks"
+    val rate: String
+    val addToCollection: String
+    val copyAdjustments: String
+    val pasteAdjustments: String
+    val analyzeWithAi: String
+    val about: String
+    val addImages: String
+    val folders: String
+    val filter: String
+    val settings: String
+    val importText: String
+    val aiTag: String
+    val starRating: String // "{n} stars"
+
+    // Album export dialog
+    val exportImages: String
+    val exportSelectImages: String // "Select Images ({selected}/{total})"
+    val noImagesAvailable: String
+    val exportMoreImages: String // "... and {n} more images"
+    val exportPreset: String
+    val exportPresetWeb: String
+    val exportPresetPrint: String
+    val exportPresetArchive: String
+    val exportNImages: String // "Export {n} Images"
+
+    // Basic panel additions
+    val editorResetLight: String
+    val editorWhites: String
+    val editorBlacks: String
+    val editorResetWb: String
+    val editorPresence: String
+    val editorResetPresence: String
+    val editorResetSplitTone: String
+
+    // Collections panel
+    val collections: String
+    val newCollection: String
+    val noCollectionsYet: String
+    val createCollection: String
+    val deleteCollection: String
+    val deleteCollectionMessage: String // "Are you sure you want to delete \"{name}\"? This cannot be undone."
+    val noImagesInCollection: String
+    val remove: String
+    val name: String
+    val descriptionOptional: String
+    val create: String
+    val renameCollection: String
 }
 
 /**

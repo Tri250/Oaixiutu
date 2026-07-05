@@ -2,6 +2,8 @@ package com.alcedo.studio.ui.editor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -389,12 +391,12 @@ private fun ScopeAnalyzerPanel(
                 }
                 IconButton(
                     onClick = onClose,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = stringRes { close },
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(24.dp),
                         tint = Color.White.copy(alpha = 0.6f)
                     )
                 }
@@ -575,20 +577,34 @@ private fun ImagePreviewArea(
             },
         contentAlignment = Alignment.Center
     ) {
-        if (isProcessing) {
-            CircularProgressIndicator(color = Color.White)
-        } else if (isCompareMode && originalBitmap != null && previewBitmap != null) {
-            CompareView(
-                originalBitmap = originalBitmap,
-                editedBitmap = previewBitmap,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            ZoomableImageView(
-                imageBitmap = previewBitmap,
-                modifier = Modifier.fillMaxSize(),
-                zoomableState = zoomableState
-            )
+        Crossfade(
+            targetState = when {
+                isProcessing -> "loading"
+                isCompareMode && originalBitmap != null && previewBitmap != null -> "compare"
+                else -> "preview"
+            },
+            animationSpec = tween(300),
+            label = "previewCrossfade"
+        ) { state ->
+            when (state) {
+                "loading" -> {
+                    CircularProgressIndicator(color = Color.White)
+                }
+                "compare" -> {
+                    CompareView(
+                        originalBitmap = originalBitmap!!,
+                        editedBitmap = previewBitmap!!,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> {
+                    ZoomableImageView(
+                        imageBitmap = previewBitmap,
+                        modifier = Modifier.fillMaxSize(),
+                        zoomableState = zoomableState
+                    )
+                }
+            }
         }
 
         // 长按时叠加显示原图
@@ -761,7 +777,6 @@ private fun ExportDialog(
     var includeMetadata by remember { mutableStateOf(true) }
     var isHdr by remember { mutableStateOf(false) }
     var maxDimension by remember { mutableStateOf("") }
-    var bitDepth by remember { mutableIntStateOf(8) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -789,23 +804,6 @@ private fun ExportDialog(
                         valueRange = 1f..100f,
                         modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // 位深度
-                if (format == ExportFormat.PNG || format == ExportFormat.TIFF) {
-                    Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = bitDepth == 8,
-                            onClick = { bitDepth = 8 },
-                            label = { Text(stringRes { export8Bit }) }
-                        )
-                        FilterChip(
-                            selected = bitDepth == 16,
-                            onClick = { bitDepth = 16 },
-                            label = { Text(stringRes { export16Bit }) }
-                        )
-                    }
                 }
 
                 // 色彩空间

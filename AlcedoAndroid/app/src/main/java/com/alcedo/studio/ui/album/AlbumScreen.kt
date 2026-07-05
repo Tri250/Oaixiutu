@@ -1,6 +1,8 @@
 package com.alcedo.studio.ui.album
 
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -14,6 +16,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.grid.animateItemPlacement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -76,6 +79,9 @@ fun AlbumScreen(
     var ratingTarget by remember { mutableStateOf<ImageModel?>(null) }
     var showBatchAiTagDialog by remember { mutableStateOf(false) }
     var showBatchRatingDialog by remember { mutableStateOf(false) }
+    var showBatchExportDialog by remember { mutableStateOf(false) }
+    var showPermissionRationale by remember { mutableStateOf(false) }
+    val permissionError by viewModel.permissionError.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -86,6 +92,15 @@ fun AlbumScreen(
             val allGranted = results.all { it.value }
             if (allGranted) {
                 viewModel.refresh()
+            } else {
+                // 检查是否应该显示解释
+                val shouldShowRationale = PermissionHelper.shouldShowRationale(context)
+                if (shouldShowRationale) {
+                    showPermissionRationale = true
+                } else {
+                    // 永久拒绝 — 引导去设置
+                    viewModel.setPermissionError("权限被拒绝，请在设置中开启存储访问权限")
+                }
             }
         }
     )
@@ -182,6 +197,7 @@ fun AlbumScreen(
                 onDeleteSelected = viewModel::deleteSelected,
                 onBatchAiTag = { showBatchAiTagDialog = true },
                 onBatchRating = { showBatchRatingDialog = true },
+                onBatchExport = { showBatchExportDialog = true },
                 onRefresh = viewModel::refresh,
                 onSortModeChange = viewModel::setSortMode,
                 onOpenFilter = { showFilterSheet = true },
@@ -219,6 +235,7 @@ fun AlbumScreen(
             onDeleteSelected = viewModel::deleteSelected,
             onBatchAiTag = { showBatchAiTagDialog = true },
             onBatchRating = { showBatchRatingDialog = true },
+            onBatchExport = { showBatchExportDialog = true },
             onRefresh = viewModel::refresh,
             onSortModeChange = viewModel::setSortMode,
             onOpenFilter = { showFilterSheet = true },
@@ -233,6 +250,7 @@ fun AlbumScreen(
     // 筛选底部表单
     if (showFilterSheet) {
         FilterBottomSheet(
+            viewModel = viewModel,
             onDismiss = { showFilterSheet = false },
             onApply = { filter ->
                 viewModel.applyFilter(filter)
@@ -335,6 +353,65 @@ fun AlbumScreen(
             }
         )
     }
+
+    // 批量导出对话框
+    if (showBatchExportDialog) {
+        val selectedImageModels = images.filter { it.imageId in selectedImages }
+        AlbumExportDialog(
+            images = selectedImageModels,
+            onDismiss = { showBatchExportDialog = false },
+            onExport = { ids, settings ->
+                viewModel.exportBatchByIds(ids, settings)
+                showBatchExportDialog = false
+            }
+        )
+    }
+
+    // 权限解释对话框
+    if (showPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { showPermissionRationale = false },
+            title = { Text("需要存储权限") },
+            text = { Text("Alcedo Studio 需要访问您的照片来浏览和编辑图片。请在接下来弹出的权限请求中点击\"允许\"。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPermissionRationale = false
+                    permissionState.requestMediaAccess()
+                }) { Text("再次请求") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPermissionRationale = false
+                    // 跳转系统设置
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) { Text("去设置") }
+            }
+        )
+    }
+
+    // 永久拒绝权限时显示提示
+    permissionError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearPermissionError() },
+            title = { Text("权限被拒绝") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearPermissionError()
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) { Text("去设置") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.clearPermissionError() }) { Text(stringRes { cancel }) }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -362,6 +439,7 @@ private fun AlbumContent(
     onDeleteSelected: () -> Unit,
     onBatchAiTag: () -> Unit,
     onBatchRating: () -> Unit,
+    onBatchExport: () -> Unit,
     onRefresh: () -> Unit,
     onSortModeChange: (SortMode) -> Unit,
     onOpenFilter: () -> Unit,
@@ -376,7 +454,63 @@ private fun AlbumContent(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            if (selectedImages.isNotEmpty()) {
+            // 使用 Box 叠加两个 TopAppBar，让退出动画能够正常播放
+            Box {
+                // 普通模式顶栏
+                AnimatedVisibility(
+                    visible = selectedImages.isEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    TopAppBar(
+                        title = {
+                            if (showSearch) {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = onSearchQueryChange,
+                                    placeholder = { Text(stringRes { albumSearchHint }) },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+                                )
+                            } else {
+                                Text("Alcedo Studio")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = onToggleSearch) {
+                                Icon(
+                                    if (showSearch) Icons.Default.Close else Icons.Default.Search,
+                                    contentDescription = stringRes { search }
+                                )
+                            }
+                            if (showSearch) {
+                                FilterChip(
+                                    selected = semanticEnabled,
+                                    onClick = onToggleSemantic,
+                                    label = { Text("AI", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                            }
+                            IconButton(onClick = onOpenFilter) {
+                                Icon(Icons.Default.FilterList, contentDescription = stringRes { filter })
+                            }
+                            IconButton(onClick = onOpenFolderSidebar) {
+                                Icon(Icons.Default.Folder, contentDescription = stringRes { folders })
+                            }
+                            IconButton(onClick = onSettings) {
+                                Icon(Icons.Default.Settings, contentDescription = stringRes { settings })
+                            }
+                        },
+                        scrollBehavior = scrollBehavior
+                    )
+                }
                 // 选择模式顶栏（带动画）
                 AnimatedVisibility(
                     visible = selectedImages.isNotEmpty(),
@@ -393,7 +527,7 @@ private fun AlbumContent(
                         actions = {
                             // 批量 AI 标签
                             IconButton(onClick = onBatchAiTag) {
-                                Icon(Icons.Default.Label, contentDescription = "AI标签",
+                                Icon(Icons.Default.Label, contentDescription = stringRes { aiTag },
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
                             // 批量评分
@@ -402,11 +536,7 @@ private fun AlbumContent(
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
                             // 批量导出选中图片
-                            IconButton(onClick = {
-                                selectedImages.firstOrNull()?.let { firstId ->
-                                    navController.navigate("export/$firstId")
-                                }
-                            }) {
+                            IconButton(onClick = onBatchExport) {
                                 Icon(Icons.Default.Share, contentDescription = stringRes { export },
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
@@ -421,55 +551,6 @@ private fun AlbumContent(
                         )
                     )
                 }
-            } else {
-                TopAppBar(
-                    title = {
-                        if (showSearch) {
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = onSearchQueryChange,
-                                placeholder = { Text(stringRes { albumSearchHint }) },
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                                leadingIcon = {
-                                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                                }
-                            )
-                        } else {
-                            Text("Alcedo Studio")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = onToggleSearch) {
-                            Icon(
-                                if (showSearch) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        }
-                        if (showSearch) {
-                            FilterChip(
-                                selected = semanticEnabled,
-                                onClick = onToggleSemantic,
-                                label = { Text("AI", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.padding(horizontal = 2.dp)
-                            )
-                        }
-                        IconButton(onClick = onOpenFilter) {
-                            Icon(Icons.Default.FilterList, contentDescription = "Filter")
-                        }
-                        IconButton(onClick = onOpenFolderSidebar) {
-                            Icon(Icons.Default.Folder, contentDescription = "Folders")
-                        }
-                        IconButton(onClick = onSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
-                        }
-                    },
-                    scrollBehavior = scrollBehavior
-                )
             }
         },
         floatingActionButton = {
@@ -483,7 +564,7 @@ private fun AlbumContent(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Import")
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringRes { importText })
                 }
             }
         }
@@ -572,7 +653,8 @@ private fun AlbumContent(
                                         } else {
                                             onToggleImageSelection(image.imageId)
                                         }
-                                    }
+                                    },
+                                    modifier = Modifier.animateItemPlacement()
                                 )
                             }
                             if (hasMorePages) {
@@ -641,7 +723,8 @@ private fun ThumbnailCard(
     isSelected: Boolean,
     thumbnailBitmap: android.graphics.Bitmap?,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 0.92f else 1f,
@@ -661,7 +744,7 @@ private fun ThumbnailCard(
     )
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .combinedClickable(
                 onClick = onClick,
@@ -961,6 +1044,7 @@ private fun ImportDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterBottomSheet(
+    viewModel: AlbumViewModel,
     onDismiss: () -> Unit,
     onApply: (FilterState) -> Unit,
     onReset: () -> Unit
@@ -973,6 +1057,7 @@ fun FilterBottomSheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         FilterSheetContent(
+            viewModel = viewModel,
             onApply = onApply,
             onReset = onReset
         )
@@ -981,23 +1066,28 @@ fun FilterBottomSheet(
 
 @Composable
 private fun FilterSheetContent(
+    viewModel: AlbumViewModel,
     onApply: (FilterState) -> Unit,
     onReset: () -> Unit
 ) {
-    // TODO: 预填当前筛选状态 — 从 ViewModel 获取 FilterState
-    var cameraMakes by remember { mutableStateOf(setOf<String>()) }
-    var cameraModels by remember { mutableStateOf(setOf<String>()) }
-    var lensModel by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf("") }
-    var endDate by remember { mutableStateOf("") }
-    var selectedRating by remember { mutableIntStateOf(0) }
-    var selectedFileTypes by remember { mutableStateOf(setOf<String>()) }
-    var selectedAiLabels by remember { mutableStateOf(setOf<String>()) }
+    val allImages by viewModel.images.collectAsStateWithLifecycle()
+    val currentFilter by viewModel.currentFilter.collectAsStateWithLifecycle()
 
-    val sampleCameraMakes = listOf("Sony", "Canon", "Nikon", "Fujifilm", "Leica", "Panasonic", "Olympus")
-    val sampleCameraModels = listOf("α7R V", "EOS R5", "Z8", "X-T5", "M11", "S5 II", "OM-1")
-    val sampleFileTypes = listOf("JPEG", "PNG", "TIFF", "RAW", "DNG")
-    val sampleAiLabels = listOf("Portrait", "Landscape", "Night", "City", "Nature", "Food", "Street", "Abstract")
+    var cameraMakes by remember { mutableStateOf(currentFilter?.cameraMakes?.toSet() ?: emptySet()) }
+    var cameraModels by remember { mutableStateOf(currentFilter?.cameraModels?.toSet() ?: emptySet()) }
+    var lensModel by remember { mutableStateOf(currentFilter?.lensModel ?: "") }
+    var startDate by remember { mutableStateOf(currentFilter?.startDate ?: "") }
+    var endDate by remember { mutableStateOf(currentFilter?.endDate ?: "") }
+    var selectedRating by remember { mutableIntStateOf(currentFilter?.rating ?: 0) }
+    var selectedFileTypes by remember { mutableStateOf(currentFilter?.fileTypes?.toSet() ?: emptySet()) }
+    var selectedAiLabels by remember { mutableStateOf(currentFilter?.aiLabels?.toSet() ?: emptySet()) }
+
+    val realCameraMakes = allImages.mapNotNull { it.exifDisplay.cameraMake.takeIf { it.isNotEmpty() } }.distinct()
+    val realCameraModels = allImages.mapNotNull { it.exifDisplay.cameraModel.takeIf { it.isNotEmpty() } }.distinct()
+    val realFileTypes = allImages.map {
+        it.imageName.substringAfterLast(".", "").uppercase()
+    }.filter { it.isNotEmpty() }.distinct()
+    val realAiLabels = emptyList<String>()
 
     Column(
         modifier = Modifier
@@ -1040,7 +1130,7 @@ private fun FilterSheetContent(
         // 相机品牌
         Text(stringRes { albumFilterCameraMake }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            sampleCameraMakes.forEach { make ->
+            realCameraMakes.forEach { make ->
                 FilterChip(
                     selected = cameraMakes.contains(make),
                     onClick = {
@@ -1056,7 +1146,7 @@ private fun FilterSheetContent(
         // 相机型号
         Text(stringRes { albumFilterCameraModel }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            sampleCameraModels.forEach { model ->
+            realCameraModels.forEach { model ->
                 FilterChip(
                     selected = cameraModels.contains(model),
                     onClick = {
@@ -1116,7 +1206,7 @@ private fun FilterSheetContent(
                 ) {
                     Icon(
                         if (star <= selectedRating) Icons.Default.Star else Icons.Default.StarOutline,
-                        contentDescription = "$star stars",
+                        contentDescription = stringRes { starRating }.format(star),
                         tint = if (star <= selectedRating)
                             MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
@@ -1132,7 +1222,7 @@ private fun FilterSheetContent(
         // 文件类型
         Text(stringRes { albumFilterFileType }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            sampleFileTypes.forEach { type ->
+            realFileTypes.forEach { type ->
                 FilterChip(
                     selected = selectedFileTypes.contains(type),
                     onClick = {
@@ -1148,7 +1238,7 @@ private fun FilterSheetContent(
         // AI 标签
         Text(stringRes { albumFilterAiLabels }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            sampleAiLabels.forEach { label ->
+            realAiLabels.forEach { label ->
                 FilterChip(
                     selected = selectedAiLabels.contains(label),
                     onClick = {

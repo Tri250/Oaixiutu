@@ -150,12 +150,12 @@ fun AdjustmentSliderWithReset(
                         onClick = {
                             onValueChange(defaultValue)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = "Reset $label",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

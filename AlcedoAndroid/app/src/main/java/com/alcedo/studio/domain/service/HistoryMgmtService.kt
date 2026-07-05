@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 class HistoryMgmtService(
@@ -19,10 +21,17 @@ class HistoryMgmtService(
         private const val TAG = "HistoryMgmtService"
         private const val MAX_TRANSACTIONS_BEFORE_COMPRESS = 100
         private const val COMPRESS_WINDOW_SIMILAR = 5
+        private const val MAX_ACTIVE_HISTORIES = 32
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val activeHistories = ConcurrentHashMap<UInt, EditHistory>()
+    // Bounded LRU cache (prevents unbounded memory growth as more images are edited)
+    private val activeHistories: MutableMap<UInt, EditHistory> = Collections.synchronizedMap(
+        object : LinkedHashMap<UInt, EditHistory>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<UInt, EditHistory>): Boolean =
+                size > MAX_ACTIVE_HISTORIES
+        }
+    )
     private val workingVersions = ConcurrentHashMap<UInt, WorkingVersion>()
 
     private val _historyState = MutableStateFlow<Map<UInt, HistoryState>>(emptyMap())
@@ -437,7 +446,9 @@ class HistoryMgmtService(
 
     fun releaseAll() {
         scope.launch {
-            activeHistories.keys.forEach { releaseHistory(it) }
+            // Snapshot keys to avoid ConcurrentModificationException while
+            // releaseHistory() removes entries from the same map.
+            activeHistories.keys.toList().forEach { releaseHistory(it) }
         }
     }
 

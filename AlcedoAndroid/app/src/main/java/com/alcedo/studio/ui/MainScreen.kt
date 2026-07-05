@@ -1,5 +1,10 @@
 package com.alcedo.studio.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -43,14 +48,19 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -59,6 +69,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.privacy.PrivacyConsentDialog
+import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.album.AlbumScreen
 import com.alcedo.studio.ui.album.StatsView
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
@@ -134,6 +146,24 @@ fun MainScreen(
     val bottomBarDestinations = MainDestination.entries
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
+    val context = LocalContext.current
+
+    // 通知权限请求 (Android 13+)
+    val notificationPermissionState = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // 用户决定后无需特殊处理，BackgroundTaskService 会在需要时检查
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionState.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     // 后台任务进度浮层
     val taskSnapshots by com.alcedo.studio.di.AppModule.backgroundTaskService.tasks.collectAsStateWithLifecycle()
     val hasActiveTasks = taskSnapshots.any {
@@ -143,6 +173,14 @@ fun MainScreen(
     }
     val onTaskCancel: (String) -> Unit = { taskId ->
         com.alcedo.studio.di.AppModule.backgroundTaskService.cancel(taskId)
+    }
+
+    // 首次启动隐私同意弹窗 (PIPL / GDPR 合规)
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (PrivacyManager.needsConsentDialog()) {
+            showPrivacyDialog = true
+        }
     }
 
     Scaffold(
@@ -350,6 +388,14 @@ fun MainScreen(
             )
         }
         }
+    }
+
+    // 首次启动隐私同意弹窗
+    if (showPrivacyDialog) {
+        PrivacyConsentDialog(
+            onDismiss = { showPrivacyDialog = false },
+            onAccept = { showPrivacyDialog = false }
+        )
     }
 }
 

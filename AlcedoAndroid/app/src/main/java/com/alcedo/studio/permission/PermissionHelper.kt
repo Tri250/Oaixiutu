@@ -105,6 +105,19 @@ object PermissionHelper {
         return activity.shouldShowRequestPermissionRationale(permission)
     }
 
+    /**
+     * 检查是否应该为读取媒体权限显示解释。
+     * 仅当当前权限未授予，且至少一个未授予权限应显示 rationale 时返回 true。
+     * 若所有未授予权限都不应显示 rationale，则视为已被永久拒绝。
+     */
+    fun shouldShowRationale(context: Context): Boolean {
+        val activity = context as? Activity ?: return false
+        val permissions = getReadMediaPermissions()
+        return permissions.any {
+            !hasPermission(activity, it) && activity.shouldShowRequestPermissionRationale(it)
+        }
+    }
+
     fun isPermanentlyDenied(activity: Activity, permission: String, wasRequested: Boolean): Boolean {
         // If the permission was requested before but shouldShowRationale returns false,
         // and the permission is not granted, it means "Don't ask again" was selected

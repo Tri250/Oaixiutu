@@ -10,6 +10,8 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.RandomAccessFile
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -21,14 +23,33 @@ import java.util.concurrent.atomic.AtomicLong
 class DecodeService(
     private val decodeBridge: DecodeNdkBridge = DecodeNdkBridge
 ) {
+    companion object {
+        private const val MAX_CACHE_ENTRIES = 64
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<Long, Job>()
     private val nextJobId = AtomicLong(1)
 
-    // Cache for decode results
-    private val metadataCache = ConcurrentHashMap<String, CachedMetadata>()
-    private val thumbnailCache = ConcurrentHashMap<String, CachedThumbnail>()
-    private val rawInfoCache = ConcurrentHashMap<String, CachedRawInfo>()
+    // Bounded LRU caches for decode results (prevents unbounded memory growth)
+    private val metadataCache: MutableMap<String, CachedMetadata> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, CachedMetadata>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedMetadata>): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
+    )
+    private val thumbnailCache: MutableMap<String, CachedThumbnail> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, CachedThumbnail>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedThumbnail>): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
+    )
+    private val rawInfoCache: MutableMap<String, CachedRawInfo> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, CachedRawInfo>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedRawInfo>): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
+    )
 
     // Progress tracking
     private val _decodeProgress = MutableStateFlow<DecodeProgress>(DecodeProgress.Idle)

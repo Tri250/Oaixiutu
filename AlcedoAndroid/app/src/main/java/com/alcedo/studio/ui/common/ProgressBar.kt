@@ -49,12 +49,12 @@ fun ProgressBar(
                 if (onCancel != null) {
                     IconButton(
                         onClick = onCancel,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Cancel",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -122,12 +122,12 @@ fun IndeterminateProgressBar(
                 if (onCancel != null) {
                     IconButton(
                         onClick = onCancel,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "Cancel",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

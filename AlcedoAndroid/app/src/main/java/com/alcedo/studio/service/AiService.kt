@@ -6,11 +6,17 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.ndk.AiNdkBridge
+import com.alcedo.studio.security.SecureHttpClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.Request
 import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.sqrt
@@ -33,6 +39,7 @@ class AiService(private val context: Context) {
         private const val LABEL_CONFIDENCE_THRESHOLD = 0.15f
         private const val MAX_LABELS_PER_IMAGE = 10
         private const val MODELS_DIR = "ai_models"
+        private const val MAX_LABEL_STORE_ENTRIES = 512
     }
 
     // ── Model Catalog ──
@@ -57,7 +64,13 @@ class AiService(private val context: Context) {
 
     // ── Label Store ──
 
-    private val labelStore = ConcurrentHashMap<UInt, List<SemanticLabel>>()
+    // Bounded LRU cache (prevents unbounded memory growth as more images are labeled)
+    private val labelStore: MutableMap<UInt, List<SemanticLabel>> = Collections.synchronizedMap(
+        object : LinkedHashMap<UInt, List<SemanticLabel>>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<UInt, List<SemanticLabel>>): Boolean =
+                size > MAX_LABEL_STORE_ENTRIES
+        }
+    )
 
     // ── Task Tracking ──
 
@@ -178,35 +191,82 @@ class AiService(private val context: Context) {
     suspend fun downloadModel(modelId: String, onProgress: (Float) -> Unit = {}): Boolean =
         withContext(Dispatchers.IO) {
             val model = modelCatalog[modelId] ?: return@withContext false
+            if (model.isDownloaded) return@withContext true
             val downloadUrl = model.downloadUrl ?: return@withContext false
 
             _modelLoadStatus.value = ModelLoadStatus.LOADING
             onProgress(0f)
 
-            try {
-                val modelsDir = File(context.filesDir, MODELS_DIR)
-                if (!modelsDir.exists()) modelsDir.mkdirs()
-                val targetFile = File(modelsDir, "$modelId.onnx")
+            val targetFile = File(context.filesDir, "models/${model.modelId}.onnx")
+            targetFile.parentFile?.mkdirs()
 
-                // In a full implementation, this would download from downloadUrl
-                // For now, mark as downloaded if the file exists
-                if (targetFile.exists()) {
-                    modelCatalog[modelId] = model.copy(isDownloaded = true)
-                    modelCatalogFlow.value = modelCatalog.values.toList()
-                    onProgress(1f)
-                    _modelLoadStatus.value = ModelLoadStatus.LOADED
-                    return@withContext true
+            try {
+                val client = SecureHttpClient.getClient(context)
+                val request = Request.Builder().url(downloadUrl).build()
+                val response = client.newCall(request).execute()
+
+                if (!response.isSuccessful) {
+                    _modelLoadStatus.value = ModelLoadStatus.NOT_LOADED
+                    return@withContext false
                 }
 
+                response.body?.let { body ->
+                    val totalBytes = body.contentLength()
+                    val inputStream = body.byteStream()
+                    val outputStream = FileOutputStream(targetFile)
+                    val buffer = ByteArray(8192)
+                    var downloadedBytes = 0L
+
+                    inputStream.use { input ->
+                        outputStream.use { output ->
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read == -1) break
+                                output.write(buffer, 0, read)
+                                downloadedBytes += read
+                                if (totalBytes > 0) {
+                                    onProgress(downloadedBytes.toFloat() / totalBytes)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 验证校验和
+                if (model.checksumSha256 != null) {
+                    val actualHash = calculateFileHash(targetFile)
+                    if (!actualHash.equals(model.checksumSha256, ignoreCase = true)) {
+                        targetFile.delete()
+                        _modelLoadStatus.value = ModelLoadStatus.NOT_LOADED
+                        return@withContext false
+                    }
+                }
+
+                modelCatalog[modelId] = model.copy(isDownloaded = true)
+                modelCatalogFlow.value = modelCatalog.values.toList()
                 onProgress(1f)
-                _modelLoadStatus.value = ModelLoadStatus.NOT_LOADED
-                false
+                _modelLoadStatus.value = ModelLoadStatus.LOADED
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Model download failed: ${e.message}")
-                _modelLoadStatus.value = ModelLoadStatus.ERROR
+                targetFile.delete()
+                _modelLoadStatus.value = ModelLoadStatus.NOT_LOADED
                 false
             }
         }
+
+    private fun calculateFileHash(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                md.update(buffer, 0, read)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
 
     fun deleteModel(modelId: String): Boolean {
         val modelPath = getModelPath(modelId) ?: return false
@@ -470,9 +530,9 @@ class AiService(private val context: Context) {
 
     fun getLabels(imageId: UInt): List<SemanticLabel> = labelStore[imageId] ?: emptyList()
 
-    fun getTotalLabelCount(): Int = labelStore.values.sumOf { it.size }
+    fun getTotalLabelCount(): Int = labelStore.values.toList().sumOf { it.size }
 
-    fun getAllUniqueLabels(): List<String> = labelStore.values.flatten()
+    fun getAllUniqueLabels(): List<String> = labelStore.values.toList().flatten()
         .map { it.label }.distinct().sorted()
 
     // ================================================================

@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.album
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -23,8 +24,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.i18n.stringRes
 import androidx.navigation.NavController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Chart color palette
 private val ChartColors = listOf(
@@ -56,6 +60,36 @@ fun StatsView(
     totalImages: Int = 0,
     modifier: Modifier = Modifier
 ) {
+    // 自行加载统计数据 — 此前调用方仅传入默认空列表，导致统计页始终为空
+    var loadedDateDistribution by remember { mutableStateOf(dateDistribution) }
+    var loadedCameraDistribution by remember { mutableStateOf(cameraDistribution) }
+    var loadedLensDistribution by remember { mutableStateOf(lensDistribution) }
+    var loadedRatingDistribution by remember { mutableStateOf(ratingDistribution) }
+    var loadedTagCloud by remember { mutableStateOf(tagCloud) }
+    var loadedTotalImages by remember { mutableStateOf(totalImages) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                val filterService = AppModule.sleeveFilterService
+                val imageRepository = AppModule.imageRepository
+
+                loadedDateDistribution = filterService.getDateFacets()
+                loadedCameraDistribution = filterService.getCameraFacets()
+                loadedLensDistribution = filterService.getLensFacets()
+                loadedTagCloud = filterService.getLabelFrequency(20)
+
+                val allMetadata = imageRepository.getAllImageMetadata()
+                loadedTotalImages = allMetadata.size
+                loadedRatingDistribution = (0..5).map { rating ->
+                    RatingDistribution(rating, allMetadata.count { it.rating == rating })
+                }
+            } catch (e: Exception) {
+                Log.e("StatsView", "加载统计数据失败", e)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -105,7 +139,7 @@ fun StatsView(
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            stringRes { statsTotalImages }.format(totalImages),
+                            stringRes { statsTotalImages }.format(loadedTotalImages),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -114,22 +148,22 @@ fun StatsView(
             }
 
             // ── Date Distribution Chart ──────────────────────────────
-            DateDistributionChart(dateDistribution)
+            DateDistributionChart(loadedDateDistribution)
 
             // ── Camera Model Distribution ────────────────────────────
-            CameraDistributionChart(cameraDistribution)
+            CameraDistributionChart(loadedCameraDistribution)
 
             // ── Lens Distribution ────────────────────────────────────
-            LensDistributionChart(lensDistribution)
+            LensDistributionChart(loadedLensDistribution)
 
             // ── Focal Length Distribution ─────────────────────────────
-            FocalLengthDistributionChart(lensDistribution)
+            FocalLengthDistributionChart(loadedLensDistribution)
 
             // ── Rating Distribution ──────────────────────────────────
-            RatingDistributionChart(ratingDistribution, totalImages)
+            RatingDistributionChart(loadedRatingDistribution, loadedTotalImages)
 
             // ── Tag Cloud ────────────────────────────────────────────
-            TagCloudChart(tagCloud)
+            TagCloudChart(loadedTagCloud)
 
             Spacer(modifier = Modifier.height(32.dp))
         }

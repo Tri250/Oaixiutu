@@ -176,6 +176,7 @@ data class AiModelProfile(
     val modelType: AiModelType,
     val localPath: String? = null,
     val downloadUrl: String? = null,
+    val checksumSha256: String? = null,
     val isDownloaded: Boolean = false,
     val isActive: Boolean = false,
     val version: String = "",

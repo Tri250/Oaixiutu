@@ -21,6 +21,7 @@ import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -50,19 +51,73 @@ fun AiModelManagerScreen(navController: NavController) {
     }
     var isRefreshing by remember { mutableStateOf(false) }
 
-    // 下载进度状态
-    val downloadProgress = remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
-    val downloadErrors = remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // 下载进度状态 — 使用 mutableStateMapOf 避免每次更新重新分配整个 Map
+    val downloadProgress = remember { mutableStateMapOf<String, Float>() }
+    val downloadErrors = remember { mutableStateMapOf<String, String>() }
+    // 下载协程任务，用于支持取消
+    val downloadJobs = remember { mutableStateMapOf<String, Job>() }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(downloadErrors.value) {
-        downloadErrors.value.values.lastOrNull()?.let { error ->
+    LaunchedEffect(downloadErrors.toMap()) {
+        downloadErrors.values.lastOrNull()?.let { error ->
             snackbarHostState.showSnackbar(error)
+            // 已通过 snackbar 提示，移除错误
+            downloadErrors.clear()
         }
     }
 
     fun refreshModels() {
         models = getAvailableModels(context)
+    }
+
+    fun downloadModel(model: AiModelInfo) {
+        // 已在下载中则忽略
+        if (downloadJobs.containsKey(model.id)) return
+        val aiService = AiService(context)
+        val job = scope.launch(Dispatchers.IO) {
+            try {
+                downloadProgress[model.id] = 0f
+                var retryCount = 0
+                val maxRetries = 3
+                var success = false
+                while (!success && retryCount < maxRetries) {
+                    try {
+                        success = aiService.ensureModelDownloaded(context, model.id) { progress ->
+                            downloadProgress[model.id] = progress
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        retryCount++
+                        if (retryCount >= maxRetries) throw e
+                        delay(2000L * retryCount)  // 指数退避
+                    }
+                }
+                if (success) {
+                    withContext(Dispatchers.Main) {
+                        models = models.map {
+                            if (it.id == model.id) it.copy(isDownloaded = true) else it
+                        }
+                        refreshModels()
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 用户主动取消，不显示错误
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    downloadErrors[model.id] = e.message ?: "下载失败"
+                }
+            } finally {
+                downloadProgress.remove(model.id)
+                downloadJobs.remove(model.id)
+            }
+        }
+        downloadJobs[model.id] = job
+    }
+
+    fun cancelDownload(modelId: String) {
+        downloadJobs.remove(modelId)?.cancel()
+        downloadProgress.remove(modelId)
     }
 
     Scaffold(
@@ -127,52 +182,10 @@ fun AiModelManagerScreen(navController: NavController) {
             items(models, key = { it.id }) { model ->
                 ModelCard(
                     model = model,
-                    downloadProgress = downloadProgress.value[model.id],
-                    onDownload = {
-                        // Trigger actual download via AiService
-                        val aiService = AiService(context)
-                        scope.launch(Dispatchers.IO) {
-                            val currentProgress = downloadProgress.value.toMutableMap()
-                            try {
-                                currentProgress[model.id] = 0f
-                                downloadProgress.value = currentProgress
-
-                                var retryCount = 0
-                                val maxRetries = 3
-                                var success = false
-                                while (!success && retryCount < maxRetries) {
-                                    try {
-                                        success = aiService.ensureModelDownloaded(context, model.id) { progress ->
-                                            currentProgress[model.id] = progress
-                                            downloadProgress.value = currentProgress.toMap()
-                                        }
-                                    } catch (e: Exception) {
-                                        retryCount++
-                                        if (retryCount >= maxRetries) throw e
-                                        delay(2000L * retryCount)  // 指数退避
-                                    }
-                                }
-
-                                if (success) {
-                                    // 更新模型状态
-                                    withContext(Dispatchers.Main) {
-                                        models = models.map {
-                                            if (it.id == model.id) it.copy(isDownloaded = true)
-                                            else it
-                                        }
-                                        refreshModels()
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                val errors = downloadErrors.value.toMutableMap()
-                                errors[model.id] = e.message ?: "下载失败"
-                                downloadErrors.value = errors
-                            } finally {
-                                currentProgress.remove(model.id)
-                                downloadProgress.value = currentProgress.toMap()
-                            }
-                        }
-                    },
+                    downloadProgress = downloadProgress[model.id],
+                    isDownloading = downloadJobs.containsKey(model.id),
+                    onDownload = { downloadModel(model) },
+                    onCancelDownload = { cancelDownload(model.id) },
                     onDelete = {
                         // Delete model files
                         AiService.deleteModel(context, model.id)
@@ -204,7 +217,9 @@ fun AiModelManagerScreen(navController: NavController) {
 private fun ModelCard(
     model: AiModelInfo,
     downloadProgress: Float?,
+    isDownloading: Boolean,
     onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -267,6 +282,31 @@ private fun ModelCard(
                         }
                     }
                 }
+                // 下载中显示进度条 + 取消按钮
+                if (isDownloading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val progress = downloadProgress
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (progress != null) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.width(72.dp)
+                            )
+                        } else {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            onClick = onCancelDownload,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text(stringRes { cancel }, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
@@ -285,8 +325,11 @@ private fun ModelCard(
                         else MaterialTheme.colorScheme.error
                     )
                 }
+            } else if (isDownloading) {
+                // 已在信息区显示进度+取消按钮，此处不重复显示
+                Spacer(modifier = Modifier.width(0.dp))
             } else if (progress != null) {
-                // 显示下载进度条
+                // 兼容性兜底：显示下载进度条
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.width(72.dp).padding(vertical = 4.dp)

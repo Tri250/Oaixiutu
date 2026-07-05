@@ -13,6 +13,7 @@ import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.ndk.AlcedoNdkBridge
 import com.alcedo.studio.ui.editor.ScopeAnalyzer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.floatOrNull
@@ -195,21 +197,24 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             _imageModel.value = img
             img?.let {
                 try {
-                    // First decode bounds only
-                    val options = BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    BitmapFactory.decodeFile(it.imagePath, options)
+                    // 在 IO 线程解码，避免主线程 ANR；采样避免大图 OOM
+                    val bitmap = withContext(Dispatchers.IO) {
+                        // First decode bounds only
+                        val options = BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                        BitmapFactory.decodeFile(it.imagePath, options)
 
-                    // Calculate sample size for large images
-                    val sampleSize = calculateSampleSize(options.outWidth, options.outHeight)
+                        // Calculate sample size for large images
+                        val sampleSize = calculateSampleSize(options.outWidth, options.outHeight)
 
-                    // Load with sampling
-                    val decodeOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        // Load with sampling
+                        val decodeOptions = BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        BitmapFactory.decodeFile(it.imagePath, decodeOptions)
                     }
-                    val bitmap = BitmapFactory.decodeFile(it.imagePath, decodeOptions)
                     _originalBitmap.value = bitmap
                     _previewBitmap.value = bitmap
                 } catch (e: OutOfMemoryError) {
@@ -1034,19 +1039,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     }
 
     fun clearBitmaps() {
-        _originalBitmap.value?.recycle()
-        _previewBitmap.value?.recycle()
+        // 不主动 recycle 暴露给 UI 的 Bitmap — Compose 可能仍在引用
+        // 仅置空引用，由 GC 回收，避免配置变更期间 use-after-recycle 崩溃
         _originalBitmap.value = null
         _previewBitmap.value = null
     }
 
     override fun onCleared() {
         super.onCleared()
+        stopAutoSave()
         releasePipelineSnapshot()
-        _originalBitmap.value?.recycle()
-        _previewBitmap.value?.recycle()
-        _originalBitmap.value = null
-        _previewBitmap.value = null
+        // 不 recycle — 避免配置变更期间 use-after-recycle 崩溃
+        clearBitmaps()
     }
 }
 

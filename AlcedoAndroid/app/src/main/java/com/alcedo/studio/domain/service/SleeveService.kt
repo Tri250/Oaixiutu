@@ -437,7 +437,12 @@ class SleeveService(
     }
 
     suspend fun ftsSearchElements(query: String): List<SleeveElementEntity> = withContext(Dispatchers.IO) {
-        elementDao.ftsSearchElements(SimpleSQLiteQuery(query, null))
+        val sanitized = query.replace("\"", "\"\"").replace("'", "''").trim()
+        if (sanitized.isEmpty()) emptyList()
+        else elementDao.ftsSearchElements(SimpleSQLiteQuery(
+            "SELECT * FROM element_fts WHERE element_fts MATCH ?",
+            arrayOf("\"$sanitized\"")
+        ))
     }
 
     // ================================================================

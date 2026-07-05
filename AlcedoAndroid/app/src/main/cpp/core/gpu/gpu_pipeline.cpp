@@ -5,6 +5,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace alcedo {
 namespace gpu {
@@ -313,7 +314,107 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
             executeFilmGrain(pixels, w, h, params);
             break;
         default:
-            GPU_LOGW("CPU fallback not implemented for %s", gpuOpName(type_));
+            // CPU 回退：根据算子类型执行对应的 CPU 实现
+            switch (type_) {
+                case GpuOperatorType::COLOR_WHEEL: {
+                    // CPU 色彩调色：lift/gamma/gain
+                    int count = w * h * 4;
+                    for (int i = 0; i < count; i += 4) {
+                        for (int c = 0; c < 3; ++c) {
+                            float lift = params.lift[c];
+                            float gain = params.gain[c];
+                            float gamma = (params.gamma[c] > 0.0f) ? params.gamma[c] : 1.0f;
+                            float val = pixels[i + c] / 255.0f;
+                            val = gain * std::pow(std::max((val + lift) / (1.0f + lift), 0.0f), gamma);
+                            pixels[i + c] = std::clamp(val * 255.0f, 0.0f, 255.0f);
+                        }
+                    }
+                    break;
+                }
+                case GpuOperatorType::HALATION: {
+                    // CPU 光晕：增强高光区域
+                    float amount = params.halationAmount;
+                    int count = w * h * 4;
+                    for (int i = 0; i < count; i += 4) {
+                        for (int c = 0; c < 3; ++c) {
+                            float val = pixels[i + c];
+                            if (val > 180.0f) {
+                                pixels[i + c] = std::clamp(val + (val - 180.0f) * amount, 0.0f, 255.0f);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case GpuOperatorType::COLOR_SCIENCE: {
+                    // CPU 色彩科学：曝光 + gamma
+                    float scale = std::pow(2.0f, params.csExposure);
+                    float gamma = (params.outputGamma > 0.0f) ? params.outputGamma : 1.0f;
+                    int count = w * h * 4;
+                    for (int i = 0; i < count; i += 4) {
+                        for (int c = 0; c < 3; ++c) {
+                            float val = pixels[i + c] / 255.0f;
+                            val = std::pow(std::max(val * scale, 0.0f), 1.0f / gamma);
+                            pixels[i + c] = std::clamp(val * 255.0f, 0.0f, 255.0f);
+                        }
+                    }
+                    break;
+                }
+                case GpuOperatorType::GEOMETRY: {
+                    // CPU 几何：水平/垂直翻转
+                    if (params.flipH) {
+                        for (int y = 0; y < h; ++y) {
+                            for (int x = 0; x < w / 2; ++x) {
+                                int i1 = (y * w + x) * 4;
+                                int i2 = (y * w + (w - 1 - x)) * 4;
+                                for (int c = 0; c < 4; ++c) std::swap(pixels[i1 + c], pixels[i2 + c]);
+                            }
+                        }
+                    }
+                    if (params.flipV) {
+                        for (int y = 0; y < h / 2; ++y) {
+                            for (int x = 0; x < w; ++x) {
+                                int i1 = (y * w + x) * 4;
+                                int i2 = ((h - 1 - y) * w + x) * 4;
+                                for (int c = 0; c < 4; ++c) std::swap(pixels[i1 + c], pixels[i2 + c]);
+                            }
+                        }
+                    }
+                    break;
+                }
+                case GpuOperatorType::LUT3D: {
+                    // CPU LUT：无 LUT 数据时保持不变（占位实现）
+                    break;
+                }
+                case GpuOperatorType::HIGHLIGHT_RECON: {
+                    // CPU 高光重建：裁剪高光
+                    float thresh = params.hrClipThreshold * 255.0f;
+                    int count = w * h * 4;
+                    for (int i = 0; i < count; i += 4) {
+                        for (int c = 0; c < 3; ++c) {
+                            if (pixels[i + c] > thresh) pixels[i + c] = thresh;
+                        }
+                    }
+                    break;
+                }
+                case GpuOperatorType::RCD_DEMOSAIC: {
+                    // CPU 去马赛克：减黑电平并归一化（简化）
+                    float black = params.blackLevel;
+                    float white = params.whiteLevel;
+                    if (white > black) {
+                        float norm = 255.0f / (white - black);
+                        int count = w * h * 4;
+                        for (int i = 0; i < count; i += 4) {
+                            for (int c = 0; c < 3; ++c) {
+                                pixels[i + c] = std::clamp((pixels[i + c] - black) * norm, 0.0f, 255.0f);
+                            }
+                        }
+                    }
+                    break;
+                }
+                default:
+                    GPU_LOGW("无 CPU 回退实现: %s", gpuOpName(type_));
+                    break;
+            }
             break;
     }
 

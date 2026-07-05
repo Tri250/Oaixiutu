@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.alcedo.studio.domain.service.TaskSnapshot
 import com.alcedo.studio.domain.service.TaskStatus
 import com.alcedo.studio.domain.service.TaskType
+import com.alcedo.studio.i18n.stringRes
 
 @Composable
 fun BackgroundTaskBar(
@@ -58,12 +59,12 @@ fun BackgroundTaskBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Background Tasks",
+                            stringRes { backgroundTasks },
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(onClick = { isExpanded = false }) {
-                            Icon(Icons.Default.ExpandMore, contentDescription = "Collapse")
+                            Icon(Icons.Default.ExpandMore, contentDescription = stringRes { collapse })
                         }
                     }
 
@@ -84,7 +85,7 @@ fun BackgroundTaskBar(
                         if (completedTasks.isNotEmpty()) {
                             item {
                                 Text(
-                                    "Completed",
+                                    stringRes { completed },
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(vertical = 4.dp)
@@ -130,7 +131,7 @@ fun BackgroundTaskBar(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (runningTasks.size == 1) runningTasks.first().title
-                        else "${runningTasks.size} active tasks",
+                        else stringRes { activeTasks }.format(runningTasks.size),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -164,7 +165,7 @@ fun BackgroundTaskBar(
                 IconButton(onClick = { isExpanded = !isExpanded }) {
                     Icon(
                         if (isExpanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand"
+                        contentDescription = if (isExpanded) stringRes { collapse } else stringRes { expand }
                     )
                 }
             }
@@ -224,11 +225,11 @@ private fun TaskDetailItem(
             )
             IconButton(
                 onClick = onCancel,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Cancel",
+                    contentDescription = stringRes { cancel },
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

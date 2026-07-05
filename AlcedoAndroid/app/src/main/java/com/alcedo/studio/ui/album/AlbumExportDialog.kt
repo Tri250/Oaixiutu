@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.i18n.stringRes
 import kotlinx.coroutines.launch
 
 /**
@@ -52,17 +53,17 @@ fun AlbumExportDialog(
         ) {
             // Header
             Text(
-                "Export Images",
+                stringRes { exportImages },
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
 
             // Image selection
-            Text("Select Images (${selectedIds.size}/${images.size})", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportSelectImages }.format(selectedIds.size, images.size), style = MaterialTheme.typography.labelLarge)
 
             if (images.isEmpty()) {
                 Text(
-                    "No images available",
+                    stringRes { noImagesAvailable },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -72,11 +73,11 @@ fun AlbumExportDialog(
                     OutlinedButton(
                         onClick = { selectedIds = images.map { it.imageId }.toSet() },
                         modifier = Modifier.height(36.dp)
-                    ) { Text("Select All", style = MaterialTheme.typography.labelSmall) }
+                    ) { Text(stringRes { selectAll }, style = MaterialTheme.typography.labelSmall) }
                     OutlinedButton(
                         onClick = { selectedIds = emptySet() },
                         modifier = Modifier.height(36.dp)
-                    ) { Text("Clear", style = MaterialTheme.typography.labelSmall) }
+                    ) { Text(stringRes { clear }, style = MaterialTheme.typography.labelSmall) }
                 }
 
                 // Image list (show up to 10 for performance)
@@ -104,7 +105,7 @@ fun AlbumExportDialog(
                 }
                 if (images.size > 10) {
                     Text(
-                        "... and ${images.size - 10} more images",
+                        stringRes { exportMoreImages }.format(images.size - 10),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -114,31 +115,37 @@ fun AlbumExportDialog(
             HorizontalDivider()
 
             // Export preset (simplified)
-            Text("Export Preset", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportPreset }, style = MaterialTheme.typography.labelLarge)
+            val presetWebLabel = stringRes { exportPresetWeb }
+            val presetPrintLabel = stringRes { exportPresetPrint }
+            val presetArchiveLabel = stringRes { exportPresetArchive }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Web" to ExportFormat.JPEG, "Print" to ExportFormat.TIFF, "Archive" to ExportFormat.PNG)
-                    .forEach { (name, fmt) ->
-                        FilterChip(
-                            selected = format == fmt && when (name) {
-                                "Web" -> quality == 85 && colorSpace == ColorSpace.SRGB
-                                "Print" -> quality == 100 && colorSpace == ColorSpace.DISPLAY_P3
-                                else -> quality == 95
-                            },
-                            onClick = {
-                                format = fmt
-                                when (name) {
-                                    "Web" -> { quality = 85; colorSpace = ColorSpace.SRGB }
-                                    "Print" -> { quality = 100; colorSpace = ColorSpace.DISPLAY_P3 }
-                                    "Archive" -> { quality = 95 }
-                                }
-                            },
-                            label = { Text(name, style = MaterialTheme.typography.labelSmall) }
-                        )
-                    }
+                listOf(
+                    Triple("web", ExportFormat.JPEG, presetWebLabel),
+                    Triple("print", ExportFormat.TIFF, presetPrintLabel),
+                    Triple("archive", ExportFormat.PNG, presetArchiveLabel)
+                ).forEach { (key, fmt, label) ->
+                    FilterChip(
+                        selected = format == fmt && when (key) {
+                            "web" -> quality == 85 && colorSpace == ColorSpace.SRGB
+                            "print" -> quality == 100 && colorSpace == ColorSpace.DISPLAY_P3
+                            else -> quality == 95
+                        },
+                        onClick = {
+                            format = fmt
+                            when (key) {
+                                "web" -> { quality = 85; colorSpace = ColorSpace.SRGB }
+                                "print" -> { quality = 100; colorSpace = ColorSpace.DISPLAY_P3 }
+                                "archive" -> { quality = 95 }
+                            }
+                        },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
             }
 
             // Format
-            Text("Format", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportFormat }, style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ExportFormat.entries.forEach { f ->
                     FilterChip(
@@ -151,7 +158,7 @@ fun AlbumExportDialog(
 
             // Quality
             if (format == ExportFormat.JPEG || format == ExportFormat.ULTRA_HDR) {
-                Text("Quality: $quality%", style = MaterialTheme.typography.labelLarge)
+                Text(stringRes { exportQuality }.format(quality), style = MaterialTheme.typography.labelLarge)
                 Slider(
                     value = quality.toFloat(),
                     onValueChange = { quality = it.toInt() },
@@ -161,7 +168,7 @@ fun AlbumExportDialog(
             }
 
             // Color space
-            Text("Color Space", style = MaterialTheme.typography.labelLarge)
+            Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
@@ -179,21 +186,21 @@ fun AlbumExportDialog(
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Checkbox(checked = embedIcc, onCheckedChange = { embedIcc = it })
-                Text("Embed ICC Profile", style = MaterialTheme.typography.bodyMedium)
+                Text(stringRes { exportEmbedIcc }, style = MaterialTheme.typography.bodyMedium)
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Checkbox(checked = includeMetadata, onCheckedChange = { includeMetadata = it })
-                Text("Include Metadata", style = MaterialTheme.typography.bodyMedium)
+                Text(stringRes { exportIncludeMetadata }, style = MaterialTheme.typography.bodyMedium)
             }
 
             OutlinedTextField(
                 value = maxDimension,
                 onValueChange = { maxDimension = it.filter { c -> c.isDigit() } },
-                label = { Text("Max dimension (px)") },
-                placeholder = { Text("No limit") },
+                label = { Text(stringRes { exportMaxDimension }) },
+                placeholder = { Text(stringRes { exportNoLimit }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.AspectRatio, contentDescription = null) }
@@ -206,7 +213,7 @@ fun AlbumExportDialog(
                     .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
                 Button(
                     onClick = {
                         val settings = ExportSettings(
@@ -224,7 +231,7 @@ fun AlbumExportDialog(
                     },
                     enabled = selectedIds.isNotEmpty()
                 ) {
-                    Text("Export ${selectedIds.size} Image${if (selectedIds.size != 1) "s" else ""}")
+                    Text(stringRes { exportNImages }.format(selectedIds.size))
                 }
             }
         }

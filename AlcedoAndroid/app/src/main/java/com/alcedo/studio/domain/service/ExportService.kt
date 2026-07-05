@@ -6,9 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.ColorSpace as AndroidColorSpace
 import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
-import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.model.*
@@ -272,7 +270,6 @@ class ExportService(private val context: Context) {
     // Color space conversion
     // ================================================================
 
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun applyColorSpaceConversion(bitmap: Bitmap, targetColorSpace: ColorSpace): Bitmap {
         if (targetColorSpace == ColorSpace.SRGB) return bitmap
 
@@ -1387,7 +1384,6 @@ class ExportService(private val context: Context) {
      * Write EXIF metadata from the original source file into the exported file.
      * Also writes rating, tags, and color space information.
      */
-    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     private fun writeMetadata(outputFile: File, sourcePath: String, settings: ExportSettings) {
         try {
             // Read original EXIF

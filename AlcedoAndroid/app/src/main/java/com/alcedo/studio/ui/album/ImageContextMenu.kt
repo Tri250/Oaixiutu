@@ -12,11 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 
 data class ContextMenuItem(
     val label: String,
     val icon: ImageVector,
     val isDestructive: Boolean = false,
+    val dividerAfter: Boolean = false,
     val onClick: () -> Unit
 )
 
@@ -40,14 +42,14 @@ fun ImageContextMenu(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-        ContextMenuItem("Edit", Icons.Default.Edit, onClick = onEdit),
-        ContextMenuItem("Rate", Icons.Default.Star, onClick = onRate),
-        ContextMenuItem("Add to Collection", Icons.Default.Collections, onClick = onAddToCollection),
-        ContextMenuItem("Export", Icons.Default.FileDownload, onClick = onExport),
-        ContextMenuItem("Copy Adjustments", Icons.Default.ContentCopy, onClick = onCopyAdjustments),
-        ContextMenuItem("Paste Adjustments", Icons.Default.ContentPaste, onClick = onPasteAdjustments),
-        ContextMenuItem("Analyze with AI", Icons.Default.AutoAwesome, onClick = onAnalyzeAi),
-        ContextMenuItem("Delete", Icons.Default.Delete, isDestructive = true, onClick = onDelete)
+        ContextMenuItem(stringRes { edit }, Icons.Default.Edit, onClick = onEdit),
+        ContextMenuItem(stringRes { rate }, Icons.Default.Star, onClick = onRate),
+        ContextMenuItem(stringRes { addToCollection }, Icons.Default.Collections, onClick = onAddToCollection),
+        ContextMenuItem(stringRes { export }, Icons.Default.FileDownload, onClick = onExport, dividerAfter = true),
+        ContextMenuItem(stringRes { copyAdjustments }, Icons.Default.ContentCopy, onClick = onCopyAdjustments),
+        ContextMenuItem(stringRes { pasteAdjustments }, Icons.Default.ContentPaste, onClick = onPasteAdjustments, dividerAfter = true),
+        ContextMenuItem(stringRes { analyzeWithAi }, Icons.Default.AutoAwesome, onClick = onAnalyzeAi),
+        ContextMenuItem(stringRes { delete }, Icons.Default.Delete, isDestructive = true, onClick = onDelete)
     )
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -82,7 +84,7 @@ fun ImageContextMenu(
 
             items.forEach { item ->
                 ContextMenuRow(item = item, onDismiss = onDismiss)
-                if (item.label == "Export" || item.label == "Paste Adjustments") {
+                if (item.dividerAfter) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)

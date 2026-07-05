@@ -1,9 +1,11 @@
 package com.alcedo.studio.ui.ai
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.animateItemPlacement
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,7 +25,9 @@ import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import com.alcedo.studio.service.AiService
 import com.alcedo.studio.di.AppModule
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -57,41 +61,57 @@ fun AiRatingScreen(
     var ratingResults by remember { mutableStateOf<List<AiRatingResult>>(emptyList()) }
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisComplete by remember { mutableStateOf(false) }
+    var analysisError by remember { mutableStateOf<String?>(null) }
+    var analysisJob by remember { mutableStateOf<Job?>(null) }
 
     // Trigger AI analysis
     fun startAnalysis() {
         if (!isAnalyzing) {
             isAnalyzing = true
             analysisComplete = false
+            analysisError = null
             ratingResults = emptyList()
-            coroutineScope.launch {
-                val results = images.mapIndexed { index, image ->
-                    ensureActive()
-                    analysisProgress.value = AnalysisProgress(index + 1, images.size)
-                    val prediction = predictRatingSafely(
-                        context = context,
-                        aiService = aiService,
-                        imageId = image.imageId,
-                        imagePath = image.imagePath
-                    )
-                    AiRatingResult(
-                        imageId = image.imageId,
-                        imageName = image.imageName,
-                        overallScore = prediction.overall,
-                        compositionScore = prediction.composition,
-                        exposureScore = prediction.exposure,
-                        colorScore = prediction.color,
-                        sharpnessScore = prediction.sharpness,
-                        suggestion = prediction.suggestion
-                    )
-                }.sortedByDescending { it.overallScore }
-                withContext(Dispatchers.Main) {
+            analysisJob = coroutineScope.launch {
+                try {
+                    val results = images.mapIndexed { index, image ->
+                        ensureActive()
+                        analysisProgress.value = AnalysisProgress(index + 1, images.size)
+                        val prediction = predictRatingSafely(
+                            context = context,
+                            aiService = aiService,
+                            imageId = image.imageId,
+                            imagePath = image.imagePath
+                        )
+                        AiRatingResult(
+                            imageId = image.imageId,
+                            imageName = image.imageName,
+                            overallScore = prediction.overall,
+                            compositionScore = prediction.composition,
+                            exposureScore = prediction.exposure,
+                            colorScore = prediction.color,
+                            sharpnessScore = prediction.sharpness,
+                            suggestion = prediction.suggestion
+                        )
+                    }.sortedByDescending { it.overallScore }
                     ratingResults = results
-                    isAnalyzing = false
                     analysisComplete = true
+                } catch (e: CancellationException) {
+                    // 用户取消，不显示错误
+                } catch (e: Exception) {
+                    analysisError = "分析失败：${e.message}"
+                } finally {
+                    isAnalyzing = false
+                    analysisJob = null
                 }
             }
         }
+    }
+
+    fun cancelAnalysis() {
+        analysisJob?.cancel()
+        analysisJob = null
+        isAnalyzing = false
+        analysisProgress.value = AnalysisProgress(0, 0)
     }
 
     Scaffold(
@@ -131,6 +151,31 @@ fun AiRatingScreen(
                         if (progress.total > 0) {
                             Text("${progress.current} / ${progress.total}", style = MaterialTheme.typography.bodySmall)
                         }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        // 取消按钮
+                        TextButton(onClick = { cancelAnalysis() }) {
+                            Text("取消")
+                        }
+                    }
+                }
+            }
+            analysisError != null -> {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("分析出错", style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(analysisError!!, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            analysisError = null
+                            startAnalysis()
+                        }) { Text("重试") }
                     }
                 }
             }
@@ -174,9 +219,13 @@ fun AiRatingScreen(
 
                     // Rating cards
                     items(ratingResults, key = { it.imageId }) { result ->
-                        RatingCard(result = result, onClick = {
-                            navController.navigate("editor/${result.imageId}")
-                        })
+                        RatingCard(
+                            result = result,
+                            onClick = {
+                                navController.navigate("editor/${result.imageId}")
+                            },
+                            modifier = Modifier.animateItemPlacement()
+                        )
                     }
                 }
             }
@@ -214,8 +263,8 @@ private fun ScoreStat(label: String, value: Int) {
 }
 
 @Composable
-private fun RatingCard(result: AiRatingResult, onClick: () -> Unit) {
-    LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+private fun RatingCard(result: AiRatingResult, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    LiquidGlassSurface(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -328,14 +377,118 @@ suspend fun predictRatingSafely(
 
     // 基于评分结果生成多维度分数
     val overallScore = (score * 20).coerceIn(0, 100)
+
+    // 从位图计算真实的子维度分数
+    val analysisBitmap = bitmap?.let { bmp ->
+        // 降采样到 64x64 用于分析
+        try {
+            Bitmap.createScaledBitmap(bmp, 64, 64, false)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    val (composition, exposure, color, sharpness) = if (analysisBitmap != null) {
+        analyzeImageDimensions(analysisBitmap)
+    } else {
+        listOf(overallScore, overallScore, overallScore, overallScore)
+    }
+
+    // 释放缩放位图（如果与原图不同）
+    if (analysisBitmap != null && analysisBitmap !== bitmap) {
+        analysisBitmap.recycle()
+    }
+
     RatingPrediction(
         overall = overallScore,
-        composition = (overallScore * 0.9 + 5).toInt().coerceIn(0, 100),
-        exposure = (overallScore * 0.95 + 3).toInt().coerceIn(0, 100),
-        color = (overallScore * 0.88 + 8).toInt().coerceIn(0, 100),
-        sharpness = (overallScore * 0.92 + 4).toInt().coerceIn(0, 100),
+        composition = composition,
+        exposure = exposure,
+        color = color,
+        sharpness = sharpness,
         suggestion = description
     )
+}
+
+/**
+ * 从位图像素计算真实的子维度评分（构图、曝光、色彩、锐度）。
+ * 在 IO 线程执行，避免阻塞 UI。
+ */
+private fun analyzeImageDimensions(bitmap: Bitmap): List<Int> {
+    val width = bitmap.width
+    val height = bitmap.height
+    val pixels = IntArray(width * height)
+    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+    // 计算亮度直方图
+    val histogram = IntArray(256)
+    var totalR = 0L; var totalG = 0L; var totalB = 0L
+    var totalBrightness = 0L
+
+    for (pixel in pixels) {
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        val brightness = (r + g + b) / 3
+        histogram[brightness]++
+        totalR += r; totalG += g; totalB += b
+        totalBrightness += brightness
+    }
+
+    val count = pixels.size
+    val avgBrightness = (totalBrightness / count).toInt()
+    val avgR = (totalR / count).toInt()
+    val avgG = (totalG / count).toInt()
+    val avgB = (totalB / count).toInt()
+
+    // 饱和度：RGB 通道平均差异
+    val saturation = (kotlin.math.abs(avgR - avgG) +
+        kotlin.math.abs(avgG - avgB) +
+        kotlin.math.abs(avgR - avgB)) / 3
+
+    // 构图：三分法评估 — 中心区域与边缘的亮度差异
+    val centerStart = width / 3
+    val centerEnd = 2 * width / 3
+    val rowStart = height / 3
+    val rowEnd = 2 * height / 3
+    var centerBrightness = 0L
+    var edgeBrightness = 0L
+    var centerCount = 0; var edgeCount = 0
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            val pixel = pixels[y * width + x]
+            val brightness = (((pixel shr 16) and 0xFF) + ((pixel shr 8) and 0xFF) + (pixel and 0xFF)) / 3
+            if (x in centerStart until centerEnd && y in rowStart until rowEnd) {
+                centerBrightness += brightness; centerCount++
+            } else {
+                edgeBrightness += brightness; edgeCount++
+            }
+        }
+    }
+    val centerAvg = if (centerCount > 0) centerBrightness / centerCount else 0L
+    val edgeAvg = if (edgeCount > 0) edgeBrightness / edgeCount else 0L
+    val compositionScore = (100 - kotlin.math.abs(centerAvg - edgeAvg)).coerceIn(0, 100)
+
+    // 锐度：拉普拉斯算子近似
+    var sharpnessSum = 0L
+    for (y in 1 until height - 1) {
+        for (x in 1 until width - 1) {
+            val center = (pixels[y * width + x] shr 16) and 0xFF
+            val top = (pixels[(y - 1) * width + x] shr 16) and 0xFF
+            val bottom = (pixels[(y + 1) * width + x] shr 16) and 0xFF
+            val left = (pixels[y * width + (x - 1)] shr 16) and 0xFF
+            val right = (pixels[y * width + (x + 1)] shr 16) and 0xFF
+            sharpnessSum += kotlin.math.abs(4 * center - top - bottom - left - right)
+        }
+    }
+    val sharpnessScore = (sharpnessSum / (width * height) * 2).toInt().coerceIn(0, 100)
+
+    // 曝光：偏离中灰 (128) 越远分数越低
+    val exposureScore = (100 - kotlin.math.abs(avgBrightness - 128) * 2).coerceIn(0, 100)
+
+    // 色彩：饱和度越高分数越高
+    val colorScore = (saturation * 3).coerceIn(0, 100)
+
+    return listOf(compositionScore.toInt(), exposureScore.toInt(), colorScore.toInt(), sharpnessScore.toInt())
 }
 
 private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {

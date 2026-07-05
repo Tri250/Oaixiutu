@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 
 data class CollectionUiModel(
     val collectionId: Long,
@@ -55,9 +56,9 @@ fun CollectionsPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Collections", style = MaterialTheme.typography.titleMedium)
+            Text(stringRes { collections }, style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "New Collection")
+                Icon(Icons.Default.Add, contentDescription = stringRes { newCollection })
             }
         }
 
@@ -81,7 +82,7 @@ fun CollectionsPanel(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "No collections yet",
+                            stringRes { noCollectionsYet },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -89,7 +90,7 @@ fun CollectionsPanel(
                         OutlinedButton(onClick = { showCreateDialog = true }) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Create Collection")
+                            Text(stringRes { createCollection })
                         }
                     }
                 }
@@ -147,8 +148,8 @@ fun CollectionsPanel(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("Delete Collection") },
-            text = { Text("Are you sure you want to delete \"${collection.name}\"? This cannot be undone.") },
+            title = { Text(stringRes { deleteCollection }) },
+            text = { Text(stringRes { deleteCollectionMessage }.format(collection.name)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -158,10 +159,10 @@ fun CollectionsPanel(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
-                ) { Text("Delete") }
+                ) { Text(stringRes { delete }) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringRes { cancel }) }
             }
         )
     }
@@ -180,7 +181,7 @@ private fun CollectionItem(
         supportingContent = {
             Text(
                 if (collection.description.isNotEmpty()) collection.description
-                else "${collection.imageCount} images"
+                else stringRes { albumImagesCount }.format(collection.imageCount)
             )
         },
         leadingContent = {
@@ -203,10 +204,10 @@ private fun CollectionItem(
         trailingContent = {
             Row {
                 IconButton(onClick = onRename) {
-                    Icon(Icons.Default.Edit, contentDescription = "Rename", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Edit, contentDescription = stringRes { rename }, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = stringRes { delete }, modifier = Modifier.size(18.dp))
                 }
             }
         },
@@ -233,7 +234,7 @@ private fun CollectionDetailView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(collection.name, style = MaterialTheme.typography.titleMedium)
@@ -246,7 +247,7 @@ private fun CollectionDetailView(
                 }
             }
             IconButton(onClick = { /* Open image picker */ }) {
-                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Add Images")
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringRes { addImages })
             }
         }
 
@@ -268,7 +269,7 @@ private fun CollectionDetailView(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "No images in this collection",
+                        stringRes { noImagesInCollection },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -276,7 +277,7 @@ private fun CollectionDetailView(
                     OutlinedButton(onClick = { /* Open image picker */ }) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Images")
+                        Text(stringRes { addImages })
                     }
                 }
             }
@@ -304,7 +305,7 @@ private fun CollectionDetailView(
                             IconButton(onClick = { onRemoveImage(image.imageId) }) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = "Remove",
+                                    contentDescription = stringRes { remove },
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -328,21 +329,21 @@ private fun CreateCollectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Collection") },
+        title = { Text(stringRes { newCollection }) },
         icon = { Icon(Icons.Default.Collections, contentDescription = null) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringRes { name }) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Description (optional)") },
+                    label = { Text(stringRes { descriptionOptional }) },
                     maxLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -352,10 +353,10 @@ private fun CreateCollectionDialog(
             Button(
                 onClick = { onCreate(name.trim(), description.trim()) },
                 enabled = name.isNotBlank()
-            ) { Text("Create") }
+            ) { Text(stringRes { create }) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
 }
@@ -370,12 +371,12 @@ private fun RenameCollectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename Collection") },
+        title = { Text(stringRes { renameCollection }) },
         text = {
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = it },
-                label = { Text("Name") },
+                label = { Text(stringRes { name }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -384,10 +385,10 @@ private fun RenameCollectionDialog(
             Button(
                 onClick = { onRename(newName.trim()) },
                 enabled = newName.isNotBlank()
-            ) { Text("Rename") }
+            ) { Text(stringRes { rename }) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
 }
