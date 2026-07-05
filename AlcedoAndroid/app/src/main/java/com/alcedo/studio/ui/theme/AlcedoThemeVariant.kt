@@ -1,6 +1,7 @@
 package com.alcedo.studio.ui.theme
 
 enum class AlcedoThemeVariant(val displayName: String) {
+    DEEP_SPACE("深空黑"),
     HASSELBLAD("Hasselblad"),
     GOLD("Gold"),
     WINE("Wine"),
@@ -11,7 +12,7 @@ enum class AlcedoThemeVariant(val displayName: String) {
 
     companion object {
         fun fromName(name: String): AlcedoThemeVariant {
-            return entries.find { it.name.equals(name, ignoreCase = true) } ?: HASSELBLAD
+            return entries.find { it.name.equals(name, ignoreCase = true) } ?: DEEP_SPACE
         }
     }
 }

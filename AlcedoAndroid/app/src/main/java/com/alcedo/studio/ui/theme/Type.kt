@@ -2,33 +2,24 @@ package com.alcedo.studio.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.alcedo.studio.R
 
 // ═══════════════════════════════════════════════════════════════════
-// 2026 Flagship Typography System
+// 2026 Flagship Typography System – OPPO Sans
 // ═══════════════════════════════════════════════════════════════════
-// Principles:
-//   - Line-height ratio 1.25–1.5x for optimal readability
-//   - Tight tracking on large display, relaxed on body
-//   - Weight hierarchy: Light→SemiBold creates visual contrast
-//   - Optical sizing: each scale level tuned independently
-//
-// Custom font family placeholder.
-// To use a custom font, place .ttf/.otf files in res/font/ and use:
-//   val AlcedoFontFamily = FontFamily(
-//       Font(R.font.alcedo_thin, FontWeight.Thin),
-//       Font(R.font.alcedo_light, FontWeight.Light),
-//       Font(R.font.alcedo_regular, FontWeight.Normal),
-//       Font(R.font.alcedo_medium, FontWeight.Medium),
-//       Font(R.font.alcedo_semibold, FontWeight.SemiBold),
-//       Font(R.font.alcedo_bold, FontWeight.Bold)
-//   )
-// Then replace FontFamily.SansSerif below with AlcedoFontFamily.
+// OPPO Sans:理性人文主义设计哲学,几何骨架+东方书法笔意
+// 字面率86%-88%,高于思源黑体,文本块密度均衡、呼吸感强
 // ═══════════════════════════════════════════════════════════════════
 
-val AlcedoFontFamily = FontFamily.SansSerif
+val AlcedoFontFamily = FontFamily(
+    Font(R.font.opposans_regular, FontWeight.Normal),
+    Font(R.font.opposans_medium, FontWeight.Medium),
+    Font(R.font.opposans_bold, FontWeight.Bold),
+)
 
 val AlcedoTypography = Typography(
     // ── Display: Hero / splash-screen headlines ────────────────────

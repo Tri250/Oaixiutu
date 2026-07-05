@@ -3,6 +3,7 @@ package com.alcedo.studio.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,21 +11,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import kotlinx.coroutines.launch
-import com.alcedo.studio.data.model.AiModelProfile
-import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.i18n.Language
 import com.alcedo.studio.i18n.LanguageManager
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.i18n.stringRes
-import com.alcedo.studio.i18n.strings
+import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.common.ConfirmDialog
+import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
-import com.alcedo.studio.privacy.PrivacyManager
+
+private const val APP_VERSION = "1.1.5"
+private const val DEVELOPER_NAME = "带娃的小陈工"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,25 +52,61 @@ fun SettingsScreen(navController: NavController) {
     val followSystem by LanguageManager.followSystem.collectAsState()
     val selectedLanguage = if (followSystem) s.langSystemDefault else currentLanguage.nativeName
 
-    // Other settings
-    var selectedColorScience by remember { mutableStateOf("ACES 2.0") }
-    var selectedGpuBackend by remember { mutableStateOf("OpenGL ES") }
-    var showClearCacheDialog by remember { mutableStateOf(false) }
-    var showClearModelsDialog by remember { mutableStateOf(false) }
+    // Album / Editor settings
+    var selectedSort by remember { mutableStateOf("date") }
+    var selectedThumbQuality by remember { mutableStateOf("high") }
+    var selectedExportFormat by remember { mutableStateOf("jpeg") }
+    var selectedExportQuality by remember { mutableStateOf("high") }
+    var selectedColorSpace by remember { mutableStateOf("srgb") }
+
+    // Dialog visibility states
     var showThemeDialog by remember { mutableStateOf(false) }
     var showThemeVariantDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
-    var showColorScienceDialog by remember { mutableStateOf(false) }
-    var showGpuDialog by remember { mutableStateOf(false) }
-    var showDeleteDataDialog by remember { mutableStateOf(false) }
-    var showExportProgressDialog by remember { mutableStateOf(false) }
+    var showSortDialog by remember { mutableStateOf(false) }
+    var showThumbQualityDialog by remember { mutableStateOf(false) }
+    var showExportFormatDialog by remember { mutableStateOf(false) }
+    var showExportQualityDialog by remember { mutableStateOf(false) }
+    var showColorSpaceDialog by remember { mutableStateOf(false) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showClearModelsDialog by remember { mutableStateOf(false) }
+
+    // Privacy consent
     val consentStatus by remember { mutableStateOf(PrivacyManager.getConsentStatus()) }
     var analyticsConsent by remember { mutableStateOf(consentStatus.analytics) }
     var crashReportsConsent by remember { mutableStateOf(consentStatus.crashReports) }
     var aiProcessingConsent by remember { mutableStateOf(consentStatus.aiProcessing) }
-    val scope = rememberCoroutineScope()
+
     var exportCachePath by remember { mutableStateOf("/sdcard/Pictures/Alcedo") }
     val cacheSize = remember { "1.2 GB" }
+
+    // Resolved display values
+    val sortLabel = when (selectedSort) {
+        "name" -> s.albumSortName
+        "rating" -> s.albumSortRating
+        "type" -> s.albumSortType
+        else -> s.albumSortDate
+    }
+    val thumbQualityLabel = when (selectedThumbQuality) {
+        "standard" -> "标准"
+        "low" -> "节省"
+        else -> "高清"
+    }
+    val exportFormatLabel = when (selectedExportFormat) {
+        "png" -> "PNG"
+        "heif" -> "HEIF"
+        else -> "JPEG"
+    }
+    val exportQualityLabel = when (selectedExportQuality) {
+        "medium" -> "中"
+        "low" -> "低"
+        else -> "高"
+    }
+    val colorSpaceLabel = when (selectedColorSpace) {
+        "p3" -> s.gamutP3
+        "rec2020" -> s.gamutRec2020
+        else -> s.gamutSrgb
+    }
 
     Scaffold(
         topBar = {
@@ -90,225 +130,340 @@ fun SettingsScreen(navController: NavController) {
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp)
         ) {
-            // Appearance
-            SettingsSectionHeader(stringRes { settingsAppearance })
-
-            ListItem(
-                headlineContent = { Text(stringRes { settingsTheme }) },
-                supportingContent = { Text(selectedTheme) },
-                leadingContent = {
-                    Icon(
-                        if (darkMode == "dark") Icons.Default.DarkMode
-                        else if (darkMode == "light") Icons.Default.LightMode
-                        else Icons.Default.BrightnessAuto,
-                        contentDescription = null
-                    )
-                },
-                modifier = Modifier.clickable { showThemeDialog = true }
-            )
-
-            ListItem(
-                headlineContent = { Text(stringRes { settingsThemeVariant }) },
-                supportingContent = { Text(getThemeVariantDisplayName(currentVariant)) },
-                leadingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
-                modifier = Modifier.clickable { showThemeVariantDialog = true }
-            )
-
-            HorizontalDivider()
-
-            // Processing
-            SettingsSectionHeader(stringRes { settingsProcessing })
-            ListItem(
-                headlineContent = { Text(stringRes { settingsGpuBackend }) },
-                supportingContent = { Text(selectedGpuBackend) },
-                leadingContent = { Icon(Icons.Default.Memory, contentDescription = null) },
-                modifier = Modifier.clickable { showGpuDialog = true }
-            )
-            ListItem(
-                headlineContent = { Text(stringRes { settingsColorScience }) },
-                supportingContent = { Text(selectedColorScience) },
-                leadingContent = { Icon(Icons.Default.Science, contentDescription = null) },
-                modifier = Modifier.clickable { showColorScienceDialog = true }
-            )
-
-            HorizontalDivider()
-
-            // Language
-            SettingsSectionHeader(stringRes { settingsLanguage })
-            ListItem(
-                headlineContent = { Text(stringRes { settingsLanguage }) },
-                supportingContent = { Text(selectedLanguage) },
-                leadingContent = { Icon(Icons.Default.Language, contentDescription = null) },
-                modifier = Modifier.clickable { showLanguageDialog = true }
-            )
-
-            HorizontalDivider()
-
-            // Storage
-            SettingsSectionHeader(stringRes { settingsStorage })
-            ListItem(
-                headlineContent = { Text(stringRes { settingsCacheSize }) },
-                supportingContent = { Text(cacheSize) },
-                leadingContent = { Icon(Icons.Default.Storage, contentDescription = null) },
-                trailingContent = {
-                    Row {
-                        TextButton(onClick = { showClearCacheDialog = true }) {
-                            Text(stringRes { settingsClearThumbnails })
-                        }
-                        TextButton(onClick = { showClearModelsDialog = true }) {
-                            Text(stringRes { settingsClearModels })
-                        }
-                    }
-                }
-            )
-            OutlinedTextField(
-                value = exportCachePath,
-                onValueChange = { exportCachePath = it },
-                label = { Text(stringRes { settingsExportCachePath }) },
-                singleLine = true,
+            // ── 顶部用户信息卡 ─────────────────────────────────────────────
+            LiquidGlassSurface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) }
-            )
-
-            HorizontalDivider()
-
-            // AI Models
-            SettingsSectionHeader(stringRes { settingsAiModels })
-            val aiService = remember { AppModule.aiService }
-            val models = remember { aiService.getModelCatalog() }
-            models.forEach { model ->
-                AiModelItem(model = model)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .size(32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Alcedo Studio",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "v$APP_VERSION",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
-            HorizontalDivider()
+            // ── 通用设置 ─────────────────────────────────────────────────
+            SettingsSectionHeader(stringRes { settingsAppearance })
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SettingsRow(
+                    icon = if (darkMode == "dark") Icons.Default.DarkMode
+                    else if (darkMode == "light") Icons.Default.LightMode
+                    else Icons.Default.BrightnessAuto,
+                    title = stringRes { settingsTheme },
+                    value = selectedTheme,
+                    onClick = { showThemeDialog = true }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.Palette,
+                    title = stringRes { settingsThemeVariant },
+                    value = getThemeVariantDisplayName(currentVariant),
+                    onClick = { showThemeVariantDialog = true }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.Language,
+                    title = stringRes { settingsLanguage },
+                    value = selectedLanguage,
+                    onClick = { showLanguageDialog = true }
+                )
+            }
 
-            // Privacy
-            SettingsSectionHeader("Privacy")
-            ListItem(
-                headlineContent = { Text("On-Device AI Processing") },
-                supportingContent = { Text("CLIP image search & AI suggestions. All processing is local.") },
-                leadingContent = { Icon(Icons.Default.Psychology, contentDescription = null) },
-                trailingContent = {
-                    Switch(
-                        checked = aiProcessingConsent,
-                        onCheckedChange = {
-                            aiProcessingConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
-                        }
+            // ── 相册设置 ─────────────────────────────────────────────────
+            SettingsSectionHeader("相册设置")
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SettingsRow(
+                    icon = Icons.Default.Sort,
+                    title = "默认排序方式",
+                    value = sortLabel,
+                    onClick = { showSortDialog = true }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.Image,
+                    title = "缩略图质量",
+                    value = thumbQualityLabel,
+                    onClick = { showThumbQualityDialog = true }
+                )
+            }
+
+            // ── 编辑设置 ─────────────────────────────────────────────────
+            SettingsSectionHeader("编辑设置")
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SettingsRow(
+                    icon = Icons.Default.FilePresent,
+                    title = "默认导出格式",
+                    value = exportFormatLabel,
+                    onClick = { showExportFormatDialog = true }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.HighQuality,
+                    title = "默认导出质量",
+                    value = exportQualityLabel,
+                    onClick = { showExportQualityDialog = true }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.ColorLens,
+                    title = "默认色彩空间",
+                    value = colorSpaceLabel,
+                    onClick = { showColorSpaceDialog = true }
+                )
+            }
+
+            // ── 存储管理 ─────────────────────────────────────────────────
+            SettingsSectionHeader(stringRes { settingsStorage })
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storage,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringRes { settingsCacheSize },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = cacheSize,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = { showClearCacheDialog = true }) {
+                        Text(stringRes { settingsClearThumbnails })
+                    }
+                    TextButton(onClick = { showClearModelsDialog = true }) {
+                        Text(stringRes { settingsClearModels })
+                    }
+                }
+                SectionDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    OutlinedTextField(
+                        value = exportCachePath,
+                        onValueChange = { exportCachePath = it },
+                        label = { Text(stringRes { settingsExportCachePath }) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-            )
-            ListItem(
-                headlineContent = { Text("Crash Reports") },
-                supportingContent = { Text("Anonymous crash reports. No personal data included.") },
-                leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
-                trailingContent = {
-                    Switch(
-                        checked = crashReportsConsent,
-                        onCheckedChange = {
-                            crashReportsConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                        }
-                    )
-                }
-            )
-            ListItem(
-                headlineContent = { Text("Usage Analytics") },
-                supportingContent = { Text("Anonymous usage statistics. No personal data collected.") },
-                leadingContent = { Icon(Icons.Default.Analytics, contentDescription = null) },
-                trailingContent = {
-                    Switch(
-                        checked = analyticsConsent,
-                        onCheckedChange = {
-                            analyticsConsent = it
-                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
-                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
-                        }
-                    )
-                }
-            )
-            ListItem(
-                headlineContent = { Text("Export My Data") },
-                supportingContent = { Text("Download a copy of your data (right to portability)") },
-                leadingContent = { Icon(Icons.Default.Download, contentDescription = null) },
-                modifier = Modifier.clickable { showExportProgressDialog = true }
-            )
-            ListItem(
-                headlineContent = { Text("Delete All Data") },
-                supportingContent = { Text("Permanently erase all your data (right to be forgotten)") },
-                leadingContent = { Icon(Icons.Default.DeleteForever, contentDescription = null) },
-                modifier = Modifier.clickable { showDeleteDataDialog = true }
-            )
-            ListItem(
-                headlineContent = { Text("Data Retention") },
-                supportingContent = { Text("Crash reports: 30 days · Temp files: 7 days") },
-                leadingContent = { Icon(Icons.Default.Schedule, contentDescription = null) }
-            )
+            }
 
-            HorizontalDivider()
+            // ── 隐私设置 ─────────────────────────────────────────────────
+            SettingsSectionHeader("隐私设置")
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SwitchRow(
+                    icon = Icons.Default.Psychology,
+                    title = "本地 AI 处理",
+                    subtitle = "CLIP 图像搜索与 AI 建议，全部本地处理",
+                    checked = aiProcessingConsent,
+                    onCheckedChange = {
+                        aiProcessingConsent = it
+                        if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                        else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                    }
+                )
+                SectionDivider()
+                SwitchRow(
+                    icon = Icons.Default.BugReport,
+                    title = "崩溃报告",
+                    subtitle = "匿名崩溃报告，不包含任何个人数据",
+                    checked = crashReportsConsent,
+                    onCheckedChange = {
+                        crashReportsConsent = it
+                        if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                        else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                    }
+                )
+                SectionDivider()
+                SwitchRow(
+                    icon = Icons.Default.Analytics,
+                    title = "使用分析",
+                    subtitle = "匿名使用统计，不收集任何个人数据",
+                    checked = analyticsConsent,
+                    onCheckedChange = {
+                        analyticsConsent = it
+                        if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
+                        else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
+                    }
+                )
+            }
 
-            // About
+            // ── 关于 ─────────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAbout })
-            ListItem(
-                headlineContent = { Text(stringRes { settingsAbout }) },
-                supportingContent = { Text(stringRes { settingsAboutDesc }) },
-                leadingContent = { Icon(Icons.Default.Info, contentDescription = null) },
-                modifier = Modifier.clickable { navController.navigate("about") }
-            )
-            ListItem(
-                headlineContent = { Text(stringRes { settingsStatistics }) },
-                supportingContent = { Text(stringRes { settingsStatisticsDesc }) },
-                leadingContent = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                modifier = Modifier.clickable { navController.navigate("stats") }
-            )
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SettingsRow(
+                    icon = Icons.Default.Info,
+                    title = "版本信息",
+                    value = "v$APP_VERSION"
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.Description,
+                    title = stringRes { settingsAbout },
+                    value = stringRes { settingsAboutDesc },
+                    onClick = { navController.navigate("about") }
+                )
+            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            // 开发者卡片
+            LiquidGlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier
+                                .padding(10.dp)
+                                .size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "开发者",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = DEVELOPER_NAME,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            // ── 底部署名 ─────────────────────────────────────────────────
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Made with ❤ by $DEVELOPER_NAME",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
         }
     }
 
+    // ── 对话框 ─────────────────────────────────────────────────────────
+
     // Theme mode dialog (Light/Dark/System)
     if (showThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text(stringRes { settingsThemeSelect }) },
-            text = {
-                Column {
-                    listOf("system" to stringRes { system }, "light" to stringRes { light }, "dark" to stringRes { dark }).forEach { (mode, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    ThemeManager.setDarkMode(mode)
-                                    showThemeDialog = false
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = darkMode == mode,
-                                onClick = {
-                                    ThemeManager.setDarkMode(mode)
-                                    showThemeDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(label)
-                        }
-                    }
-                }
+        OptionListDialog(
+            title = stringRes { settingsThemeSelect },
+            options = listOf(
+                "system" to stringRes { system },
+                "light" to stringRes { light },
+                "dark" to stringRes { dark }
+            ),
+            selectedId = darkMode,
+            onOptionSelected = {
+                ThemeManager.setDarkMode(it)
+                showThemeDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) { Text(stringRes { cancel }) }
-            }
+            onDismiss = { showThemeDialog = false }
         )
     }
 
-    // Theme variant dialog (Gold/Wine/Steel/Graphite/Mist/Dynamic)
+    // Theme variant dialog (DEEP_SPACE first)
     if (showThemeVariantDialog) {
         AlertDialog(
             onDismissRequest = { showThemeVariantDialog = false },
@@ -336,6 +491,7 @@ fun SettingsScreen(navController: NavController) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
                                 imageVector = when (variant) {
+                                    AlcedoThemeVariant.DEEP_SPACE -> Icons.Default.NightsStay
                                     AlcedoThemeVariant.HASSELBLAD -> Icons.Default.PhotoCamera
                                     AlcedoThemeVariant.GOLD -> Icons.Default.Star
                                     AlcedoThemeVariant.WINE -> Icons.Default.LocalBar
@@ -421,77 +577,94 @@ fun SettingsScreen(navController: NavController) {
         )
     }
 
-    // Color science dialog
-    if (showColorScienceDialog) {
-        AlertDialog(
-            onDismissRequest = { showColorScienceDialog = false },
-            title = { Text(stringRes { settingsColorScience }) },
-            text = {
-                Column {
-                    listOf("ACES 2.0", "OpenDRT", "Linear").forEach { cs ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedColorScience = cs
-                                    showColorScienceDialog = false
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedColorScience == cs,
-                                onClick = {
-                                    selectedColorScience = cs
-                                    showColorScienceDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(cs)
-                        }
-                    }
-                }
+    // Album sort dialog
+    if (showSortDialog) {
+        OptionListDialog(
+            title = "默认排序方式",
+            options = listOf(
+                "date" to s.albumSortDate,
+                "name" to s.albumSortName,
+                "rating" to s.albumSortRating,
+                "type" to s.albumSortType
+            ),
+            selectedId = selectedSort,
+            onOptionSelected = {
+                selectedSort = it
+                showSortDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = { showColorScienceDialog = false }) { Text(stringRes { cancel }) }
-            }
+            onDismiss = { showSortDialog = false }
         )
     }
 
-    // GPU dialog
-    if (showGpuDialog) {
-        AlertDialog(
-            onDismissRequest = { showGpuDialog = false },
-            title = { Text(stringRes { settingsGpuBackend }) },
-            text = {
-                Column {
-                    listOf("OpenGL ES", "Vulkan", "Auto").forEach { gpu ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedGpuBackend = gpu
-                                    showGpuDialog = false
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedGpuBackend == gpu,
-                                onClick = {
-                                    selectedGpuBackend = gpu
-                                    showGpuDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(gpu)
-                        }
-                    }
-                }
+    // Thumbnail quality dialog
+    if (showThumbQualityDialog) {
+        OptionListDialog(
+            title = "缩略图质量",
+            options = listOf(
+                "high" to "高清",
+                "standard" to "标准",
+                "low" to "节省"
+            ),
+            selectedId = selectedThumbQuality,
+            onOptionSelected = {
+                selectedThumbQuality = it
+                showThumbQualityDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = { showGpuDialog = false }) { Text(stringRes { cancel }) }
-            }
+            onDismiss = { showThumbQualityDialog = false }
+        )
+    }
+
+    // Export format dialog
+    if (showExportFormatDialog) {
+        OptionListDialog(
+            title = "默认导出格式",
+            options = listOf(
+                "jpeg" to "JPEG",
+                "png" to "PNG",
+                "heif" to "HEIF"
+            ),
+            selectedId = selectedExportFormat,
+            onOptionSelected = {
+                selectedExportFormat = it
+                showExportFormatDialog = false
+            },
+            onDismiss = { showExportFormatDialog = false }
+        )
+    }
+
+    // Export quality dialog
+    if (showExportQualityDialog) {
+        OptionListDialog(
+            title = "默认导出质量",
+            options = listOf(
+                "high" to "高",
+                "medium" to "中",
+                "low" to "低"
+            ),
+            selectedId = selectedExportQuality,
+            onOptionSelected = {
+                selectedExportQuality = it
+                showExportQualityDialog = false
+            },
+            onDismiss = { showExportQualityDialog = false }
+        )
+    }
+
+    // Color space dialog
+    if (showColorSpaceDialog) {
+        OptionListDialog(
+            title = "默认色彩空间",
+            options = listOf(
+                "srgb" to s.gamutSrgb,
+                "p3" to s.gamutP3,
+                "rec2020" to s.gamutRec2020
+            ),
+            selectedId = selectedColorSpace,
+            onOptionSelected = {
+                selectedColorSpace = it
+                showColorSpaceDialog = false
+            },
+            onDismiss = { showColorSpaceDialog = false }
         )
     }
 
@@ -520,63 +693,12 @@ fun SettingsScreen(navController: NavController) {
             isDestructive = true
         )
     }
-
-    if (showDeleteDataDialog) {
-        ConfirmDialog(
-            title = "Delete All Data",
-            message = "This will permanently delete all your data including images metadata, ratings, collections, edit history, and cached files. This action cannot be undone.",
-            confirmText = "Delete Everything",
-            onConfirm = {
-                showDeleteDataDialog = false
-                scope.launch {
-                    PrivacyManager.deleteAllUserData(context)
-                }
-            },
-            onDismiss = { showDeleteDataDialog = false },
-            isDestructive = true
-        )
-    }
-
-    if (showExportProgressDialog) {
-        AlertDialog(
-            onDismissRequest = { showExportProgressDialog = false },
-            title = { Text("Export Your Data") },
-            text = {
-                Column {
-                    Text("Your data will be exported to:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "/sdcard/AlcedoExport/alcedo_data_export/",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("File paths and personal information are excluded from the export for your privacy.")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showExportProgressDialog = false
-                    scope.launch {
-                        val outputDir = java.io.File("/sdcard/AlcedoExport")
-                        PrivacyManager.exportUserData(context, outputDir)
-                    }
-                }) {
-                    Text("Export")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExportProgressDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }
 
 @Composable
 private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
     return when (variant) {
+        AlcedoThemeVariant.DEEP_SPACE -> variant.displayName
         AlcedoThemeVariant.HASSELBLAD -> stringRes { themeHasselblad }
         AlcedoThemeVariant.GOLD -> stringRes { themeGold }
         AlcedoThemeVariant.WINE -> stringRes { themeWine }
@@ -593,49 +715,142 @@ private fun SettingsSectionHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
     )
 }
 
 @Composable
-private fun AiModelItem(model: AiModelProfile) {
-    ListItem(
-        headlineContent = { Text(model.modelName) },
-        supportingContent = { Text(model.description) },
-        leadingContent = {
-            Icon(
-                Icons.Default.ModelTraining,
-                contentDescription = null,
-                tint = if (model.isActive) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+private fun SectionDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        thickness = 0.5.dp
+    )
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    value: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        },
-        trailingContent = {
-            when {
-                !model.isDownloaded -> {
-                    TextButton(onClick = { /* Download */ }) {
-                        Text(stringRes { download })
-                    }
-                }
-                model.isActive -> {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
+            if (onClick != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        } else if (onClick != null) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun OptionListDialog(
+    title: String,
+    options: List<Pair<String, String>>,
+    selectedId: String,
+    onOptionSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                options.forEach { (id, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOptionSelected(id) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            stringRes { active },
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        RadioButton(
+                            selected = selectedId == id,
+                            onClick = { onOptionSelected(id) }
                         )
-                    }
-                }
-                else -> {
-                    TextButton(onClick = { /* Activate */ }) {
-                        Text(stringRes { activate })
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label)
                     }
                 }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
     )
 }
