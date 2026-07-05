@@ -67,6 +67,7 @@ fun AlbumScreen(
     var showFolderSidebar by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(false) }
     var contextMenuImage by remember { mutableStateOf<ImageModel?>(null) }
+    var ratingTarget by remember { mutableStateOf<ImageModel?>(null) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -249,7 +250,7 @@ fun AlbumScreen(
             },
             onRate = {
                 contextMenuImage = null
-                viewModel.setRating(image.imageId, 3)
+                ratingTarget = image
             },
             onExport = {
                 contextMenuImage = null
@@ -262,6 +263,18 @@ fun AlbumScreen(
             onAnalyzeAi = {
                 contextMenuImage = null
                 viewModel.generateLabelsForImage(image.imageId)
+            }
+        )
+    }
+
+    // Rating picker dialog (replaces previously hardcoded rating value)
+    ratingTarget?.let { image ->
+        RatingPickerDialog(
+            imageName = image.imageName,
+            onDismiss = { ratingTarget = null },
+            onPick = { rating ->
+                viewModel.setRating(image.imageId, rating)
+                ratingTarget = null
             }
         )
     }
@@ -992,6 +1005,90 @@ enum class SortMode(val label: String) {
     NAME("Name"),
     RATING("Rating"),
     TYPE("Type")
+}
+
+/**
+ * Star rating picker dialog. Replaces the previous hardcoded rating value (3)
+ * wired into the context menu's "Rate" action.
+ */
+@Composable
+private fun RatingPickerDialog(
+    imageName: String,
+    onDismiss: () -> Unit,
+    onPick: (Int) -> Unit
+) {
+    var selectedRating by remember { mutableIntStateOf(0) }
+    val view = androidx.compose.ui.platform.LocalView.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Star, contentDescription = null) },
+        title = {
+            Text(
+                "Rate: $imageName",
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    (1..5).forEach { star ->
+                        IconButton(
+                            onClick = {
+                                selectedRating = if (selectedRating == star) 0 else star
+                                com.alcedo.studio.ui.common.HapticFeedback.click(view)
+                            },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                if (star <= selectedRating) Icons.Default.Star else Icons.Default.StarOutline,
+                                contentDescription = "$star star${if (star != 1) "s" else ""}",
+                                tint = if (star <= selectedRating) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (selectedRating == 0) {
+                    Text(
+                        "Tap a star to rate, or pick 0 stars to clear",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "$selectedRating star${if (selectedRating != 1) "s" else ""}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onPick(selectedRating) },
+                enabled = true
+            ) { Text("Apply") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    onPick(0)
+                }) { Text("Clear") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 // Helper to convert Bitmap to ImageBitmap for Compose

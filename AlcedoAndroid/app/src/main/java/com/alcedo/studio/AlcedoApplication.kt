@@ -7,6 +7,8 @@ import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
+import com.alcedo.studio.ui.common.CoachMarkManager
+import com.alcedo.studio.ui.common.HapticFeedback
 
 class AlcedoApplication : Application() {
     override fun onCreate() {
@@ -24,6 +26,8 @@ class AlcedoApplication : Application() {
         runSafe("PrivacyManager.initialize") { PrivacyManager.initialize(this) }
         runSafe("PrivacyManager.applyRetentionPolicy") { PrivacyManager.applyRetentionPolicy(this) }
         runSafe("TempFileManager.cleanupOldFiles") { TempFileManager.cleanupOldFiles(this) }
+        runSafe("HapticFeedback.initialize") { HapticFeedback.initialize(this) }
+        runSafe("CoachMarkManager.initialize") { CoachMarkManager.initialize(this) }
 
         runSafe("SecurityChecker.checkSecurity") {
             val securityStatus = SecurityChecker.checkSecurity(this)

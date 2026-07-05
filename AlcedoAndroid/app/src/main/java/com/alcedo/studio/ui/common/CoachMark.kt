@@ -1,5 +1,7 @@
 package com.alcedo.studio.ui.common
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -74,15 +76,31 @@ fun CoachMark(
 
 object CoachMarkManager {
     private const val PREFS_NAME = "alcedo_coach_marks"
+    private const val KEY_SHOWN_SET = "shown_keys"
     private val shownKeys = mutableSetOf<String>()
+    private var prefs: SharedPreferences? = null
+
+    /**
+     * Must be called once at app startup so that dismissed coach marks survive
+     * across launches. Falls back to in-memory tracking if not initialized.
+     */
+    fun initialize(context: Context) {
+        if (prefs != null) return
+        prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        shownKeys.clear()
+        shownKeys.addAll(prefs!!.getStringSet(KEY_SHOWN_SET, emptySet()) ?: emptySet())
+    }
 
     fun hasBeenShown(key: String): Boolean = key in shownKeys
 
     fun markShown(key: String) {
-        shownKeys.add(key)
+        if (shownKeys.add(key)) {
+            prefs?.edit()?.putStringSet(KEY_SHOWN_SET, shownKeys)?.apply()
+        }
     }
 
     fun resetAll() {
         shownKeys.clear()
+        prefs?.edit()?.remove(KEY_SHOWN_SET)?.apply()
     }
 }

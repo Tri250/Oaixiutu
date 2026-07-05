@@ -41,7 +41,9 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -60,6 +62,7 @@ import com.alcedo.studio.ui.album.StatsView
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.ai.AiSearchScreen
+import com.alcedo.studio.ui.common.BackgroundTaskBar
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
 import com.alcedo.studio.ui.common.NavTransitions
@@ -129,6 +132,17 @@ fun MainScreen(
     val bottomBarDestinations = MainDestination.entries
     val showBottomBar = currentRoute in bottomBarDestinations.map { it.route }
 
+    // Background task progress overlay – surfaced above the bottom nav when tasks run.
+    val taskSnapshots by com.alcedo.studio.di.AppModule.backgroundTaskService.tasks.collectAsState()
+    val hasActiveTasks = taskSnapshots.any {
+        it.status == com.alcedo.studio.domain.service.TaskStatus.RUNNING ||
+            it.status == com.alcedo.studio.domain.service.TaskStatus.PENDING ||
+            it.status == com.alcedo.studio.domain.service.TaskStatus.RETRYING
+    }
+    val onTaskCancel: (String) -> Unit = { taskId ->
+        com.alcedo.studio.di.AppModule.backgroundTaskService.cancel(taskId)
+    }
+
     Scaffold(
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
@@ -169,6 +183,7 @@ fun MainScreen(
             }
         }
     ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
         when (navigationType) {
             NavigationType.BOTTOM_NAVIGATION -> {
                 NavHost(
@@ -318,6 +333,21 @@ fun MainScreen(
                     }
                 }
             }
+        }
+
+        // Background task progress overlay – floats above the bottom navigation
+        // bar whenever import / export / AI tagging tasks are running.
+        if (hasActiveTasks) {
+            BackgroundTaskBar(
+                activeTasks = taskSnapshots,
+                onCancelTask = onTaskCancel,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) 80.dp else 8.dp)
+            )
+        }
         }
     }
 }

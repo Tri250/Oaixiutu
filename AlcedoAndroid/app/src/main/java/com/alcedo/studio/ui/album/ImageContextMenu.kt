@@ -1,12 +1,16 @@
 package com.alcedo.studio.ui.album
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 data class ContextMenuItem(
@@ -16,6 +20,11 @@ data class ContextMenuItem(
     val onClick: () -> Unit
 )
 
+/**
+ * Mobile-idiomatic long-press context menu rendered as a ModalBottomSheet
+ * instead of a desktop-style AlertDialog right-click menu.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImageContextMenu(
     imageName: String,
@@ -41,60 +50,77 @@ fun ImageContextMenu(
         ContextMenuItem("Delete", Icons.Default.Delete, isDestructive = true, onClick = onDelete)
     )
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        modifier = modifier,
-        title = {
-            Text(
-                imageName,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            // Drag handle + title
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                items.forEach { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        TextButton(
-                            onClick = {
-                                item.onClick()
-                                onDismiss()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                item.icon,
-                                contentDescription = item.label,
-                                modifier = Modifier.size(20.dp),
-                                tint = if (item.isDestructive) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                item.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (item.isDestructive) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    if (item.label == "Export" || item.label == "Paste Adjustments") {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    }
+                Text(
+                    text = imageName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            HorizontalDivider()
+
+            items.forEach { item ->
+                ContextMenuRow(item = item, onDismiss = onDismiss)
+                if (item.label == "Export" || item.label == "Paste Adjustments") {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-    )
+    }
+}
+
+@Composable
+private fun ContextMenuRow(item: ContextMenuItem, onDismiss: () -> Unit) {
+    val tint = if (item.isDestructive) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.onSurface
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable {
+                item.onClick()
+                onDismiss()
+            }
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            item.icon,
+            contentDescription = item.label,
+            modifier = Modifier.size(24.dp),
+            tint = tint
+        )
+        Spacer(modifier = Modifier.width(20.dp))
+        Text(
+            text = item.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = tint,
+            modifier = Modifier.weight(1f)
+        )
+    }
 }

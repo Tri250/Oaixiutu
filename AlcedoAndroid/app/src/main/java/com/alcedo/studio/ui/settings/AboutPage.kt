@@ -14,26 +14,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.alcedo.studio.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutPage(navController: NavController) {
     val context = LocalContext.current
+    // Prefer compile-time BuildConfig values; fall back to PackageManager lookup
+    // (and finally a sane constant) so the version is always shown consistently
+    // with SettingsScreen.
     val versionName = remember {
-        try {
-            val pi = context.packageManager.getPackageInfo(context.packageName, 0)
-            pi.versionName ?: "0.2.6"
-        } catch (_: Exception) {
-            "0.2.6"
+        BuildConfig.VERSION_NAME.ifBlank {
+            try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                    ?: "1.1.5"
+            } catch (_: Exception) {
+                "1.1.5"
+            }
         }
     }
     val versionCode = remember {
         try {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
             @Suppress("DEPRECATION")
-            pi.longVersionCode.toInt()
+            if (pi.longVersionCode > 0) pi.longVersionCode.toInt() else BuildConfig.VERSION_CODE
         } catch (_: Exception) {
-            26
+            BuildConfig.VERSION_CODE
         }
     }
 

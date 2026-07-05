@@ -2,19 +2,16 @@ package com.alcedo.studio.ui.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.alcedo.studio.domain.repository.EditHistoryRepository
-import com.alcedo.studio.domain.repository.ImageRepository
-import com.alcedo.studio.domain.service.*
-import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.viewmodel.EditorViewModel
 
+/**
+ * Factory for EditorViewModel.
+ *
+ * EditorViewModel resolves its repositories lazily through AppModule, so the
+ * only parameter the factory needs to thread through is the image id.
+ */
 class EditorViewModelFactory(
-    private val imageId: String,
-    private val imageRepository: ImageRepository = AppModule.imageRepository,
-    private val editHistoryRepository: EditHistoryRepository = AppModule.editHistoryRepository,
-    private val pipelineService: PipelineService = AppModule.pipelineService,
-    private val exportService: ExportService = AppModule.exportService,
-    private val thumbnailService: ThumbnailService = AppModule.thumbnailService
+    private val imageId: String
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

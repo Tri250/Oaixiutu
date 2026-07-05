@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import com.alcedo.studio.BuildConfig
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -27,7 +28,7 @@ import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
 
-private const val APP_VERSION = "1.1.5"
+private val APP_VERSION = BuildConfig.VERSION_NAME.ifBlank { "1.1.5" }
 private const val DEVELOPER_NAME = "带娃的小陈工"
 
 @OptIn(ExperimentalMaterial3Api::class)

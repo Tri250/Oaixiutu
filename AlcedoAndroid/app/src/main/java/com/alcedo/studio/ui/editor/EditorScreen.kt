@@ -1,9 +1,12 @@
 package com.alcedo.studio.ui.editor
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,7 +37,7 @@ enum class ScopeType(val label: String) {
     CHROMATICITY("Chromaticity")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun EditorScreen(
     navController: NavController,
@@ -176,16 +179,31 @@ fun EditorScreen(
                         zoomableState = zoomableState
                     )
 
-                    // Panel tabs
+                    // Panel tabs (synced with the swipeable pager below)
+                    val pagerState = rememberPagerState(
+                        initialPage = selectedPanel.ordinal,
+                        pageCount = { EditorPanel.entries.size }
+                    )
+                    // Keep tab selection and pager page in sync
+                    LaunchedEffect(selectedPanel) {
+                        if (pagerState.currentPage != selectedPanel.ordinal) {
+                            pagerState.animateScrollToPage(selectedPanel.ordinal)
+                        }
+                    }
+                    LaunchedEffect(pagerState.currentPage) {
+                        val synced = EditorPanel.entries[pagerState.currentPage]
+                        if (synced != selectedPanel) selectedPanel = synced
+                    }
+
                     ScrollableTabRow(
-                        selectedTabIndex = selectedPanel.ordinal,
+                        selectedTabIndex = pagerState.currentPage,
                         modifier = Modifier.fillMaxWidth(),
                         edgePadding = 0.dp,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         EditorPanel.entries.forEach { panel ->
                             Tab(
-                                selected = selectedPanel == panel,
+                                selected = pagerState.currentPage == panel.ordinal,
                                 onClick = { selectedPanel = panel },
                                 text = { Text(panel.label, style = MaterialTheme.typography.labelSmall) },
                                 selectedContentColor = MaterialTheme.colorScheme.primary,
@@ -194,24 +212,32 @@ fun EditorScreen(
                         }
                     }
 
-                    // Editor panel content
-                    Column(
+                    // Swipeable editor panel content (HorizontalPager replaces tab-only navigation)
+                    HorizontalPager(
+                        state = pagerState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(0.5f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        when (selectedPanel) {
-                            EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
-                            EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
-                            EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
-                            EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
-                            EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
-                            EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
-                            EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
-                            EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
+                            .weight(0.5f),
+                        pageSpacing = 8.dp
+                    ) { pageIndex ->
+                        val panel = EditorPanel.entries[pageIndex]
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            when (panel) {
+                                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
+                                EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
+                                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
+                                EditorPanel.HSL -> ColorPanel(viewModel = viewModel)
+                                EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
+                                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
+                                EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
+                                EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
+                            }
                         }
                     }
                 }
