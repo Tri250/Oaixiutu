@@ -13,7 +13,7 @@ import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.dao.AiEmbeddingDao
 import android.util.Log
-import net.zetetic.database.sqlcipher.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 import java.security.SecureRandom
 
@@ -86,7 +86,7 @@ abstract class SleeveDatabase : RoomDatabase() {
                 val appContext = context.applicationContext
                 try {
                     val passphrase = getOrCreatePassphrase(appContext)
-                    val factory = SupportFactory(passphrase)
+                    val factory = SupportOpenHelperFactory(passphrase)
                     val instance = Room.databaseBuilder(
                         appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
                     )
@@ -107,7 +107,7 @@ abstract class SleeveDatabase : RoomDatabase() {
                     deleteDatabaseFiles(appContext)
                     resetPassphrase(appContext)
                     val newPassphrase = getOrCreatePassphrase(appContext)
-                    val newFactory = SupportFactory(newPassphrase)
+                    val newFactory = SupportOpenHelperFactory(newPassphrase)
                     val instance = Room.databaseBuilder(
                         appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
                     )

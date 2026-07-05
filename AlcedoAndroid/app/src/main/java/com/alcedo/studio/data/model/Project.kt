@@ -1,8 +1,19 @@
 package com.alcedo.studio.data.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonObject
 import java.time.Instant
+
+object InstantSerializer : KSerializer<Instant> {
+    override val descriptor = PrimitiveSerialDescriptor("Instant", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: Instant) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): Instant = Instant.parse(decoder.decodeString())
+}
 
 @Serializable
 data class Project(
@@ -10,13 +21,13 @@ data class Project(
     val projectName: String,
     val projectPath: String,
     val sleeveRootId: UInt = 0u,
-    val createdAt: Instant = Instant.now(),
-    val modifiedAt: Instant = Instant.now(),
+    @Serializable(with = InstantSerializer::class) val createdAt: Instant = Instant.now(),
+    @Serializable(with = InstantSerializer::class) val modifiedAt: Instant = Instant.now(),
     val metadata: JsonObject? = null,
     val thumbnailCachePath: String = "",
     val modelCachePath: String = "",
     val packageVersion: Int = CURRENT_PACKAGE_VERSION,
-    val lastAutoSaveTime: Instant = Instant.now(),
+    @Serializable(with = InstantSerializer::class) val lastAutoSaveTime: Instant = Instant.now(),
     val isOpen: Boolean = false,
     val projectFileSize: Long = 0L
 ) {
