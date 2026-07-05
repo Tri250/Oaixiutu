@@ -104,25 +104,47 @@ abstract class SleeveDatabase : RoomDatabase() {
                     instance
                 } catch (e: Throwable) {
                     Log.e(TAG, "Failed to open database, attempting recovery", e)
-                    deleteDatabaseFiles(appContext)
-                    resetPassphrase(appContext)
-                    val newPassphrase = getOrCreatePassphrase(appContext)
-                    val newFactory = SupportOpenHelperFactory(newPassphrase)
-                    val instance = Room.databaseBuilder(
-                        appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
-                    )
-                    .openHelperFactory(newFactory)
-                    .fallbackToDestructiveMigration()
-                    .setJournalMode(JournalMode.AUTOMATIC)
-                    .addCallback(object : RoomDatabase.Callback() {
-                        override fun onOpen(db: SupportSQLiteDatabase) {
-                            super.onOpen(db)
-                            db.execSQL("PRAGMA journal_mode=WAL")
-                        }
-                    })
-                    .build()
-                    INSTANCE = instance
-                    instance
+                    try {
+                        deleteDatabaseFiles(appContext)
+                        resetPassphrase(appContext)
+                        val newPassphrase = getOrCreatePassphrase(appContext)
+                        val newFactory = SupportOpenHelperFactory(newPassphrase)
+                        val instance = Room.databaseBuilder(
+                            appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
+                        )
+                        .openHelperFactory(newFactory)
+                        .fallbackToDestructiveMigration()
+                        .setJournalMode(JournalMode.AUTOMATIC)
+                        .addCallback(object : RoomDatabase.Callback() {
+                            override fun onOpen(db: SupportSQLiteDatabase) {
+                                super.onOpen(db)
+                                db.execSQL("PRAGMA journal_mode=WAL")
+                            }
+                        })
+                        .build()
+                        INSTANCE = instance
+                        instance
+                    } catch (e2: Throwable) {
+                        Log.e(TAG, "Recovery failed, falling back to plain passphrase", e2)
+                        deleteDatabaseFiles(appContext)
+                        val fallbackPassphrase = getFallbackPassphrase(appContext)
+                        val fallbackFactory = SupportOpenHelperFactory(fallbackPassphrase)
+                        val instance = Room.databaseBuilder(
+                            appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
+                        )
+                        .openHelperFactory(fallbackFactory)
+                        .fallbackToDestructiveMigration()
+                        .setJournalMode(JournalMode.AUTOMATIC)
+                        .addCallback(object : RoomDatabase.Callback() {
+                            override fun onOpen(db: SupportSQLiteDatabase) {
+                                super.onOpen(db)
+                                db.execSQL("PRAGMA journal_mode=WAL")
+                            }
+                        })
+                        .build()
+                        INSTANCE = instance
+                        instance
+                    }
                 }
             }
         }
@@ -151,6 +173,15 @@ abstract class SleeveDatabase : RoomDatabase() {
         }
 
         private fun getOrCreatePassphrase(context: Context): ByteArray {
+            return try {
+                getOrCreateEncryptedPassphrase(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "EncryptedSharedPreferences unavailable, falling back", e)
+                getFallbackPassphrase(context)
+            }
+        }
+
+        private fun getOrCreateEncryptedPassphrase(context: Context): ByteArray {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
@@ -175,6 +206,29 @@ abstract class SleeveDatabase : RoomDatabase() {
             }
 
             return generateAndSavePassphrase(securePrefs)
+        }
+
+        private fun getFallbackPassphrase(context: Context): ByteArray {
+            val prefs = context.getSharedPreferences("alcedo_fallback", Context.MODE_PRIVATE)
+            val existingKey = prefs.getString("db_passphrase", null)
+            if (existingKey != null) {
+                return try {
+                    Base64.decode(existingKey, Base64.NO_WRAP)
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "Failed to decode fallback passphrase, generating new one", e)
+                    generateAndSaveFallbackPassphrase(prefs)
+                }
+            }
+            return generateAndSaveFallbackPassphrase(prefs)
+        }
+
+        private fun generateAndSaveFallbackPassphrase(prefs: android.content.SharedPreferences): ByteArray {
+            val key = ByteArray(32)
+            SecureRandom().nextBytes(key)
+            prefs.edit()
+                .putString("db_passphrase", Base64.encodeToString(key, Base64.NO_WRAP))
+                .apply()
+            return key
         }
 
         private fun generateAndSavePassphrase(securePrefs: android.content.SharedPreferences): ByteArray {
