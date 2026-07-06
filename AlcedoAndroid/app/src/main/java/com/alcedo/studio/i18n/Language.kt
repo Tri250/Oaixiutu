@@ -15,8 +15,9 @@ enum class Language(
     SPANISH("es", "Spanish", "Español");
 
     companion object {
+        // 国内用户默认使用简体中文：未识别的 locale 统一回退到简体中文
         fun fromCode(code: String): Language {
-            return entries.find { it.code == code } ?: ENGLISH
+            return entries.find { it.code == code } ?: CHINESE_SIMPLIFIED
         }
 
         fun fromSystemLocale(locale: java.util.Locale): Language {
@@ -30,7 +31,9 @@ enum class Language(
                 lang == "de" -> GERMAN
                 lang == "fr" -> FRENCH
                 lang == "es" -> SPANISH
-                else -> ENGLISH
+                lang == "en" -> ENGLISH
+                // 其它未识别的语言（含空 locale）默认回退到简体中文，适合国内用户
+                else -> CHINESE_SIMPLIFIED
             }
         }
     }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alcedo Studio</string>
+    <string name="album_title">Album</string>
+    <string name="editor_title">Editor</string>
+    <string name="export_title">Export</string>
+    <string name="settings_title">Settings</string>
+    <string name="search_hint">Search images…</string>
+    <string name="import_photos">Import Photos</string>
+    <string name="no_images">No images yet</string>
+    <string name="import_to_start">Import photos to get started</string>
+    <string name="save">Save</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="export">Export</string>
+    <string name="exposure">Exposure</string>
+    <string name="contrast">Contrast</string>
+    <string name="saturation">Saturation</string>
+    <string name="highlights">Highlights</string>
+    <string name="shadows">Shadows</string>
+    <string name="temperature">Temperature</string>
+    <string name="tint">Tint</string>
+    <string name="ai_search">AI Search</string>
+</resources>

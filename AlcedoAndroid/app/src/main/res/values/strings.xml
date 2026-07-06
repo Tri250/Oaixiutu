@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Alcedo Studio</string>
-    <string name="album_title">Album</string>
-    <string name="editor_title">Editor</string>
-    <string name="export_title">Export</string>
-    <string name="settings_title">Settings</string>
-    <string name="search_hint">Search images…</string>
-    <string name="import_photos">Import Photos</string>
-    <string name="no_images">No images yet</string>
-    <string name="import_to_start">Import photos to get started</string>
-    <string name="save">Save</string>
-    <string name="undo">Undo</string>
-    <string name="redo">Redo</string>
-    <string name="export">Export</string>
-    <string name="exposure">Exposure</string>
-    <string name="contrast">Contrast</string>
-    <string name="saturation">Saturation</string>
-    <string name="highlights">Highlights</string>
-    <string name="shadows">Shadows</string>
-    <string name="temperature">Temperature</string>
-    <string name="tint">Tint</string>
-    <string name="ai_search">AI Search</string>
+    <string name="album_title">相册</string>
+    <string name="editor_title">编辑器</string>
+    <string name="export_title">导出</string>
+    <string name="settings_title">设置</string>
+    <string name="search_hint">搜索图片…</string>
+    <string name="import_photos">导入照片</string>
+    <string name="no_images">暂无图片</string>
+    <string name="import_to_start">导入照片以开始使用</string>
+    <string name="save">保存</string>
+    <string name="undo">撤销</string>
+    <string name="redo">重做</string>
+    <string name="export">导出</string>
+    <string name="exposure">曝光</string>
+    <string name="contrast">对比度</string>
+    <string name="saturation">饱和度</string>
+    <string name="highlights">高光</string>
+    <string name="shadows">阴影</string>
+    <string name="temperature">色温</string>
+    <string name="tint">色调</string>
+    <string name="ai_search">AI 搜索</string>
 </resources>

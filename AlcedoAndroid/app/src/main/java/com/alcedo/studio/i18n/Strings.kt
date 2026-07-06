@@ -919,7 +919,8 @@ interface StringResources {
  * Updated by LanguageManager when language changes.
  */
 object Strings {
-    var current: StringResources = EnglishStrings()
+    // 默认使用简体中文，适合国内用户
+    var current: StringResources = ChineseSimplifiedStrings()
         internal set
 
     fun update(resources: StringResources) {
