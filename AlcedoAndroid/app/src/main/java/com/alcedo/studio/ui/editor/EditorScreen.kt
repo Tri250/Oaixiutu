@@ -46,6 +46,8 @@ import com.alcedo.studio.viewmodel.ScopeType
 import com.alcedo.studio.ui.common.LoadingOverlay
 import com.alcedo.studio.ui.common.LocalEditorEnabled
 import com.alcedo.studio.ui.editor.HlsProfilePanel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -125,17 +127,22 @@ fun EditorScreen(
     var chromaticityData by remember { mutableStateOf(ChromaticityData()) }
     var isScopeComputing by remember { mutableStateOf(false) }
 
-    // 位图变化时计算示波器数据
+    // 专注模式 — RapidRAW 风格：仅展开当前活跃的小节，其余自动折叠
+    val focusMode = remember { FocusModeState() }
+
+    // 位图变化时计算示波器数据 — 在后台线程执行，避免阻塞 UI
     LaunchedEffect(preview) {
         preview?.let { bitmap ->
             isScopeComputing = true
-            try {
-                histogramData = ScopeAnalyzer.computeHistogram(bitmap)
-                waveformData = ScopeAnalyzer.computeWaveform(bitmap)
-                vectorscopeData = ScopeAnalyzer.computeVectorscope(bitmap)
-                chromaticityData = ScopeAnalyzer.computeChromaticity(bitmap)
-            } finally {
-                isScopeComputing = false
+            withContext(Dispatchers.Default) {
+                try {
+                    histogramData = ScopeAnalyzer.computeHistogram(bitmap)
+                    waveformData = ScopeAnalyzer.computeWaveform(bitmap)
+                    vectorscopeData = ScopeAnalyzer.computeVectorscope(bitmap)
+                    chromaticityData = ScopeAnalyzer.computeChromaticity(bitmap)
+                } finally {
+                    isScopeComputing = false
+                }
             }
         }
     }
@@ -189,6 +196,26 @@ fun EditorScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    // 示波器 — 与专注模式按钮相邻，便于平板与手机共用同一入口
+                    IconButton(onClick = { viewModel.toggleShowScope() }) {
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = stringRes { editorScopeAnalyzer },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (showScope) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // 专注模式开关 — RapidRAW 风格：自动折叠其它小节，仅保留当前活跃小节
+                    IconButton(onClick = { focusMode.toggle() }) {
+                        Icon(
+                            Icons.Default.CenterFocusStrong,
+                            contentDescription = stringRes { editorFocusMode },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (focusMode.enabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     IconButton(onClick = { viewModel.saveVersion() }) {
                         Icon(
                             Icons.Default.Save,
@@ -213,7 +240,8 @@ fun EditorScreen(
             )
         },
         bottomBar = {
-            if (!isTablet) {
+            // 专注模式开启时隐藏底部工具栏，留出更多空间给图片与当前面板
+            if (!isTablet && !focusMode.enabled) {
                 EditorBottomToolbar(
                     isCompareMode = isCompareMode,
                     canUndo = canUndo,
@@ -257,7 +285,8 @@ fun EditorScreen(
                                 .fillMaxHeight(),
                             selectedPanel = selectedPanel,
                             onPanelSelected = { viewModel.updateSelectedPanel(it) },
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            focusMode = focusMode
                         )
                     }
                 }
@@ -352,9 +381,9 @@ fun EditorScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             when (panel) {
-                                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
+                                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel, focusMode = focusMode)
                                 EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
-                                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
+                                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel, focusMode = focusMode)
                                 EditorPanel.HSL -> {
                                     val params by remember { viewModel.params }
                                     HlsProfilePanel(
@@ -363,7 +392,7 @@ fun EditorScreen(
                                     )
                                 }
                                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
-                                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
+                                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel, focusMode = focusMode)
                                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
                                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
                                 EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
@@ -759,7 +788,8 @@ private fun EditorPanelColumn(
     modifier: Modifier = Modifier,
     selectedPanel: EditorPanel,
     onPanelSelected: (EditorPanel) -> Unit,
-    viewModel: EditorViewModel
+    viewModel: EditorViewModel,
+    focusMode: FocusModeState
 ) {
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.surface)
@@ -804,9 +834,9 @@ private fun EditorPanelColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when (selectedPanel) {
-                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel)
+                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel, focusMode = focusMode)
                 EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
-                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel)
+                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel, focusMode = focusMode)
                 EditorPanel.HSL -> {
                     val params by remember { viewModel.params }
                     HlsProfilePanel(
@@ -815,7 +845,7 @@ private fun EditorPanelColumn(
                     )
                 }
                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
-                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel)
+                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel, focusMode = focusMode)
                 EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
                 EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(

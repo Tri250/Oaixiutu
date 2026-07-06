@@ -10,7 +10,7 @@ object ThemeManager {
     private const val KEY_THEME_VARIANT = "theme_variant"
     private const val KEY_DARK_MODE = "dark_mode" // "system", "light", "dark"
 
-    private val _themeVariant = MutableStateFlow(AlcedoThemeVariant.PIXCAKE)
+    private val _themeVariant = MutableStateFlow(AlcedoThemeVariant.PRO_DARK)
     val themeVariant: StateFlow<AlcedoThemeVariant> = _themeVariant
 
     private val _darkMode = MutableStateFlow("dark")
@@ -20,8 +20,8 @@ object ThemeManager {
 
     fun initialize(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedVariant = prefs?.getString(KEY_THEME_VARIANT, AlcedoThemeVariant.PIXCAKE.name)
-            ?: AlcedoThemeVariant.PIXCAKE.name
+        val savedVariant = prefs?.getString(KEY_THEME_VARIANT, AlcedoThemeVariant.PRO_DARK.name)
+            ?: AlcedoThemeVariant.PRO_DARK.name
         _themeVariant.value = AlcedoThemeVariant.fromName(savedVariant)
         _darkMode.value = prefs?.getString(KEY_DARK_MODE, "dark") ?: "dark"
     }
@@ -38,6 +38,7 @@ object ThemeManager {
 
     fun getAlcedoColorScheme(variant: AlcedoThemeVariant, darkTheme: Boolean): AlcedoColorScheme {
         return when (variant) {
+            AlcedoThemeVariant.PRO_DARK -> if (darkTheme) ProDarkDarkColors else ProDarkLightColors
             AlcedoThemeVariant.PIXCAKE -> if (darkTheme) PixCakeDarkColors else PixCakeLightColors
             AlcedoThemeVariant.DEEP_SPACE -> if (darkTheme) DeepSpaceDarkColors else DeepSpaceLightColors
             AlcedoThemeVariant.HASSELBLAD -> if (darkTheme) HasselbladDarkColors else HasselbladLightColors

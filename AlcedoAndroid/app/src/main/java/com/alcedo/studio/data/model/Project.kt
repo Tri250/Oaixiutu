@@ -8,6 +8,7 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonObject
+import com.alcedo.studio.domain.service.WatermarkConfig
 import java.time.Instant
 
 object InstantSerializer : KSerializer<Instant> {
@@ -239,7 +240,8 @@ data class ExportSettings(
     val tags: List<String> = emptyList(),
     val outputPath: String = "",
     val sourceExifPath: String? = null,
-    val hassebladWatermark: Boolean = false
+    val hassebladWatermark: Boolean = false,
+    val watermarkConfig: WatermarkConfig = WatermarkConfig()
 )
 
 enum class ExportFormat {

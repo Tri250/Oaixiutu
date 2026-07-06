@@ -130,6 +130,7 @@ fun AlbumScreen(
     var showBatchAiTagDialog by remember { mutableStateOf(false) }
     var showBatchRatingDialog by remember { mutableStateOf(false) }
     var showBatchExportDialog by remember { mutableStateOf(false) }
+    var showBatchEditPanel by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf(false) }
     // 待删除图片 — 单张删除前需用户确认 (G-5 修复)
     var pendingDeleteImage by remember { mutableStateOf<ImageModel?>(null) }
@@ -248,6 +249,7 @@ fun AlbumScreen(
                 onBatchAiTag = { showBatchAiTagDialog = true },
                 onBatchRating = { showBatchRatingDialog = true },
                 onBatchExport = { showBatchExportDialog = true },
+                onBatchEdit = { showBatchEditPanel = true },
                 onRefresh = viewModel::refresh,
                 onSortModeChange = viewModel::setSortMode,
                 onOpenFilter = { showFilterSheet = true },
@@ -304,6 +306,7 @@ fun AlbumScreen(
             onBatchAiTag = { showBatchAiTagDialog = true },
             onBatchRating = { showBatchRatingDialog = true },
             onBatchExport = { showBatchExportDialog = true },
+            onBatchEdit = { showBatchEditPanel = true },
             onRefresh = viewModel::refresh,
             onSortModeChange = viewModel::setSortMode,
             onOpenFilter = { showFilterSheet = true },
@@ -443,6 +446,14 @@ fun AlbumScreen(
                 viewModel.exportBatchByIds(ids, settings)
                 showBatchExportDialog = false
             }
+        )
+    }
+
+    // 批量同步调整面板 (复制/粘贴/选择性粘贴/应用预设/重置)
+    if (showBatchEditPanel) {
+        BatchEditPanel(
+            viewModel = viewModel,
+            onDismiss = { showBatchEditPanel = false }
         )
     }
 
@@ -622,6 +633,7 @@ private fun AlbumContent(
     onBatchAiTag: () -> Unit,
     onBatchRating: () -> Unit,
     onBatchExport: () -> Unit,
+    onBatchEdit: () -> Unit,
     onRefresh: () -> Unit,
     onSortModeChange: (SortMode) -> Unit,
     onOpenFilter: () -> Unit,
@@ -762,6 +774,10 @@ private fun AlbumContent(
                             }
                         },
                         actions = {
+                            IconButton(onClick = onBatchEdit) {
+                                Icon(Icons.Default.AutoFixHigh, contentDescription = stringRes { batchCopyAdjustments },
+                                    tint = MaterialTheme.colorScheme.onSurface)
+                            }
                             IconButton(onClick = onBatchAiTag) {
                                 Icon(Icons.Default.Label, contentDescription = stringRes { aiTag },
                                     tint = MaterialTheme.colorScheme.onSurface)

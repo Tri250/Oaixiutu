@@ -1,17 +1,24 @@
 package com.alcedo.studio.crash
 
 import android.content.Context
-import android.os.Build
-import android.os.Process
 import android.util.Log
 import java.io.File
-import java.io.FileWriter
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
+/**
+ * Global uncaught-exception handler.
+ *
+ * Acts as the entry point that the JVM/ART invokes when a thread dies with an
+ * uncaught exception. The actual persistence, metadata capture and (opt-in)
+ * upload work is delegated to [CrashReportService] so this class stays focused
+ * on installing the handler and chaining to the platform default.
+ *
+ * Legacy public API (used elsewhere in the app) is preserved:
+ *  - [getCrashReports], [clearCrashReports], [hasRecentCrash] now operate on
+ *    whatever files exist in the crash directory, covering both the new JSON
+ *    reports produced by [CrashReportService] and any older `.log` files.
+ */
 object CrashHandler : Thread.UncaughtExceptionHandler {
     private const val TAG = "AlcedoCrash"
     private var defaultHandler: Thread.UncaughtExceptionHandler? = null
@@ -20,6 +27,13 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        // Make sure the report service is bootstrapped first so it can accept
+        // the crash when we delegate below.
+        try {
+            CrashReportService.initialize(context)
+        } catch (e: Throwable) {
+            Log.e(TAG, "CrashReportService.initialize failed", e)
+        }
         defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler(this)
     }
@@ -33,71 +47,53 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             // Log the crash
             Log.e(TAG, "Uncaught exception in thread: ${thread.name}", throwable)
 
-            // Save crash report to file
-            saveCrashReport(throwable)
+            // Delegate persistent storage + (optional) upload to the service.
+            CrashReportService.reportCrash(thread, throwable)
+
+            // Also keep a lightweight plain-text trace for legacy diagnostics
+            // tools that scan the crash directory. This does not duplicate the
+            // structured JSON report but makes the crash immediately visible.
+            writeLegacyTrace(thread, throwable)
 
             // Notify callback
             crashCallback?.invoke(throwable)
         } catch (e: Exception) {
             Log.e(TAG, "Error in crash handler", e)
         } finally {
-            // Chain to default handler
+            // Chain to default handler so the process exits normally.
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }
 
-    private fun saveCrashReport(throwable: Throwable) {
+    /**
+     * Writes a minimal plain-text marker so that legacy tooling which only
+     * scans for `.log` files continues to detect crashes. The authoritative,
+     * rich report lives in the JSON file produced by [CrashReportService].
+     */
+    private fun writeLegacyTrace(thread: Thread, throwable: Throwable) {
         val context = appContext ?: return
-        val crashDir = File(context.filesDir, "crash_reports")
-        if (!crashDir.exists()) crashDir.mkdirs()
-
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val crashFile = File(crashDir, "crash_${timestamp}.log")
-
-        // Convert stack trace to string, then sanitize PII
-        val stringWriter = StringWriter()
-        PrintWriter(stringWriter).use { pw ->
-            throwable.printStackTrace(pw)
-        }
-        val sanitizedTrace = sanitizeStackTrace(stringWriter.toString())
-
-        FileWriter(crashFile, true).use { writer ->
-            PrintWriter(writer).use { pw ->
-                pw.println("=== Alcedo Crash Report ===")
-                pw.println("Time: ${Date()}")
-                pw.println("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
-                pw.println("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-                pw.println("Thread: ${Thread.currentThread().name}")
-                pw.println()
-                pw.println(sanitizedTrace)
-                pw.println()
-
-                // Also log recent native crashes if available
-                val tombstoneDir = File("/data/tombstones")
-                if (tombstoneDir.exists()) {
-                    pw.println("=== Recent Tombstones ===")
-                    tombstoneDir.listFiles()
-                        ?.sortedByDescending { it.lastModified() }
-                        ?.take(1)
-                        ?.forEach { pw.println("(See: ${it.name})") }
+        try {
+            val crashDir = File(context.filesDir, "crash_reports")
+            if (!crashDir.exists()) crashDir.mkdirs()
+            val timestamp = java.text.SimpleDateFormat(
+                "yyyyMMdd_HHmmss", java.util.Locale.US
+            ).format(java.util.Date())
+            val legacyFile = File(crashDir, "crash_${timestamp}.log")
+            val stringWriter = StringWriter()
+            PrintWriter(stringWriter).use { pw -> throwable.printStackTrace(pw) }
+            val sanitized = CrashReportService.sanitizeStackTrace(stringWriter.toString())
+            legacyFile.writeText(
+                buildString {
+                    appendLine("=== Alcedo Crash Report (legacy trace) ===")
+                    appendLine("Time: ${java.util.Date()}")
+                    appendLine("Thread: ${thread.name}")
+                    appendLine()
+                    appendLine(sanitized)
                 }
-            }
+            )
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to write legacy trace", e)
         }
-    }
-
-    private fun sanitizeStackTrace(trace: String): String {
-        var sanitized = trace
-        // Remove file paths that might contain usernames
-        sanitized = sanitized.replace(Regex("/data/data/[^/]+/"), "/data/data/[REDACTED]/")
-        sanitized = sanitized.replace(Regex("/storage/emulated/\\d+/"), "/storage/[REDACTED]/")
-        sanitized = sanitized.replace(Regex("/sdcard/"), "/[REDACTED]/")
-        // Remove potential API keys or tokens
-        sanitized = sanitized.replace(Regex("(api[_-]?key|token|secret|password|credential)\\s*[=:]\\s*\\S+", RegexOption.IGNORE_CASE), "$1=[REDACTED]")
-        // Remove email addresses
-        sanitized = sanitized.replace(Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"), "[EMAIL_REDACTED]")
-        // Remove IP addresses
-        sanitized = sanitized.replace(Regex("\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b"), "[IP_REDACTED]")
-        return sanitized
     }
 
     fun getCrashReports(): List<File> {

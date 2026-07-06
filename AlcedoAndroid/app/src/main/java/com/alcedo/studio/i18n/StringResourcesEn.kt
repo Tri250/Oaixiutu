@@ -122,6 +122,9 @@ class EnglishStrings : StringResources {
     override val editorNoImage = "No image"
     override val editorImagePreview = "Image Preview"
     override val editorProcessing = "Processing…"
+    override val editorFocusMode = "Focus Mode"
+    override val editorFocusModeOn = "Focus mode on"
+    override val editorFocusModeOff = "Focus mode off"
 
     // Basic panel
     override val editorSectionLight = "Light"
@@ -466,6 +469,7 @@ class EnglishStrings : StringResources {
     override val gamutAces = "ACES"
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    override val themeProDark = "Pro Dark"
     override val themeHasselblad = "Hasselblad"
     override val themeGold = "Gold"
     override val themeWine = "Wine"
@@ -672,6 +676,54 @@ class EnglishStrings : StringResources {
     override val inspectorAdd = "Add"
     override val inspectorQualityScore = "Quality Score:"
 
+    // EXIF Editor panel
+    override val exifEditTitle = "Edit EXIF Metadata"
+    override val exifAuthor = "Author"
+    override val exifCopyright = "Copyright"
+    override val exifTitle = "Title"
+    override val exifComment = "Comment"
+    override val exifDateTime = "Date/Time"
+    override val exifDateTimeOriginal = "Date/Time Original"
+    override val exifMake = "Camera Make"
+    override val exifModel = "Camera Model"
+    override val exifLensModel = "Lens Model"
+    override val exifFocalLength = "Focal Length"
+    override val exifFNumber = "Aperture"
+    override val exifIso = "ISO"
+    override val exifExposureTime = "Exposure Time"
+    override val exifGpsLatitude = "GPS Latitude"
+    override val exifGpsLongitude = "GPS Longitude"
+    override val exifGpsClear = "Clear GPS"
+    override val exifSave = "Save Changes"
+    override val exifReset = "Reset to Original"
+    override val exifSaved = "EXIF metadata saved"
+    override val exifSaveFailed = "Failed to save EXIF metadata"
+    override val exifGpsCleared = "GPS data cleared"
+
+    // Watermark panel
+    override val watermarkTitle = "Custom Watermark"
+    override val watermarkTypeText = "Text"
+    override val watermarkTypeImage = "Image"
+    override val watermarkTypeTextWithLogo = "Text + Logo"
+    override val watermarkText = "Watermark Text"
+    override val watermarkImage = "Watermark Image"
+    override val watermarkFontSize = "Font Size"
+    override val watermarkColor = "Color"
+    override val watermarkOpacity = "Opacity"
+    override val watermarkPosition = "Position"
+    override val watermarkMargin = "Margin"
+    override val watermarkRotation = "Rotation"
+    override val watermarkShadow = "Shadow"
+    override val watermarkBorder = "Border"
+    override val watermarkPreview = "Preview"
+    override val watermarkSavePreset = "Save as Preset"
+    override val watermarkPositionTopLeft = "Top Left"
+    override val watermarkPositionTopRight = "Top Right"
+    override val watermarkPositionBottomLeft = "Bottom Left"
+    override val watermarkPositionBottomRight = "Bottom Right"
+    override val watermarkPositionCenter = "Center"
+    override val watermarkPositionBottomCenter = "Bottom Center"
+
     // Mask panel (AI masks for local adjustments)
     override val maskTitle = "Masks"
     override val maskNewMask = "New Mask"
@@ -736,4 +788,210 @@ class EnglishStrings : StringResources {
     override val privacySavePreferences = "Save Preferences"
     override val privacyChangeNote = "You can change these preferences at any time in Settings > Privacy."
     override val privacyDataNote = "Your photos are processed locally and never uploaded to our servers. AI API keys (if you provide them) are stored encrypted on your device."
+
+    // ── Batch Edit (RapidRAW-inspired copy/paste adjustments) ─────────
+    override val batchCopyAdjustments = "Copy Adjustments"
+    override val batchPasteAdjustments = "Paste Adjustments"
+    override val batchSelectivePaste = "Selective Paste"
+    override val batchApplyPreset = "Apply Preset"
+    override val batchResetAdjustments = "Reset Adjustments"
+    override val batchCopySuccess = "Adjustments copied from image %s"
+    override val batchPasteSuccess = "Pasted to %s images"
+    override val batchPastePartialSuccess = "Partial paste: %s images updated"
+    override val batchResetSuccess = "Reset %s images"
+    override val batchApplyPresetSuccess = "Preset applied to %s images"
+    override val batchSelectSource = "Select a source image first"
+    override val batchNoSource = "No adjustments on clipboard"
+    override val batchFilterBasic = "Basic (Exposure, Contrast, Highlights, Shadows)"
+    override val batchFilterWhiteBalance = "White Balance (Temperature, Tint)"
+    override val batchFilterColor = "Color (HSL, Color Wheels, Channel Mixer)"
+    override val batchFilterToneCurve = "Tone Curve"
+    override val batchFilterEffects = "Effects (Grain, Halation, Sharpen, Clarity, Vignette)"
+    override val batchFilterGeometry = "Geometry (Crop, Rotation, Perspective)"
+    override val batchFilterLut = "LUT"
+    override val batchProcessing = "Processing…"
+    override val batchProcessed = "%s / %s"
+    override val batchFailed = "Batch operation failed: %s"
+    override val batchSelectImagesFirst = "Select images first"
+    override val batchPanelTitle = "Batch Edit (%s selected)"
+    override val batchConfirmResetTitle = "Reset Adjustments?"
+    override val batchConfirmResetMessage = "Reset adjustments for %s selected images? This cannot be undone."
+    override val batchPickPreset = "Pick a Preset"
+    override val batchClipboardFrom = "Clipboard from image %s"
+    override val batchClipboardEmpty = "Clipboard is empty — copy adjustments first"
+
+    // ── Privacy Policy & User Agreement screens ─────────────────────────
+    override val settingsPrivacyPolicy = "Privacy Policy"
+    override val settingsUserAgreement = "User Agreement"
+    override val settingsCrashReporting = "Crash Reporting"
+    override val settingsCrashReportingDesc = "Send anonymous crash reports to help us fix issues (opt-in)"
+    override val privacyPolicyTitle = "Privacy Policy"
+    override val userAgreementTitle = "User Agreement"
+    override val privacyAgree = "Agree"
+    override val privacyDisagree = "Disagree"
+    override val privacyEffectiveDate = "Effective Date: January 1, 2026"
+    override val userAgreementEffectiveDate = "Effective Date: January 1, 2026"
+    override val privacyContent = """Alcedo Studio Privacy Policy
+
+Effective Date: January 1, 2026
+
+This Privacy Policy explains how Alcedo Studio ("we", "us", or "the App") collects, uses, stores, and protects your personal information when you use this App. Please read this policy carefully.
+
+1. Information We Collect
+
+1.1 Photos and Image Data
+When you grant storage or photo library permissions, the App reads the photos you select for editing. This includes image pixel data and embedded EXIF metadata (such as camera model, lens, shooting time, GPS location, ISO, and exposure parameters). All image data is processed locally on your device and is NOT uploaded to any server.
+
+1.2 Device Information
+To diagnose crashes and improve stability, the App may collect the following anonymous device information (only when you enable crash reporting): device model, Android version, app version, CPU architecture, memory status, and crash stack traces. This information does not identify you personally.
+
+1.3 Usage Data
+When you opt in to usage analytics, the App collects anonymous statistics such as feature usage frequency and session duration. This data is aggregated and does not contain personal identifiers.
+
+2. How We Use Your Information
+
+2.1 Image Processing
+Photos and EXIF data are used solely to provide editing, filtering, export, and AI-assisted features (such as semantic search and intelligent rating). All processing occurs locally on your device.
+
+2.2 Crash Diagnosis
+Crash reports help us locate and fix bugs. Reports contain no personal data; sensitive information such as file paths, email addresses, IP addresses, and API keys is automatically redacted before storage or upload.
+
+2.3 Product Improvement
+Aggregated, anonymous analytics help us understand which features are popular and prioritize improvements.
+
+3. Local Processing and Data Security
+
+3.1 Local-First Design
+The App follows a local-first principle: your photos, edits, and history are stored and processed on your device. We do NOT upload your photos to any cloud server by default.
+
+3.2 Optional Cloud Features
+If you configure a third-party AI service provider and provide an API key, image analysis requests may be sent to that provider's servers. Your API key is encrypted and stored only on your device. You bear responsibility for your chosen provider's privacy practices.
+
+3.3 Data Encryption
+Sensitive data such as AI API keys is stored using the Android Keystore system with encryption. Crash reports are sanitized before persistence.
+
+4. Permissions We Request
+
+4.1 Storage / Media Access (READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE)
+Required to read and import your photos for editing.
+
+4.2 Camera (CAMERA)
+Required if you use the in-app camera capture feature.
+
+4.3 Network Access (INTERNET)
+Required for optional features: downloading AI models, optional AI provider requests, and uploading crash reports (only with your consent).
+
+4.4 Foreground Service
+Required for long-running export and batch processing tasks so they continue when the app is in the background.
+
+5. Third-Party SDKs and Services
+
+5.1 AI Model Providers
+If you enable AI features and provide credentials, the App may communicate with the AI provider you configured. Please review that provider's privacy policy.
+
+5.2 Open-Source Libraries
+The App uses open-source libraries (such as image codecs and networking libraries). Each library's privacy practices are governed by its own license and documentation.
+
+6. Data Retention and Deletion
+
+6.1 Local Data
+Your photos, edit history, and presets remain on your device until you delete them. Uninstalling the App removes all locally stored data.
+
+6.2 Crash Reports
+Crash reports are stored locally for up to 30 days and are deleted after successful upload or after the retention period. At most 10 reports are kept on disk.
+
+6.3 Right to Erasure
+You can delete all App data at any time via Settings > Privacy > Delete All Data, or by uninstalling the App.
+
+7. Children's Privacy
+
+This App is a professional photo editing tool and is not directed at children under the age of 14. We do not knowingly collect personal information from children. If you believe a child has provided us with personal data, please contact us so we can delete it.
+
+8. Your Rights
+
+You have the right to:
+- Access the personal data the App holds about you;
+- Export your data (Settings > Privacy > Export My Data);
+- Delete your data (Settings > Privacy > Delete All Data);
+- Withdraw consent for analytics and crash reporting at any time;
+- Disable AI processing features at any time.
+
+9. Changes to This Policy
+
+We may update this Privacy Policy from time to time. Material changes will be reflected by an updated "Effective Date" and, where required, a new consent prompt. Continued use of the App after changes constitutes acceptance of the revised policy.
+
+10. Contact Us
+
+If you have questions about this Privacy Policy or your personal data, please contact the developer through the in-app feedback channel or the contact information listed on the app store listing.
+
+By tapping "Agree", you acknowledge that you have read, understood, and agree to this Privacy Policy."""
+    override val userAgreementContent = """Alcedo Studio User Agreement
+
+Effective Date: January 1, 2026
+
+Welcome to Alcedo Studio. This User Agreement ("Agreement") is a legal contract between you ("User" or "you") and the developer of Alcedo Studio ("we", "us", or "the App"). By installing, accessing, or using the App, you agree to be bound by the terms of this Agreement. If you do not agree, please do not install or use the App.
+
+1. Definition of the Service
+
+Alcedo Studio is a local photo editing application that provides image adjustment, filtering, batch export, AI-assisted search and rating, and other features. The App runs primarily on your device; some optional features may require network connectivity.
+
+2. Account and Eligibility
+
+2.1 The App does not require registration. Most features are available without an account.
+2.2 You must be at least 14 years old or use the App under the supervision of a guardian. By using the App, you represent that you meet this requirement.
+
+3. User Conduct
+
+You agree NOT to:
+3.1 Use the App for any unlawful purpose or in violation of applicable laws;
+3.2 Reverse engineer, decompile, disassemble, or otherwise attempt to derive the source code of the App, except as permitted by law;
+3.3 Modify, adapt, translate, or create derivative works based on the App;
+3.4 Remove, alter, or obscure any copyright, trademark, or other proprietary notices;
+3.5 Use the App to process images in a way that infringes the intellectual property, privacy, or portrait rights of third parties;
+3.6 Introduce malware, viruses, or harmful code through any input channel of the App.
+
+4. Intellectual Property
+
+4.1 All intellectual property rights in the App, including but not limited to software code, interface design, icons, built-in presets, and documentation, are owned by us or our licensors.
+4.2 You retain all rights to the photos and content you create or edit with the App. The App claims no ownership over your images.
+4.3 Built-in presets, LUTs, and model assets provided within the App are licensed to you for personal, non-commercial use within the App unless otherwise stated.
+
+5. Optional AI Features
+
+5.1 AI features (semantic search, intelligent rating, etc.) are provided for reference only. We do not guarantee the accuracy, completeness, or reliability of AI-generated results.
+5.2 If you connect a third-party AI provider, your use of that provider's service is subject to the provider's terms and pricing. We are not responsible for any charges or data practices of third-party providers.
+5.3 You are solely responsible for the content you submit to AI services and for ensuring you have the rights to do so.
+
+6. Privacy and Data
+
+Your use of the App is also governed by our Privacy Policy. By agreeing to this Agreement, you also acknowledge the data practices described in the Privacy Policy.
+
+7. Disclaimers
+
+7.1 The App is provided on an "AS IS" and "AS AVAILABLE" basis. To the maximum extent permitted by law, we disclaim all warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, and non-infringement.
+7.2 We do not guarantee that the App will operate uninterrupted, error-free, or secure, or that it will meet your specific requirements.
+7.3 You are solely responsible for backing up your photos and data. We are not liable for any data loss resulting from App usage, device failure, or uninstallation.
+
+8. Limitation of Liability
+
+To the maximum extent permitted by law, in no event shall we be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or data, arising out of or related to your use of the App, even if advised of the possibility of such damages. Our total liability shall not exceed the amount you paid for the App (which is zero if the App is provided free of charge).
+
+9. Termination
+
+9.1 You may stop using the App at any time by uninstalling it.
+9.2 We may modify, suspend, or discontinue the App (or any feature) at any time without notice. We will not be liable to you for any such modification, suspension, or discontinuance.
+
+10. Changes to This Agreement
+
+We may update this Agreement from time to time. Material changes will be communicated through an in-app prompt or app store update notes. Continued use of the App after changes constitutes acceptance of the revised Agreement.
+
+11. Governing Law
+
+This Agreement shall be governed by and construed in accordance with the laws of the People's Republic of China, without regard to its conflict of law principles. Any disputes shall be resolved through friendly negotiation; failing that, submitted to the competent court in the developer's jurisdiction.
+
+12. Contact
+
+If you have questions about this Agreement, please contact the developer through the in-app feedback channel or the contact information on the app store listing.
+
+By tapping "Agree", you acknowledge that you have read, understood, and agree to this User Agreement."""
 }

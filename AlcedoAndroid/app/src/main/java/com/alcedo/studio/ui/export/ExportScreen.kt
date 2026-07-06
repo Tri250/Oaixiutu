@@ -21,6 +21,7 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ProgressBar
+import com.alcedo.studio.ui.editor.WatermarkPanelDialog
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
 import com.alcedo.studio.viewmodel.ExportViewModel
@@ -37,6 +38,7 @@ fun ExportScreen(
     val progress by viewModel.exportProgress.collectAsStateWithLifecycle()
     val lastResult by viewModel.lastResult.collectAsStateWithLifecycle()
     val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
+    val showWatermarkPanel by viewModel.showWatermarkPanel.collectAsStateWithLifecycle()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
 
     // Initialize Hasselblad watermark default based on theme variant
@@ -95,6 +97,18 @@ fun ExportScreen(
                 )
             }
         }
+    }
+
+    if (showWatermarkPanel) {
+        WatermarkPanelDialog(
+            initialConfig = viewModel.watermarkConfig,
+            onConfigChange = { viewModel.updateWatermarkConfig(it) },
+            onDismiss = { viewModel.setWatermarkPanelVisible(false) },
+            onSavePreset = { config ->
+                viewModel.updateWatermarkConfig(config)
+                viewModel.setWatermarkPanelVisible(false)
+            }
+        )
     }
 
     Scaffold(
@@ -187,19 +201,53 @@ fun ExportScreen(
                 }
             }
 
-            // Hasselblad Watermark
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = viewModel.hassebladWatermark,
-                    onCheckedChange = { viewModel.hassebladWatermark = it }
-                )
-                Column {
-                    Text(stringRes { exportHasselbladWatermark }, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        stringRes { exportWatermarkDescription },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            // Custom Watermark
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.WaterDrop,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringRes { watermarkTitle }, style = MaterialTheme.typography.bodyMedium)
+                        val wm = viewModel.watermarkConfig
+                        val summary = if (wm.enabled) {
+                            when (wm.type) {
+                                com.alcedo.studio.domain.service.WatermarkType.TEXT -> wm.text
+                                com.alcedo.studio.domain.service.WatermarkType.IMAGE -> stringRes { watermarkTypeImage }
+                                com.alcedo.studio.domain.service.WatermarkType.TEXT_WITH_LOGO -> stringRes { watermarkTypeTextWithLogo }
+                            }
+                        } else {
+                            stringRes { exportWatermarkDescription }
+                        }
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    Switch(
+                        checked = viewModel.watermarkConfig.enabled,
+                        onCheckedChange = { checked ->
+                            viewModel.updateWatermarkConfig(viewModel.watermarkConfig.copy(enabled = checked))
+                        }
+                    )
+                    IconButton(onClick = { viewModel.setWatermarkPanelVisible(true) }) {
+                        Icon(Icons.Default.Settings, contentDescription = null)
+                    }
                 }
             }
 

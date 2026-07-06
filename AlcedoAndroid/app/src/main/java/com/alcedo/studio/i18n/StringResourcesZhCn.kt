@@ -122,6 +122,9 @@ class ChineseSimplifiedStrings : StringResources {
     override val editorNoImage = "无图片"
     override val editorImagePreview = "图片预览"
     override val editorProcessing = "处理中…"
+    override val editorFocusMode = "专注模式"
+    override val editorFocusModeOn = "专注模式已开启"
+    override val editorFocusModeOff = "专注模式已关闭"
 
     // Basic panel
     override val editorSectionLight = "光线"
@@ -466,6 +469,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val gamutAces = "ACES"
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    override val themeProDark = "专业暗色"
     override val themeHasselblad = "哈苏"
     override val themeGold = "金色"
     override val themeWine = "酒红"
@@ -672,6 +676,54 @@ class ChineseSimplifiedStrings : StringResources {
     override val inspectorAdd = "添加"
     override val inspectorQualityScore = "质量评分："
 
+    // EXIF 编辑面板
+    override val exifEditTitle = "编辑 EXIF 元数据"
+    override val exifAuthor = "作者"
+    override val exifCopyright = "版权"
+    override val exifTitle = "标题"
+    override val exifComment = "注释"
+    override val exifDateTime = "日期/时间"
+    override val exifDateTimeOriginal = "原始日期/时间"
+    override val exifMake = "相机制造商"
+    override val exifModel = "相机型号"
+    override val exifLensModel = "镜头型号"
+    override val exifFocalLength = "焦距"
+    override val exifFNumber = "光圈"
+    override val exifIso = "ISO"
+    override val exifExposureTime = "曝光时间"
+    override val exifGpsLatitude = "GPS 纬度"
+    override val exifGpsLongitude = "GPS 经度"
+    override val exifGpsClear = "清除 GPS"
+    override val exifSave = "保存更改"
+    override val exifReset = "恢复原状"
+    override val exifSaved = "EXIF 元数据已保存"
+    override val exifSaveFailed = "保存 EXIF 元数据失败"
+    override val exifGpsCleared = "GPS 数据已清除"
+
+    // 水印面板
+    override val watermarkTitle = "自定义水印"
+    override val watermarkTypeText = "文本"
+    override val watermarkTypeImage = "图片"
+    override val watermarkTypeTextWithLogo = "文本 + 图标"
+    override val watermarkText = "水印文本"
+    override val watermarkImage = "水印图片"
+    override val watermarkFontSize = "字号"
+    override val watermarkColor = "颜色"
+    override val watermarkOpacity = "不透明度"
+    override val watermarkPosition = "位置"
+    override val watermarkMargin = "边距"
+    override val watermarkRotation = "旋转"
+    override val watermarkShadow = "阴影"
+    override val watermarkBorder = "边框"
+    override val watermarkPreview = "预览"
+    override val watermarkSavePreset = "保存为预设"
+    override val watermarkPositionTopLeft = "左上"
+    override val watermarkPositionTopRight = "右上"
+    override val watermarkPositionBottomLeft = "左下"
+    override val watermarkPositionBottomRight = "右下"
+    override val watermarkPositionCenter = "居中"
+    override val watermarkPositionBottomCenter = "底部居中"
+
     // 蒙版面板（用于局部调整的 AI 蒙版）
     override val maskTitle = "蒙版"
     override val maskNewMask = "新建蒙版"
@@ -736,4 +788,210 @@ class ChineseSimplifiedStrings : StringResources {
     override val privacySavePreferences = "保存偏好"
     override val privacyChangeNote = "您可以随时在 设置 > 隐私 中更改这些偏好。"
     override val privacyDataNote = "您的照片在本地处理，从不上传到我们的服务器。AI API 密钥（如果您提供）将在设备上加密存储。"
+
+    // ── Batch Edit (RapidRAW-inspired copy/paste adjustments) ─────────
+    override val batchCopyAdjustments = "复制调整"
+    override val batchPasteAdjustments = "粘贴调整"
+    override val batchSelectivePaste = "选择性粘贴"
+    override val batchApplyPreset = "应用预设"
+    override val batchResetAdjustments = "重置调整"
+    override val batchCopySuccess = "已复制图片 %s 的调整"
+    override val batchPasteSuccess = "已粘贴到 %s 张图片"
+    override val batchPastePartialSuccess = "部分粘贴：已更新 %s 张图片"
+    override val batchResetSuccess = "已重置 %s 张图片"
+    override val batchApplyPresetSuccess = "预设已应用到 %s 张图片"
+    override val batchSelectSource = "请先选择源图片"
+    override val batchNoSource = "剪贴板中没有调整"
+    override val batchFilterBasic = "基础（曝光、对比度、高光、阴影）"
+    override val batchFilterWhiteBalance = "白平衡（色温、色调）"
+    override val batchFilterColor = "颜色（HSL、色轮、通道混合器）"
+    override val batchFilterToneCurve = "色调曲线"
+    override val batchFilterEffects = "效果（颗粒、光晕、锐化、清晰度、暗角）"
+    override val batchFilterGeometry = "几何（裁剪、旋转、透视）"
+    override val batchFilterLut = "LUT"
+    override val batchProcessing = "处理中…"
+    override val batchProcessed = "%s / %s"
+    override val batchFailed = "批量操作失败：%s"
+    override val batchSelectImagesFirst = "请先选择图片"
+    override val batchPanelTitle = "批量编辑（已选 %s 张）"
+    override val batchConfirmResetTitle = "重置调整？"
+    override val batchConfirmResetMessage = "确定要重置选中的 %s 张图片的调整吗？此操作不可撤销。"
+    override val batchPickPreset = "选择预设"
+    override val batchClipboardFrom = "剪贴板来自图片 %s"
+    override val batchClipboardEmpty = "剪贴板为空 — 请先复制调整"
+
+    // ── 隐私政策与用户协议页面 ───────────────────────────────────────
+    override val settingsPrivacyPolicy = "隐私政策"
+    override val settingsUserAgreement = "用户协议"
+    override val settingsCrashReporting = "崩溃报告"
+    override val settingsCrashReportingDesc = "发送匿名崩溃报告以帮助我们修复问题（可选）"
+    override val privacyPolicyTitle = "隐私政策"
+    override val userAgreementTitle = "用户协议"
+    override val privacyAgree = "同意"
+    override val privacyDisagree = "不同意"
+    override val privacyEffectiveDate = "生效日期：2026年1月1日"
+    override val userAgreementEffectiveDate = "生效日期：2026年1月1日"
+    override val privacyContent = """Alcedo Studio 隐私政策
+
+生效日期：2026年1月1日
+
+本《隐私政策》说明 Alcedo Studio（以下简称"我们"或"本应用"）在您使用本应用时如何收集、使用、存储和保护您的个人信息。请您仔细阅读本政策。
+
+一、我们收集的信息
+
+1.1 照片与图像数据
+当您授予存储或相册权限后，本应用会读取您选择的照片以进行编辑。这包括图像像素数据以及内嵌的 EXIF 元数据（例如相机型号、镜头型号、拍摄时间、GPS 位置、ISO、曝光参数等）。所有图像数据均在您的设备本地处理，不会上传至任何服务器。
+
+1.2 设备信息
+为诊断崩溃并提升稳定性，当您启用崩溃报告功能时，本应用可能收集以下匿名设备信息：设备型号、Android 系统版本、应用版本、CPU 架构、内存状态以及崩溃堆栈信息。该等信息不会用于识别您的个人身份。
+
+1.3 使用数据
+当您同意使用统计分析后，本应用会收集匿名统计数据，例如功能使用频率与使用时长。此类数据均为聚合后的统计信息，不包含任何个人标识。
+
+二、我们如何使用您的信息
+
+2.1 图像处理
+照片及 EXIF 数据仅用于提供编辑、滤镜、导出以及 AI 辅助功能（如语义搜索与智能评分）。所有处理均在您的设备本地完成。
+
+2.2 崩溃诊断
+崩溃报告帮助我们定位并修复缺陷。报告不包含任何个人数据；文件路径、电子邮箱、IP 地址、API 密钥等敏感信息会在存储或上传前被自动脱敏处理。
+
+2.3 产品改进
+聚合后的匿名分析数据帮助我们了解哪些功能更受欢迎，从而优先改进。
+
+三、本地处理与数据安全
+
+3.1 本地优先原则
+本应用遵循本地优先原则：您的照片、编辑与历史记录均存储并处理于您的设备上。我们默认不会将您的照片上传至任何云端服务器。
+
+3.2 可选的云功能
+若您配置了第三方 AI 服务商并提供 API 密钥，图像分析请求可能会被发送至该服务商的服务器。您的 API 密钥会加密存储于您的设备上。该服务商的隐私实践由您自行负责审阅。
+
+3.3 数据加密
+AI API 密钥等敏感数据使用 Android Keystore 系统加密存储。崩溃报告在持久化前会进行脱敏处理。
+
+四、我们申请的权限
+
+4.1 存储 / 媒体访问权限（READ_MEDIA_IMAGES、READ_EXTERNAL_STORAGE）
+用于读取并导入您要编辑的照片。
+
+4.2 相机权限（CAMERA）
+当您使用应用内拍照功能时使用。
+
+4.3 网络访问权限（INTERNET）
+用于可选功能：下载 AI 模型、可选的 AI 服务商请求以及上传崩溃报告（仅在您同意的情况下）。
+
+4.4 前台服务
+用于长时间运行的导出与批量处理任务，使其在应用处于后台时仍可继续执行。
+
+五、第三方 SDK 与服务
+
+5.1 AI 模型服务商
+若您启用 AI 功能并提供凭据，本应用可能与您配置的 AI 服务商通信。请审阅该服务商的隐私政策。
+
+5.2 开源库
+本应用使用了开源库（例如图像编解码库与网络库）。各库的隐私实践受其各自的许可证与文档约束。
+
+六、数据保留与删除
+
+6.1 本地数据
+您的照片、编辑历史与预设将一直保存在设备上，直至您主动删除。卸载本应用将清除所有本地存储的数据。
+
+6.2 崩溃报告
+崩溃报告在本地最多保留 30 天，并在成功上传后或保留期满后删除。磁盘上最多保留 10 份报告。
+
+6.3 删除权
+您可随时通过 设置 > 隐私 > 删除全部数据 删除所有应用数据，或通过卸载本应用删除数据。
+
+七、未成年人隐私
+
+本应用为专业照片编辑工具，不面向 14 周岁以下的未成年人。我们不会故意收集未成年人的个人信息。若您认为有未成年人向我们提供了个人数据，请联系我们以便删除。
+
+八、您的权利
+
+您有权：
+- 访问本应用持有的关于您的个人数据；
+- 导出您的数据（设置 > 隐私 > 导出我的数据）；
+- 删除您的数据（设置 > 隐私 > 删除全部数据）；
+- 随时撤回对使用分析与崩溃报告的同意；
+- 随时关闭 AI 处理功能。
+
+九、本政策的变更
+
+我们可能不时更新本《隐私政策》。重大变更将通过更新后的"生效日期"体现，并在必要时通过新的同意提示告知。变更后继续使用本应用即视为您接受修订后的政策。
+
+十、联系我们
+
+若您对本《隐私政策》或您的个人数据有任何疑问，请通过应用内反馈渠道或应用商店详情页所列联系方式与开发者联系。
+
+点击"同意"即表示您已阅读、理解并同意本《隐私政策》。"""
+    override val userAgreementContent = """Alcedo Studio 用户协议
+
+生效日期：2026年1月1日
+
+欢迎使用 Alcedo Studio。本《用户协议》（以下简称"本协议"）是您（以下简称"用户"或"您"）与 Alcedo Studio 开发者（以下简称"我们"或"本应用"）之间订立的具有法律约束力的协议。安装、访问或使用本应用即表示您同意受本协议条款约束。若您不同意，请勿安装或使用本应用。
+
+一、服务定义
+
+Alcedo Studio 是一款本地照片编辑应用，提供图像调整、滤镜、批量导出、AI 辅助搜索与评分等功能。本应用主要运行于您的设备上；部分可选功能可能需要网络连接。
+
+二、账户与资格
+
+2.1 本应用无需注册，绝大多数功能在无账户情况下即可使用。
+2.2 您应年满 14 周岁，或在监护人监督下使用本应用。使用本应用即表示您声明已满足此要求。
+
+三、用户行为规范
+
+您同意不会：
+3.1 将本应用用于任何非法目的或违反适用法律；
+3.2 对本应用进行逆向工程、反编译、反汇编或以其他方式试图获取本应用的源代码（法律允许的除外）；
+3.3 修改、改编、翻译或基于本应用创作衍生作品；
+3.4 移除、更改或遮挡任何版权、商标或其他专有权利声明；
+3.5 以侵犯第三方知识产权、隐私权或肖像权的方式使用本应用处理图像；
+3.6 通过本应用的任何输入渠道引入恶意软件、病毒或有害代码。
+
+四、知识产权
+
+4.1 本应用中的所有知识产权，包括但不限于软件代码、界面设计、图标、内置预设与文档，归我们或其许可方所有。
+4.2 您对使用本应用创作或编辑的照片与内容保留全部权利。本应用不对您的图像主张任何所有权。
+4.3 本应用内置的预设、LUT 与模型资产，除另有说明外，授予您在本应用内个人非商业使用许可。
+
+五、可选 AI 功能
+
+5.1 AI 功能（语义搜索、智能评分等）仅供参考。我们不保证 AI 生成结果的准确性、完整性或可靠性。
+5.2 若您连接第三方 AI 服务商，您对该服务商服务的使用受该服务商条款与定价约束。我们对第三方服务商的收费或数据实践不承担责任。
+5.3 您对提交至 AI 服务的内容以及您拥有相应权利负有全部责任。
+
+六、隐私与数据
+
+您对本应用的使用同时受我们《隐私政策》约束。同意本协议即视为您已知悉《隐私政策》中所述的数据实践。
+
+七、免责声明
+
+7.1 本应用按"现状"与"现有"基础提供。在法律允许的最大范围内，我们放弃所有明示或默示的保证，包括适销性与特定用途适用性的保证。
+7.2 我们不保证本应用将不间断、无错误或安全地运行，亦不保证其满足您的特定需求。
+7.3 您须自行备份您的照片与数据。我们对因使用本应用、设备故障或卸载造成的任何数据丢失不承担责任。
+
+八、责任限制
+
+在法律允许的最大范围内，无论是否被告知此类损害的可能性，我们均不对因您使用本应用而产生的任何间接、附带、特殊、后果性或惩罚性损害，或任何利润或数据损失承担责任。我们的总责任不超过您为本应用支付的金额（若本应用免费提供，则为零）。
+
+九、终止
+
+9.1 您可随时通过卸载本应用停止使用。
+9.2 我们可能随时修改、暂停或终止本应用（或其任何功能）而不另行通知。对于此类修改、暂停或终止，我们不向您承担责任。
+
+十、本协议的变更
+
+我们可能不时更新本协议。重大变更将通过应用内提示或应用商店更新说明告知。变更后继续使用本应用即视为您接受修订后的协议。
+
+十一、适用法律
+
+本协议受中华人民共和国法律管辖并据其解释，不适用其法律冲突原则。任何争议应通过友好协商解决；协商不成的，提交开发者所在地有管辖权的法院诉讼解决。
+
+十二、联系方式
+
+若您对本协议有任何疑问，请通过应用内反馈渠道或应用商店详情页所列联系方式与开发者联系。
+
+点击"同意"即表示您已阅读、理解并同意本《用户协议》。"""
 }

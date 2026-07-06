@@ -72,6 +72,17 @@ class ExportViewModel : ViewModel() {
     private val _showColorSpaceOptions = MutableStateFlow(false)
     val showColorSpaceOptions: StateFlow<Boolean> = _showColorSpaceOptions.asStateFlow()
 
+    private val _showWatermarkPanel = MutableStateFlow(false)
+    val showWatermarkPanel: StateFlow<Boolean> = _showWatermarkPanel.asStateFlow()
+
+    fun setWatermarkPanelVisible(visible: Boolean) {
+        _showWatermarkPanel.value = visible
+    }
+
+    fun updateWatermarkConfig(config: com.alcedo.studio.domain.service.WatermarkConfig) {
+        watermarkConfig = config
+    }
+
     // ── Convenience properties for ExportScreen ──
 
     var format: ExportFormat
@@ -105,6 +116,10 @@ class ExportViewModel : ViewModel() {
     var hassebladWatermark: Boolean
         get() = _settings.value.hassebladWatermark
         set(value) { _settings.value = _settings.value.copy(hassebladWatermark = value) }
+
+    var watermarkConfig: com.alcedo.studio.domain.service.WatermarkConfig
+        get() = _settings.value.watermarkConfig
+        set(value) { _settings.value = _settings.value.copy(watermarkConfig = value) }
 
     var maxDimension: String
         get() = _settings.value.maxDimension?.toString() ?: ""

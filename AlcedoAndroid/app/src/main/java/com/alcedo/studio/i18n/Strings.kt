@@ -126,6 +126,9 @@ interface StringResources {
     val editorNoImage: String
     val editorImagePreview: String
     val editorProcessing: String
+    val editorFocusMode: String
+    val editorFocusModeOn: String
+    val editorFocusModeOff: String
 
     // Basic panel
     val editorSectionLight: String
@@ -470,6 +473,7 @@ interface StringResources {
     val gamutAces: String
 
     // ── Theme Variants ──────────────────────────────────────────────────
+    val themeProDark: String
     val themeHasselblad: String
     val themeGold: String
     val themeWine: String
@@ -676,6 +680,54 @@ interface StringResources {
     val inspectorAdd: String
     val inspectorQualityScore: String
 
+    // EXIF Editor panel
+    val exifEditTitle: String
+    val exifAuthor: String
+    val exifCopyright: String
+    val exifTitle: String
+    val exifComment: String
+    val exifDateTime: String
+    val exifDateTimeOriginal: String
+    val exifMake: String
+    val exifModel: String
+    val exifLensModel: String
+    val exifFocalLength: String
+    val exifFNumber: String
+    val exifIso: String
+    val exifExposureTime: String
+    val exifGpsLatitude: String
+    val exifGpsLongitude: String
+    val exifGpsClear: String
+    val exifSave: String
+    val exifReset: String
+    val exifSaved: String
+    val exifSaveFailed: String
+    val exifGpsCleared: String
+
+    // Watermark panel
+    val watermarkTitle: String
+    val watermarkTypeText: String
+    val watermarkTypeImage: String
+    val watermarkTypeTextWithLogo: String
+    val watermarkText: String
+    val watermarkImage: String
+    val watermarkFontSize: String
+    val watermarkColor: String
+    val watermarkOpacity: String
+    val watermarkPosition: String
+    val watermarkMargin: String
+    val watermarkRotation: String
+    val watermarkShadow: String
+    val watermarkBorder: String
+    val watermarkPreview: String
+    val watermarkSavePreset: String
+    val watermarkPositionTopLeft: String
+    val watermarkPositionTopRight: String
+    val watermarkPositionBottomLeft: String
+    val watermarkPositionBottomRight: String
+    val watermarkPositionCenter: String
+    val watermarkPositionBottomCenter: String
+
     // Mask panel (AI masks for local adjustments)
     val maskTitle: String
     val maskNewMask: String
@@ -740,6 +792,51 @@ interface StringResources {
     val privacySavePreferences: String
     val privacyChangeNote: String
     val privacyDataNote: String
+
+    // ── Batch Edit (RapidRAW-inspired copy/paste adjustments) ─────────
+    val batchCopyAdjustments: String
+    val batchPasteAdjustments: String
+    val batchSelectivePaste: String
+    val batchApplyPreset: String
+    val batchResetAdjustments: String
+    val batchCopySuccess: String
+    val batchPasteSuccess: String
+    val batchPastePartialSuccess: String
+    val batchResetSuccess: String
+    val batchApplyPresetSuccess: String
+    val batchSelectSource: String
+    val batchNoSource: String
+    val batchFilterBasic: String
+    val batchFilterWhiteBalance: String
+    val batchFilterColor: String
+    val batchFilterToneCurve: String
+    val batchFilterEffects: String
+    val batchFilterGeometry: String
+    val batchFilterLut: String
+    val batchProcessing: String
+    val batchProcessed: String
+    val batchFailed: String
+    val batchSelectImagesFirst: String
+    val batchPanelTitle: String
+    val batchConfirmResetTitle: String
+    val batchConfirmResetMessage: String
+    val batchPickPreset: String
+    val batchClipboardFrom: String
+    val batchClipboardEmpty: String
+
+    // ── Privacy Policy & User Agreement screens ─────────────────────────
+    val settingsPrivacyPolicy: String
+    val settingsUserAgreement: String
+    val settingsCrashReporting: String
+    val settingsCrashReportingDesc: String
+    val privacyPolicyTitle: String
+    val userAgreementTitle: String
+    val privacyAgree: String
+    val privacyDisagree: String
+    val privacyContent: String
+    val userAgreementContent: String
+    val privacyEffectiveDate: String
+    val userAgreementEffectiveDate: String
 }
 
 /**

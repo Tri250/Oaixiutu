@@ -24,7 +24,8 @@ import java.io.File
 @Composable
 fun EffectsPanel(
     viewModel: EditorViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusMode: FocusModeState = FocusModeState()
 ) {
     val params by remember { viewModel.params }
     val context = LocalContext.current
@@ -40,20 +41,33 @@ fun EffectsPanel(
         }
     }
 
+    // 专注模式下用于切换活跃小节的小节标签
+    val focusSections = listOf(
+        "effects.grain" to stringRes { editorSectionFilmGrain },
+        "effects.halation" to stringRes { editorSectionHalation },
+        "effects.sharpen" to stringRes { editorSectionSharpen },
+        "effects.clarity" to stringRes { editorSectionClarity },
+        "effects.vignette" to stringRes { editorSectionVignette },
+        "effects.lut" to stringRes { editorSectionLut }
+    )
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        FocusSectionChips(focusMode = focusMode, sections = focusSections)
+
         // ── Film Grain ─────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { editorSectionFilmGrain },
+        if (focusMode.shouldShowSection("effects.grain")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringRes { editorSectionFilmGrain },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -82,8 +96,10 @@ fun EffectsPanel(
                 )
             }
         }
+        }
 
         // ── Halation ──────────────────────────────────────────────
+        if (focusMode.shouldShowSection("effects.halation")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -163,8 +179,10 @@ fun EffectsPanel(
                 )
             }
         }
+        }
 
         // ── Sharpen ───────────────────────────────────────────────
+        if (focusMode.shouldShowSection("effects.sharpen")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -202,8 +220,10 @@ fun EffectsPanel(
                 )
             }
         }
+        }
 
         // ── Clarity ───────────────────────────────────────────────
+        if (focusMode.shouldShowSection("effects.clarity")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -249,8 +269,10 @@ fun EffectsPanel(
                 )
             }
         }
+        }
 
         // ── Vignette ──────────────────────────────────────────────
+        if (focusMode.shouldShowSection("effects.vignette")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -290,8 +312,10 @@ fun EffectsPanel(
                 )
             }
         }
+        }
 
         // ── LUT ───────────────────────────────────────────────────
+        if (focusMode.shouldShowSection("effects.lut")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -347,6 +371,7 @@ fun EffectsPanel(
                     }
                 }
             }
+        }
         }
     }
 }

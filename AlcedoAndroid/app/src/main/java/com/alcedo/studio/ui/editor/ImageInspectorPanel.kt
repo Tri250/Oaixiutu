@@ -35,6 +35,14 @@ fun ImageInspectorPanel(
     }
 
     val exif = image.exifDisplay
+    var showExifEditor by remember { mutableStateOf(false) }
+
+    if (showExifEditor && image.imagePath.isNotEmpty()) {
+        ExifEditorDialog(
+            filePath = image.imagePath,
+            onDismiss = { showExifEditor = false }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -72,11 +80,34 @@ fun ImageInspectorPanel(
         // ── EXIF Data ─────────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    stringRes { inspectorExifData },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringRes { inspectorExifData },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (image.imagePath.isNotEmpty()) {
+                        FilledTonalButton(
+                            onClick = { showExifEditor = true },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                stringRes { exifEditTitle },
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 val entries = buildExifEntries(exif)
                 if (entries.isEmpty()) {

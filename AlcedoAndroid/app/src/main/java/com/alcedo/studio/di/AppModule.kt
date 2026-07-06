@@ -10,6 +10,7 @@ import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.service.RenderService
 import com.alcedo.studio.service.SleeveFilterService as AppSleeveFilterService
 import com.alcedo.studio.service.ExportService as AppExportService
+import kotlinx.coroutines.CoroutineScope
 // Old AiService in service package has been removed; domain.service.AiService is used everywhere
 
 object AppModule {
@@ -125,6 +126,14 @@ object AppModule {
             presetDao = pipelinePresetDao,
             pipelineService = pipelineService,
             editHistoryRepository = editHistoryRepository
+        )
+    }
+
+    val batchEditService: BatchEditService by lazy {
+        BatchEditService(
+            editHistoryRepository = editHistoryRepository,
+            pipelineService = pipelineService,
+            applicationScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
         )
     }
 

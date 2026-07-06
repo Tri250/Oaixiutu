@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.alcedo.studio.crash.CrashReportService
 import com.alcedo.studio.i18n.Language
 import com.alcedo.studio.i18n.LanguageManager
 import com.alcedo.studio.i18n.Strings
@@ -384,18 +385,6 @@ fun SettingsScreen(navController: NavController) {
                 )
                 SectionDivider()
                 SwitchRow(
-                    icon = Icons.Default.BugReport,
-                    title = stringRes { settingsCrashReport },
-                    subtitle = stringRes { settingsCrashReportDesc },
-                    checked = crashReportsConsent,
-                    onCheckedChange = {
-                        crashReportsConsent = it
-                        if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                        else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                    }
-                )
-                SectionDivider()
-                SwitchRow(
                     icon = Icons.Default.Analytics,
                     title = stringRes { settingsUsageAnalytics },
                     subtitle = stringRes { settingsUsageAnalyticsDesc },
@@ -423,7 +412,7 @@ fun SettingsScreen(navController: NavController) {
                 )
             }
 
-            // ── 关于 ─────────────────────────────────────────────────────
+            // ── 法律与关于 ───────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAbout })
             SettingsCard(
                 modifier = Modifier
@@ -431,13 +420,44 @@ fun SettingsScreen(navController: NavController) {
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 SettingsRow(
+                    icon = Icons.Default.PrivacyTip,
+                    title = stringRes { settingsPrivacyPolicy },
+                    value = stringRes { privacyPolicyTitle },
+                    onClick = { navController.navigate("privacy_policy") }
+                )
+                SectionDivider()
+                SettingsRow(
+                    icon = Icons.Default.Description,
+                    title = stringRes { settingsUserAgreement },
+                    value = stringRes { userAgreementTitle },
+                    onClick = { navController.navigate("user_agreement") }
+                )
+                SectionDivider()
+                SwitchRow(
+                    icon = Icons.Default.BugReport,
+                    title = stringRes { settingsCrashReporting },
+                    subtitle = stringRes { settingsCrashReportingDesc },
+                    checked = crashReportsConsent,
+                    onCheckedChange = {
+                        crashReportsConsent = it
+                        if (it) {
+                            PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                        } else {
+                            PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                        }
+                        // Sync the reporting service so uploads respect consent.
+                        CrashReportService.setUploadEnabled(it)
+                    }
+                )
+                SectionDivider()
+                SettingsRow(
                     icon = Icons.Default.Info,
                     title = stringRes { settingsVersionInfo },
                     value = "v$APP_VERSION"
                 )
                 SectionDivider()
                 SettingsRow(
-                    icon = Icons.Default.Description,
+                    icon = Icons.Default.Info,
                     title = stringRes { settingsAbout },
                     value = stringRes { settingsAboutDesc },
                     onClick = { navController.navigate("about") }
@@ -784,6 +804,7 @@ fun SettingsScreen(navController: NavController) {
 @Composable
 private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
     return when (variant) {
+        AlcedoThemeVariant.PRO_DARK -> stringRes { themeProDark }
         AlcedoThemeVariant.PIXCAKE -> variant.displayName
         AlcedoThemeVariant.DEEP_SPACE -> variant.displayName
         AlcedoThemeVariant.HASSELBLAD -> stringRes { themeHasselblad }
@@ -801,6 +822,7 @@ private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
  */
 private fun getThemeSwatchColor(variant: AlcedoThemeVariant): Color {
     return when (variant) {
+        AlcedoThemeVariant.PRO_DARK -> Color(0xFF0D0D0D)
         AlcedoThemeVariant.PIXCAKE -> Color(0xFFFF6B35)
         AlcedoThemeVariant.DEEP_SPACE -> Color(0xFF000000)
         AlcedoThemeVariant.HASSELBLAD -> Color(0xFFFF7A3D)

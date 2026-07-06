@@ -39,6 +39,8 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class ExportService(private val context: Context) {
 
+    private val watermarkService = WatermarkService()
+
     // ================================================================
     // Progress tracking
     // ================================================================
@@ -75,6 +77,9 @@ class ExportService(private val context: Context) {
 
     companion object {
         const val MAX_CONCURRENCY = 4
+
+        /** Maximum HDR/SDR gain ratio used when synthesizing the HDR bitmap. */
+        private const val ULTRA_HDR_MAX_RATIO = 4.0f
     }
 
     // ================================================================
@@ -108,11 +113,13 @@ class ExportService(private val context: Context) {
             val resized = applyDimensionLimit(converted, settings)
             updateItemProgress(0.3f)
 
-            // 2b. Apply Hasselblad watermark if enabled
-            val watermarked = if (settings.hassebladWatermark) {
-                applyHasselbladWatermark(resized)
-            } else {
-                resized
+            // 2b. Apply watermark: custom watermark takes precedence, else Hasselblad preset
+            val watermarked = when {
+                settings.watermarkConfig.enabled ->
+                    watermarkService.applyWatermark(resized, settings.watermarkConfig)
+                settings.hassebladWatermark ->
+                    applyHasselbladWatermark(resized)
+                else -> resized
             }
             updateItemProgress(0.35f)
 
@@ -874,80 +881,70 @@ class ExportService(private val context: Context) {
             return writeJpeg(bitmap, file, settings)
         }
 
-        try {
-            // Step 1: Write the SDR base image as high-quality JPEG
-            val sdrJpegBytes = ByteArrayOutputStream().use { bos ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, settings.quality.coerceIn(1, 100), bos)
-                bos.toByteArray()
-            }
-
-            // Step 2: Generate gain map from the bitmap
-            val gainMapJpegBytes = generateGainMap(bitmap)
-
-            // Step 3: Build the MPF container combining SDR + gain map
-            val ultraHdrData = buildUltraHdrContainer(sdrJpegBytes, gainMapJpegBytes, settings)
-
-            FileOutputStream(file).use { it.write(ultraHdrData) }
-            return true
+        // Delegate to the Kotlin UltraHdrWriter, which uses Android 14+
+        // Gainmap API on supported devices and falls back to a standard
+        // JPEG on older devices. The C++ ultra_hdr_writer.cpp stub returns
+        // false to signal that encoding is handled here.
+        var syntheticHdr: Bitmap? = null
+        return try {
+            val hdr = generateSyntheticHdr(bitmap)
+            syntheticHdr = hdr
+            val writer = UltraHdrWriter.create(context)
+            val ok = writer.writeUltraHdr(
+                sdrBitmap = bitmap,
+                hdrBitmap = hdr,
+                outputPath = file.absolutePath,
+                quality = settings.quality
+            )
+            if (ok) true else writeJpeg(bitmap, file, settings)
         } catch (e: Exception) {
-            // Fallback to standard JPEG
-            return writeJpeg(bitmap, file, settings)
+            // Fallback to standard JPEG on any unexpected failure
+            writeJpeg(bitmap, file, settings)
+        } finally {
+            syntheticHdr?.recycle()
         }
     }
 
     /**
-     * Generate a gain map: a grayscale image representing the ratio between
-     * the HDR scene luminance and the SDR rendered luminance.
-     * Since we don't have actual HDR data, we generate a luminance-based gain map
-     * that enhances highlights for HDR display.
+     * Generate a synthetic HDR bitmap from the SDR bitmap by boosting
+     * highlights based on BT.709 luminance. Real HDR source data is not
+     * available at this layer, so we synthesize an HDR representation that
+     * the [UltraHdrWriter] can diff against the SDR bitmap to produce a
+     * meaningful gain map (highlights get up to [ULTRA_HDR_MAX_RATIO] boost).
      */
-    private fun generateGainMap(bitmap: Bitmap): ByteArray {
-        val gmWidth = (bitmap.width / 4).coerceAtLeast(1)
-        val gmHeight = (bitmap.height / 4).coerceAtLeast(1)
-        val gainMapBitmap = Bitmap.createScaledBitmap(bitmap, gmWidth, gmHeight, true)
-
-        val pixels = IntArray(gmWidth * gmHeight)
-        gainMapBitmap.getPixels(pixels, 0, gmWidth, 0, 0, gmWidth, gmHeight)
-
-        // Compute luminance and create gain map values
-        // Gain map encodes log2(HDR / SDR) normalized to [0, 1]
-        // For highlight boost: high luminance -> higher gain
-        val maxHdrRatio = 4.0f // HDR is up to 4x SDR
+    private fun generateSyntheticHdr(sdrBitmap: Bitmap): Bitmap {
+        val width = sdrBitmap.width
+        val height = sdrBitmap.height
+        val pixels = IntArray(width * height)
+        sdrBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
         for (i in pixels.indices) {
             val pixel = pixels[i]
             val r = ((pixel shr 16) and 0xFF) / 255f
             val g = ((pixel shr 8) and 0xFF) / 255f
             val b = (pixel and 0xFF) / 255f
+            val alpha = pixel and 0xFF000000.toInt()
 
             // BT.709 luminance
             val luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b
 
-            // Gain = HDR/SDR ratio, larger for highlights
-            val gain = if (luminance > 0.01f) {
-                val hdrLum = luminance * (1f + (maxHdrRatio - 1f) * luminance)
-                (hdrLum / luminance).coerceIn(1f, maxHdrRatio)
+            // Boost highlights: bright pixels get a stronger HDR ratio.
+            val boost = if (luminance > 0.01f) {
+                (1f + (ULTRA_HDR_MAX_RATIO - 1f) * luminance).coerceIn(1f, ULTRA_HDR_MAX_RATIO)
             } else {
                 1f
             }
 
-            // Encode as log2 ratio, normalized to [0, 255]
-            val normalized = ((Math.log(gain.toDouble()) / Math.log(2.0)) /
-                    (Math.log(maxHdrRatio.toDouble()) / Math.log(2.0))).toFloat()
-            val gmValue = (normalized.coerceIn(0f, 1f) * 255f).toInt()
+            val hdrR = (r * boost * 255f).toInt().coerceIn(0, 255)
+            val hdrG = (g * boost * 255f).toInt().coerceIn(0, 255)
+            val hdrB = (b * boost * 255f).toInt().coerceIn(0, 255)
 
-            // Write as grayscale pixel
-            pixels[i] = (0xFF shl 24) or (gmValue shl 16) or (gmValue shl 8) or gmValue
+            pixels[i] = alpha or (hdrR shl 16) or (hdrG shl 8) or hdrB
         }
 
-        gainMapBitmap.setPixels(pixels, 0, gmWidth, 0, 0, gmWidth, gmHeight)
-
-        val gainMapJpeg = ByteArrayOutputStream().use { bos ->
-            gainMapBitmap.compress(Bitmap.CompressFormat.JPEG, 80, bos)
-            bos.toByteArray()
-        }
-        gainMapBitmap.recycle()
-        return gainMapJpeg
+        val hdrBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        hdrBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        return hdrBitmap
     }
 
     /**

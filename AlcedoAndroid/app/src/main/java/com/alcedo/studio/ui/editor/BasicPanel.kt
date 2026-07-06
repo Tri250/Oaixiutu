@@ -17,297 +17,316 @@ import com.alcedo.studio.viewmodel.EditorViewModel
 fun BasicPanel(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    focusMode: FocusModeState = FocusModeState()
 ) {
     val params by remember { viewModel.params }
+
+    // 专注模式下用于切换活跃小节的小节标签
+    val focusSections = listOf(
+        "basic.light" to stringRes { editorSectionLight },
+        "basic.wb" to stringRes { editorSectionWhiteBalance },
+        "basic.presence" to stringRes { editorPresence },
+        "basic.split_tone" to stringRes { editorSectionSplitToning }
+    )
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        FocusSectionChips(focusMode = focusMode, sections = focusSections)
+
         // ── Light ──────────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { editorSectionLight },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            viewModel.updateExposure(0f)
-                            viewModel.updateContrast(0f)
-                            viewModel.updateHighlights(0f)
-                            viewModel.updateShadows(0f)
-                            viewModel.updateMidtones(0f)
-                            viewModel.updateSigmoidShoulder(0.5f)
-                            viewModel.updateShadowBoundary(0.25f)
-                        },
-                        modifier = Modifier.size(48.dp)
+        if (focusMode.shouldShowSection("basic.light")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringRes { editorResetLight },
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            stringRes { editorSectionLight },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        IconButton(
+                            onClick = {
+                                viewModel.updateExposure(0f)
+                                viewModel.updateContrast(0f)
+                                viewModel.updateHighlights(0f)
+                                viewModel.updateShadows(0f)
+                                viewModel.updateMidtones(0f)
+                                viewModel.updateSigmoidShoulder(0.5f)
+                                viewModel.updateShadowBoundary(0.25f)
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { editorResetLight },
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorExposure },
+                        value = params.exposure,
+                        range = -5f..5f,
+                        onValueChange = { viewModel.updateExposure(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorContrast },
+                        value = params.contrast,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateContrast(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorHighlights },
+                        value = params.highlights,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateHighlights(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorShadows },
+                        value = params.shadows,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateShadows(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = "Sigmoid Shoulder",
+                        value = params.sigmoidShoulder,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.updateSigmoidShoulder(it) },
+                        defaultValue = 0.5f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorBlacks },
+                        value = params.shadowBoundary,
+                        range = 0f..0.5f,
+                        onValueChange = {
+                            viewModel.updateShadowBoundary(it)
+                        },
+                        defaultValue = 0.25f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorMidtones },
+                        value = params.midtones,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateMidtones(it) },
+                        defaultValue = 0f
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                AdjustmentSlider(
-                    label = stringRes { editorExposure },
-                    value = params.exposure,
-                    range = -5f..5f,
-                    onValueChange = { viewModel.updateExposure(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorContrast },
-                    value = params.contrast,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateContrast(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorHighlights },
-                    value = params.highlights,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateHighlights(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorShadows },
-                    value = params.shadows,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateShadows(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = "Sigmoid Shoulder",
-                    value = params.sigmoidShoulder,
-                    range = 0f..1f,
-                    onValueChange = { viewModel.updateSigmoidShoulder(it) },
-                    defaultValue = 0.5f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorBlacks },
-                    value = params.shadowBoundary,
-                    range = 0f..0.5f,
-                    onValueChange = {
-                        viewModel.updateShadowBoundary(it)
-                    },
-                    defaultValue = 0.25f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorMidtones },
-                    value = params.midtones,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateMidtones(it) },
-                    defaultValue = 0f
-                )
             }
         }
 
         // ── White Balance ──────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { editorSectionWhiteBalance },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            viewModel.updateWhiteBalance(6500f, 0f)
-                        },
-                        modifier = Modifier.size(48.dp)
+        if (focusMode.shouldShowSection("basic.wb")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringRes { editorResetWb },
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            stringRes { editorSectionWhiteBalance },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        IconButton(
+                            onClick = {
+                                viewModel.updateWhiteBalance(6500f, 0f)
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { editorResetWb },
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorTemperature },
+                        value = params.whiteBalanceTemp,
+                        range = 2000f..15000f,
+                        onValueChange = { viewModel.updateWhiteBalance(it, params.whiteBalanceTint) },
+                        defaultValue = 6500f,
+                        valueDisplayTransform = { "%.0fK".format(it) }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorTint },
+                        value = params.whiteBalanceTint,
+                        range = -100f..100f,
+                        onValueChange = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, it) },
+                        defaultValue = 0f
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                AdjustmentSlider(
-                    label = stringRes { editorTemperature },
-                    value = params.whiteBalanceTemp,
-                    range = 2000f..15000f,
-                    onValueChange = { viewModel.updateWhiteBalance(it, params.whiteBalanceTint) },
-                    defaultValue = 6500f,
-                    valueDisplayTransform = { "%.0fK".format(it) }
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorTint },
-                    value = params.whiteBalanceTint,
-                    range = -100f..100f,
-                    onValueChange = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, it) },
-                    defaultValue = 0f
-                )
             }
         }
 
         // ── Presence ───────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { editorPresence },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            viewModel.updateClarity(0f)
-                            viewModel.updateVibrance(0f)
-                            viewModel.updateSaturation(0f)
-                        },
-                        modifier = Modifier.size(48.dp)
+        if (focusMode.shouldShowSection("basic.presence")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringRes { editorResetPresence },
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            stringRes { editorPresence },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        IconButton(
+                            onClick = {
+                                viewModel.updateClarity(0f)
+                                viewModel.updateVibrance(0f)
+                                viewModel.updateSaturation(0f)
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { editorResetPresence },
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorSectionClarity },
+                        value = params.clarityAmount,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateClarity(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorVibrance },
+                        value = params.vibrance,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateVibrance(it) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorSaturation },
+                        value = params.saturation,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateSaturation(it) },
+                        defaultValue = 0f
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                AdjustmentSlider(
-                    label = stringRes { editorSectionClarity },
-                    value = params.clarityAmount,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateClarity(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorVibrance },
-                    value = params.vibrance,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateVibrance(it) },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorSaturation },
-                    value = params.saturation,
-                    range = -1f..1f,
-                    onValueChange = { viewModel.updateSaturation(it) },
-                    defaultValue = 0f
-                )
             }
         }
 
         // ── Split Toning ──────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { editorSectionSplitToning },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            viewModel.updateTint(0f, 0f, 0f, 0f, 0f)
-                        },
-                        modifier = Modifier.size(48.dp)
+        if (focusMode.shouldShowSection("basic.split_tone")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringRes { editorResetSplitTone },
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            stringRes { editorSectionSplitToning },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        IconButton(
+                            onClick = {
+                                viewModel.updateTint(0f, 0f, 0f, 0f, 0f)
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { editorResetSplitTone },
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorHighlightHue },
+                        value = params.tintHighlightHue,
+                        range = 0f..360f,
+                        onValueChange = {
+                            viewModel.updateTint(
+                                it, params.tintHighlightStrength,
+                                params.tintShadowHue, params.tintShadowStrength,
+                                params.tintBalance
+                            )
+                        },
+                        defaultValue = 0f,
+                        valueDisplayTransform = { "%.0f°".format(it) }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorHighlightStrength },
+                        value = params.tintHighlightStrength,
+                        range = 0f..1f,
+                        onValueChange = {
+                            viewModel.updateTint(
+                                params.tintHighlightHue, it,
+                                params.tintShadowHue, params.tintShadowStrength,
+                                params.tintBalance
+                            )
+                        },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorShadowHue },
+                        value = params.tintShadowHue,
+                        range = 0f..360f,
+                        onValueChange = {
+                            viewModel.updateTint(
+                                params.tintHighlightHue, params.tintHighlightStrength,
+                                it, params.tintShadowStrength,
+                                params.tintBalance
+                            )
+                        },
+                        defaultValue = 0f,
+                        valueDisplayTransform = { "%.0f°".format(it) }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorShadowStrength },
+                        value = params.tintShadowStrength,
+                        range = 0f..1f,
+                        onValueChange = {
+                            viewModel.updateTint(
+                                params.tintHighlightHue, params.tintHighlightStrength,
+                                params.tintShadowHue, it,
+                                params.tintBalance
+                            )
+                        },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorBalance },
+                        value = params.tintBalance,
+                        range = -1f..1f,
+                        onValueChange = {
+                            viewModel.updateTint(
+                                params.tintHighlightHue, params.tintHighlightStrength,
+                                params.tintShadowHue, params.tintShadowStrength,
+                                it
+                            )
+                        },
+                        defaultValue = 0f
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                AdjustmentSlider(
-                    label = stringRes { editorHighlightHue },
-                    value = params.tintHighlightHue,
-                    range = 0f..360f,
-                    onValueChange = {
-                        viewModel.updateTint(
-                            it, params.tintHighlightStrength,
-                            params.tintShadowHue, params.tintShadowStrength,
-                            params.tintBalance
-                        )
-                    },
-                    defaultValue = 0f,
-                    valueDisplayTransform = { "%.0f°".format(it) }
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorHighlightStrength },
-                    value = params.tintHighlightStrength,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateTint(
-                            params.tintHighlightHue, it,
-                            params.tintShadowHue, params.tintShadowStrength,
-                            params.tintBalance
-                        )
-                    },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorShadowHue },
-                    value = params.tintShadowHue,
-                    range = 0f..360f,
-                    onValueChange = {
-                        viewModel.updateTint(
-                            params.tintHighlightHue, params.tintHighlightStrength,
-                            it, params.tintShadowStrength,
-                            params.tintBalance
-                        )
-                    },
-                    defaultValue = 0f,
-                    valueDisplayTransform = { "%.0f°".format(it) }
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorShadowStrength },
-                    value = params.tintShadowStrength,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateTint(
-                            params.tintHighlightHue, params.tintHighlightStrength,
-                            params.tintShadowHue, it,
-                            params.tintBalance
-                        )
-                    },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorBalance },
-                    value = params.tintBalance,
-                    range = -1f..1f,
-                    onValueChange = {
-                        viewModel.updateTint(
-                            params.tintHighlightHue, params.tintHighlightStrength,
-                            params.tintShadowHue, params.tintShadowStrength,
-                            it
-                        )
-                    },
-                    defaultValue = 0f
-                )
             }
         }
     }

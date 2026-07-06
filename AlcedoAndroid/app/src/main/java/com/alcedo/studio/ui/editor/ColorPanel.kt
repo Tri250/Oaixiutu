@@ -22,27 +22,43 @@ import com.alcedo.studio.viewmodel.EditorViewModel
 @Composable
 fun ColorPanel(
     viewModel: EditorViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusMode: FocusModeState = FocusModeState()
 ) {
     val params by remember { viewModel.params }
+
+    // 专注模式下用于切换活跃小节的小节标签
+    val focusSections = listOf(
+        "color.wheels" to stringRes { editorColorWheels },
+        "color.hsl" to stringRes { editorHsl },
+        "color.mixer" to stringRes { editorChannelMixer }
+    )
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        FocusSectionChips(focusMode = focusMode, sections = focusSections)
+
         // ── Color Wheels (CDL) ─────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            ColorWheelsSection(viewModel = viewModel, params = params)
+        if (focusMode.shouldShowSection("color.wheels")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                ColorWheelsSection(viewModel = viewModel, params = params)
+            }
         }
 
         // ── HSL ────────────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            HslSection(viewModel = viewModel, params = params)
+        if (focusMode.shouldShowSection("color.hsl")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                HslSection(viewModel = viewModel, params = params)
+            }
         }
 
         // ── Channel Mixer ──────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            ChannelMixerSection(viewModel = viewModel, params = params)
+        if (focusMode.shouldShowSection("color.mixer")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                ChannelMixerSection(viewModel = viewModel, params = params)
+            }
         }
     }
 }

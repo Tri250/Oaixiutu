@@ -87,7 +87,9 @@ import com.alcedo.studio.ui.common.NavTransitions
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
 import com.alcedo.studio.ui.settings.AboutPage
+import com.alcedo.studio.ui.settings.PrivacyPolicyScreen
 import com.alcedo.studio.ui.settings.SettingsScreen
+import com.alcedo.studio.ui.settings.UserAgreementScreen
 
 enum class NavigationType {
     BOTTOM_NAVIGATION, NAVIGATION_RAIL, PERMANENT_NAVIGATION_DRAWER
@@ -539,6 +541,12 @@ private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
     }
     composable("about") {
         AboutPage(navController = navController)
+    }
+    composable("privacy_policy") {
+        PrivacyPolicyScreen(navController = navController)
+    }
+    composable("user_agreement") {
+        UserAgreementScreen(navController = navController)
     }
     composable("stats") {
         StatsView(navController = navController)

@@ -126,76 +126,25 @@ bool UltraHdrWriter::WriteUltraHdr(const ImageBuffer& hdr_buffer,
         return false;
     }
 
-#if defined(ALCEDO_HAS_ULTRAHDR)
-    // ── Step 5: Encode with libultrahdr ──
-    // Build a minimal JPEG from the SDR base for libultrahdr input.
-    // In practice, the SDR JPEG encoding is done by the Kotlin side
-    // using Android's Bitmap.compress(), but for the libultrahdr path
-    // we need raw JPEG bytes.
-    //
-    // Here we prepare the data structures and call libultrahdr.
-    // The SDR JPEG is expected to be provided by the Kotlin bridge.
+    // ── Step 5: Encode ──
+    // Ultra HDR encoding is delegated to the Kotlin bridge
+    // (com.alcedo.studio.domain.service.UltraHdrWriter), which uses the
+    // Android 14+ (API 34+) android.graphics.Gainmap API to attach a gain
+    // map to the SDR bitmap and emit a standard Ultra HDR JPEG via
+    // Bitmap.compress(). The C++ side is a clean fallback: returning false
+    // signals "use the Kotlin path". The SDR base / gain map computed above
+    // are kept available for a future native encoder but are unused on this
+    // path, so suppress unused-variable warnings for the export options.
+    (void)options;
+    (void)sdr_rgb;
+    (void)gain_map;
     __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "WriteUltraHdr: using libultrahdr encoding "
-                        "(%dx%d, quality=%d, headroom=%.1f)",
-                        width, height, options.ultra_hdr_quality_, hdr_headroom);
-
-    // Placeholder: the actual JPEG encoding + libultrahdr call requires
-    // the Kotlin side to provide the SDR JPEG bytes. In a full integration,
-    // this would:
-    // 1. Call EncodeWithLibUltraHdr() with the SDR JPEG and gain map
-    // 2. Write the resulting Ultra HDR JPEG to options.export_path_
-    // For now, we write the prepared data as a raw blob for the Kotlin bridge.
-    std::ofstream ofs(options.export_path_, std::ios::binary);
-    if (!ofs.is_open()) {
-        __android_log_print(ANDROID_LOG_ERROR, kTag,
-                            "WriteUltraHdr: cannot open output %s",
-                            options.export_path_.c_str());
-        return false;
-    }
-    // Header
-    uint32_t w = static_cast<uint32_t>(width);
-    uint32_t h = static_cast<uint32_t>(height);
-    ofs.write("UHDR", 4);
-    ofs.write(reinterpret_cast<const char*>(&w), 4);
-    ofs.write(reinterpret_cast<const char*>(&h), 4);
-    float headroom_f = hdr_headroom;
-    ofs.write(reinterpret_cast<const char*>(&headroom_f), sizeof(float));
-    // SDR RGB data
-    ofs.write(reinterpret_cast<const char*>(sdr_rgb.data()),
-              static_cast<std::streamsize>(sdr_rgb.size()));
-    // Gain map data
-    ofs.write(reinterpret_cast<const char*>(gain_map.data()),
-              static_cast<std::streamsize>(gain_map.size() * sizeof(float)));
-    return ofs.good();
-#else
-    // Without libultrahdr, write a raw pixel blob for the Kotlin bridge
-    // to process using Android's UltraHDR API.
-    __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "WriteUltraHdr: libultrahdr not available, "
-                        "writing raw data for Kotlin bridge (%dx%d)",
-                        width, height);
-
-    std::ofstream ofs(options.export_path_, std::ios::binary);
-    if (!ofs.is_open()) {
-        __android_log_print(ANDROID_LOG_ERROR, kTag,
-                            "WriteUltraHdr: cannot open output %s",
-                            options.export_path_.c_str());
-        return false;
-    }
-    uint32_t w = static_cast<uint32_t>(width);
-    uint32_t h = static_cast<uint32_t>(height);
-    ofs.write("UHDR", 4);
-    ofs.write(reinterpret_cast<const char*>(&w), 4);
-    ofs.write(reinterpret_cast<const char*>(&h), 4);
-    float headroom_f = hdr_headroom;
-    ofs.write(reinterpret_cast<const char*>(&headroom_f), sizeof(float));
-    ofs.write(reinterpret_cast<const char*>(sdr_rgb.data()),
-              static_cast<std::streamsize>(sdr_rgb.size()));
-    ofs.write(reinterpret_cast<const char*>(gain_map.data()),
-              static_cast<std::streamsize>(gain_map.size() * sizeof(float)));
-    return ofs.good();
-#endif
+                        "WriteUltraHdr: encoding delegated to Kotlin bridge "
+                        "(Android 14+ Gainmap API), %dx%d, headroom=%.1f — "
+                        "returning false so caller routes through "
+                        "com.alcedo.studio.domain.service.UltraHdrWriter",
+                        width, height, hdr_headroom);
+    return false;
 }
 
 bool UltraHdrWriter::IsUltraHdrAvailable() {
@@ -398,54 +347,26 @@ bool UltraHdrWriter::EncodeWithLibUltraHdr(const uint8_t* sdr_jpeg_data,
                                              float hdr_headroom,
                                              int quality,
                                              std::vector<uint8_t>& output_jpeg) {
-#if defined(ALCEDO_HAS_ULTRAHDR)
-    // Use libultrahdr to encode the gain map into an Ultra HDR JPEG.
-    // The exact API depends on the libultrahdr version available in AOSP.
-    //
-    // Typical flow:
-    // 1. Create ultrahdr_encoder_ptr
-    // 2. Set SDR JPEG, gain map data, metadata (hdr_headroom, etc.)
-    // 3. Encode to get the output Ultra HDR JPEG
-    //
-    // Example (API may vary):
-    //   ultrahdr::uhdr_codec_private_t* enc = uhdr_create_encoder();
-    //   uhdr_enc_set_sdr_image(enc, sdr_jpeg_data, sdr_jpeg_size);
-    //   uhdr_enc_set_gainmap(enc, gain_map, gain_map_width, gain_map_height, ...);
-    //   uhdr_enc_set_quality(enc, quality);
-    //   uhdr_encode_result_t result = uhdr_encode(enc);
-    //   if (result.error_code == UHDR_CODEC_OK) {
-    //       output_jpeg.assign(result.data, result.data + result.size);
-    //   }
-    //   uhdr_release_encoder(enc);
-
+    // libultrahdr encoding is intentionally not invoked from C++. The Kotlin
+    // bridge (com.alcedo.studio.domain.service.UltraHdrWriter) handles Ultra
+    // HDR encoding on Android 14+ using the android.graphics.Gainmap API:
+    // it attaches a gain map to the SDR bitmap and calls Bitmap.compress(JPEG)
+    // to emit a standard Ultra HDR JPEG. This C++ entry point remains as a
+    // clean fallback that signals "use the Kotlin path" by returning false.
+    (void)sdr_jpeg_data;
+    (void)sdr_jpeg_size;
+    (void)gain_map;
+    (void)gain_map_width;
+    (void)gain_map_height;
+    (void)hdr_headroom;
+    (void)quality;
+    (void)output_jpeg;
     __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "EncodeWithLibUltraHdr: encoding %dx%d gain map, "
-                        "quality=%d, headroom=%.1f",
-                        gain_map_width, gain_map_height, quality, hdr_headroom);
-
-    // Placeholder — the actual libultrahdr integration requires
-    // the specific AOSP version's API. For now, return false
-    // to indicate the Kotlin bridge should handle encoding.
-    (void)sdr_jpeg_data;
-    (void)sdr_jpeg_size;
-    (void)gain_map;
-    (void)gain_map_width;
-    (void)gain_map_height;
-    (void)hdr_headroom;
-    (void)quality;
-    (void)output_jpeg;
+                        "EncodeWithLibUltraHdr: Kotlin bridge handles Ultra HDR "
+                        "encoding on Android 14+ using Gainmap API — returning "
+                        "false so caller routes through "
+                        "com.alcedo.studio.domain.service.UltraHdrWriter");
     return false;
-#else
-    (void)sdr_jpeg_data;
-    (void)sdr_jpeg_size;
-    (void)gain_map;
-    (void)gain_map_width;
-    (void)gain_map_height;
-    (void)hdr_headroom;
-    (void)quality;
-    (void)output_jpeg;
-    return false;
-#endif
 }
 
 } // namespace alcedo

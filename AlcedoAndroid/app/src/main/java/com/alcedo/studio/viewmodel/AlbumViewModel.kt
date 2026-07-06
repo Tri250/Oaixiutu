@@ -42,6 +42,8 @@ class AlbumViewModel : ViewModel() {
     private val searchService by lazy { AppModule.searchService }
     private val aiService by lazy { AppModule.aiService }
     private val exportService by lazy { AppModule.exportService }
+    private val batchEditService by lazy { AppModule.batchEditService }
+    private val presetService by lazy { AppModule.presetService }
 
     // ── Image list state ──
 
@@ -1053,6 +1055,162 @@ class AlbumViewModel : ViewModel() {
                 Log.e("AlbumVM", "Batch export failed", e)
             }
         }
+    }
+
+    // ================================================================
+    // Batch Edit (RapidRAW-inspired copy / paste adjustments)
+    // ================================================================
+
+    /** Holds the adjustments copied from the source image (clipboard). */
+    private val _clipboardParams = MutableStateFlow<PipelineParams?>(null)
+    val clipboardParams: StateFlow<PipelineParams?> = _clipboardParams.asStateFlow()
+
+    /** Image id of the most recently copied source, for UI hints ("Copied from X"). */
+    private val _clipboardSourceId = MutableStateFlow<Long?>(null)
+    val clipboardSourceId: StateFlow<Long?> = _clipboardSourceId.asStateFlow()
+
+    /** Live progress of any ongoing batch edit operation. */
+    private val _batchEditProgress = MutableStateFlow<BatchEditProgress>(BatchEditProgress())
+    val batchEditProgress: StateFlow<BatchEditProgress> = _batchEditProgress.asStateFlow()
+
+    /** Snackbar feedback for the batch edit panel. */
+    private val _batchEditMessage = MutableStateFlow<String?>(null)
+    val batchEditMessage: StateFlow<String?> = _batchEditMessage.asStateFlow()
+
+    /** Available presets for the batch preset picker. */
+    private val _batchPresets = MutableStateFlow<List<PresetWithThumbnail>>(emptyList())
+    val batchPresets: StateFlow<List<PresetWithThumbnail>> = _batchPresets.asStateFlow()
+
+    init {
+        // Mirror BatchEditService progress into the ViewModel-exposed flow so
+        // the UI can observe a single source of truth.
+        viewModelScope.launch {
+            batchEditService.progress.collect { p ->
+                _batchEditProgress.value = p
+            }
+        }
+    }
+
+    fun clearBatchEditMessage() {
+        _batchEditMessage.value = null
+    }
+
+    /**
+     * Copy adjustments from the first selected image into the in-memory
+     * clipboard. The caller (UI) decides which image is the "first" by
+     * passing its id; typically the lowest id in the selection set.
+     */
+    fun copyAdjustments() {
+        val sourceId = _selectedImages.value.firstOrNull() ?: run {
+            _batchEditMessage.value = "No source image selected"
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val params = batchEditService.copyAdjustments(sourceId.toString())
+                _clipboardParams.value = params
+                _clipboardSourceId.value = sourceId
+                _batchEditMessage.value = "Adjustments copied from image $sourceId"
+            } catch (e: Throwable) {
+                Log.e("AlbumVM", "copyAdjustments failed", e)
+                _batchEditMessage.value = "Copy failed: ${e.message ?: "unknown error"}"
+            }
+        }
+    }
+
+    /** Paste the clipboard adjustments to every currently-selected image. */
+    fun pasteAdjustments() {
+        val targets = _selectedImages.value.map { it.toString() }
+        if (targets.isEmpty()) {
+            _batchEditMessage.value = "Select images to paste onto first"
+            return
+        }
+        val params = _clipboardParams.value ?: run {
+            _batchEditMessage.value = "No adjustments copied yet"
+            return
+        }
+        viewModelScope.launch {
+            val outcome = batchEditService.pasteAdjustments(targets, params)
+            _batchEditMessage.value = messageForOutcome(outcome, "Paste")
+        }
+    }
+
+    /** Selective paste — only the categories enabled in [filter] are applied. */
+    fun pastePartialAdjustments(filter: AdjustmentFilter) {
+        val targets = _selectedImages.value.map { it.toString() }
+        if (targets.isEmpty()) {
+            _batchEditMessage.value = "Select images to paste onto first"
+            return
+        }
+        val params = _clipboardParams.value ?: run {
+            _batchEditMessage.value = "No adjustments copied yet"
+            return
+        }
+        viewModelScope.launch {
+            val outcome = batchEditService.pastePartialAdjustments(targets, params, filter)
+            _batchEditMessage.value = messageForOutcome(outcome, "Selective paste")
+        }
+    }
+
+    /** Reset adjustments for every currently-selected image. */
+    fun resetBatchAdjustments() {
+        val targets = _selectedImages.value.map { it.toString() }
+        if (targets.isEmpty()) {
+            _batchEditMessage.value = "Select images to reset first"
+            return
+        }
+        viewModelScope.launch {
+            val outcome = batchEditService.resetAdjustments(targets)
+            _batchEditMessage.value = messageForOutcome(outcome, "Reset")
+        }
+    }
+
+    /** Apply a preset to every currently-selected image. */
+    fun applyPresetBatch(presetId: Long) {
+        val targets = _selectedImages.value.map { it.toString() }
+        if (targets.isEmpty()) {
+            _batchEditMessage.value = "Select images first"
+            return
+        }
+        viewModelScope.launch {
+            val outcome = batchEditService.applyPresetBatch(presetService, presetId, targets)
+            _batchEditMessage.value = messageForOutcome(outcome, "Apply preset")
+        }
+    }
+
+    /** Sync adjustments from [sourceImageId] to all other selected images. */
+    fun syncAdjustments(sourceImageId: Long) {
+        val targets = _selectedImages.value
+            .filter { it != sourceImageId }
+            .map { it.toString() }
+        if (targets.isEmpty()) {
+            _batchEditMessage.value = "Select more than one image to sync"
+            return
+        }
+        viewModelScope.launch {
+            val outcome = batchEditService.syncAdjustments(sourceImageId.toString(), targets)
+            _batchEditMessage.value = messageForOutcome(outcome, "Sync")
+        }
+    }
+
+    /** Load available presets for the batch preset picker. */
+    fun loadBatchPresets() {
+        viewModelScope.launch {
+            try {
+                presetService.ensureBuiltInPresetsInitialized()
+                presetService.getAllPresets().collect { presets ->
+                    _batchPresets.value = presets
+                }
+            } catch (e: Throwable) {
+                Log.e("AlbumVM", "loadBatchPresets failed", e)
+            }
+        }
+    }
+
+    private fun messageForOutcome(outcome: BatchEditOutcome, op: String): String = when (outcome) {
+        is BatchEditOutcome.Success -> "$op succeeded (${outcome.affected} images)"
+        is BatchEditOutcome.Partial -> "$op partial: ${outcome.message}"
+        is BatchEditOutcome.Failure -> "$op failed: ${outcome.message}"
     }
 
     // ================================================================

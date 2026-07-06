@@ -289,3 +289,36 @@ val DeepSpaceLightColors = AlcedoColorScheme(
     scrim = Color(0xFF000000), accent = Color(0xFF4A6FA5), onAccent = Color(0xFFFFFFFF),
     glassTint = Color(0x28FFFFFF), glassBorder = Color(0x1A000000), glassHighlight = Color(0x33FFFFFF)
 )
+
+// ═══════════════════════════════════════════════════════════════════
+// ProDark – RapidRAW-inspired clean, distraction-free dark theme
+// Near-black canvas (#0D0D0D), layered panel surfaces (#161616–#2C2C2C),
+// off-white text and a single steel-blue accent. Professional & minimal.
+// ═══════════════════════════════════════════════════════════════════
+val ProDarkDarkColors = AlcedoColorScheme(
+    bgDeep = Color(0xFF050505), bgBase = Color(0xFF0D0D0D), bgPanel = Color(0xFF161616), bgCanvas = Color(0xFF0D0D0D),
+    primary = Color(0xFF4FC3F7), onPrimary = Color(0xFF002838), primaryContainer = Color(0xFF1E3A47), onPrimaryContainer = Color(0xFFBEEAFF),
+    secondary = Color(0xFF9E9E9E), onSecondary = Color(0xFF1A1A1A), secondaryContainer = Color(0xFF2C2C2C), onSecondaryContainer = Color(0xFFE0E0E0),
+    tertiary = Color(0xFF80CBC4), onTertiary = Color(0xFF003733), tertiaryContainer = Color(0xFF1F3A36), onTertiaryContainer = Color(0xFFB2DFDB),
+    surface = Color(0xFF161616), onSurface = Color(0xFFF5F5F5), surfaceVariant = Color(0xFF1E1E1E), onSurfaceVariant = Color(0xFF9E9E9E),
+    surfaceContainerLowest = Color(0xFF0A0A0A), surfaceContainerLow = Color(0xFF121212), surfaceContainer = Color(0xFF1A1A1A), surfaceContainerHigh = Color(0xFF222222), surfaceContainerHighest = Color(0xFF2C2C2C),
+    error = Color(0xFFFFB4AB), onError = Color(0xFF690005), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
+    outline = Color(0xFF333333), outlineVariant = Color(0xFF252525),
+    inverseSurface = Color(0xFFF5F5F5), inverseOnSurface = Color(0xFF222222), inversePrimary = Color(0xFF0288D1),
+    scrim = Color(0xFF000000), accent = Color(0xFF4FC3F7), onAccent = Color(0xFF002838),
+    glassTint = Color(0x334FC3F7), glassBorder = Color(0x26BEEAFF), glassHighlight = Color(0x1AFFFFFF)
+)
+
+val ProDarkLightColors = AlcedoColorScheme(
+    bgDeep = Color(0xFFE8E8E8), bgBase = Color(0xFFF2F2F2), bgPanel = Color(0xFFE4E4E4), bgCanvas = Color(0xFFF6F6F6),
+    primary = Color(0xFF0288D1), onPrimary = Color(0xFFFFFFFF), primaryContainer = Color(0xFFBEEAFF), onPrimaryContainer = Color(0xFF001924),
+    secondary = Color(0xFF555555), onSecondary = Color(0xFFFFFFFF), secondaryContainer = Color(0xFFE0E0E0), onSecondaryContainer = Color(0xFF1A1A1A),
+    tertiary = Color(0xFF00695C), onTertiary = Color(0xFFFFFFFF), tertiaryContainer = Color(0xFFB2DFDB), onTertiaryContainer = Color(0xFF00201C),
+    surface = Color(0xFFF2F2F2), onSurface = Color(0xFF1A1A1A), surfaceVariant = Color(0xFFDEDEDE), onSurfaceVariant = Color(0xFF4A4A4A),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF8F8F8), surfaceContainer = Color(0xFFF2F2F2), surfaceContainerHigh = Color(0xFFECECEC), surfaceContainerHighest = Color(0xFFE6E6E6),
+    error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
+    outline = Color(0xFF7A7A7A), outlineVariant = Color(0xFFC8C8C8),
+    inverseSurface = Color(0xFF2C2C2C), inverseOnSurface = Color(0xFFF5F5F5), inversePrimary = Color(0xFF4FC3F7),
+    scrim = Color(0xFF000000), accent = Color(0xFF0288D1), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x280288D1), glassBorder = Color(0x1A4FC3F7), glassHighlight = Color(0x33FFFFFF)
+)
