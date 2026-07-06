@@ -147,16 +147,68 @@ fun EditorScreen(
                     Text(
                         image?.imageName ?: stringRes { editorTitle },
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = stringRes { back },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.undo() }, enabled = canUndo) {
+                        Icon(
+                            Icons.Default.Undo,
+                            contentDescription = stringRes { editorUndo },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (canUndo) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                    IconButton(onClick = { viewModel.redo() }, enabled = canRedo) {
+                        Icon(
+                            Icons.Default.Redo,
+                            contentDescription = stringRes { editorRedo },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (canRedo) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                    IconButton(onClick = { viewModel.toggleCompareMode() }) {
+                        Icon(
+                            Icons.Default.Compare,
+                            contentDescription = stringRes { editorCompare },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (isCompareMode) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    IconButton(onClick = { viewModel.saveVersion() }) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = stringRes { editorSave },
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    IconButton(onClick = { viewModel.toggleShowExport() }) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = stringRes { editorExport },
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
@@ -243,14 +295,39 @@ fun EditorScreen(
                     ScrollableTabRow(
                         selectedTabIndex = pagerState.currentPage,
                         modifier = Modifier.fillMaxWidth(),
-                        edgePadding = 0.dp,
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        edgePadding = 12.dp,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        divider = {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                thickness = 0.5.dp
+                            )
+                        }
                     ) {
                         EditorPanel.entries.forEach { panel ->
+                            val selected = pagerState.currentPage == panel.ordinal
                             Tab(
-                                selected = pagerState.currentPage == panel.ordinal,
+                                selected = selected,
                                 onClick = { viewModel.updateSelectedPanel(panel) },
-                                text = { Text(stringRes(panel.labelKey), style = MaterialTheme.typography.labelSmall) },
+                                icon = {
+                                    Icon(
+                                        imageVector = panelIcon(panel),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        stringRes(panel.labelKey),
+                                        style = if (selected) MaterialTheme.typography.labelMedium
+                                        else MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                                        else androidx.compose.ui.text.font.FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
                                 selectedContentColor = MaterialTheme.colorScheme.primary,
                                 unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -682,13 +759,32 @@ private fun EditorPanelColumn(
         ScrollableTabRow(
             selectedTabIndex = selectedPanel.ordinal,
             modifier = Modifier.fillMaxWidth(),
-            edgePadding = 0.dp
+            edgePadding = 12.dp,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.primary,
+            divider = {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    thickness = 0.5.dp
+                )
+            }
         ) {
             EditorPanel.entries.forEach { panel ->
+                val selected = selectedPanel == panel
                 Tab(
-                    selected = selectedPanel == panel,
+                    selected = selected,
                     onClick = { onPanelSelected(panel) },
-                    text = { Text(stringRes(panel.labelKey), style = MaterialTheme.typography.labelSmall) }
+                    text = {
+                        Text(
+                            stringRes(panel.labelKey),
+                            style = if (selected) MaterialTheme.typography.labelMedium
+                            else MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                            else androidx.compose.ui.text.font.FontWeight.Medium
+                        )
+                    },
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -920,6 +1016,23 @@ private fun ExportDialog(
     )
 }
 
+/**
+ * Maps each editor panel to a representative leading icon for the bottom tabs.
+ */
+private fun panelIcon(panel: EditorPanel): ImageVector = when (panel) {
+    EditorPanel.BASIC -> Icons.Default.Tune
+    EditorPanel.TONE_CURVE -> Icons.Default.ShowChart
+    EditorPanel.COLOR -> Icons.Default.Palette
+    EditorPanel.HSL -> Icons.Default.InvertColors
+    EditorPanel.GEOMETRY -> Icons.Default.Crop
+    EditorPanel.EFFECTS -> Icons.Default.AutoFixHigh
+    EditorPanel.RAW -> Icons.Default.Image
+    EditorPanel.HISTORY -> Icons.Default.History
+    EditorPanel.DISPLAY_TRANSFORM -> Icons.Default.Layers
+    EditorPanel.LMT -> Icons.Default.FilterVintage
+    EditorPanel.INSPECTOR -> Icons.Default.Info
+}
+
 @Composable
 private fun EditorBottomToolbar(
     isCompareMode: Boolean,
@@ -937,13 +1050,14 @@ private fun EditorBottomToolbar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-        tonalElevation = 3.dp
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1001,27 +1115,40 @@ private fun EditorToolbarButton(
     tint: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit
 ) {
+    val iconColor = when {
+        !enabled -> tint.copy(alpha = 0.38f)
+        selected -> MaterialTheme.colorScheme.primary
+        else -> tint
+    }
+    val labelColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    // 选中时显示暖色背景,加强可读性
+    val backgroundColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    else Color.Transparent
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundColor)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Icon(
             icon,
             contentDescription = label,
-            modifier = Modifier.size(22.dp),
-            tint = if (!enabled) tint.copy(alpha = 0.38f)
-                else if (selected) MaterialTheme.colorScheme.primary
-                else tint
+            modifier = Modifier.size(24.dp),
+            tint = iconColor
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (!enabled) tint.copy(alpha = 0.38f)
-                else if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+            color = labelColor,
+            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+            else androidx.compose.ui.text.font.FontWeight.Medium
         )
     }
 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
@@ -470,42 +471,89 @@ private fun AlbumContent(
                                     onValueChange = onSearchQueryChange,
                                     placeholder = { Text(stringRes { albumSearchHint }) },
                                     singleLine = true,
+                                    shape = RoundedCornerShape(28.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        focusedLeadingIconColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     modifier = Modifier.fillMaxWidth(),
                                     leadingIcon = {
-                                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 )
                             } else {
-                                Text("Alcedo Studio")
+                                Text(
+                                    "Alcedo Studio",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                )
                             }
                         },
                         actions = {
                             IconButton(onClick = onToggleSearch) {
                                 Icon(
                                     if (showSearch) Icons.Default.Close else Icons.Default.Search,
-                                    contentDescription = stringRes { search }
+                                    contentDescription = stringRes { search },
+                                    tint = if (showSearch) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             if (showSearch) {
                                 FilterChip(
                                     selected = semanticEnabled,
                                     onClick = onToggleSemantic,
-                                    label = { Text("AI", style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                    label = {
+                                        Text(
+                                            "AI",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (semanticEnabled)
+                                                androidx.compose.ui.text.font.FontWeight.SemiBold
+                                            else androidx.compose.ui.text.font.FontWeight.Medium
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(50),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ),
+                                    modifier = Modifier.padding(end = 4.dp)
                                 )
                             }
                             IconButton(onClick = onOpenFilter) {
-                                Icon(Icons.Default.FilterList, contentDescription = stringRes { filter })
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = stringRes { filter },
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                             IconButton(onClick = onOpenFolderSidebar) {
-                                Icon(Icons.Default.Folder, contentDescription = stringRes { folders })
+                                Icon(
+                                    Icons.Default.Folder,
+                                    contentDescription = stringRes { folders },
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                             IconButton(onClick = onSettings) {
-                                Icon(Icons.Default.Settings, contentDescription = stringRes { settings })
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = stringRes { settings },
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
                             }
                         },
                         scrollBehavior = scrollBehavior
@@ -561,8 +609,13 @@ private fun AlbumContent(
             ) {
                 FloatingActionButton(
                     onClick = onImport,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 6.dp,
+                        pressedElevation = 10.dp
+                    )
                 ) {
                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringRes { importText })
                 }
@@ -581,7 +634,7 @@ private fun AlbumContent(
                     SkeletonAlbumGrid(
                         columns = columns,
                         itemCount = 12,
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
                 images.isEmpty() -> {
@@ -591,11 +644,18 @@ private fun AlbumContent(
                             title = stringRes { albumNoImages },
                             message = stringRes { albumNoImagesDesc },
                             action = {
-                                Button(onClick = onImport) {
+                                Button(
+                                    onClick = onImport,
+                                    shape = RoundedCornerShape(28.dp),
+                                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                                ) {
                                     Icon(Icons.Default.AddPhotoAlternate, contentDescription = null,
-                                        modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(stringRes { albumImportPhotos })
+                                        modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        stringRes { albumImportPhotos },
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
                                 }
                             }
                         )
@@ -624,16 +684,16 @@ private fun AlbumContent(
                             if (shouldLoadMore) onLoadMore()
                         }
 
-                        // 缩略图网格
+                        // 缩略图网格 – 加大间距贴合 Pixel Cake 旗舰观感
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Fixed(columns),
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
-                                start = 8.dp, end = 8.dp, top = 4.dp, bottom = 88.dp
+                                start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp
                             ),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(images, key = { it.imageId }) { image ->
                                 ThumbnailCard(
@@ -686,29 +746,49 @@ private fun SortFilterBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             stringRes { albumImagesCount }.format(imageCount),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
         )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             SortMode.entries.forEach { mode ->
-                AssistChip(
+                val selected = sortMode == mode
+                FilterChip(
+                    selected = selected,
                     onClick = { onSortModeChange(mode) },
-                    label = { Text(stringRes(mode.labelKey), style = MaterialTheme.typography.labelSmall) },
-                    modifier = Modifier.height(28.dp),
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (sortMode == mode)
-                            MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant
+                    label = {
+                        Text(
+                            stringRes(mode.labelKey),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                            else androidx.compose.ui.text.font.FontWeight.Medium
+                        )
+                    },
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selected,
+                        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        selectedBorderColor = Color.Transparent,
+                        borderWidth = 0.5.dp,
+                        selectedBorderWidth = 0.dp
                     )
                 )
             }
@@ -727,7 +807,7 @@ private fun ThumbnailCard(
     modifier: Modifier = Modifier
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 0.92f else 1f,
+        targetValue = if (isSelected) 0.94f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -735,7 +815,7 @@ private fun ThumbnailCard(
         label = "selectScale"
     )
     val elevation by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (isSelected) 6.dp else 1.dp,
+        targetValue = if (isSelected) 8.dp else 2.dp,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -750,13 +830,16 @@ private fun ThumbnailCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected)
                 MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(
+            1.5.dp, MaterialTheme.colorScheme.primary
+        ) else null
     ) {
         Box {
             // 缩略图或占位符
@@ -765,8 +848,8 @@ private fun ThumbnailCard(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        else MaterialTheme.colorScheme.surfaceVariant
+                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        else MaterialTheme.colorScheme.surfaceContainerLow
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -774,15 +857,18 @@ private fun ThumbnailCard(
                     androidx.compose.foundation.Image(
                         bitmap = thumbnailBitmap.asImageBitmap(),
                         contentDescription = image.imageName,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // 首字母占位符
+                    // 首字母占位符 – 更柔和的暖色调
                     Text(
                         image.imageName.take(1).uppercase(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Light
                     )
                 }
             }
@@ -797,45 +883,46 @@ private fun ThumbnailCard(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
                     )
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp),
+                            .padding(8.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        shadowElevation = 4.dp
                     ) {
                         Icon(
                             Icons.Default.Check,
                             contentDescription = null,
                             modifier = Modifier
-                                .size(18.dp)
-                                .padding(2.dp),
+                                .size(20.dp)
+                                .padding(3.dp),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
             }
 
-            // 评分浮层
+            // 评分浮层 – 暖金色,稍大尺寸提升可读性
             val rating = image.exifDisplay.rating
             if (rating > 0) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(6.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     repeat(rating.coerceIn(1, 5)) {
                         Icon(
                             Icons.Default.Star,
                             contentDescription = null,
-                            modifier = Modifier.size(10.dp),
-                            tint = Color(0xFFFFD700)
+                            modifier = Modifier.size(11.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -851,33 +938,34 @@ private fun ThumbnailCard(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color(0xFF6B8E6B).copy(alpha = 0.8f)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
                 ) {
                     Text(
                         "RAW",
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontSize = 9.sp
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontSize = 9.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                     )
                 }
             }
 
-            // 图片名称浮层
+            // 图片名称浮层 – 暖色渐变,更佳可读性
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
                             startY = 0f,
-                            endY = 24.dp.value
+                            endY = 28.dp.value
                         )
                     )
-                    .padding(horizontal = 4.dp, vertical = 3.dp)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Text(
                     image.imageName,
@@ -885,7 +973,8 @@ private fun ThumbnailCard(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 9.sp
+                    fontSize = 10.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
                 )
             }
         }
@@ -1000,45 +1089,92 @@ private fun ImportDialog(
     onSelectFiles: () -> Unit,
     onSelectDirectory: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringRes { albumImportTitle }) },
-        icon = { Icon(Icons.Default.AddPhotoAlternate, contentDescription = null) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 选择文件按钮 – 启动 Photo Picker 或文件选择器
-                FilledTonalButton(
-                    onClick = onSelectFiles,
-                    modifier = Modifier.fillMaxWidth()
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 暖色圆形图标背景 – premium photographic feel
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringRes { albumSelectFiles })
+                    Icon(
+                        Icons.Default.AddPhotoAlternate,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
 
-                // 选择目录按钮 – 启动 SAF 目录选择器
+                Text(
+                    stringRes { albumImportTitle },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // 选择文件按钮 – 启动 Photo Picker 或文件选择器 (primary warm accent)
+                Button(
+                    onClick = onSelectFiles,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        stringRes { albumSelectFiles },
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+
+                // 选择目录按钮 – 启动 SAF 目录选择器 (subtle outline)
                 OutlinedButton(
                     onClick = onSelectDirectory,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringRes { albumSelectDirectory })
+                    Icon(
+                        Icons.Default.FolderOpen,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        stringRes { albumSelectDirectory },
+                        style = MaterialTheme.typography.titleSmall
+                    )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
                 Text(
                     stringRes { albumDragDrop },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringRes { cancel }) }
         }
-    )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

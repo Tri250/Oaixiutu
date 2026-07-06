@@ -1,9 +1,11 @@
 package com.alcedo.studio.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,6 +16,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import com.alcedo.studio.BuildConfig
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -26,7 +30,6 @@ import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.common.ConfirmDialog
-import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
 
@@ -127,15 +130,29 @@ fun SettingsScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringRes { settingsTitle }) },
+                title = {
+                    Text(
+                        stringRes { settingsTitle },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = stringRes { back },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = { navController.navigate("ai_models") }) {
-                        Icon(Icons.Default.ModelTraining, contentDescription = stringRes { settingsAiModels })
+                        Icon(
+                            Icons.Default.ModelTraining,
+                            contentDescription = stringRes { settingsAiModels },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             )
@@ -149,43 +166,43 @@ fun SettingsScreen(navController: NavController) {
                 .padding(bottom = 24.dp)
         ) {
             // ── 顶部用户信息卡 ─────────────────────────────────────────────
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(64.dp)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        modifier = Modifier.size(72.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoCamera,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .size(32.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(20.dp))
                     Column {
                         Text(
                             text = "Alcedo Studio",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "v$APP_VERSION",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -194,7 +211,7 @@ fun SettingsScreen(navController: NavController) {
 
             // ── 通用设置 ─────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAppearance })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -225,7 +242,7 @@ fun SettingsScreen(navController: NavController) {
 
             // ── 相册设置 ─────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAlbumSection })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -234,20 +251,22 @@ fun SettingsScreen(navController: NavController) {
                     icon = Icons.Default.Sort,
                     title = stringRes { settingsDefaultSort },
                     value = sortLabel,
-                    onClick = { showSortDialog = true }
+                    onClick = { showSortDialog = true },
+                    important = false
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.Image,
                     title = stringRes { settingsThumbnailQuality },
                     value = thumbQualityLabel,
-                    onClick = { showThumbQualityDialog = true }
+                    onClick = { showThumbQualityDialog = true },
+                    important = false
                 )
             }
 
             // ── 编辑设置 ─────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsEditorSection })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -256,27 +275,30 @@ fun SettingsScreen(navController: NavController) {
                     icon = Icons.Default.FilePresent,
                     title = stringRes { settingsDefaultExportFormat },
                     value = exportFormatLabel,
-                    onClick = { showExportFormatDialog = true }
+                    onClick = { showExportFormatDialog = true },
+                    important = false
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.HighQuality,
                     title = stringRes { settingsDefaultExportQuality },
                     value = exportQualityLabel,
-                    onClick = { showExportQualityDialog = true }
+                    onClick = { showExportQualityDialog = true },
+                    important = false
                 )
                 SectionDivider()
                 SettingsRow(
                     icon = Icons.Default.ColorLens,
                     title = stringRes { settingsDefaultColorSpace },
                     value = colorSpaceLabel,
-                    onClick = { showColorSpaceDialog = true }
+                    onClick = { showColorSpaceDialog = true },
+                    important = false
                 )
             }
 
             // ── 存储管理 ─────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsStorage })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -284,21 +306,22 @@ fun SettingsScreen(navController: NavController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Storage,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringRes { settingsCacheSize },
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = cacheSize,
@@ -317,16 +340,16 @@ fun SettingsScreen(navController: NavController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
                     OutlinedTextField(
                         value = exportCachePath,
                         onValueChange = {
@@ -343,7 +366,7 @@ fun SettingsScreen(navController: NavController) {
 
             // ── 隐私设置 ─────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsPrivacySection })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -387,18 +410,22 @@ fun SettingsScreen(navController: NavController) {
 
             // 统计分析
             SettingsSectionHeader(stringRes { settingsStatistics })
-            SectionDivider()
-            SettingsRow(
-                icon = Icons.Default.BarChart,
-                title = stringRes { navStats },
-                value = stringRes { settingsStatisticsDesc },
-                onClick = { navController.navigate("stats") }
-            )
-            SectionDivider()
+            SettingsCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                SettingsRow(
+                    icon = Icons.Default.BarChart,
+                    title = stringRes { navStats },
+                    value = stringRes { settingsStatisticsDesc },
+                    onClick = { navController.navigate("stats") }
+                )
+            }
 
             // ── 关于 ─────────────────────────────────────────────────────
             SettingsSectionHeader(stringRes { settingsAbout })
-            LiquidGlassSurface(
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -417,8 +444,8 @@ fun SettingsScreen(navController: NavController) {
                 )
             }
 
-            // 开发者卡片
-            LiquidGlassSurface(
+            // 开发者卡片 – 更佳间距与暖色调
+            SettingsCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -426,22 +453,22 @@ fun SettingsScreen(navController: NavController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(44.dp)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Code,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .padding(10.dp)
-                                .size(24.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
@@ -452,7 +479,7 @@ fun SettingsScreen(navController: NavController) {
                         )
                         Text(
                             text = DEVELOPER_NAME,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -461,11 +488,11 @@ fun SettingsScreen(navController: NavController) {
             }
 
             // ── 底部署名 ─────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Made with ❤ by $DEVELOPER_NAME",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -494,49 +521,66 @@ fun SettingsScreen(navController: NavController) {
         )
     }
 
-    // Theme variant dialog (DEEP_SPACE first)
+    // Theme variant dialog (DEEP_SPACE first) — 视觉化色板选择
     if (showThemeVariantDialog) {
         AlertDialog(
             onDismissRequest = { showThemeVariantDialog = false },
-            title = { Text(stringRes { settingsThemeVariantSelect }) },
+            title = {
+                Text(
+                    stringRes { settingsThemeVariantSelect },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     AlcedoThemeVariant.entries.forEach { variant ->
+                        val selected = currentVariant == variant
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.medium)
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    else Color.Transparent
+                                )
                                 .clickable {
                                     ThemeManager.setThemeVariant(variant)
                                     showThemeVariantDialog = false
                                 }
-                                .padding(vertical = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(
-                                selected = currentVariant == variant,
-                                onClick = {
-                                    ThemeManager.setThemeVariant(variant)
-                                    showThemeVariantDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = when (variant) {
-                                    AlcedoThemeVariant.DEEP_SPACE -> Icons.Default.NightsStay
-                                    AlcedoThemeVariant.HASSELBLAD -> Icons.Default.PhotoCamera
-                                    AlcedoThemeVariant.GOLD -> Icons.Default.Star
-                                    AlcedoThemeVariant.WINE -> Icons.Default.LocalBar
-                                    AlcedoThemeVariant.STEEL -> Icons.Default.Construction
-                                    AlcedoThemeVariant.GRAPHITE -> Icons.Default.Brush
-                                    AlcedoThemeVariant.MIST -> Icons.Default.Cloud
-                                    AlcedoThemeVariant.DYNAMIC -> Icons.Default.AutoAwesome
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(getThemeVariantDisplayName(variant))
+                            // 视觉化色板 - 每个主题对应的代表色
+                            Surface(
+                                shape = CircleShape,
+                                color = getThemeSwatchColor(variant),
+                                modifier = Modifier.size(28.dp),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    2.dp,
+                                    if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                )
+                            ) {}
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    getThemeVariantDisplayName(variant),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (selected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (selected) FontWeight.SemiBold
+                                    else FontWeight.Medium
+                                )
+                            }
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -751,20 +795,72 @@ private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
     }
 }
 
+/**
+ * 视觉化主题色板 – 在主题选择对话框中显示每个主题的代表色
+ */
+private fun getThemeSwatchColor(variant: AlcedoThemeVariant): Color {
+    return when (variant) {
+        AlcedoThemeVariant.DEEP_SPACE -> Color(0xFF000000)
+        AlcedoThemeVariant.HASSELBLAD -> Color(0xFFFF7A3D)
+        AlcedoThemeVariant.GOLD -> Color(0xFFD4A843)
+        AlcedoThemeVariant.WINE -> Color(0xFFAD1457)
+        AlcedoThemeVariant.STEEL -> Color(0xFF4FC3F7)
+        AlcedoThemeVariant.GRAPHITE -> Color(0xFF4A634A)
+        AlcedoThemeVariant.MIST -> Color(0xFF90A4AE)
+        AlcedoThemeVariant.DYNAMIC -> Color(0xFF6750A4)
+    }
+}
+
 @Composable
 private fun SettingsSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(16.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/**
+ * Section card – wraps a settings group in a warm surfaceContainer with
+ * rounded corners, matching the Hasselblad dark photography aesthetic.
+ */
+@Composable
+private fun SettingsCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            content = content
+        )
+    }
 }
 
 @Composable
 private fun SectionDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = 20.dp),
         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
         thickness = 0.5.dp
     )
@@ -775,22 +871,24 @@ private fun SettingsRow(
     icon: ImageVector,
     title: String,
     value: String? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    important: Boolean = true
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
+            tint = if (important) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
         )
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
@@ -804,12 +902,12 @@ private fun SettingsRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (onClick != null) {
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         } else if (onClick != null) {
@@ -817,7 +915,7 @@ private fun SettingsRow(
                 imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }
@@ -834,21 +932,22 @@ private fun SwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(24.dp)
         )
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
             )
             Text(
                 text = subtitle,
@@ -856,7 +955,16 @@ private fun SwitchRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        )
     }
 }
 

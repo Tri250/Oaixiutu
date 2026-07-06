@@ -237,15 +237,32 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // Persist tree URI permission so we can access files later
+                val resolver = AppModule.context.contentResolver
+                try {
+                    resolver.takePersistableUriPermission(
+                        treeUri,
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: SecurityException) {
+                    // Some providers don't support persistable permission
+                }
+
                 val files = SafHelper.listDirectory(AppModule.context, treeUri)
                 val imageFiles = files.filter { !it.isDirectory }
-                for (file in imageFiles) {
-                    importService.importImage(file.uri)
+
+                if (imageFiles.isEmpty()) {
+                    _permissionRationale.value = "所选目录中没有图片文件"
+                    return@launch
                 }
+
+                val uris = imageFiles.map { it.uri }
+                importService.importTwoPhase(uris)
                 loadImages()
                 loadFolders()
-            } catch (_: Exception) {
-                // SAF import failure
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "importFromSafDirectory failed", e)
+                _permissionRationale.value = "目录导入失败: ${e.message ?: "未知错误"}"
             } finally {
                 _isLoading.value = false
             }
@@ -260,21 +277,6 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // Take persistable read permission so thumbnail generation
-                // and later access don't throw SecurityException
-                val resolver = AppModule.context.contentResolver
-                for (uri in uris) {
-                    try {
-                        resolver.takePersistableUriPermission(
-                            uri,
-                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    } catch (_: SecurityException) {
-                        // Photo Picker URIs may not support persistable permission;
-                        // that's OK — we still have read access for this process.
-                    }
-                }
-
                 // Use two-phase import for better UX (fast scan + background metadata)
                 importService.importTwoPhase(uris)
                 loadImages()

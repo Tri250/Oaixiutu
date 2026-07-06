@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -190,38 +191,26 @@ fun MainScreen(
     Scaffold(
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
-                // 液态玻璃底部导航栏
-                Box(
-                    Modifier
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                // 干净的 Material3 底部导航栏 – surfaceContainer 暖色背景,贴合 Hasselblad Dark 旗舰观感
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 0.dp
                 ) {
-                    LiquidGlassToolbar(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(28.dp)
-                    ) {
-                        NavigationBar(
-                            containerColor = Color.Transparent,
-                            tonalElevation = 0.dp,
-                            windowInsets = WindowInsets(0, 0, 0, 0)
-                        ) {
-                            bottomBarDestinations.forEach { destination ->
-                                AlcedoNavItem(
-                                    selected = currentRoute == destination.route,
-                                    onClick = {
-                                        navController.navigate(destination.route) {
-                                            popUpTo(MainDestination.ALBUM.route) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    icon = destination.icon,
-                                    labelKey = destination.labelKey
-                                )
-                            }
-                        }
+                    bottomBarDestinations.forEach { destination ->
+                        AlcedoNavItem(
+                            selected = currentRoute == destination.route,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo(MainDestination.ALBUM.route) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = destination.icon,
+                            labelKey = destination.labelKey
+                        )
                     }
                 }
             }
@@ -253,11 +242,11 @@ fun MainScreen(
                     // 液态玻璃侧边导航栏
                     Box(
                         Modifier
-                            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp)
+                            .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 6.dp)
                     ) {
                         LiquidGlassToolbar(
                             modifier = Modifier.fillMaxHeight(),
-                            shape = RoundedCornerShape(28.dp)
+                            shape = RoundedCornerShape(32.dp)
                         ) {
                             NavigationRail(
                                 containerColor = Color.Transparent,
@@ -302,26 +291,27 @@ fun MainScreen(
                 PermanentNavigationDrawer(
                     drawerContent = {
                         PermanentDrawerSheet(
-                            modifier = Modifier.width(280.dp),
+                            modifier = Modifier.width(300.dp),
                             drawerContainerColor = Color.Transparent,
                             drawerContentColor = MaterialTheme.colorScheme.onSurface
                         ) {
                             Box(
                                 Modifier
-                                    .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp)
+                                    .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 6.dp)
                             ) {
                                 LiquidGlassPanel(
                                     modifier = Modifier.fillMaxHeight(),
-                                    shape = RoundedCornerShape(28.dp)
+                                    shape = RoundedCornerShape(32.dp)
                                 ) {
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Spacer(modifier = Modifier.height(28.dp))
                                     Text(
                                         text = projectName,
-                                        style = MaterialTheme.typography.titleMedium,
+                                        style = MaterialTheme.typography.titleLarge,
                                         color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
                                     bottomBarDestinations.forEach { destination ->
                                         val selected = currentRoute == destination.route
                                         NavigationDrawerItem(
@@ -346,16 +336,24 @@ fun MainScreen(
                                                 )
                                             },
                                             label = {
-                                                Text(stringRes(destination.labelKey))
+                                                Text(
+                                                    stringRes(destination.labelKey),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                                                    else androidx.compose.ui.text.font.FontWeight.Medium
+                                                )
                                             },
                                             colors = NavigationDrawerItemDefaults.colors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
                                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                             ),
-                                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                                            modifier = Modifier.padding(
+                                                horizontal = 12.dp,
+                                                vertical = 4.dp
+                                            ).height(56.dp)
                                         )
                                     }
                                 }
@@ -428,14 +426,19 @@ private fun RowScope.AlcedoNavItem(
             )
         },
         label = {
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                else androidx.compose.ui.text.font.FontWeight.Medium
+            )
         },
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.primary,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
         )
     )
 }
@@ -464,14 +467,20 @@ private fun AlcedoRailItem(
             )
         },
         label = {
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(
+                label,
+                style = if (selected) MaterialTheme.typography.labelMedium
+                else MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
+                else androidx.compose.ui.text.font.FontWeight.Medium
+            )
         },
         colors = NavigationRailItemDefaults.colors(
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.primary,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
         )
     )
 }
@@ -484,15 +493,22 @@ private fun AlcedoNavIcon(
     contentDescription: String
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.18f else 1f,
+        targetValue = if (selected) 1.20f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "navIconScale"
     )
-    Box(modifier = Modifier.scale(scale)) {
-        Icon(imageVector, contentDescription = contentDescription)
+    val iconColor = if (selected) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(modifier = Modifier.scale(scale), contentAlignment = Alignment.Center) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = iconColor,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
 

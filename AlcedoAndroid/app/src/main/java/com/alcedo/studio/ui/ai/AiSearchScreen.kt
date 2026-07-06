@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -73,10 +74,20 @@ fun AiSearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringRes { aiSearchTitle }) },
+                title = {
+                    Text(
+                        stringRes { aiSearchTitle },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 actions = {
                     IconButton(onClick = { navController.navigate("ai_models") }) {
-                        Icon(Icons.Default.ModelTraining, contentDescription = stringRes { navAiModels })
+                        Icon(
+                            Icons.Default.ModelTraining,
+                            contentDescription = stringRes { navAiModels },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             )
@@ -103,9 +114,18 @@ fun AiSearchScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = {
-                    Text(if (semanticEnabled) "输入语义描述搜索..." else "输入文件名或关键词...")
+                    Text(
+                        if (semanticEnabled) "输入语义描述搜索..." else "输入文件名或关键词...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
                 trailingIcon = {
                     if (inputText.isNotEmpty()) {
                         IconButton(onClick = {
@@ -118,7 +138,14 @@ fun AiSearchScreen(
                     FilterChip(
                         selected = semanticEnabled,
                         onClick = { albumViewModel.toggleSemanticSearch() },
-                        label = { Text("AI", style = MaterialTheme.typography.labelSmall) },
+                        label = {
+                            Text(
+                                "AI",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        shape = RoundedCornerShape(50),
                         modifier = Modifier.padding(start = 4.dp)
                     )
                 }
@@ -164,13 +191,21 @@ fun AiSearchScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             "语义搜索已启用 — 用自然语言描述图片内容，AI 将理解含义并匹配相似图片",
                             style = MaterialTheme.typography.bodySmall,
@@ -185,11 +220,12 @@ fun AiSearchScreen(
                 // Loading state
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             if (semanticEnabled) "AI 正在理解语义..." else "搜索中...",
                             style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -200,15 +236,16 @@ fun AiSearchScreen(
                     "找到 ${images.size} 个结果",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 88.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 96.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(images, key = { it.imageId }) { image ->
                         SearchResultCard(
@@ -229,7 +266,10 @@ fun AiSearchScreen(
                 EmptyState(
                     icon = Icons.Default.SearchOff,
                     title = "未找到匹配结果",
-                    message = if (semanticEnabled) "尝试使用不同的描述词" else "尝试使用不同的关键词",
+                    message = if (semanticEnabled)
+                        "AI 未找到匹配的图片，可尝试更换描述词或开启标签匹配模式"
+                    else
+                        "没有匹配该关键词的图片，可尝试启用 AI 语义搜索，用自然语言描述内容",
                     action = {
                         OutlinedButton(onClick = {
                             inputText = ""
@@ -253,7 +293,11 @@ fun AiSearchScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("搜索历史", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "搜索历史",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                                 TextButton(onClick = {
                                     searchHistory = emptyList()
                                     clearSearchHistory(context)
@@ -286,7 +330,11 @@ fun AiSearchScreen(
 
                     // AI suggestions
                     item {
-                        Text("智能推荐", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "智能推荐",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                     item {
@@ -301,12 +349,19 @@ fun AiSearchScreen(
                                         albumViewModel.onSearchQueryChange(suggestion)
                                         searchHistory = saveSearchHistory(searchHistory, suggestion)
                                     },
-                                    label = { Text(suggestion, style = MaterialTheme.typography.labelSmall) },
+                                    label = {
+                                        Text(
+                                            suggestion,
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(50),
                                     icon = {
                                         Icon(
                                             Icons.Default.AutoAwesome,
                                             contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 )
@@ -324,7 +379,11 @@ fun AiSearchScreen(
                                 modifier = Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text("AI 搜索能力", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "AI 搜索能力",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                                 AiCapabilityRow(Icons.Default.Image, "语义搜索", "用自然语言描述图片内容")
                                 AiCapabilityRow(Icons.Default.Label, "标签匹配", "自动识别图片中的场景和对象")
                                 AiCapabilityRow(Icons.Default.Camera, "EXIF 搜索", "按相机、镜头、参数筛选")
@@ -390,10 +449,23 @@ fun AiSearchScreen(
 @Composable
 private fun AiCapabilityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, desc: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            modifier = Modifier.size(32.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
         Column {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -414,8 +486,9 @@ private fun SearchResultCard(
             onClick = onClick,
             onLongClick = onLongClick
         ),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 6.dp)
     ) {
         Box {
             Box(
@@ -441,20 +514,21 @@ private fun SearchResultCard(
                 }
             }
 
-            // Similarity badge
+            // Similarity badge — 暖色强调
             if (similarity != null) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp),
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                        .padding(6.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
                 ) {
                     Text(
                         "${(similarity * 100).toInt()}%",
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -469,7 +543,7 @@ private fun SearchResultCard(
                             colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
                         )
                     )
-                    .padding(horizontal = 4.dp, vertical = 3.dp)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Text(
                     image.imageName,
@@ -534,22 +608,32 @@ private fun AiQuickActionCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             Text(
                 title,
                 style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             Text(

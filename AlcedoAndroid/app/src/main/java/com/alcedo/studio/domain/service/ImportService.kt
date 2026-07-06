@@ -443,7 +443,7 @@ class ImportService(
         } catch (e: CancellationException) {
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             ImportDirectoryResult(
                 totalFiles = 0, successCount = 0, duplicateCount = 0, errorCount = 0,
@@ -467,10 +467,12 @@ class ImportService(
                 ?: detectImageTypeByExtension(fileName)
         } catch (_: Exception) {
             detectImageTypeByExtension(fileName)
+        } catch (_: Throwable) {
+            detectImageTypeByExtension(fileName)
         }
 
-        // Compute checksum (fast - just reads the file once)
-        val checksum = computeChecksum(uri)
+        // Skip checksum in quick scan for speed; dedup will use DB lookup by path+size
+        val checksum = 0L
 
         return ScannedFileInfo(
             uri = uri,

@@ -4,9 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,13 +17,19 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.viewmodel.AlbumViewModel
@@ -33,6 +42,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 data class AiRatingResult(
     val imageId: Long,
@@ -54,6 +64,8 @@ fun AiRatingScreen(
     albumViewModel: AlbumViewModel = viewModel()
 ) {
     val images by albumViewModel.filteredImages.collectAsStateWithLifecycle()
+    // 缩略图通过 LruCache 存储；订阅版本号触发重组，bitmap 直接访问
+    @Suppress("UNUSED_VARIABLE") val thumbnailCacheVersion by albumViewModel.thumbnailCacheVersion.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val aiService = remember { AppModule.aiService }
     val coroutineScope = rememberCoroutineScope()
@@ -118,16 +130,27 @@ fun AiRatingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringRes { aiRatingTitle }.format("")) },
+                title = {
+                    Text(
+                        stringRes { aiRatingTitle }.format(""),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringRes { back })
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = stringRes { back },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 actions = {
                     if (!isAnalyzing && !analysisComplete) {
                         FilledTonalButton(
                             onClick = { startAnalysis() },
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -143,14 +166,23 @@ fun AiRatingScreen(
             isAnalyzing -> {
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringRes { aiRatingEvaluating }, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringRes { aiRatingEvaluating },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Text(stringRes { aiRatingAnalyze }, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         val progress by analysisProgress.collectAsStateWithLifecycle()
                         if (progress.total > 0) {
-                            Text("${progress.current} / ${progress.total}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "${progress.current} / ${progress.total}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         // 取消按钮
@@ -163,33 +195,43 @@ fun AiRatingScreen(
             analysisError != null -> {
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.ErrorOutline, contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("分析出错", style = MaterialTheme.typography.titleMedium,
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+                            modifier = Modifier.size(96.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.ErrorOutline, contentDescription = null,
+                                    modifier = Modifier.size(44.dp),
+                                    tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text("分析出错",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(analysisError!!, style = MaterialTheme.typography.bodySmall,
+                        Text(analysisError!!, style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            analysisError = null
-                            startAnalysis()
-                        }) { Text("重试") }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = {
+                                analysisError = null
+                                startAnalysis()
+                            },
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("重试") }
                     }
                 }
             }
             analysisComplete && ratingResults.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.ImageNotSupported, contentDescription = null,
-                            modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringRes { aiRatingNoImages }, style = MaterialTheme.typography.titleMedium)
-                        Text(stringRes { aiRatingNoImagesDesc }, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    EmptyState(
+                        icon = Icons.Default.ImageNotSupported,
+                        title = stringRes { aiRatingNoImages },
+                        message = stringRes { aiRatingNoImagesDesc }
+                    )
                 }
             }
             analysisComplete -> {
@@ -202,7 +244,11 @@ fun AiRatingScreen(
                     item {
                         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(stringRes { aiRatingScoreOverview }, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    stringRes { aiRatingScoreOverview },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 val avgScore = ratingResults.map { it.overallScore }.average().toInt()
                                 val topCount = ratingResults.count { it.overallScore >= 80 }
@@ -222,6 +268,7 @@ fun AiRatingScreen(
                     items(ratingResults, key = { it.imageId }) { result ->
                         RatingCard(
                             result = result,
+                            thumbnailBitmap = albumViewModel.getThumbnail(result.imageId),
                             onClick = {
                                 navController.navigate("editor/${result.imageId}")
                             },
@@ -234,15 +281,35 @@ fun AiRatingScreen(
                 // Initial state
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null,
-                            modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(stringRes { aiRatingTitle }.format(""), style = MaterialTheme.typography.titleLarge)
+                        Surface(
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            modifier = Modifier.size(112.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(52.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            stringRes { aiRatingTitle }.format(""),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(stringRes { aiRatingAnalyzeDesc }, style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(24.dp))
-                        FilledTonalButton(onClick = { startAnalysis() }) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(modifier = Modifier.height(28.dp))
+                        Button(
+                            onClick = { startAnalysis() },
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringRes { aiRatingStartWithCount }.format(images.size))
                         }
@@ -256,15 +323,24 @@ fun AiRatingScreen(
 @Composable
 private fun ScoreStat(label: String, value: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("$value", style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.primary)
+        Text(
+            "$value",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
         Text(label, style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun RatingCard(result: AiRatingResult, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun RatingCard(
+    result: AiRatingResult,
+    thumbnailBitmap: Bitmap?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     LiquidGlassSurface(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -272,21 +348,66 @@ private fun RatingCard(result: AiRatingResult, onClick: () -> Unit, modifier: Mo
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(result.imageName, style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f))
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = when {
-                        result.overallScore >= 80 -> Color(0xFF4CAF50)
-                        result.overallScore >= 60 -> Color(0xFFFFC107)
-                        else -> Color(0xFFFF5722)
+                // 醒目图片预览
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (thumbnailBitmap != null) {
+                        Image(
+                            bitmap = thumbnailBitmap.asImageBitmap(),
+                            contentDescription = result.imageName,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            result.imageName.take(1).uppercase(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
                     }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        result.imageName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // 星级显示 — 暖色金色
+                    Row {
+                        val starCount = (result.overallScore / 20f).roundToInt().coerceIn(0, 5)
+                        repeat(5) { i ->
+                            Icon(
+                                imageVector = if (i < starCount) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // 评分徽章 — 暖色强调
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary
                 ) {
                     Text(
                         "${result.overallScore}",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.White
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -311,7 +432,11 @@ private fun RatingCard(result: AiRatingResult, onClick: () -> Unit, modifier: Mo
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringRes { aiRatingEditImage })
@@ -325,14 +450,21 @@ private fun SubScore(label: String, score: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("$score", style = MaterialTheme.typography.bodyLarge,
-            color = when {
-                score >= 80 -> Color(0xFF4CAF50)
-                score >= 60 -> Color(0xFFFFC107)
-                else -> Color(0xFFFF5722)
-            }
+        Text(
+            "$score",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = scoreTierColor(score)
         )
     }
+}
+
+/** 基于主题色的评分等级颜色 — 高分用暖色 primary，中分 tertiary，低分 error。 */
+@Composable
+private fun scoreTierColor(score: Int): Color = when {
+    score >= 80 -> MaterialTheme.colorScheme.primary
+    score >= 60 -> MaterialTheme.colorScheme.tertiary
+    else -> MaterialTheme.colorScheme.error
 }
 
 // Rating prediction result model

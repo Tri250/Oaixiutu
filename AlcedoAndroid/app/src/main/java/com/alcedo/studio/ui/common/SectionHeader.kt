@@ -4,14 +4,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 
@@ -29,38 +30,45 @@ fun SectionHeader(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        tonalElevation = 1.dp
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 1.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Column(modifier = Modifier.padding(vertical = 6.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
                 )
-                IconButton(
-                    onClick = { expanded = !expanded },
-                    modifier = Modifier.size(24.dp)
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(28.dp)
                 ) {
-                    Icon(
-                        Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) stringRes { sectionCollapse } else stringRes { sectionExpand },
-                        modifier = Modifier.rotate(rotation),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) stringRes { sectionCollapse } else stringRes { sectionExpand },
+                            modifier = Modifier
+                                .size(18.dp)
+                                .rotate(rotation),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     content = content
                 )
             }
