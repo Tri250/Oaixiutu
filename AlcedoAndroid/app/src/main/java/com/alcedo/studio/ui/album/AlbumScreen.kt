@@ -13,7 +13,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
@@ -981,25 +982,29 @@ private fun PhotoGridSection(
         if (shouldLoadMore) onLoadMore()
     }
 
-    // 收集当前可见项目用于缩略图加载
-    LaunchedEffect(gridState, images, columns) {
-        val visible = gridState.layoutInfo.visibleItemsInfo
-        visible.forEach { info ->
-            // 通过 index 找到 imageId，触发缩略图加载
-            if (info.index < images.size) {
-                onLoadThumbnail(images[info.index].imageId)
-            }
-        }
-    }
+    // 缩略图预加载: 通过 ThumbnailCard 内部的 LaunchedEffect 触发,此处无需手动索引映射
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             // 双指捏合调整列数 (PixCake 风格 3-6 张/行)
+            // 仅在双指时响应,不拦截单指滚动
             .pointerInput(Unit) {
-                detectTransformGestures { _, _, zoom, _ ->
-                    val target = (columns.toFloat() / zoom).roundToInt().coerceIn(2, 6)
-                    if (target != columns) columns = target
+                awaitEachGesture {
+                    // 等待至少两个指针按下才处理,单指事件交给 LazyGrid 滚动
+                    do {
+                        val event = awaitPointerEvent()
+                        val pointers = event.changes.filter { it.pressed }
+                        if (pointers.size >= 2) {
+                            val zoom = event.calculateZoom()
+                            if (zoom != 1f) {
+                                val target = (columns.toFloat() / zoom).roundToInt().coerceIn(2, 6)
+                                if (target != columns) columns = target
+                            }
+                            // 双指时消费事件,防止触发滚动
+                            pointers.forEach { it.consume() }
+                        }
+                    } while (pointers.isNotEmpty())
                 }
             }
     ) {
@@ -1031,6 +1036,7 @@ private fun PhotoGridSection(
                             thumbnailBitmap = onGetThumbnail(image.imageId),
                             onClick = { onImageClick(image) },
                             onLongClick = { onImageLongClick(image) },
+                            onLoadThumbnail = { onLoadThumbnail(image.imageId) },
                             modifier = Modifier.animateItemPlacement()
                         )
                     }
@@ -1331,8 +1337,13 @@ private fun ThumbnailCard(
     thumbnailBitmap: android.graphics.Bitmap?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onLoadThumbnail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 缩略图未缓存时触发异步加载
+    LaunchedEffect(image.imageId) {
+        if (thumbnailBitmap == null) onLoadThumbnail()
+    }
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 0.94f else 1f,
         animationSpec = spring(
