@@ -78,8 +78,8 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     if (!params) { env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT); return nullptr; }
 
     jsize paramsLen = env->GetArrayLength(paramsArray);
-    if (paramsLen < 47) {  // minimum expected params count
-        LOGE("Params array too short: %d < 47", paramsLen);
+    if (paramsLen < 36) {  // minimum expected params count (basic 36)
+        LOGE("Params array too short: %d < 36", paramsLen);
         env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
         env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
         return nullptr;
@@ -87,7 +87,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
 
     PipelineParams pipeline_params;
 
-    // Parse params array (complex structure, simplified)
+    // C1 修复: 完整解析所有参数,顺序必须与 PipelineService.buildParamsArray 严格一致
     int p_idx = 0;
     SAFE_PARAM(p_idx++, pipeline_params.exposure);
     SAFE_PARAM(p_idx++, pipeline_params.contrast);
@@ -131,6 +131,46 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.eotf = static_cast<int>(tmp); }
     SAFE_PARAM(p_idx++, pipeline_params.display_transform.peak_luminance);
     { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.display_color_space = static_cast<int>(tmp); }
+
+    // ── Tone region boundaries (idx 36-37) ──
+    SAFE_PARAM(p_idx++, pipeline_params.shadow_boundary);
+    SAFE_PARAM(p_idx++, pipeline_params.highlight_boundary);
+
+    // ── Auto exposure (idx 38-41) ──
+    { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.auto_exposure_enabled = (tmp > 0.5f); }
+    SAFE_PARAM(p_idx++, pipeline_params.auto_exposure_target_percentile);
+    SAFE_PARAM(p_idx++, pipeline_params.auto_exposure_target_luminance);
+    SAFE_PARAM(p_idx++, pipeline_params.auto_exposure_value);
+
+    // ── Tone curve (idx 42-75): points + x[16] + y[16] ──
+    { int tmp = 5; SAFE_PARAM(p_idx++, tmp); pipeline_params.tone_curve_points = tmp; }
+    for (int i = 0; i < 16; ++i) { SAFE_PARAM(p_idx++, pipeline_params.tone_curve_x[i]); }
+    for (int i = 0; i < 16; ++i) { SAFE_PARAM(p_idx++, pipeline_params.tone_curve_y[i]); }
+
+    // ── HSL (idx 76-99): hue_shift[8] + sat_scale[8] + lum_scale[8] ──
+    for (int i = 0; i < 8; ++i) { SAFE_PARAM(p_idx++, pipeline_params.hsl_hue_shift[i]); }
+    for (int i = 0; i < 8; ++i) { SAFE_PARAM(p_idx++, pipeline_params.hsl_saturation_scale[i]); }
+    for (int i = 0; i < 8; ++i) { SAFE_PARAM(p_idx++, pipeline_params.hsl_luminance_scale[i]); }
+
+    // ── Channel mixer (idx 100-109): matrix[9] + monochrome ──
+    for (int i = 0; i < 9; ++i) { SAFE_PARAM(p_idx++, pipeline_params.channel_mixer_matrix[i]); }
+    { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.channel_mixer_monochrome = (tmp > 0.5f); }
+
+    // ── Crop (idx 110-113) ──
+    SAFE_PARAM(p_idx++, pipeline_params.geometry_crop_left);
+    SAFE_PARAM(p_idx++, pipeline_params.geometry_crop_top);
+    SAFE_PARAM(p_idx++, pipeline_params.geometry_crop_right);
+    SAFE_PARAM(p_idx++, pipeline_params.geometry_crop_bottom);
+
+    // ── Lens correction (idx 114-118) ──
+    SAFE_PARAM(p_idx++, pipeline_params.lens_k1);
+    SAFE_PARAM(p_idx++, pipeline_params.lens_k2);
+    SAFE_PARAM(p_idx++, pipeline_params.lens_k3);
+    SAFE_PARAM(p_idx++, pipeline_params.lens_p1);
+    SAFE_PARAM(p_idx++, pipeline_params.lens_p2);
+
+    // ── LUT enable flag (idx 119); lut_path is applied via separate native call ──
+    { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.lut_enabled = (tmp > 0.5f); }
 
     env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
 

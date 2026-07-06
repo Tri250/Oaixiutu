@@ -131,7 +131,15 @@ fun AlbumScreen(
     var showBatchRatingDialog by remember { mutableStateOf(false) }
     var showBatchExportDialog by remember { mutableStateOf(false) }
     var showPermissionRationale by remember { mutableStateOf(false) }
+    // 待删除图片 — 单张删除前需用户确认 (G-5 修复)
+    var pendingDeleteImage by remember { mutableStateOf<ImageModel?>(null) }
+    // 批量删除前确认 (G-5 修复)
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
     val permissionError by viewModel.permissionError.collectAsStateWithLifecycle()
+    // S-2 修复: 收集 permissionRationale,在 UI 上展示
+    val permissionRationale by viewModel.permissionRationale.collectAsStateWithLifecycle()
+    // S-8 修复: 收集 batchExportResult,导出完成时弹出提示
+    val batchExportResult by viewModel.batchExportResult.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -235,7 +243,8 @@ fun AlbumScreen(
                 onToggleSemantic = viewModel::toggleSemanticSearch,
                 onToggleImageSelection = viewModel::toggleImageSelection,
                 onClearSelection = viewModel::clearSelection,
-                onDeleteSelected = viewModel::deleteSelected,
+                // G-5 修复: 批量删除前需用户确认,避免误操作
+                onDeleteSelected = { showBatchDeleteConfirm = true },
                 onBatchAiTag = { showBatchAiTagDialog = true },
                 onBatchRating = { showBatchRatingDialog = true },
                 onBatchExport = { showBatchExportDialog = true },
@@ -290,7 +299,8 @@ fun AlbumScreen(
             onToggleSemantic = viewModel::toggleSemanticSearch,
             onToggleImageSelection = viewModel::toggleImageSelection,
             onClearSelection = viewModel::clearSelection,
-            onDeleteSelected = viewModel::deleteSelected,
+            // G-5 修复: 批量删除前需用户确认,避免误操作 (与 showFolderSidebar 分支保持一致)
+            onDeleteSelected = { showBatchDeleteConfirm = true },
             onBatchAiTag = { showBatchAiTagDialog = true },
             onBatchRating = { showBatchRatingDialog = true },
             onBatchExport = { showBatchExportDialog = true },
@@ -369,8 +379,10 @@ fun AlbumScreen(
                 navController.navigate("export/${image.imageId}")
             },
             onDelete = {
+                // F-1 修复: 上下文菜单"删除"应执行真正的删除,而非切换选中态
+                // G-5 修复: 删除前弹出确认对话框
                 contextMenuImage = null
-                viewModel.toggleImageSelection(image.imageId)
+                pendingDeleteImage = image
             },
             onAnalyzeAi = {
                 contextMenuImage = null
@@ -478,6 +490,106 @@ fun AlbumScreen(
             }
         )
     }
+
+    // S-2 修复: 观察 ViewModel 抛出的 permissionRationale (例如: 目录无图片/导入失败等)
+    permissionRationale?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearPermissionRationale() },
+            title = { Text("提示") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearPermissionRationale() }) {
+                    Text(stringRes { confirm })
+                }
+            }
+        )
+    }
+
+    // G-5 修复: 单张图片删除确认对话框
+    pendingDeleteImage?.let { image ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteImage = null },
+            title = { Text(stringRes { delete }) },
+            text = {
+                Text("确定要删除 \"${image.imageName}\" 吗?此操作不可撤销。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteImage(image.imageId)
+                        pendingDeleteImage = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text(stringRes { delete }) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteImage = null }) {
+                    Text(stringRes { cancel })
+                }
+            }
+        )
+    }
+
+    // G-5 修复: 批量删除确认对话框
+    if (showBatchDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = { Text(stringRes { delete }) },
+            text = {
+                Text("确定要删除选中的 ${selectedImages.size} 张图片吗?此操作不可撤销。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteSelected()
+                        showBatchDeleteConfirm = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text(stringRes { delete }) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    Text(stringRes { cancel })
+                }
+            }
+        )
+    }
+
+    // S-8 修复: 批量导出结果反馈 — 导出完成后弹出汇总信息
+    batchExportResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearBatchExportResult() },
+            title = { Text(stringRes { export }) },
+            text = {
+                Column {
+                    Text("导出完成")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "成功: ${result.successCount} / ${result.totalItems}",
+                        color = if (result.errorCount == 0)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error
+                    )
+                    if (result.errorCount > 0) {
+                        Text(
+                            "失败: ${result.errorCount}",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearBatchExportResult() }) {
+                    Text(stringRes { confirm })
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -557,13 +669,19 @@ private fun AlbumContent(
                                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
                                     },
                                     trailingIcon = {
+                                        // G-1 修复: 清除按钮必须可点击 (原 bare Icon 不可交互)
                                         if (searchQuery.isNotEmpty()) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            IconButton(
+                                                onClick = { onSearchQueryChange("") },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = stringRes { clear },
+                                                    modifier = Modifier.size(18.dp),
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                     }
                                 )
@@ -771,7 +889,9 @@ private fun AlbumContent(
                                             onToggleImageSelection(image.imageId)
                                         }
                                     },
-                                    onToggleDateGroup = onToggleDateGroup
+                                    onToggleDateGroup = onToggleDateGroup,
+                                    // G-9 修复: 双指捏合调整列数后,反向同步到 gridDensity 状态
+                                    onGridDensityChange = onGridDensityChange
                                 )
                             }
                             AlbumViewMode.PROJECT -> {
@@ -958,7 +1078,9 @@ private fun PhotoGridSection(
     onLoadThumbnail: (Long) -> Unit,
     onImageClick: (ImageModel) -> Unit,
     onImageLongClick: (ImageModel) -> Unit,
-    onToggleDateGroup: (String) -> Unit
+    onToggleDateGroup: (String) -> Unit,
+    // G-9 修复: 双指捏合调整列数后,反向同步到 gridDensity 状态
+    onGridDensityChange: (GridDensity) -> Unit
 ) {
     val dateGroups = remember(images) { groupImagesByDate(images) }
     val density = LocalDensity.current
@@ -967,6 +1089,15 @@ private fun PhotoGridSection(
     // 同步密度切换
     LaunchedEffect(gridDensity) {
         columns = gridDensity.columns
+    }
+
+    // G-9 修复: 双指捏合调整列数时,反向同步到 gridDensity
+    // 这样 GridDensityCycleButton 显示的图标/列数与实际渲染一致
+    fun syncDensityFromColumns(col: Int) {
+        val matched = GridDensity.entries.firstOrNull { it.columns == col }
+        if (matched != null && matched != gridDensity) {
+            onGridDensityChange(matched)
+        }
     }
 
     val gridState = rememberLazyGridState()
@@ -999,7 +1130,11 @@ private fun PhotoGridSection(
                             val zoom = event.calculateZoom()
                             if (zoom != 1f) {
                                 val target = (columns.toFloat() / zoom).roundToInt().coerceIn(2, 6)
-                                if (target != columns) columns = target
+                                if (target != columns) {
+                                    columns = target
+                                    // G-9 修复: 同步回 gridDensity,使密度按钮显示与实际列数一致
+                                    syncDensityFromColumns(target)
+                                }
                             }
                             // 双指时消费事件,防止触发滚动
                             pointers.forEach { it.consume() }

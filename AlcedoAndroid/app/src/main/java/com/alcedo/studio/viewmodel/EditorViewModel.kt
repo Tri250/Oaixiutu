@@ -35,6 +35,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     companion object {
         private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
+        // C8 修复: 预览处理使用降采样位图,避免 4096x4096 时 256MB float 数组 OOM
+        // 2048x2048 = 4M 像素,float 数组 64MB,足够预览质量且不爆内存
+        private const val PREVIEW_MAX_PIXELS = 2048 * 2048
     }
     private val imageRepository by lazy { AppModule.imageRepository }
     private val editHistoryRepository by lazy { AppModule.editHistoryRepository }
@@ -49,6 +52,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _originalBitmap = MutableStateFlow<Bitmap?>(null)
     val originalBitmap: StateFlow<Bitmap?> = _originalBitmap
+
+    // C8 修复: 预览专用降采样位图,用于 PipelineService 实时处理
+    // 避免对 4096x4096 原图每次调整都分配 256MB float 数组导致 OOM
+    private var previewSourceBitmap: Bitmap? = null
 
     private val _previewBitmap = MutableStateFlow<Bitmap?>(null)
     val previewBitmap: StateFlow<Bitmap?> = _previewBitmap
@@ -120,6 +127,14 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _canRedo = MutableStateFlow(false)
     val canRedo: StateFlow<Boolean> = _canRedo
+
+    // C9 修复: 单独跟踪"已保存"状态,避免 hasUnsavedChanges 永远返回 true
+    // _savedCursor 记录上次保存时的工作版本游标位置
+    private var savedCursor: Int = 0
+
+    // C4 修复: 保存版本时,把当前 PipelineParams 物化为 JSON 写入历史版本,
+    // 这样切换版本时能完整恢复所有参数
+    private var lastSavedParamsJson: JsonObject? = null
 
     // ── Presets ──
 
@@ -194,6 +209,20 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         return sampleSize
     }
 
+    /**
+     * C8 修复: 将原图降采样到 PREVIEW_MAX_PIXELS 以内,供实时预览 Pipeline 使用。
+     * 2048x2048 足够预览质量,float 数组约 64MB,显著降低 OOM 风险。
+     * 原图保留在 [_originalBitmap] 供导出使用。
+     */
+    private fun downscaleForPreview(source: Bitmap): Bitmap {
+        val pixelCount = source.width.toLong() * source.height.toLong()
+        if (pixelCount <= PREVIEW_MAX_PIXELS) return source
+        val scale = kotlin.math.sqrt(PREVIEW_MAX_PIXELS.toFloat() / pixelCount.toFloat())
+        val newW = (source.width * scale).toInt().coerceAtLeast(1)
+        val newH = (source.height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(source, newW, newH, true)
+    }
+
     private fun loadImage() {
         viewModelScope.launch {
             val id = imageId.toLongOrNull() ?: return@launch
@@ -220,7 +249,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         BitmapFactory.decodeFile(it.imagePath, decodeOptions)
                     }
                     _originalBitmap.value = bitmap
-                    _previewBitmap.value = bitmap
+                    // C8 修复: 为预览生成降采样位图,避免实时处理大图 OOM
+                    previewSourceBitmap = downscaleForPreview(bitmap)
+                    _previewBitmap.value = previewSourceBitmap
                 } catch (e: OutOfMemoryError) {
                     Log.e("EditorVM", "OOM loading image, attempting recovery", e)
                     System.gc()
@@ -279,7 +310,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateWhiteBalance(temperature: Float, tint: Float) {
         _params.value = _params.value.copy(whiteBalanceTemp = temperature, whiteBalanceTint = tint)
-        recordTransaction(OperatorType.WHITE_BALANCE, "temperature", temperature)
+        // C3 修复: 复合更新需记录全部变更的子参数,否则 tint 在撤销时丢失
+        recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", temperature)
+        recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", tint)
         regeneratePreview()
     }
 
@@ -297,7 +330,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateClarity(amount: Float, radius: Float = 15f) {
         _params.value = _params.value.copy(clarityAmount = amount, clarityRadius = radius)
+        // C3 修复: 同时记录 radius
         recordTransaction(OperatorType.CLARITY, "clarityAmount", amount)
+        recordTransaction(OperatorType.CLARITY, "clarityRadius", radius)
         regeneratePreview()
     }
 
@@ -320,7 +355,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             halationSpread = spread,
             halationRedBias = redBias
         )
+        // C3 修复: 记录全部 halation 子参数,避免撤销时丢失 threshold/spread/redBias
         recordTransaction(OperatorType.HALATION, "halationIntensity", intensity)
+        recordTransaction(OperatorType.HALATION, "halationThreshold", threshold)
+        recordTransaction(OperatorType.HALATION, "halationSpread", spread)
+        recordTransaction(OperatorType.HALATION, "halationRedBias", redBias)
         regeneratePreview()
     }
 
@@ -344,13 +383,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateLensCorrection(k1: Float, k2: Float, k3: Float, p1: Float, p2: Float) {
         _params.value = _params.value.copy(lensK1 = k1, lensK2 = k2, lensK3 = k3, lensP1 = p1, lensP2 = p2)
+        // C3 修复: 记录全部镜头校正参数,避免撤销只恢复 k1
         recordTransaction(OperatorType.GEOMETRY, "lensK1", k1)
+        recordTransaction(OperatorType.GEOMETRY, "lensK2", k2)
+        recordTransaction(OperatorType.GEOMETRY, "lensK3", k3)
+        recordTransaction(OperatorType.GEOMETRY, "lensP1", p1)
+        recordTransaction(OperatorType.GEOMETRY, "lensP2", p2)
         regeneratePreview()
     }
 
     fun updateLut(enabled: Boolean, path: String) {
         _params.value = _params.value.copy(lutEnabled = enabled, lutPath = path)
-        recordTransaction(OperatorType.LUT, "lutPath", if (enabled) 1f else 0f)
+        // C3 修复: 单独记录 enabled 状态,path 字符串暂不入历史 (float 数组不支持 String)
+        recordTransaction(OperatorType.LUT, "lutEnabled", if (enabled) 1f else 0f)
         regeneratePreview()
     }
 
@@ -374,13 +419,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateCrop(left: Float, top: Float, right: Float, bottom: Float) {
         _params.value = _params.value.copy(cropLeft = left, cropTop = top, cropRight = right, cropBottom = bottom)
+        // C3 修复: 记录全部裁剪参数
         recordTransaction(OperatorType.GEOMETRY, "cropLeft", left)
+        recordTransaction(OperatorType.GEOMETRY, "cropTop", top)
+        recordTransaction(OperatorType.GEOMETRY, "cropRight", right)
+        recordTransaction(OperatorType.GEOMETRY, "cropBottom", bottom)
         regeneratePreview()
     }
 
     fun updatePerspective(horizontal: Float, vertical: Float) {
         _params.value = _params.value.copy(perspectiveH = horizontal, perspectiveV = vertical)
+        // C3 修复: 记录水平+垂直透视
         recordTransaction(OperatorType.GEOMETRY, "perspectiveH", horizontal)
+        recordTransaction(OperatorType.GEOMETRY, "perspectiveV", vertical)
         regeneratePreview()
     }
 
@@ -398,7 +449,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateDisplayTransform(displayTransform: DisplayTransform) {
         _params.value = _params.value.copy(displayTransform = displayTransform)
-        recordTransaction(OperatorType.DISPLAY_TRANSFORM, "colorScience", displayTransform.colorScience.ordinal.toFloat())
+        // C3 修复: 记录全部 DisplayTransform 子字段
+        recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_colorScience", displayTransform.colorScience.ordinal.toFloat())
+        recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_eotf", displayTransform.eotf.ordinal.toFloat())
+        recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_peakLuminance", displayTransform.peakLuminance)
+        recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_displayColorSpace", displayTransform.displayColorSpace.ordinal.toFloat())
         regeneratePreview()
     }
 
@@ -419,7 +474,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             toneCurveY = y,
             toneCurvePoints = x.size
         )
+        // C3 修复: 记录全部曲线点,否则撤销只恢复点数,曲线形状丢失
         recordTransaction(OperatorType.TONE_CURVE, "toneCurvePoints", x.size.toFloat())
+        for (i in x.indices) {
+            recordTransaction(OperatorType.TONE_CURVE, "toneCurveX[$i]", x[i])
+            recordTransaction(OperatorType.TONE_CURVE, "toneCurveY[$i]", y[i])
+        }
         regeneratePreview()
     }
 
@@ -440,7 +500,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             colorWheelLiftG = lift[1],
             colorWheelLiftB = lift[2]
         )
-        recordTransaction(OperatorType.COLOR_WHEEL, "liftR", lift[0])
+        // C3 修复: 记录全部 RGB 分量
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelLiftR", lift[0])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelLiftG", lift[1])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelLiftB", lift[2])
         regeneratePreview()
     }
 
@@ -451,7 +514,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             colorWheelGammaG = gamma[1],
             colorWheelGammaB = gamma[2]
         )
-        recordTransaction(OperatorType.COLOR_WHEEL, "gammaR", gamma[0])
+        // C3 修复: 记录全部 RGB 分量
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGammaR", gamma[0])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGammaG", gamma[1])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGammaB", gamma[2])
         regeneratePreview()
     }
 
@@ -462,7 +528,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             colorWheelGainG = gain[1],
             colorWheelGainB = gain[2]
         )
-        recordTransaction(OperatorType.COLOR_WHEEL, "gainR", gain[0])
+        // C3 修复: 记录全部 RGB 分量
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGainR", gain[0])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGainG", gain[1])
+        recordTransaction(OperatorType.COLOR_WHEEL, "colorWheelGainB", gain[2])
         regeneratePreview()
     }
 
@@ -530,6 +599,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             tintShadowStrength = shadowStrength,
             tintBalance = balance
         )
+        // C3 修复: 记录全部 tint 子参数,避免撤销只恢复 balance
+        recordTransaction(OperatorType.TINT, "tintHighlightHue", highlightHue)
+        recordTransaction(OperatorType.TINT, "tintHighlightStrength", highlightStrength)
+        recordTransaction(OperatorType.TINT, "tintShadowHue", shadowHue)
+        recordTransaction(OperatorType.TINT, "tintShadowStrength", shadowStrength)
         recordTransaction(OperatorType.TINT, "tintBalance", balance)
         regeneratePreview()
     }
@@ -540,6 +614,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateChannelMixer(matrix: FloatArray, monochrome: Boolean) {
         _params.value = _params.value.copy(channelMixerMatrix = matrix, channelMixerMonochrome = monochrome)
+        // C3 修复: 记录矩阵元素 + monochrome 标志,避免撤销丢失矩阵
+        for (i in matrix.indices) {
+            recordTransaction(OperatorType.COLOR_WHEEL, "channelMixerMatrix[$i]", matrix[i])
+        }
         recordTransaction(OperatorType.COLOR_WHEEL, "channelMixerMonochrome", if (monochrome) 1f else 0f)
         regeneratePreview()
     }
@@ -566,7 +644,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             delay(50) // 50ms debounce
             _isProcessing.value = true
             try {
-                val source = _originalBitmap.value
+                // C8 修复: 使用降采样位图进行预览,避免大图 OOM
+                val source = previewSourceBitmap ?: _originalBitmap.value
                 if (source != null) {
                     _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
                 }
@@ -612,7 +691,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     autoExposureValue = ev,
                     exposure = ev
                 )
-                recordTransaction(OperatorType.EXPOSURE, "autoExposure", ev)
+                recordTransaction(OperatorType.EXPOSURE, "autoExposureValue", ev)
                 regeneratePreview()
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
@@ -718,6 +797,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     private fun recordTransaction(operatorType: OperatorType, key: String, value: Float) {
+        // C3 修复: 扩展 when 块以覆盖所有可调标量参数,
+        // 否则未列出的 key 会落入 else 分支,paramsBefore == paramsAfter,撤销无效
         val paramsBefore = JsonObject(mapOf(key to JsonPrimitive(_params.value.run {
             when (key) {
                 "exposure" -> exposure
@@ -728,20 +809,75 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "saturation" -> saturation
                 "vibrance" -> vibrance
                 "clarityAmount" -> clarityAmount
+                "clarityRadius" -> clarityRadius
                 "sharpenAmount" -> sharpenAmount
                 "filmGrainIntensity" -> filmGrainIntensity
                 "halationIntensity" -> halationIntensity
+                "halationThreshold" -> halationThreshold
+                "halationSpread" -> halationSpread
+                "halationRedBias" -> halationRedBias
                 "sigmoidContrast" -> sigmoidContrast
+                "sigmoidPivot" -> sigmoidPivot
+                "sigmoidShoulder" -> sigmoidShoulder
+                "shadowBoundary" -> shadowBoundary
+                "highlightBoundary" -> highlightBoundary
+                "whiteBalanceTemp" -> whiteBalanceTemp
+                "whiteBalanceTint" -> whiteBalanceTint
+                "autoExposureValue" -> autoExposureValue
                 "geometryRotate" -> geometryRotate
+                "geometryScale" -> geometryScale
                 "geometryFlipH" -> if (geometryFlipH) 1f else 0f
                 "geometryFlipV" -> if (geometryFlipV) 1f else 0f
                 "cropLeft" -> cropLeft
+                "cropTop" -> cropTop
+                "cropRight" -> cropRight
+                "cropBottom" -> cropBottom
                 "perspectiveH" -> perspectiveH
+                "perspectiveV" -> perspectiveV
+                "lensK1" -> lensK1
+                "lensK2" -> lensK2
+                "lensK3" -> lensK3
+                "lensP1" -> lensP1
+                "lensP2" -> lensP2
                 "lensVignetteStrength" -> lensVignetteStrength
-                "sigmoidShoulder" -> sigmoidShoulder
-                "shadowBoundary" -> shadowBoundary
                 "lutIntensity" -> lutIntensity
-                else -> value
+                "lutEnabled" -> if (lutEnabled) 1f else 0f
+                "tintHighlightHue" -> tintHighlightHue
+                "tintHighlightStrength" -> tintHighlightStrength
+                "tintShadowHue" -> tintShadowHue
+                "tintShadowStrength" -> tintShadowStrength
+                "tintBalance" -> tintBalance
+                "colorWheelLiftR" -> colorWheelLiftR
+                "colorWheelLiftG" -> colorWheelLiftG
+                "colorWheelLiftB" -> colorWheelLiftB
+                "colorWheelGammaR" -> colorWheelGammaR
+                "colorWheelGammaG" -> colorWheelGammaG
+                "colorWheelGammaB" -> colorWheelGammaB
+                "colorWheelGainR" -> colorWheelGainR
+                "colorWheelGainG" -> colorWheelGainG
+                "colorWheelGainB" -> colorWheelGainB
+                "channelMixerMonochrome" -> if (channelMixerMonochrome) 1f else 0f
+                "toneCurvePoints" -> toneCurvePoints.toFloat()
+                "displayTransform_colorScience" -> displayTransform.colorScience.ordinal.toFloat()
+                "displayTransform_eotf" -> displayTransform.eotf.ordinal.toFloat()
+                "displayTransform_peakLuminance" -> displayTransform.peakLuminance
+                "displayTransform_displayColorSpace" -> displayTransform.displayColorSpace.ordinal.toFloat()
+                // HSL / 数组元素 — 通过索引键查询
+                else -> {
+                    val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
+                    if (m != null) return@run hslHueShift[m.groupValues[1].toInt()]
+                    val m2 = Regex("""hslSaturationScale\[(\d+)]""").matchEntire(key)
+                    if (m2 != null) return@run hslSaturationScale[m2.groupValues[1].toInt()]
+                    val m3 = Regex("""hslLuminanceScale\[(\d+)]""").matchEntire(key)
+                    if (m3 != null) return@run hslLuminanceScale[m3.groupValues[1].toInt()]
+                    val m4 = Regex("""channelMixerMatrix\[(\d+)]""").matchEntire(key)
+                    if (m4 != null) return@run channelMixerMatrix[m4.groupValues[1].toInt()]
+                    val m5 = Regex("""toneCurveX\[(\d+)]""").matchEntire(key)
+                    if (m5 != null) return@run toneCurveX[m5.groupValues[1].toInt()]
+                    val m6 = Regex("""toneCurveY\[(\d+)]""").matchEntire(key)
+                    if (m6 != null) return@run toneCurveY[m6.groupValues[1].toInt()]
+                    value
+                }
             }
         })))
         val paramsAfter = JsonObject(mapOf(key to JsonPrimitive(value)))
@@ -777,12 +913,31 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _canRedo.value = _workingVersion.value.cursor < _workingVersion.value.transactions.size
     }
 
+    /**
+     * C9 修复: 真正判断是否有未保存修改 — 比较当前游标与上次保存时的游标。
+     * 旧实现 [_canUndo.value] 在任何操作后都为 true,导致永远显示"未保存"。
+     */
+    fun hasUnsavedChanges(): Boolean = _workingVersion.value.cursor != savedCursor
+
     private fun reconstructParamsFromWorkingVersion() {
         val applied = _workingVersion.value.appliedTransactions()
         if (applied.isEmpty()) return
 
         // Start from default and replay all applied transactions
         var reconstructed = PipelineParams()
+        // 数组类型需可变累积,避免每次事务覆盖前面的索引
+        val hslHue = FloatArray(8) { 0f }
+        val hslSat = FloatArray(8) { 1f }
+        val hslLum = FloatArray(8) { 1f }
+        val mixer = FloatArray(9) { if (it % 4 == 0) 1f else 0f }
+        val tcX = FloatArray(5) { it / 4f }
+        val tcY = FloatArray(5) { it / 4f }
+        var toneCurvePoints = 5
+        var colorScience = ColorScience.ACES20
+        var eotf = EOTF.SRGB
+        var peakLuminance = 100f
+        var displayColorSpace = ColorSpace.SRGB
+
         for (tx in applied) {
             val after = tx.paramsAfter
             for ((key, value) in after) {
@@ -796,25 +951,116 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "saturation" -> reconstructed.copy(saturation = floatValue)
                     "vibrance" -> reconstructed.copy(vibrance = floatValue)
                     "clarityAmount" -> reconstructed.copy(clarityAmount = floatValue)
+                    "clarityRadius" -> reconstructed.copy(clarityRadius = floatValue)
                     "sharpenAmount" -> reconstructed.copy(sharpenAmount = floatValue)
                     "filmGrainIntensity" -> reconstructed.copy(filmGrainIntensity = floatValue)
                     "halationIntensity" -> reconstructed.copy(halationIntensity = floatValue)
+                    "halationThreshold" -> reconstructed.copy(halationThreshold = floatValue)
+                    "halationSpread" -> reconstructed.copy(halationSpread = floatValue)
+                    "halationRedBias" -> reconstructed.copy(halationRedBias = floatValue)
                     "sigmoidContrast" -> reconstructed.copy(sigmoidContrast = floatValue)
-                    "autoExposure" -> reconstructed.copy(exposure = floatValue)
+                    "sigmoidPivot" -> reconstructed.copy(sigmoidPivot = floatValue)
+                    "sigmoidShoulder" -> reconstructed.copy(sigmoidShoulder = floatValue)
+                    "shadowBoundary" -> reconstructed.copy(shadowBoundary = floatValue)
+                    "highlightBoundary" -> reconstructed.copy(highlightBoundary = floatValue)
+                    "whiteBalanceTemp" -> reconstructed.copy(whiteBalanceTemp = floatValue)
+                    "whiteBalanceTint" -> reconstructed.copy(whiteBalanceTint = floatValue)
+                    "autoExposureValue" -> reconstructed.copy(
+                        autoExposureEnabled = true, autoExposureValue = floatValue, exposure = floatValue)
                     "geometryRotate" -> reconstructed.copy(geometryRotate = floatValue)
+                    "geometryScale" -> reconstructed.copy(geometryScale = floatValue)
                     "geometryFlipH" -> reconstructed.copy(geometryFlipH = floatValue != 0f)
                     "geometryFlipV" -> reconstructed.copy(geometryFlipV = floatValue != 0f)
                     "cropLeft" -> reconstructed.copy(cropLeft = floatValue)
+                    "cropTop" -> reconstructed.copy(cropTop = floatValue)
+                    "cropRight" -> reconstructed.copy(cropRight = floatValue)
+                    "cropBottom" -> reconstructed.copy(cropBottom = floatValue)
                     "perspectiveH" -> reconstructed.copy(perspectiveH = floatValue)
+                    "perspectiveV" -> reconstructed.copy(perspectiveV = floatValue)
+                    "lensK1" -> reconstructed.copy(lensK1 = floatValue)
+                    "lensK2" -> reconstructed.copy(lensK2 = floatValue)
+                    "lensK3" -> reconstructed.copy(lensK3 = floatValue)
+                    "lensP1" -> reconstructed.copy(lensP1 = floatValue)
+                    "lensP2" -> reconstructed.copy(lensP2 = floatValue)
                     "lensVignetteStrength" -> reconstructed.copy(lensVignetteStrength = floatValue)
-                    "sigmoidShoulder" -> reconstructed.copy(sigmoidShoulder = floatValue)
-                    "shadowBoundary" -> reconstructed.copy(shadowBoundary = floatValue)
                     "lutIntensity" -> reconstructed.copy(lutIntensity = floatValue)
-                    else -> reconstructed
+                    "lutEnabled" -> reconstructed.copy(lutEnabled = floatValue != 0f)
+                    "tintHighlightHue" -> reconstructed.copy(tintHighlightHue = floatValue)
+                    "tintHighlightStrength" -> reconstructed.copy(tintHighlightStrength = floatValue)
+                    "tintShadowHue" -> reconstructed.copy(tintShadowHue = floatValue)
+                    "tintShadowStrength" -> reconstructed.copy(tintShadowStrength = floatValue)
+                    "tintBalance" -> reconstructed.copy(tintBalance = floatValue)
+                    "colorWheelLiftR" -> reconstructed.copy(colorWheelLiftR = floatValue)
+                    "colorWheelLiftG" -> reconstructed.copy(colorWheelLiftG = floatValue)
+                    "colorWheelLiftB" -> reconstructed.copy(colorWheelLiftB = floatValue)
+                    "colorWheelGammaR" -> reconstructed.copy(colorWheelGammaR = floatValue)
+                    "colorWheelGammaG" -> reconstructed.copy(colorWheelGammaG = floatValue)
+                    "colorWheelGammaB" -> reconstructed.copy(colorWheelGammaB = floatValue)
+                    "colorWheelGainR" -> reconstructed.copy(colorWheelGainR = floatValue)
+                    "colorWheelGainG" -> reconstructed.copy(colorWheelGainG = floatValue)
+                    "colorWheelGainB" -> reconstructed.copy(colorWheelGainB = floatValue)
+                    "channelMixerMonochrome" -> reconstructed.copy(channelMixerMonochrome = floatValue != 0f)
+                    "toneCurvePoints" -> { toneCurvePoints = floatValue.toInt(); reconstructed }
+                    "displayTransform_colorScience" -> { colorScience = ColorScience.entries.getOrNull(floatValue.toInt()) ?: colorScience; reconstructed }
+                    "displayTransform_eotf" -> { eotf = EOTF.entries.getOrNull(floatValue.toInt()) ?: eotf; reconstructed }
+                    "displayTransform_peakLuminance" -> { peakLuminance = floatValue; reconstructed }
+                    "displayTransform_displayColorSpace" -> { displayColorSpace = ColorSpace.entries.getOrNull(floatValue.toInt()) ?: displayColorSpace; reconstructed }
+                    else -> {
+                        // HSL / 数组元素 — 累积写入对应索引
+                        val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
+                        if (m != null) { hslHue[m.groupValues[1].toInt()] = floatValue; reconstructed }
+                        else {
+                            val m2 = Regex("""hslSaturationScale\[(\d+)]""").matchEntire(key)
+                            if (m2 != null) { hslSat[m2.groupValues[1].toInt()] = floatValue; reconstructed }
+                            else {
+                                val m3 = Regex("""hslLuminanceScale\[(\d+)]""").matchEntire(key)
+                                if (m3 != null) { hslLum[m3.groupValues[1].toInt()] = floatValue; reconstructed }
+                                else {
+                                    val m4 = Regex("""channelMixerMatrix\[(\d+)]""").matchEntire(key)
+                                    if (m4 != null) { mixer[m4.groupValues[1].toInt()] = floatValue; reconstructed }
+                                    else {
+                                        val m5 = Regex("""toneCurveX\[(\d+)]""").matchEntire(key)
+                                        if (m5 != null) { tcX[m5.groupValues[1].toInt()] = floatValue; reconstructed }
+                                        else {
+                                            val m6 = Regex("""toneCurveY\[(\d+)]""").matchEntire(key)
+                                            if (m6 != null) { tcY[m6.groupValues[1].toInt()] = floatValue; reconstructed }
+                                            else reconstructed
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-        _params.value = reconstructed
+        _params.value = reconstructed.copy(
+            hslHueShift = hslHue,
+            hslSaturationScale = hslSat,
+            hslLuminanceScale = hslLum,
+            channelMixerMatrix = mixer,
+            toneCurveX = tcX,
+            toneCurveY = tcY,
+            toneCurvePoints = toneCurvePoints,
+            displayTransform = DisplayTransform(
+                colorScience = colorScience,
+                eotf = eotf,
+                peakLuminance = peakLuminance,
+                displayColorSpace = displayColorSpace
+            )
+        )
+        // 同步 UI 状态
+        _toneCurveX.value = tcX
+        _toneCurveY.value = tcY
+        _colorWheelLift.value = floatArrayOf(
+            reconstructed.colorWheelLiftR, reconstructed.colorWheelLiftG, reconstructed.colorWheelLiftB)
+        _colorWheelGamma.value = floatArrayOf(
+            reconstructed.colorWheelGammaR, reconstructed.colorWheelGammaG, reconstructed.colorWheelGammaB)
+        _colorWheelGain.value = floatArrayOf(
+            reconstructed.colorWheelGainR, reconstructed.colorWheelGainG, reconstructed.colorWheelGainB)
+        _hslHueShift.value = hslHue
+        _hslSaturationScale.value = hslSat
+        _hslLuminanceScale.value = hslLum
         regeneratePreview()
     }
 
@@ -906,8 +1152,17 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun saveVersion() {
         _history.value?.let { hist ->
+            // C4 修复: 把当前 PipelineParams 物化为 JSON 写入活动版本,
+            // 这样切换版本时能完整恢复所有参数(而不仅是被记录的少量字段)
+            val paramsJson = materializeParamsToJson(_params.value)
+            lastSavedParamsJson = paramsJson
+            hist.getVersion(hist.activeVersionId)?.let { version ->
+                version.materializedParams = paramsJson
+            }
             val updated = hist.copy(lastModifiedTime = java.time.Instant.now())
             _history.value = updated
+            // C9 修复: 记录已保存的游标位置,使 hasUnsavedChanges 返回 false
+            savedCursor = _workingVersion.value.cursor
             viewModelScope.launch {
                 try {
                     editHistoryRepository.saveHistory(updated)
@@ -918,8 +1173,86 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
-    // 如果有可撤销的操作说明有未保存的修改
-    fun hasUnsavedChanges(): Boolean = _canUndo.value
+    /**
+     * C4 修复: 把 PipelineParams 序列化为 JSON,作为版本的 materializedParams 持久化。
+     * 覆盖所有可调参数,避免旧实现只保存少量字段导致版本切换丢失数据。
+     */
+    private fun materializeParamsToJson(p: PipelineParams): JsonObject {
+        val map = mutableMapOf<String, JsonPrimitive>()
+        map["exposure"] = JsonPrimitive(p.exposure)
+        map["contrast"] = JsonPrimitive(p.contrast)
+        map["saturation"] = JsonPrimitive(p.saturation)
+        map["vibrance"] = JsonPrimitive(p.vibrance)
+        map["highlights"] = JsonPrimitive(p.highlights)
+        map["shadows"] = JsonPrimitive(p.shadows)
+        map["midtones"] = JsonPrimitive(p.midtones)
+        map["shadowBoundary"] = JsonPrimitive(p.shadowBoundary)
+        map["highlightBoundary"] = JsonPrimitive(p.highlightBoundary)
+        map["whiteBalanceTemp"] = JsonPrimitive(p.whiteBalanceTemp)
+        map["whiteBalanceTint"] = JsonPrimitive(p.whiteBalanceTint)
+        map["autoExposureEnabled"] = JsonPrimitive(p.autoExposureEnabled)
+        map["autoExposureValue"] = JsonPrimitive(p.autoExposureValue)
+        map["sigmoidContrast"] = JsonPrimitive(p.sigmoidContrast)
+        map["sigmoidPivot"] = JsonPrimitive(p.sigmoidPivot)
+        map["sigmoidShoulder"] = JsonPrimitive(p.sigmoidShoulder)
+        map["tintHighlightHue"] = JsonPrimitive(p.tintHighlightHue)
+        map["tintHighlightStrength"] = JsonPrimitive(p.tintHighlightStrength)
+        map["tintShadowHue"] = JsonPrimitive(p.tintShadowHue)
+        map["tintShadowStrength"] = JsonPrimitive(p.tintShadowStrength)
+        map["tintBalance"] = JsonPrimitive(p.tintBalance)
+        map["colorWheelLiftR"] = JsonPrimitive(p.colorWheelLiftR)
+        map["colorWheelLiftG"] = JsonPrimitive(p.colorWheelLiftG)
+        map["colorWheelLiftB"] = JsonPrimitive(p.colorWheelLiftB)
+        map["colorWheelGammaR"] = JsonPrimitive(p.colorWheelGammaR)
+        map["colorWheelGammaG"] = JsonPrimitive(p.colorWheelGammaG)
+        map["colorWheelGammaB"] = JsonPrimitive(p.colorWheelGammaB)
+        map["colorWheelGainR"] = JsonPrimitive(p.colorWheelGainR)
+        map["colorWheelGainG"] = JsonPrimitive(p.colorWheelGainG)
+        map["colorWheelGainB"] = JsonPrimitive(p.colorWheelGainB)
+        map["clarityAmount"] = JsonPrimitive(p.clarityAmount)
+        map["clarityRadius"] = JsonPrimitive(p.clarityRadius)
+        map["sharpenAmount"] = JsonPrimitive(p.sharpenAmount)
+        map["filmGrainIntensity"] = JsonPrimitive(p.filmGrainIntensity)
+        map["halationIntensity"] = JsonPrimitive(p.halationIntensity)
+        map["halationThreshold"] = JsonPrimitive(p.halationThreshold)
+        map["halationSpread"] = JsonPrimitive(p.halationSpread)
+        map["halationRedBias"] = JsonPrimitive(p.halationRedBias)
+        map["lutEnabled"] = JsonPrimitive(p.lutEnabled)
+        map["lutIntensity"] = JsonPrimitive(p.lutIntensity)
+        map["lutPath"] = JsonPrimitive(p.lutPath)
+        map["geometryRotate"] = JsonPrimitive(p.geometryRotate)
+        map["geometryScale"] = JsonPrimitive(p.geometryScale)
+        map["geometryFlipH"] = JsonPrimitive(p.geometryFlipH)
+        map["geometryFlipV"] = JsonPrimitive(p.geometryFlipV)
+        map["cropLeft"] = JsonPrimitive(p.cropLeft)
+        map["cropTop"] = JsonPrimitive(p.cropTop)
+        map["cropRight"] = JsonPrimitive(p.cropRight)
+        map["cropBottom"] = JsonPrimitive(p.cropBottom)
+        map["perspectiveH"] = JsonPrimitive(p.perspectiveH)
+        map["perspectiveV"] = JsonPrimitive(p.perspectiveV)
+        map["lensK1"] = JsonPrimitive(p.lensK1)
+        map["lensK2"] = JsonPrimitive(p.lensK2)
+        map["lensK3"] = JsonPrimitive(p.lensK3)
+        map["lensP1"] = JsonPrimitive(p.lensP1)
+        map["lensP2"] = JsonPrimitive(p.lensP2)
+        map["lensVignetteStrength"] = JsonPrimitive(p.lensVignetteStrength)
+        map["channelMixerMonochrome"] = JsonPrimitive(p.channelMixerMonochrome)
+        // HSL / channelMixerMatrix / toneCurve 数组通过索引展开
+        p.hslHueShift.forEachIndexed { i, v -> map["hslHueShift[$i]"] = JsonPrimitive(v) }
+        p.hslSaturationScale.forEachIndexed { i, v -> map["hslSaturationScale[$i]"] = JsonPrimitive(v) }
+        p.hslLuminanceScale.forEachIndexed { i, v -> map["hslLuminanceScale[$i]"] = JsonPrimitive(v) }
+        p.channelMixerMatrix.forEachIndexed { i, v -> map["channelMixerMatrix[$i]"] = JsonPrimitive(v) }
+        p.toneCurveX.forEachIndexed { i, v -> map["toneCurveX[$i]"] = JsonPrimitive(v) }
+        p.toneCurveY.forEachIndexed { i, v -> map["toneCurveY[$i]"] = JsonPrimitive(v) }
+        map["toneCurvePoints"] = JsonPrimitive(p.toneCurvePoints)
+        map["displayTransform_colorScience"] = JsonPrimitive(p.displayTransform.colorScience.ordinal)
+        map["displayTransform_eotf"] = JsonPrimitive(p.displayTransform.eotf.ordinal)
+        map["displayTransform_peakLuminance"] = JsonPrimitive(p.displayTransform.peakLuminance)
+        map["displayTransform_displayColorSpace"] = JsonPrimitive(p.displayTransform.displayColorSpace.ordinal)
+        map["displayTransform_openDrtLook"] = JsonPrimitive(p.displayTransform.openDrtLook.ordinal)
+        map["displayTransform_openDrtTonescale"] = JsonPrimitive(p.displayTransform.openDrtTonescale.ordinal)
+        return JsonObject(map)
+    }
 
     // 自动保存 — 每30秒检查一次
     private var autoSaveJob: Job? = null
@@ -929,7 +1262,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         autoSaveJob = viewModelScope.launch {
             while (isActive) {
                 delay(30_000) // 30秒
-                if (_canUndo.value) {
+                // C9 修复: 使用真实的未保存判断,而非 _canUndo (永远为 true)
+                if (hasUnsavedChanges()) {
                     saveVersion()
                 }
             }
@@ -942,35 +1276,119 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private fun reconstructParamsFromJson(json: JsonObject) {
         try {
-            val exposure = json["exposure"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val contrast = json["contrast"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val highlights = json["highlights"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val shadows = json["shadows"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val saturation = json["saturation"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val vibrance = json["vibrance"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val whiteBalanceTemp = json["whiteBalanceTemp"]?.jsonPrimitive?.floatOrNull ?: 6500f
-            val whiteBalanceTint = json["whiteBalanceTint"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val clarityAmount = json["clarityAmount"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val sharpenAmount = json["sharpenAmount"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val filmGrainIntensity = json["filmGrainIntensity"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val halationIntensity = json["halationIntensity"]?.jsonPrimitive?.floatOrNull ?: 0f
-            val sigmoidContrast = json["sigmoidContrast"]?.jsonPrimitive?.floatOrNull ?: 0f
+            // C4 修复: 完整恢复所有参数,避免版本切换丢失 HSL/色轮/几何/显示变换等
+            fun f(key: String, default: Float = 0f): Float =
+                json[key]?.jsonPrimitive?.floatOrNull ?: default
+
+            val hslHueShift = FloatArray(8) { i -> f("hslHueShift[$i]") }
+            val hslSatScale = FloatArray(8) { i -> f("hslSaturationScale[$i]", 1f) }
+            val hslLumScale = FloatArray(8) { i -> f("hslLuminanceScale[$i]", 1f) }
+            val channelMixer = FloatArray(9) { i ->
+                f("channelMixerMatrix[$i]", if (i % 4 == 0) 1f else 0f)
+            }
+            val toneCurveX = (0 until 5).map { f("toneCurveX[$it]", it / 4f) }.toFloatArray()
+            val toneCurveY = (0 until 5).map { f("toneCurveY[$it]", it / 4f) }.toFloatArray()
+
+            val colorScience = ColorScience.entries.getOrNull(
+                f("displayTransform_colorScience").toInt()) ?: ColorScience.ACES20
+            val eotf = EOTF.entries.getOrNull(
+                f("displayTransform_eotf").toInt()) ?: EOTF.SRGB
+            val colorSpace = ColorSpace.entries.getOrNull(
+                f("displayTransform_displayColorSpace").toInt()) ?: ColorSpace.SRGB
+            val openDrtLook = OpenDrtLook.entries.getOrNull(
+                f("displayTransform_openDrtLook").toInt()) ?: OpenDrtLook.STANDARD
+            val openDrtTonescale = OpenDrtTonescale.entries.getOrNull(
+                f("displayTransform_openDrtTonescale").toInt()) ?: OpenDrtTonescale.STANDARD
 
             _params.value = _params.value.copy(
-                exposure = exposure,
-                contrast = contrast,
-                highlights = highlights,
-                shadows = shadows,
-                saturation = saturation,
-                vibrance = vibrance,
-                whiteBalanceTemp = whiteBalanceTemp,
-                whiteBalanceTint = whiteBalanceTint,
-                clarityAmount = clarityAmount,
-                sharpenAmount = sharpenAmount,
-                filmGrainIntensity = filmGrainIntensity,
-                halationIntensity = halationIntensity,
-                sigmoidContrast = sigmoidContrast
+                exposure = f("exposure"),
+                contrast = f("contrast"),
+                saturation = f("saturation"),
+                vibrance = f("vibrance"),
+                highlights = f("highlights"),
+                shadows = f("shadows"),
+                midtones = f("midtones"),
+                shadowBoundary = f("shadowBoundary", 0.25f),
+                highlightBoundary = f("highlightBoundary", 0.75f),
+                whiteBalanceTemp = f("whiteBalanceTemp", 6500f),
+                whiteBalanceTint = f("whiteBalanceTint"),
+                autoExposureEnabled = json["autoExposureEnabled"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                autoExposureValue = f("autoExposureValue"),
+                sigmoidContrast = f("sigmoidContrast"),
+                sigmoidPivot = f("sigmoidPivot", 0.18f),
+                sigmoidShoulder = f("sigmoidShoulder", 0.5f),
+                tintHighlightHue = f("tintHighlightHue"),
+                tintHighlightStrength = f("tintHighlightStrength"),
+                tintShadowHue = f("tintShadowHue"),
+                tintShadowStrength = f("tintShadowStrength"),
+                tintBalance = f("tintBalance"),
+                colorWheelLiftR = f("colorWheelLiftR"),
+                colorWheelLiftG = f("colorWheelLiftG"),
+                colorWheelLiftB = f("colorWheelLiftB"),
+                colorWheelGammaR = f("colorWheelGammaR", 1f),
+                colorWheelGammaG = f("colorWheelGammaG", 1f),
+                colorWheelGammaB = f("colorWheelGammaB", 1f),
+                colorWheelGainR = f("colorWheelGainR", 1f),
+                colorWheelGainG = f("colorWheelGainG", 1f),
+                colorWheelGainB = f("colorWheelGainB", 1f),
+                clarityAmount = f("clarityAmount"),
+                clarityRadius = f("clarityRadius", 15f),
+                sharpenAmount = f("sharpenAmount"),
+                filmGrainIntensity = f("filmGrainIntensity"),
+                halationIntensity = f("halationIntensity"),
+                halationThreshold = f("halationThreshold", 0.8f),
+                halationSpread = f("halationSpread", 10f),
+                halationRedBias = f("halationRedBias", 0.7f),
+                lutEnabled = json["lutEnabled"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                lutIntensity = f("lutIntensity", 100f),
+                lutPath = json["lutPath"]?.jsonPrimitive?.content ?: "",
+                geometryRotate = f("geometryRotate"),
+                geometryScale = f("geometryScale", 1f),
+                geometryFlipH = json["geometryFlipH"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                geometryFlipV = json["geometryFlipV"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                cropLeft = f("cropLeft"),
+                cropTop = f("cropTop"),
+                cropRight = f("cropRight", 1f),
+                cropBottom = f("cropBottom", 1f),
+                perspectiveH = f("perspectiveH"),
+                perspectiveV = f("perspectiveV"),
+                lensK1 = f("lensK1"),
+                lensK2 = f("lensK2"),
+                lensK3 = f("lensK3"),
+                lensP1 = f("lensP1"),
+                lensP2 = f("lensP2"),
+                lensVignetteStrength = f("lensVignetteStrength"),
+                channelMixerMatrix = channelMixer,
+                channelMixerMonochrome = json["channelMixerMonochrome"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                hslHueShift = hslHueShift,
+                hslSaturationScale = hslSatScale,
+                hslLuminanceScale = hslLumScale,
+                toneCurveX = toneCurveX,
+                toneCurveY = toneCurveY,
+                toneCurvePoints = f("toneCurvePoints", 5f).toInt(),
+                displayTransform = DisplayTransform(
+                    colorScience = colorScience,
+                    eotf = eotf,
+                    peakLuminance = f("displayTransform_peakLuminance", 100f),
+                    displayColorSpace = colorSpace,
+                    openDrtLook = openDrtLook,
+                    openDrtTonescale = openDrtTonescale
+                )
             )
+
+            // 同步 UI 状态
+            _toneCurveX.value = toneCurveX
+            _toneCurveY.value = toneCurveY
+            _colorWheelLift.value = floatArrayOf(
+                f("colorWheelLiftR"), f("colorWheelLiftG"), f("colorWheelLiftB"))
+            _colorWheelGamma.value = floatArrayOf(
+                f("colorWheelGammaR", 1f), f("colorWheelGammaG", 1f), f("colorWheelGammaB", 1f))
+            _colorWheelGain.value = floatArrayOf(
+                f("colorWheelGainR", 1f), f("colorWheelGainG", 1f), f("colorWheelGainB", 1f))
+            _hslHueShift.value = hslHueShift
+            _hslSaturationScale.value = hslSatScale
+            _hslLuminanceScale.value = hslLumScale
+
             regeneratePreview()
         } catch (_: Exception) {
             // Fallback to default params
@@ -1123,6 +1541,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         // 仅置空引用，由 GC 回收，避免配置变更期间 use-after-recycle 崩溃
         _originalBitmap.value = null
         _previewBitmap.value = null
+        // C8 修复: 同步清空预览源位图引用
+        previewSourceBitmap = null
     }
 
     override fun onCleared() {

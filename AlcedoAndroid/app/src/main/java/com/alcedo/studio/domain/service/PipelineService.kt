@@ -387,50 +387,109 @@ class PipelineService {
     }
 
     private fun buildParamsArray(params: PipelineParams): FloatArray {
-        return floatArrayOf(
-            // Basic adjustments
-            params.exposure,
-            params.contrast,
-            params.saturation,
-            params.vibrance,
-            params.highlights,
-            params.shadows,
-            params.midtones,
-            params.whiteBalanceTemp,
-            params.whiteBalanceTint,
-            params.sharpenAmount,
-            params.clarityAmount,
-            params.clarityRadius,
-            params.filmGrainIntensity,
-            params.halationIntensity,
-            params.halationThreshold,
-            params.halationSpread,
-            params.halationRedBias,
-            params.sigmoidContrast,
+        // C1 修复: 完整序列化所有 PipelineParams 字段到原生管线,
+        // 确保 HSL/色调曲线/通道混合器/裁剪/镜头校正/自动曝光等
+        // 用户调整真正传递到原生 process(),否则预览不响应这些操作。
+        // 顺序必须与 native-lib.cpp 中 SAFE_PARAM 读取顺序严格一致。
+        val list = mutableListOf<Float>()
 
-            // Color wheels
-            params.colorWheelLiftR,
-            params.colorWheelLiftG,
-            params.colorWheelLiftB,
-            params.colorWheelGammaR,
-            params.colorWheelGammaG,
-            params.colorWheelGammaB,
-            params.colorWheelGainR,
-            params.colorWheelGainG,
-            params.colorWheelGainB,
+        // ── Basic adjustments (idx 0-17) ──
+        list += params.exposure
+        list += params.contrast
+        list += params.saturation
+        list += params.vibrance
+        list += params.highlights
+        list += params.shadows
+        list += params.midtones
+        list += params.whiteBalanceTemp
+        list += params.whiteBalanceTint
+        list += params.sharpenAmount
+        list += params.clarityAmount
+        list += params.clarityRadius
+        list += params.filmGrainIntensity
+        list += params.halationIntensity
+        list += params.halationThreshold
+        list += params.halationSpread
+        list += params.halationRedBias
+        list += params.sigmoidContrast
 
-            // Tint
-            params.tintHighlightHue,
-            params.tintHighlightStrength,
-            params.tintShadowHue,
-            params.tintShadowStrength,
-            params.tintBalance,
+        // ── Color wheels (idx 18-26) ──
+        list += params.colorWheelLiftR
+        list += params.colorWheelLiftG
+        list += params.colorWheelLiftB
+        list += params.colorWheelGammaR
+        list += params.colorWheelGammaG
+        list += params.colorWheelGammaB
+        list += params.colorWheelGainR
+        list += params.colorWheelGainG
+        list += params.colorWheelGainB
 
-            // Display transform
-            params.displayTransform.colorScience.ordinal.toFloat(),
-            params.displayTransform.eotf.ordinal.toFloat(),
-            params.displayTransform.peakLuminance,
-            params.displayTransform.displayColorSpace.ordinal.toFloat()
-        )
+        // ── Tint (idx 27-31) ──
+        list += params.tintHighlightHue
+        list += params.tintHighlightStrength
+        list += params.tintShadowHue
+        list += params.tintShadowStrength
+        list += params.tintBalance
+
+        // ── Display transform (idx 32-35) ──
+        list += params.displayTransform.colorScience.ordinal.toFloat()
+        list += params.displayTransform.eotf.ordinal.toFloat()
+        list += params.displayTransform.peakLuminance
+        list += params.displayTransform.displayColorSpace.ordinal.toFloat()
+
+        // ── Tone region boundaries (idx 36-37) ──
+        list += params.shadowBoundary
+        list += params.highlightBoundary
+
+        // ── Auto exposure (idx 38-41) ──
+        list += if (params.autoExposureEnabled) 1f else 0f
+        list += params.autoExposureTargetPercentile
+        list += params.autoExposureTargetLuminance
+        list += params.autoExposureValue
+
+        // ── Tone curve (idx 42-75): points count + x[16] + y[16] ──
+        list += params.toneCurvePoints.toFloat()
+        // Pad tone curve arrays to 16 entries (C++ struct fixed size)
+        for (i in 0 until 16) {
+            list += if (i < params.toneCurveX.size) params.toneCurveX[i] else 0f
+        }
+        for (i in 0 until 16) {
+            list += if (i < params.toneCurveY.size) params.toneCurveY[i] else 0f
+        }
+
+        // ── HSL (idx 76-99): hue_shift[8] + sat_scale[8] + lum_scale[8] ──
+        for (i in 0 until 8) {
+            list += if (i < params.hslHueShift.size) params.hslHueShift[i] else 0f
+        }
+        for (i in 0 until 8) {
+            list += if (i < params.hslSaturationScale.size) params.hslSaturationScale[i] else 1f
+        }
+        for (i in 0 until 8) {
+            list += if (i < params.hslLuminanceScale.size) params.hslLuminanceScale[i] else 1f
+        }
+
+        // ── Channel mixer (idx 100-109): matrix[9] + monochrome ──
+        for (i in 0 until 9) {
+            list += if (i < params.channelMixerMatrix.size) params.channelMixerMatrix[i] else 0f
+        }
+        list += if (params.channelMixerMonochrome) 1f else 0f
+
+        // ── Crop (idx 110-113) ──
+        list += params.geometryCropLeft
+        list += params.geometryCropTop
+        list += params.geometryCropRight
+        list += params.geometryCropBottom
+
+        // ── Lens correction (idx 114-118) ──
+        list += params.lensK1
+        list += params.lensK2
+        list += params.lensK3
+        list += params.lensP1
+        list += params.lensP2
+
+        // ── LUT enable flag (idx 119); lutPath is a string, applied via separate native call ──
+        list += if (params.lutEnabled) 1f else 0f
+
+        return list.toFloatArray()
     }
 }

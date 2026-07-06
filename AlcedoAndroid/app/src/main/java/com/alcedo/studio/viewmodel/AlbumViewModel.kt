@@ -100,6 +100,16 @@ class AlbumViewModel : ViewModel() {
         _permissionError.value = null
     }
 
+    /** S-2 修复: 清空 permissionRationale 状态 */
+    fun clearPermissionRationale() {
+        _permissionRationale.value = null
+    }
+
+    /** S-8 修复: 清空 batchExportResult 状态,避免对话框重复弹出 */
+    fun clearBatchExportResult() {
+        _batchExportResult.value = null
+    }
+
     // ── Sort & Filter ──
 
     private val _sortMode = MutableStateFlow(SortMode.DATE)
@@ -445,6 +455,8 @@ class AlbumViewModel : ViewModel() {
                 _images.value = firstPage
                 _hasMorePages.value = allImages.size > PAGE_SIZE
                 applyCurrentSortAndFilter(firstPage)
+                // 下拉刷新同时刷新文件夹列表 (B-2 修复)
+                loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "refresh failed", e)
             } finally {
@@ -684,7 +696,13 @@ class AlbumViewModel : ViewModel() {
 
     private fun applyCurrentSortAndFilter(images: List<ImageModel>) {
         val sorted = when (_sortMode.value) {
-            SortMode.DATE -> images.sortedByDescending { it.imageId }
+            // 日期排序使用真实拍摄日期 (G-2 修复),
+            // captureDate 格式 "yyyy:MM:dd HH:mm:ss" 可直接字符串比较
+            // 空值排到末尾
+            SortMode.DATE -> images.sortedWith(
+                compareByDescending<ImageModel> { it.exifDisplay.captureDate.isNotEmpty() }
+                    .thenByDescending { it.exifDisplay.captureDate }
+            )
             SortMode.NAME -> images.sortedBy { it.imageName }
             SortMode.RATING -> images.sortedByDescending {
                 it.exifDisplay.rating
@@ -692,7 +710,11 @@ class AlbumViewModel : ViewModel() {
             SortMode.TYPE -> images.sortedBy { it.imageType.ordinal }
         }
         val filter = _currentFilter.value
-        _filteredImages.value = if (filter != null) applyFilter(sorted, filter) else sorted
+        // 搜索激活时不覆盖 _filteredImages (S-6 修复):
+        // loadMoreImages 调用此方法时,若正在搜索,应保留搜索结果
+        if (_searchQuery.value.isBlank()) {
+            _filteredImages.value = if (filter != null) applyFilter(sorted, filter) else sorted
+        }
     }
 
     // ================================================================
@@ -821,13 +843,43 @@ class AlbumViewModel : ViewModel() {
             try {
                 val ids = _selectedImages.value.toList()
                 ids.map { id ->
-                    async { imageRepository.deleteImage(id) }
+                    async {
+                        // 完整删除链路 (F-2 修复):
+                        // 1. 删除 SleeveFile 记录 (避免孤儿数据)
+                        // 2. 删除 metadata 记录
+                        // 3. 清理缩略图缓存
+                        // 物理文件不删除 (SAF/MediaStore URI 无写权限时静默跳过)
+                        try {
+                            sleeveRepository.removeElementByImageId(id)
+                        } catch (_: Throwable) { /* SleeveFile 可能不存在 */ }
+                        imageRepository.deleteImage(id)
+                    }
                 }.awaitAll()
                 clearSelection()
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
+                _permissionError.value = "删除失败: ${e.message ?: "未知错误"}"
+            }
+        }
+    }
+
+    /**
+     * 单张图片删除 (F-1 修复): 上下文菜单"删除"按钮应调用此方法而非 toggleImageSelection
+     */
+    fun deleteImage(imageId: Long) {
+        viewModelScope.launch {
+            try {
+                try {
+                    sleeveRepository.removeElementByImageId(imageId)
+                } catch (_: Throwable) { }
+                imageRepository.deleteImage(imageId)
+                loadImages()
+                loadFolders()
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "deleteImage failed", e)
+                _permissionError.value = "删除失败: ${e.message ?: "未知错误"}"
             }
         }
     }
@@ -900,6 +952,14 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 sleeveRepository.setRating(imageId, rating)
+                // 评分后刷新 UI (S-1 修复): 更新 _images 中对应图片的 rating
+                val updated = _images.value.map { img ->
+                    if (img.imageId == imageId) {
+                        img.copy(exifDisplay = img.exifDisplay.copy(rating = rating))
+                    } else img
+                }
+                _images.value = updated
+                applyCurrentSortAndFilter(updated)
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
@@ -948,6 +1008,15 @@ class AlbumViewModel : ViewModel() {
                 for (imageId in ids) {
                     sleeveRepository.setRating(imageId, rating)
                 }
+                // 批量评分后刷新 UI (S-1 修复)
+                val idSet = ids.toSet()
+                val updated = _images.value.map { img ->
+                    if (img.imageId in idSet) {
+                        img.copy(exifDisplay = img.exifDisplay.copy(rating = rating))
+                    } else img
+                }
+                _images.value = updated
+                applyCurrentSortAndFilter(updated)
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }

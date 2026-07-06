@@ -11,6 +11,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
@@ -1578,10 +1579,26 @@ class ExportService(private val context: Context) {
 
     private fun createOutputFile(settings: ExportSettings): File {
         val outputDir = if (settings.outputPath.isNotEmpty()) {
-            File(settings.outputPath)
+            // 用户指定路径:可能是 SAF content URI 或文件系统路径
+            val path = settings.outputPath
+            if (path.startsWith("content://")) {
+                // SAF URI 由 writeImageSaf 单独处理,这里回退到 app-specific 目录
+                context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)?.resolve("AlcedoStudio")
+                    ?: File(context.cacheDir, "exports")
+            } else {
+                File(path)
+            }
         } else {
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                .resolve("AlcedoStudio")
+            // 默认输出目录:Android 10+ 必须用 app-specific 外部存储,
+            // 公共目录直接写入会抛 FileNotFoundException (Scoped Storage)
+            // (导出致命问题 3 修复)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)?.resolve("AlcedoStudio")
+                    ?: File(context.cacheDir, "exports")
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    .resolve("AlcedoStudio")
+            }
         }
 
         if (!outputDir.exists()) outputDir.mkdirs()

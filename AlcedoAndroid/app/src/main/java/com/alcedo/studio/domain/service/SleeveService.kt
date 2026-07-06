@@ -79,6 +79,13 @@ class SleeveService(
         elementId
     }
 
+    /**
+     * 按 imageId 查询 SleeveFile (F-2 修复辅助)
+     */
+    suspend fun getFileByImageId(imageId: Long): SleeveFileEntity? = withContext(Dispatchers.IO) {
+        fileDao.getFileByImageId(imageId)
+    }
+
     suspend fun deleteElement(elementId: Long): Boolean = withContext(Dispatchers.IO) {
         val element = elementDao.getElementById(elementId) ?: return@withContext false
         val parentId = element.parentId

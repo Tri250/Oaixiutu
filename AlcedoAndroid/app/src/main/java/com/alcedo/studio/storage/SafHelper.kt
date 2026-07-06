@@ -197,7 +197,10 @@ object SafHelper {
             return null
         }
         return try {
-            val docId = DocumentsContract.getDocumentId(treeUri)
+            // 对 OpenDocumentTree 返回的 tree URI 必须用 getTreeDocumentId,
+            // getDocumentId 对 tree URI 返回 null (路径段是 "tree/..." 而非 "document/...")
+            // 此 bug 与 listDirectory 相同,会导致 createDocument 失败 (导出致命问题 1 修复)
+            val docId = DocumentsContract.getTreeDocumentId(treeUri)
             val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
             DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, sanitizeFileName(fileName))
         } catch (e: Exception) {

@@ -89,6 +89,19 @@ class SleeveRepository(
         sleeveService.deleteElement(id)
     }
 
+    /**
+     * 按 imageId 删除 SleeveFile 元素 (F-2 修复):
+     * 先查询 element_id,再调用 deleteElement 完整清理 sleeve_files + sleeve_elements 记录
+     */
+    suspend fun removeElementByImageId(imageId: Long): Boolean = withContext(Dispatchers.IO) {
+        val file = sleeveService.getFileByImageId(imageId)
+        if (file != null) {
+            sleeveService.deleteElement(file.elementId)
+        } else {
+            false
+        }
+    }
+
     suspend fun moveElement(elementId: Long, newParentId: Long?): Boolean = withContext(Dispatchers.IO) {
         sleeveService.moveElement(elementId, newParentId)
     }
