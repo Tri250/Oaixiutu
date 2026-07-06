@@ -926,6 +926,7 @@ class AdjustmentTransferService(
             OperatorType.DISPLAY_TRANSFORM -> TransferParamGroup.DISPLAY
             OperatorType.RAW_DECODE -> TransferParamGroup.RAW_DECODE
             OperatorType.TONE_REGION -> TransferParamGroup.TONE_CURVE
+            OperatorType.PRESET -> TransferParamGroup.EXPOSURE
         }
     }
 

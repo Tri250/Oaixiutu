@@ -114,11 +114,13 @@ interface StringResources {
     val editorPanelDisplayTransform: String
     val editorPanelLmt: String
     val editorPanelInspector: String
+    val editorPanelLensCorrection: String
     val editorPanelMasks: String
     val editorUndo: String
     val editorRedo: String
     val editorCompare: String
     val editorScopeAnalyzer: String
+    val editorClippingWarning: String
     val editorSave: String
     val editorExport: String
     val editorBefore: String
@@ -129,6 +131,7 @@ interface StringResources {
     val editorFocusMode: String
     val editorFocusModeOn: String
     val editorFocusModeOff: String
+    val colorSpaceWorkflow: String
 
     // Basic panel
     val editorSectionLight: String
@@ -162,6 +165,7 @@ interface StringResources {
     val toneCurveDarks: String
     val toneCurveShadows: String
     val toneCurveSigmoidContrast: String
+    val editorSigmoidShoulder: String
     val toneCurvePointMode: String
     val toneCurveParametricMode: String
 
@@ -259,6 +263,13 @@ interface StringResources {
     val cropAmount: String
 
     // Effects panel
+    val editorSectionLuminanceDenoise: String
+    val editorSectionChromaDenoise: String
+    val editorStrength: String
+    val editorDetailPreserve: String
+    val editorColorThreshold: String
+    val effectsResetLumaDenoise: String
+    val effectsResetChromaDenoise: String
     val editorSectionFilmGrain: String
     val effectsResetGrain: String
     val editorIntensity: String
@@ -269,6 +280,7 @@ interface StringResources {
     val editorRedBias: String
     val editorSectionSharpen: String
     val effectsResetSharpen: String
+    val effectsShowSharpeningMask: String
     val editorAmount: String
     val editorSectionClarity: String
     val effectsResetClarity: String
@@ -356,6 +368,15 @@ interface StringResources {
     val exportBatchResult: String // "Batch complete: {success} succeeded, {failed} failed"
     val exportHasselbladWatermark: String
     val exportWatermarkDescription: String
+    val exportUseOriginalFilename: String
+    val exportPathDefault: String
+
+    // ── Share (国内社交平台) ────────────────────────────────────────────
+    val shareImage: String
+    val shareToWechat: String
+    val shareToWeibo: String
+    val shareToRednote: String
+    val shareToOther: String
 
     // ── Accessibility ───────────────────────────────────────────────────
     val accColorWheel: String
@@ -595,12 +616,16 @@ interface StringResources {
     val presetCategoryPortrait: String
     val presetCategoryLandscape: String
     val presetCategoryBW: String
+    val presetCategoryStreet: String
+    val presetCategoryImported: String
+    val presetCategoryLut: String
     val presetApply: String
     val presetEdit: String
     val presetDelete: String
     val presetExport: String
     val presetNamePrompt: String
     val presetCategoryPrompt: String
+    val presetDescriptionPrompt: String
     val presetCreated: String
     val presetDeleted: String
     val presetImported: String
@@ -777,6 +802,14 @@ interface StringResources {
     val maskName: String
     val maskBrushSize: String
     val maskBrushHardness: String
+    val maskBrushOpacity: String
+    val maskBrushEdit: String
+    val maskBrushDone: String
+    val maskBrushDraw: String
+    val maskBrushEraser: String
+    val maskBrushNavigate: String
+    val maskBrushUndo: String
+    val maskBrushClear: String
     val maskFeather: String
     val maskAnalyzing: String
     val maskApplyTo: String
@@ -851,6 +884,9 @@ interface StringResources {
     val batchPickPreset: String
     val batchClipboardFrom: String
     val batchClipboardEmpty: String
+    val batchSelectedCount: String // "{count} images selected"
+    val batchSyncParams: String
+    val batchIndividualAdjust: String
 
     // ── Privacy Policy & User Agreement screens ─────────────────────────
     val settingsPrivacyPolicy: String
@@ -865,6 +901,17 @@ interface StringResources {
     val userAgreementContent: String
     val privacyEffectiveDate: String
     val userAgreementEffectiveDate: String
+
+    // ── About Page ──────────────────────────────────────────────────────
+    val aboutAppTagline: String
+    val aboutVersionInfo: String
+    val aboutAppName: String
+    val aboutVersion: String
+    val aboutBuildNumber: String
+    val aboutPlatform: String
+    val aboutMinSdk: String
+    val aboutArchitecture: String
+    val aboutLicense: String
 }
 
 /**

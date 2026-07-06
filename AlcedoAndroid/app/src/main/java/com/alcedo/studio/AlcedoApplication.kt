@@ -5,6 +5,8 @@ import android.util.Log
 import com.alcedo.studio.crash.CrashHandler
 import com.alcedo.studio.crash.CrashReportService
 import com.alcedo.studio.di.AppModule
+import com.alcedo.studio.domain.service.GpuPipelineService
+import com.alcedo.studio.domain.service.GpuService
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
@@ -49,6 +51,30 @@ class AlcedoApplication : Application() {
         }
 
         runSafe("AppModule.initialize") { AppModule.initialize(this) }
+
+        // ── GPU 能力检测 ──
+        // 初始化底层 GpuService（探测 GLES / Vulkan 可用性），并创建可选的
+        // GpuPipelineService 注入到 PipelineService 中。真正的 GPU 程序与纹理
+        // 创建会在首次 applyPipeline 时按需在 GL 线程上完成，此处仅做能力探测
+        // 与服务装配，不创建 GL 上下文。
+        runSafe("GpuService.initialize") {
+            val gpuService = GpuService.getInstance(this)
+            gpuService.initialize()
+            Log.i("AlcedoApp", "GPU backend: ${gpuService.currentBackend.value.displayName}")
+        }
+
+        runSafe("GpuPipelineService.setup") {
+            val gpuPipelineService = GpuPipelineService(this)
+            val supported = gpuPipelineService.checkGpuSupport()
+            Log.i("AlcedoApp", "GPU Compute (GLES 3.1) supported: $supported")
+            if (supported) {
+                // 注入到 PipelineService，使其在 applyPipeline 中优先尝试 GPU 路径。
+                // 注意：GPU 渲染器的真正 initialize() 需在 GL 线程上调用，
+                // 此处仅完成服务装配；GPU 不可用或不支持时 PipelineService 会自动
+                // 回退到 CPU 原生管线。
+                AppModule.pipelineService.gpuPipelineService = gpuPipelineService
+            }
+        }
     }
 
     private inline fun runSafe(tag: String, block: () -> Unit) {

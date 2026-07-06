@@ -1,6 +1,7 @@
 package com.alcedo.studio.data.model
 
 import android.graphics.PointF
+import androidx.compose.ui.geometry.Offset
 
 /**
  * AI Mask system data model for local adjustments, inspired by RapidRAW.
@@ -9,6 +10,18 @@ import android.graphics.PointF
  * [MaskCombineMode]s and a set of [MaskAdjustments] applied to the masked
  * region of the original image.
  */
+
+/**
+ * 单条画笔笔触。所有坐标均使用相对于图片的归一化坐标 (0-1)，
+ * 这样笔触在不同显示尺寸下都保持正确的相对位置。
+ */
+data class BrushStroke(
+    val points: List<Offset> = emptyList(),  // 笔触点序列（归一化坐标 0-1）
+    val size: Float = 0.05f,                  // 画笔大小（归一化）
+    val hardness: Float = 0.5f,               // 硬度 0-1（边缘羽化）
+    val opacity: Float = 1f,                  // 不透明度 0-1
+    val isEraser: Boolean = false             // 是否为橡皮擦
+)
 
 /** Supported mask types (AI + manual geometric + range-based). */
 enum class MaskType {
@@ -54,8 +67,10 @@ data class MaskParams(
     val luminanceMin: Float = 0f,
     val luminanceMax: Float = 1f,
     val feather: Float = 0.2f,
-    val brushSize: Float = 0.02f,
-    val brushHardness: Float = 0.5f
+    val brushSize: Float = 0.05f,
+    val brushHardness: Float = 0.5f,
+    val brushOpacity: Float = 1f,
+    val brushStrokes: List<BrushStroke> = emptyList()
 ) {
     companion object {
         fun defaultFor(type: MaskType): MaskParams = when (type) {
@@ -72,8 +87,10 @@ data class MaskParams(
             )
             MaskType.BRUSH -> MaskParams(
                 brushPoints = emptyList(),
-                brushSize = 0.02f,
-                brushHardness = 0.5f
+                brushSize = 0.05f,
+                brushHardness = 0.5f,
+                brushOpacity = 1f,
+                brushStrokes = emptyList()
             )
             MaskType.COLOR_RANGE -> MaskParams(
                 colorTarget = 0x808080,

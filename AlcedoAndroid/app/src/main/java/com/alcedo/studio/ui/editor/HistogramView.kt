@@ -1,7 +1,18 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -34,9 +45,29 @@ fun HistogramView(
     showChannels: HistogramChannel = HistogramChannel.RGB,
     scale: HistogramScale = HistogramScale.LINEAR,
     showClippingIndicators: Boolean = true,
-    shadowClipThreshold: Int = 5,
-    highlightClipThreshold: Int = 250
+    showClippingWarning: Boolean = true,
+    shadowClipThreshold: Int = 15,
+    highlightClipThreshold: Int = 240
 ) {
+    // 剪裁预警动画：闪烁效果
+    val infiniteTransition = rememberInfiniteTransition(label = "clippingWarning")
+    val clippingAnimation by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "clipBlink"
+    )
+
+    // 检测是否有实际剪裁（超过总像素的2%）
+    val totalLuminance = histogramData.luminance.sum()
+    val highlightClipped = totalLuminance > 0f &&
+            histogramData.luminance.sliceArray(highlightClipThreshold..255).sum() > totalLuminance * 0.02f
+    val shadowClipped = totalLuminance > 0f &&
+            histogramData.luminance.sliceArray(0 until shadowClipThreshold).sum() > totalLuminance * 0.02f
+
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
             modifier = Modifier
@@ -133,20 +164,47 @@ fun HistogramView(
                 }
             }
 
-            // Clipping indicators
-            if (showClippingIndicators) {
+            // Clipping indicators (静态背景区域)
+            if (showClippingIndicators || showClippingWarning) {
                 val shadowX = padding + (shadowClipThreshold / 255f) * graphW
                 val highlightX = padding + (highlightClipThreshold / 255f) * graphW
-                drawRect(
-                    color = Color(0xFF2979FF).copy(alpha = 0.3f),
-                    topLeft = Offset(padding, padding),
-                    size = Size(shadowX - padding, graphH)
-                )
-                drawRect(
-                    color = Color(0xFFFF1744).copy(alpha = 0.3f),
-                    topLeft = Offset(highlightX, padding),
-                    size = Size(padding + graphW - highlightX, graphH)
-                )
+
+                // 阴影剪裁背景（蓝色半透明）
+                if (showClippingIndicators && shadowClipped) {
+                    drawRect(
+                        color = Color(0xFF2979FF).copy(alpha = 0.15f),
+                        topLeft = Offset(padding, padding),
+                        size = Size(shadowX - padding, graphH)
+                    )
+                }
+                // 高光溢出背景（红色半透明）
+                if (showClippingIndicators && highlightClipped) {
+                    drawRect(
+                        color = Color(0xFFFF1744).copy(alpha = 0.15f),
+                        topLeft = Offset(highlightX, padding),
+                        size = Size(padding + graphW - highlightX, graphH)
+                    )
+                }
+
+                // 剪裁预警闪烁动画
+                if (showClippingWarning && (highlightClipped || shadowClipped)) {
+                    // 高光溢出红色闪烁
+                    if (highlightClipped) {
+                        drawRect(
+                            color = Color.Red.copy(alpha = clippingAnimation * 0.5f),
+                            topLeft = Offset(highlightX, padding),
+                            size = Size(padding + graphW - highlightX, graphH)
+                        )
+                    }
+                    // 阴影裁切蓝色闪烁
+                    if (shadowClipped) {
+                        drawRect(
+                            color = Color.Blue.copy(alpha = clippingAnimation * 0.5f),
+                            topLeft = Offset(padding, padding),
+                            size = Size(shadowX - padding, graphH)
+                        )
+                    }
+                }
             }
 
             // Border
@@ -188,6 +246,35 @@ fun HistogramView(
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isSelected) Color(0xFFB0BEC5) else Color.Gray.copy(alpha = 0.5f),
                     modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+
+        // 剪裁预警状态提示
+        if (showClippingWarning && (highlightClipped || shadowClipped)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = if (highlightClipped) Color.Red else Color.Blue,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = buildString {
+                        val parts = mutableListOf<String>()
+                        if (highlightClipped) parts += "Highlight clipping"
+                        if (shadowClipped) parts += "Shadow clipping"
+                        append(parts.joinToString(" · "))
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (highlightClipped) Color.Red else Color.Blue
                 )
             }
         }

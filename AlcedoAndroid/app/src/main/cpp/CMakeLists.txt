@@ -40,6 +40,7 @@ add_library(
     core/sleeve/filter_combo.cpp
     core/image/image.cpp
     core/image/image_buffer.cpp
+    core/image/denoise.cpp
     core/image/image_pool.cpp
     core/image/raw_decoder.cpp
     core/image/metadata_decoder.cpp

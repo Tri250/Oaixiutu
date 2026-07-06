@@ -1,18 +1,35 @@
 package com.alcedo.studio.ui.editor
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.EditHistory
+import com.alcedo.studio.data.model.EditTransaction
+import com.alcedo.studio.data.model.OperatorType
 import com.alcedo.studio.data.model.Version
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
@@ -44,6 +61,11 @@ fun HistoryPanel(
     val orderedVersions = versionOrder.mapNotNull { node ->
         versions.find { it.versionId == node.versionId }
     }
+
+    // P2-6 撤销/重做可视化：获取当前工作版本的事务列表与游标位置
+    val workingVersion = viewModel.workingVersion.value
+    val transactions = workingVersion.transactions
+    val currentIndex = workingVersion.cursor
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -116,6 +138,36 @@ fun HistoryPanel(
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(stringRes { historyNewVersion })
+                }
+            }
+        }
+
+        // ── P2-6 可视化事务列表（点击跳转、高亮当前位置） ────────
+        if (transactions.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "${stringRes { historyRecentEdits }} (${transactions.size})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        itemsIndexed(transactions) { index, tx ->
+                            val isCurrent = index < currentIndex
+                            val isCursor = index == currentIndex - 1
+                            HistoryItem(
+                                transaction = tx,
+                                isCurrent = isCurrent,
+                                isCursorAt = isCursor,
+                                onClick = {
+                                    HapticFeedback.click(view)
+                                    viewModel.jumpToHistoryStep(index + 1)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -322,3 +374,123 @@ fun HistoryPanel(
         )
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// P2-6 历史步骤可视化组件
+// ═══════════════════════════════════════════════════════════════════
+
+/** 根据 [OperatorType] 返回对应的图标。 */
+@Composable
+private fun getOperatorIcon(type: OperatorType) = when (type) {
+    OperatorType.EXPOSURE -> Icons.Default.Brightness6
+    OperatorType.CONTRAST -> Icons.Default.Contrast
+    OperatorType.SATURATION -> Icons.Default.Palette
+    OperatorType.VIBRANCE -> Icons.AutoMirrored.Filled.ArrowForward
+    OperatorType.HIGHLIGHTS, OperatorType.SHADOWS -> Icons.Default.Tune
+    OperatorType.WHITE_BALANCE -> Icons.Default.WbSunny
+    OperatorType.TONE_CURVE -> Icons.Default.ShowChart
+    OperatorType.HSL -> Icons.Default.Colorize
+    OperatorType.COLOR_WHEEL -> Icons.Default.Circle
+    OperatorType.GEOMETRY, OperatorType.CROP -> Icons.Default.CropRotate
+    OperatorType.FILM_GRAIN -> Icons.Default.Grain
+    OperatorType.HALATION -> Icons.Default.FlashOn
+    OperatorType.LUT -> Icons.Default.PhotoLibrary
+    OperatorType.DISPLAY_TRANSFORM -> Icons.Default.SettingsBrightness
+    OperatorType.RAW_DECODE -> Icons.Default.CameraAlt
+    OperatorType.SHARPEN -> Icons.Default.AutoFixHigh
+    OperatorType.CLARITY -> Icons.Default.FilterCenterFocus
+    OperatorType.TINT -> Icons.Default.WaterDrop
+    OperatorType.TONE_REGION -> Icons.Default.Equalizer
+    OperatorType.PRESET -> Icons.Default.Bookmark
+}
+
+/**
+ * 单个历史步骤项。
+ * [isCurrent]: 该步骤是否在已应用范围内。
+ * [isCursorAt]: 是否为游标指向的最后一步（高亮显示）。
+ */
+@Composable
+private fun HistoryItem(
+    transaction: EditTransaction,
+    isCurrent: Boolean,
+    isCursorAt: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor = when {
+        isCursorAt -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+        isCurrent -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        else -> Color.Unspecified
+    }
+
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = bgColor,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isCursorAt) { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 操作类型图标
+            Icon(
+                imageVector = getOperatorIcon(transaction.operatorType),
+                contentDescription = null,
+                tint = if (isCurrent || isCursorAt) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 操作名称
+            Text(
+                text = buildTransactionLabel(transaction),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isCurrent || isCursorAt) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            // 时间
+            Text(
+                text = DateTimeFormatter.ofPattern("HH:mm:ss")
+                    .withZone(java.time.ZoneId.systemDefault())
+                    .format(transaction.timestamp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (isCursorAt) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.circle)
+                )
+            }
+        }
+    }
+}
+
+/** 从 [EditTransaction] 中提取可读的操作标签。 */
+private fun buildTransactionLabel(tx: EditTransaction): String {
+    return when (tx.operatorType) {
+        OperatorType.PRESET -> {
+            val desc = extractDescriptionKey(tx.paramsAfter)?.takeIf { it.isNotBlank() } ?: "Preset"
+            "Preset · ${desc.removePrefix("applyPreset:")}"
+        }
+        else -> tx.operatorType.name.replaceFirstChar { it.uppercase() }.let {
+            val key = extractDescriptionKey(tx.paramsAfter)
+            key.takeIf { it.isNotBlank() } ?: it
+        }
+    }
+}
+
+private fun extractDescriptionKey(json: kotlinx.serialization.json.JsonObject): String? =
+    json.entries.firstOrNull()?.key

@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <string>
+#include <utility>
 #include <vector>
 #include <cmath>
 #include <cstring>
@@ -10,6 +11,7 @@
 
 #include "core/edit/pipeline_service.h"
 #include "core/image/image_buffer.h"
+#include "core/image/denoise.h"
 #include "core/image/metadata_extractor.h"
 #include "core/image/raw_decoder.h"
 #include "core/image/metadata_decoder.h"
@@ -78,7 +80,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     if (!params) { env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT); return nullptr; }
 
     jsize paramsLen = env->GetArrayLength(paramsArray);
-    if (paramsLen < 36) {  // minimum expected params count (basic 36)
+    if (paramsLen < 36) {  // minimum expected params count (basic 36, full 124)
         LOGE("Params array too short: %d < 36", paramsLen);
         env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
         env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
@@ -171,6 +173,12 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
 
     // ── LUT enable flag (idx 119); lut_path is applied via separate native call ──
     { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.lut_enabled = (tmp > 0.5f); }
+
+    // ── Denoise (idx 120-123) ──
+    SAFE_PARAM(p_idx++, pipeline_params.luminance_denoise_strength);
+    SAFE_PARAM(p_idx++, pipeline_params.luminance_denoise_detail);
+    SAFE_PARAM(p_idx++, pipeline_params.chroma_denoise_strength);
+    SAFE_PARAM(p_idx++, pipeline_params.chroma_denoise_threshold);
 
     env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
 
@@ -2365,6 +2373,206 @@ Java_com_alcedo_studio_security_NativeSecurityChecker_nativeCheckIntegrity(
         }
     }
     return JNI_FALSE;
+}
+
+// ============================================================
+// Denoise Operators — Luminance NLM & Chroma Bilateral
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyLuminanceDenoise(
+    JNIEnv *env, jobject thiz,
+    jfloatArray input, jint width, jint height, jint channels,
+    jfloat strength, jfloat detailPreserve) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    auto result = alcedo::luminance_denoise_nlm(float_pixels, width, height, channels,
+                                                 strength, detailPreserve);
+
+    jfloatArray output = env->NewFloatArray(static_cast<jsize>(result.size()));
+    if (!output || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for luminance denoise result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(output, 0, static_cast<jsize>(result.size()), result.data());
+    return output;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyChromaDenoise(
+    JNIEnv *env, jobject thiz,
+    jfloatArray input, jint width, jint height, jint channels,
+    jfloat strength, jfloat colorThreshold) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    auto result = alcedo::chroma_denoise_bilateral(float_pixels, width, height, channels,
+                                                     strength, colorThreshold);
+
+    jfloatArray output = env->NewFloatArray(static_cast<jsize>(result.size()));
+    if (!output || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for chroma denoise result");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(output, 0, static_cast<jsize>(result.size()), result.data());
+    return output;
+}
+
+// ============================================================
+// Brush Stroke Rasterization (笔触光栅化 → 单通道遮罩)
+// ============================================================
+
+/**
+ * 在遮罩数组中绘制一个圆盘。
+ * 硬度影响边缘羽化：
+ *   - hardness=1: 距离 <= radius → opacity，否则 0
+ *   - hardness=0: 距离从 0 到 radius 线性衰减到 0
+ *   - 介于之间：过渡带宽度 = radius * (1 - hardness)
+ */
+static void drawDiskToMask(
+    std::vector<float>& mask, int width, int height,
+    float cx, float cy, float radius, float hardness, float opacity) {
+
+    int minX = static_cast<int>(std::floor(cx - radius));
+    int maxX = static_cast<int>(std::ceil(cx + radius));
+    int minY = static_cast<int>(std::floor(cy - radius));
+    int maxY = static_cast<int>(std::ceil(cy + radius));
+
+    minX = std::max(0, minX);
+    maxX = std::min(width - 1, maxX);
+    minY = std::max(0, minY);
+    maxY = std::min(height - 1, maxY);
+
+    // 过渡带宽度：硬度越低，过渡带越宽
+    float transition = radius * (1.0f - hardness);
+    // 钳制为正，避免 hardness 略大于 1 时出现负值
+    if (transition < 0.0f) transition = 0.0f;
+
+    for (int y = minY; y <= maxY; ++y) {
+        for (int x = minX; x <= maxX; ++x) {
+            float dx = static_cast<float>(x) - cx;
+            float dy = static_cast<float>(y) - cy;
+            float dist = std::sqrt(dx * dx + dy * dy);
+
+            if (dist > radius) continue;
+
+            float value;
+            if (transition <= 1e-6f || dist <= radius - transition) {
+                // 核心区域（完全填充）或无过渡带（硬度=1）
+                value = opacity;
+            } else {
+                // 过渡区域（线性衰减）
+                float t = (dist - (radius - transition)) / transition;
+                value = opacity * (1.0f - t);
+            }
+
+            // 取 max（笔触叠加）
+            int idx = y * width + x;
+            mask[idx] = std::max(mask[idx], value);
+        }
+    }
+}
+
+/**
+ * 沿笔触路径绘制圆盘，生成单通道遮罩。
+ *
+ * brushSize: 归一化半径 (0-1)，转换为像素半径 = brushSize * width
+ * brushHardness: 0-1，控制边缘羽化。1=锐利，0=最柔。
+ * brushOpacity: 0-1，遮罩强度。
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeRasterizeBrushStrokes(
+    JNIEnv *env, jobject thiz,
+    jint width, jint height,
+    jfloatArray strokePointsX, jfloatArray strokePointsY, jint strokePointsCount,
+    jfloat brushSize, jfloat brushHardness, jfloat brushOpacity) {
+
+    if (width <= 0 || height <= 0 || strokePointsCount <= 0) {
+        LOGE("Invalid parameters for rasterizeBrushStrokes");
+        return nullptr;
+    }
+
+    jfloat *ptsX = env->GetFloatArrayElements(strokePointsX, nullptr);
+    jfloat *ptsY = env->GetFloatArrayElements(strokePointsY, nullptr);
+    if (!ptsX || !ptsY) {
+        if (ptsX) env->ReleaseFloatArrayElements(strokePointsX, ptsX, JNI_ABORT);
+        if (ptsY) env->ReleaseFloatArrayElements(strokePointsY, ptsY, JNI_ABORT);
+        return nullptr;
+    }
+
+    // 初始化遮罩为全 0
+    std::vector<float> mask(width * height, 0.0f);
+
+    // 笔触半径（像素）= 归一化大小 * 图片宽度
+    float radiusPx = brushSize * static_cast<float>(width);
+    if (radiusPx < 1.0f) radiusPx = 1.0f;
+
+    // 将归一化坐标转换为像素坐标
+    std::vector<std::pair<float, float>> points;
+    for (int i = 0; i < strokePointsCount && i < static_cast<int>(env->GetArrayLength(strokePointsX)); ++i) {
+        float nx = ptsX[i];
+        float ny = ptsY[i];
+        // 归一化 → 像素
+        float px = nx * static_cast<float>(width);
+        float py = ny * static_cast<float>(height);
+        points.emplace_back(px, py);
+    }
+
+    env->ReleaseFloatArrayElements(strokePointsX, ptsX, JNI_ABORT);
+    env->ReleaseFloatArrayElements(strokePointsY, ptsY, JNI_ABORT);
+
+    // 沿路径绘制圆盘：对每两个相邻点之间的连线，以间隔 step = radius/4 采样
+    float step = radiusPx * 0.25f;
+    if (step < 1.0f) step = 1.0f;
+
+    for (size_t i = 0; i + 1 < points.size(); ++i) {
+        float x0 = points[i].first;
+        float y0 = points[i].second;
+        float x1 = points[i + 1].first;
+        float y1 = points[i + 1].second;
+
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist < 1e-6f) continue;
+
+        float dirX = dx / dist;
+        float dirY = dy / dist;
+
+        // 沿连线从起点到终点放置圆盘
+        for (float t = 0.0f; t <= dist; t += step) {
+            float cx = x0 + dirX * t;
+            float cy = y0 + dirY * t;
+            drawDiskToMask(mask, width, height, cx, cy, radiusPx, brushHardness, brushOpacity);
+        }
+    }
+
+    // 对最后一个点也画一个圆盘（确保端点完整）
+    if (!points.empty()) {
+        auto last = points.back();
+        drawDiskToMask(mask, width, height, last.first, last.second, radiusPx, brushHardness, brushOpacity);
+    }
+
+    // 返回遮罩数组
+    jfloatArray output = env->NewFloatArray(static_cast<jsize>(mask.size()));
+    if (!output || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for brush mask");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(output, 0, static_cast<jsize>(mask.size()), mask.data());
+    return output;
 }
 
 } // extern "C"

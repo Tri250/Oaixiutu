@@ -34,8 +34,10 @@ import androidx.compose.material.icons.filled.FilterDrama
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.InvertColors
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AssistChip
@@ -174,6 +176,7 @@ fun MaskPanel(
                 MaskContainerCard(
                     container = container,
                     expanded = expandedContainerId == container.id,
+                    viewModel = viewModel,
                     onToggleExpand = {
                         expandedContainerId = if (expandedContainerId == container.id) null else container.id
                     },
@@ -258,6 +261,7 @@ private fun MaskPreviewCard(
 private fun MaskContainerCard(
     container: MaskContainer,
     expanded: Boolean,
+    viewModel: EditorViewModel,
     onToggleExpand: () -> Unit,
     onUpdate: (MaskContainer) -> Unit,
     onDelete: () -> Unit,
@@ -334,6 +338,8 @@ private fun MaskContainerCard(
                 // Sub-mask list with drag-to-reorder
                 SubMaskList(
                     subMasks = container.subMasks,
+                    containerId = container.id,
+                    viewModel = viewModel,
                     onMove = onMoveSubMask,
                     onUpdate = { updated ->
                         onUpdate(container.copy(
@@ -400,6 +406,8 @@ private fun MaskContainerCard(
 @Composable
 private fun SubMaskList(
     subMasks: List<SubMask>,
+    containerId: String,
+    viewModel: EditorViewModel,
     onMove: (Int, Int) -> Unit,
     onUpdate: (SubMask) -> Unit,
     onRemove: (String) -> Unit
@@ -409,6 +417,9 @@ private fun SubMaskList(
             var dragOffset by remember(sub.id) { mutableStateOf(0f) }
             SubMaskRow(
                 sub = sub,
+                containerId = containerId,
+                subMaskIndex = index,
+                viewModel = viewModel,
                 isFirst = index == 0,
                 isLast = index == subMasks.size - 1,
                 onUpdate = onUpdate,
@@ -437,6 +448,9 @@ private fun SubMaskList(
 @Composable
 private fun SubMaskRow(
     sub: SubMask,
+    containerId: String,
+    subMaskIndex: Int,
+    viewModel: EditorViewModel,
     isFirst: Boolean,
     isLast: Boolean,
     onUpdate: (SubMask) -> Unit,
@@ -445,6 +459,10 @@ private fun SubMaskRow(
     onMoveDown: () -> Unit,
     onDrag: (Float) -> Unit
 ) {
+    val brushState by remember { viewModel.brushState }
+    val activeBrush = viewModel.activeBrushSubMaskIndex.collectAsState().value
+    val isActiveBrush = activeBrush?.first == containerId && activeBrush?.second == subMaskIndex
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -528,23 +546,155 @@ private fun SubMaskRow(
                 )
             }
 
-            // Brush controls
+            // Brush controls — 画笔交互参数（仅当该行被激活为画笔目标时可调）
             if (sub.type == MaskType.BRUSH) {
-                AdjustmentSlider(
-                    label = stringRes { maskBrushSize },
-                    value = sub.params.brushSize,
-                    range = 0.002f..0.2f,
-                    onValueChange = { onUpdate(sub.copy(params = sub.params.copy(brushSize = it))) },
-                    defaultValue = 0.02f
-                )
-                AdjustmentSlider(
-                    label = stringRes { maskBrushHardness },
-                    value = sub.params.brushHardness,
-                    range = 0f..1f,
-                    onValueChange = { onUpdate(sub.copy(params = sub.params.copy(brushHardness = it))) },
-                    defaultValue = 0.5f,
-                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
-                )
+                // 激活/退出画笔编辑按钮
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isActiveBrush) {
+                        FilterChip(
+                            selected = true,
+                            onClick = { viewModel.clearActiveBrushSubMask() },
+                            label = { Text(stringRes { maskBrushDone }, style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    } else {
+                        FilterChip(
+                            selected = false,
+                            onClick = { viewModel.setActiveBrushSubMask(containerId, subMaskIndex) },
+                            label = { Text(stringRes { maskBrushEdit }, style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${sub.params.brushStrokes.size} strokes",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // 仅当该 sub-mask 被激活为画笔目标时显示完整画笔参数
+                if (isActiveBrush) {
+                    AdjustmentSlider(
+                        label = stringRes { maskBrushSize },
+                        value = brushState.brushSize,
+                        range = 0.01f..0.2f,
+                        onValueChange = { viewModel.setBrushSize(it) },
+                        defaultValue = 0.05f,
+                        valueDisplayTransform = { "${(it * 100).roundToInt()}" }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { maskBrushHardness },
+                        value = brushState.brushHardness,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.setBrushHardness(it) },
+                        defaultValue = 0.5f,
+                        valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { maskBrushOpacity },
+                        value = brushState.brushOpacity,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.setBrushOpacity(it) },
+                        defaultValue = 1f,
+                        valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                    )
+
+                    // 模式切换行：绘制 / 导航 / 橡皮擦 / 撤销 / 清除
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        FilterChip(
+                            selected = brushState.isDrawingMode && !brushState.isEraser,
+                            onClick = {
+                                viewModel.setBrushEraser(false)
+                                viewModel.setBrushDrawingMode(true)
+                            },
+                            label = { Text(stringRes { maskBrushDraw }, style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        FilterChip(
+                            selected = brushState.isEraser,
+                            onClick = {
+                                viewModel.setBrushEraser(true)
+                                viewModel.setBrushDrawingMode(true)
+                            },
+                            label = { Text(stringRes { maskBrushEraser }, style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        FilterChip(
+                            selected = !brushState.isDrawingMode,
+                            onClick = { viewModel.setBrushDrawingMode(false) },
+                            label = { Text(stringRes { maskBrushNavigate }, style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = {
+                                Icon(Icons.Default.PanTool, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IconButton(
+                            onClick = { viewModel.undoLastBrushStroke() },
+                            enabled = brushState.strokes.isNotEmpty(),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Undo,
+                                contentDescription = stringRes { maskBrushUndo },
+                                tint = if (brushState.strokes.isNotEmpty())
+                                    MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.clearAllBrushStrokes() },
+                            enabled = brushState.strokes.isNotEmpty(),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringRes { maskBrushClear },
+                                tint = if (brushState.strokes.isNotEmpty())
+                                    MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                } else {
+                    // 未激活时仅显示静态画笔大小/硬度（与该 sub-mask 当前参数一致）
+                    AdjustmentSlider(
+                        label = stringRes { maskBrushSize },
+                        value = sub.params.brushSize,
+                        range = 0.01f..0.2f,
+                        onValueChange = { onUpdate(sub.copy(params = sub.params.copy(brushSize = it))) },
+                        defaultValue = 0.05f,
+                        valueDisplayTransform = { "${(it * 100).roundToInt()}" }
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { maskBrushHardness },
+                        value = sub.params.brushHardness,
+                        range = 0f..1f,
+                        onValueChange = { onUpdate(sub.copy(params = sub.params.copy(brushHardness = it))) },
+                        defaultValue = 0.5f,
+                        valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                    )
+                }
             }
 
             // Feather for geometric masks

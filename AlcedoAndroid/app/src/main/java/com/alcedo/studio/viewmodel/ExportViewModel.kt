@@ -13,7 +13,7 @@ import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
-import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -116,6 +116,10 @@ class ExportViewModel : ViewModel() {
     var hassebladWatermark: Boolean
         get() = _settings.value.hassebladWatermark
         set(value) { _settings.value = _settings.value.copy(hassebladWatermark = value) }
+
+    var useOriginalFilename: Boolean
+        get() = _settings.value.useOriginalFilename
+        set(value) { _settings.value = _settings.value.copy(useOriginalFilename = value) }
 
     var watermarkConfig: com.alcedo.studio.domain.service.WatermarkConfig
         get() = _settings.value.watermarkConfig
@@ -650,6 +654,7 @@ class ExportViewModel : ViewModel() {
             ExportFormat.PNG -> 4L
             ExportFormat.TIFF -> if (_settings.value.bitDepth == 16) 6L else 3L
             ExportFormat.EXR -> 8L // half-float RGBA
+            ExportFormat.DNG -> 0L // non-destructive copy of original; size ~= source
             ExportFormat.ULTRA_HDR -> 3L * _settings.value.quality / 100
         }
         return pixelCount * bytesPerPixel

@@ -218,7 +218,28 @@ data class ExifDisplayMetaData(
     val captureDate: String = "",
     val imageSize: String = "",
     val fileSize: String = "",
-    val rating: Int = 0
+    val rating: Int = 0,
+    // 拍摄参数扩展
+    val exposureCompensation: String = "",
+    val maxAperture: String = "",
+    val focalLength35mm: String = "",
+    // 色彩
+    val colorSpace: String = "",
+    // GPS
+    val gpsLatitude: String = "",
+    val gpsLongitude: String = "",
+    val gpsAltitude: String = "",
+    // RAW 特有信息
+    val bitsPerSample: Int = 0,
+    val whiteBalanceMode: String = "",
+    val demosaicAlgorithm: String = "",
+    // 大疆特有信息
+    val djiFlightHeight: String = "",
+    val djiGpsMode: String = "",
+    val djiGimbalPitch: String = "",
+    // 华为/小米 AI 场景与多帧合成
+    val aiScene: String = "",
+    val multiFrameInfo: String = ""
 )
 
 data class RawRuntimeColorContext(

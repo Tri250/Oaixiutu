@@ -2,6 +2,7 @@ package com.alcedo.studio.domain.service
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.Log
 import com.alcedo.studio.data.dao.PipelinePresetDao
 import com.alcedo.studio.data.model.ColorScience
 import com.alcedo.studio.data.model.ColorSpace
@@ -33,6 +34,7 @@ data class PresetWithThumbnail(
     val id: Long,
     val name: String,
     val category: String,
+    val description: String,
     val isBuiltIn: Boolean,
     val createdTime: Long,
     val params: PipelineParams,
@@ -58,8 +60,12 @@ class PresetService(
         const val CATEGORY_PORTRAIT = "Portrait"
         const val CATEGORY_LANDSCAPE = "Landscape"
         const val CATEGORY_BW = "B&W"
+        const val CATEGORY_STREET = "Street"
         const val CATEGORY_GENERAL = "General"
+        const val CATEGORY_IMPORTED = "Imported"
+        const val CATEGORY_LUT = "LUT"
 
+        private const val TAG = "PresetService"
         private const val SAMPLE_SIZE = 160
         private const val EXPORT_FORMAT_VERSION = 1
     }
@@ -78,7 +84,7 @@ class PresetService(
     // ================================================================
 
     /**
-     * Seeds the 12 built-in presets on first launch. Safe to call repeatedly;
+     * Seeds the built-in presets on first launch. Safe to call repeatedly;
      * only inserts when no built-in presets exist yet.
      */
     suspend fun ensureBuiltInPresetsInitialized() {
@@ -87,10 +93,11 @@ class PresetService(
         if (existing.isEmpty()) {
             val now = System.currentTimeMillis()
             presetDao.insertAll(
-                BUILT_IN_PRESETS.map { (name, category, params) ->
+                BUILT_IN_PRESETS.map { (name, category, params, description) ->
                     PipelinePresetEntity(
                         name = name,
                         category = category,
+                        description = description,
                         paramsJson = serializeParams(params),
                         createdTime = now,
                         isBuiltIn = true
@@ -118,6 +125,7 @@ class PresetService(
                     id = entity.id,
                     name = entity.name,
                     category = entity.category,
+                    description = entity.description,
                     isBuiltIn = entity.isBuiltIn,
                     createdTime = entity.createdTime,
                     params = params,
@@ -136,13 +144,15 @@ class PresetService(
         name: String,
         category: String,
         params: PipelineParams,
-        thumbnailBitmap: Bitmap?
+        thumbnailBitmap: Bitmap?,
+        description: String = ""
     ): Long = withContext(Dispatchers.IO) {
         ensureBuiltInPresetsInitialized()
         val paramsJson = serializeParams(params)
         val entity = PipelinePresetEntity(
             name = name.ifBlank { "Untitled" },
             category = category,
+            description = description,
             paramsJson = paramsJson,
             createdTime = System.currentTimeMillis(),
             isBuiltIn = false
@@ -159,13 +169,15 @@ class PresetService(
         presetId: Long,
         name: String,
         category: String,
-        params: PipelineParams
+        params: PipelineParams,
+        description: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
         val existing = presetDao.getById(presetId) ?: return@withContext false
         presetDao.update(
             existing.copy(
                 name = name.ifBlank { existing.name },
                 category = category,
+                description = description,
                 paramsJson = serializeParams(params)
             )
         )
@@ -191,44 +203,132 @@ class PresetService(
      * Returns true on success.
      */
     suspend fun exportPreset(presetId: Long, outputPath: String): Boolean = withContext(Dispatchers.IO) {
+        exportPreset(presetId, File(outputPath))
+    }
+
+    /**
+     * Exports a single preset as a JSON file to [outputFile].
+     * Returns true on success. Includes name, category, description and the
+     * full pipeline-params snapshot.
+     */
+    suspend fun exportPreset(presetId: Long, outputFile: File): Boolean = withContext(Dispatchers.IO) {
         try {
             val entity = presetDao.getById(presetId) ?: return@withContext false
             val exportObj = buildMap {
                 put("formatVersion", JsonPrimitive(EXPORT_FORMAT_VERSION))
                 put("name", JsonPrimitive(entity.name))
                 put("category", JsonPrimitive(entity.category))
+                put("description", JsonPrimitive(entity.description))
                 put("isBuiltIn", JsonPrimitive(entity.isBuiltIn))
                 put("createdTime", JsonPrimitive(entity.createdTime))
                 put("params", Json.parseToJsonElement(entity.paramsJson))
             }
             val json = Json { prettyPrint = true; encodeDefaults = true }
-            File(outputPath).apply {
+            outputFile.apply {
                 parentFile?.mkdirs()
                 writeText(json.encodeToString(JsonObject.serializer(), JsonObject(exportObj)))
             }
             true
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            Log.e(TAG, "Export preset failed", e)
             false
         }
     }
 
     /**
-     * Imports a preset from a JSON file at [filePath]. Returns the new preset id.
+     * Imports a preset from a JSON file at [filePath]. Returns the new preset id,
+     * or -1 on failure. The imported preset is marked as non-built-in and its
+     * category defaults to [CATEGORY_IMPORTED] when the file omits one.
      */
     suspend fun importPreset(filePath: String): Long = withContext(Dispatchers.IO) {
-        val text = File(filePath).readText()
-        val obj = Json.parseToJsonElement(text).jsonObject
-        val name = obj["name"]?.jsonPrimitive?.content ?: "Imported Preset"
-        val category = obj["category"]?.jsonPrimitive?.content ?: CATEGORY_GENERAL
-        val paramsJson = obj["params"]?.let { it.toString() } ?: "{}"
-        val entity = PipelinePresetEntity(
-            name = name,
-            category = category,
-            paramsJson = paramsJson,
-            createdTime = System.currentTimeMillis(),
-            isBuiltIn = false
-        )
-        presetDao.insert(entity)
+        importPreset(File(filePath))
+    }
+
+    /**
+     * Imports a preset from a JSON [inputFile]. Returns the new preset id, or
+     * -1 on failure.
+     */
+    suspend fun importPreset(inputFile: File): Long = withContext(Dispatchers.IO) {
+        try {
+            val text = inputFile.readText()
+            val obj = Json.parseToJsonElement(text).jsonObject
+            val name = obj["name"]?.jsonPrimitive?.content ?: "Imported Preset"
+            val category = obj["category"]?.jsonPrimitive?.content?.ifBlank { CATEGORY_IMPORTED }
+                ?: CATEGORY_IMPORTED
+            val description = obj["description"]?.jsonPrimitive?.content ?: ""
+            val paramsJson = obj["params"]?.let { it.toString() } ?: "{}"
+            val entity = PipelinePresetEntity(
+                name = name,
+                category = category,
+                description = description,
+                paramsJson = paramsJson,
+                createdTime = System.currentTimeMillis(),
+                isBuiltIn = false
+            )
+            presetDao.insert(entity)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Import preset failed", e)
+            -1L
+        }
+    }
+
+    /**
+     * Imports an Adobe Lightroom `.xmp` preset file. Parses the `crs:`
+     * adjustment tags and maps them to [PipelineParams]. Returns the new
+     * preset id, or -1 on failure.
+     */
+    suspend fun importXmpPreset(xmpFile: File): Long = withContext(Dispatchers.IO) {
+        try {
+            val xmpContent = xmpFile.readText()
+            val params = parseXmpToParams(xmpContent)
+            val entity = PipelinePresetEntity(
+                name = xmpFile.nameWithoutExtension,
+                category = CATEGORY_IMPORTED,
+                description = "Imported from XMP",
+                paramsJson = serializeParams(params),
+                createdTime = System.currentTimeMillis(),
+                isBuiltIn = false
+            )
+            presetDao.insert(entity)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Import XMP failed", e)
+            -1L
+        }
+    }
+
+    /**
+     * Imports a `.cube` LUT file as a preset. The LUT path is stored on the
+     * preset's [PipelineParams.lutPath] (copied into the app cache so it
+     * remains accessible), with [PipelineParams.lutEnabled] set to true.
+     * Returns the new preset id, or -1 on failure.
+     */
+    suspend fun importCubePreset(cubeFile: File, lutStorageDir: File): Long = withContext(Dispatchers.IO) {
+        try {
+            // Persist the .cube file into the app's LUT storage directory so the
+            // pipeline can reload it when the preset is applied.
+            val destDir = lutStorageDir.apply { mkdirs() }
+            val destFile = File(destDir, "${System.currentTimeMillis()}_${cubeFile.name}")
+            cubeFile.inputStream().use { input ->
+                destFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            val params = PipelineParams(
+                lutEnabled = true,
+                lutPath = destFile.absolutePath,
+                lutIntensity = 100f
+            )
+            val entity = PipelinePresetEntity(
+                name = cubeFile.nameWithoutExtension,
+                category = CATEGORY_LUT,
+                description = "Imported from CUBE LUT",
+                paramsJson = serializeParams(params),
+                createdTime = System.currentTimeMillis(),
+                isBuiltIn = false
+            )
+            presetDao.insert(entity)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Import CUBE failed", e)
+            -1L
+        }
     }
 
     /**
@@ -246,6 +346,7 @@ class PresetService(
                 put("formatVersion", JsonPrimitive(EXPORT_FORMAT_VERSION))
                 put("name", JsonPrimitive(entity.name))
                 put("category", JsonPrimitive(entity.category))
+                put("description", JsonPrimitive(entity.description))
                 put("isBuiltIn", JsonPrimitive(entity.isBuiltIn))
                 put("createdTime", JsonPrimitive(entity.createdTime))
                 put("params", Json.parseToJsonElement(entity.paramsJson))
@@ -589,7 +690,12 @@ class PresetService(
     // 12 built-in presets with REAL, visually distinct parameter values
     // ================================================================
 
-    private data class BuiltInPreset(val name: String, val category: String, val params: PipelineParams)
+    private data class BuiltInPreset(
+        val name: String,
+        val category: String,
+        val params: PipelineParams,
+        val description: String = ""
+    )
 
     private val BUILT_IN_PRESETS: List<BuiltInPreset> = listOf(
         BuiltInPreset(
@@ -816,7 +922,87 @@ class PresetService(
                 whiteBalanceTemp = 6200f,
                 sigmoidContrast = 0.1f,
                 lensVignetteStrength = -0.1f
-            )
+            ),
+            description = "High micro-contrast for architectural detail"
+        ),
+        BuiltInPreset(
+            name = "Street B&W High Contrast",
+            category = CATEGORY_STREET,
+            params = PipelineParams(
+                contrast = 0.25f,
+                saturation = -1f,
+                clarityAmount = 0.2f,
+                highlights = -0.1f,
+                shadows = 0.1f,
+                filmGrainIntensity = 0.2f,
+                channelMixerMonochrome = true,
+                channelMixerMatrix = floatArrayOf(
+                    0.3f, 0.59f, 0.11f,
+                    0.3f, 0.59f, 0.11f,
+                    0.3f, 0.59f, 0.11f
+                )
+            ),
+            description = "High-contrast monochrome street look"
+        ),
+        BuiltInPreset(
+            name = "Street Moody",
+            category = CATEGORY_STREET,
+            params = PipelineParams(
+                exposure = -0.2f,
+                contrast = 0.15f,
+                saturation = -0.3f,
+                vibrance = -0.1f,
+                clarityAmount = 0.15f,
+                highlights = -0.25f,
+                shadows = -0.05f,
+                whiteBalanceTemp = 6000f,
+                tintShadowHue = 210f,
+                tintShadowStrength = 0.1f
+            ),
+            description = "Desaturated, low-key mood for street photography"
         )
     )
+
+    // ================================================================
+    // XMP parsing (Adobe Lightroom .xmp preset format)
+    // ================================================================
+
+    /**
+     * Parses an Adobe Lightroom `.xmp` preset's `crs:` adjustment attributes
+     * and maps them onto a [PipelineParams]. Unknown / unparseable values are
+     * silently ignored, leaving the corresponding field at its default.
+     *
+     * Lightroom stores most adjustments as integers in the range -100..+100
+     * (or 0..+100 for some), so each value is divided by 100f to fit the
+     * pipeline's -1..+1 / 0..1 conventions.
+     */
+    private fun parseXmpToParams(xmpContent: String): PipelineParams {
+        val params = PipelineParams()
+
+        fun extractValue(key: String): String? {
+            // Matches both crs:Key="value" and crs:Key>value</crs:Key> forms.
+            val attrRegex = Regex("""crs:$key="([^"]+)"""")
+            attrRegex.find(xmpContent)?.let { return it.groupValues.getOrNull(1) }
+            val elemRegex = Regex("""<crs:$key>\s*([^<]+)\s*</crs:$key>""")
+            elemRegex.find(xmpContent)?.let { return it.groupValues.getOrNull(1) }
+            return null
+        }
+
+        fun f(key: String): Float? = extractValue(key)?.toFloatOrNull()?.let { it / 100f }
+
+        return params.copy(
+            exposure = f("Exposure2012") ?: params.exposure,
+            contrast = f("Contrast2012") ?: params.contrast,
+            highlights = f("Highlights2012") ?: params.highlights,
+            shadows = f("Shadows2012") ?: params.shadows,
+            // Whites/Blacks map onto the midtones region in this pipeline.
+            midtones = f("Whites2012") ?: params.midtones,
+            saturation = f("Saturation") ?: params.saturation,
+            vibrance = f("Vibrance") ?: params.vibrance,
+            clarityAmount = f("Clarity2012") ?: params.clarityAmount,
+            sharpenAmount = f("Sharpness") ?: params.sharpenAmount,
+            filmGrainIntensity = f("GrainAmount")?.let { it / 100f } ?: params.filmGrainIntensity,
+            lensVignetteStrength = f("PostCropVignetteAmount") ?: params.lensVignetteStrength
+        )
+    }
 }

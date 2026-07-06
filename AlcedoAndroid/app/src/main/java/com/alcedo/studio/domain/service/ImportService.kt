@@ -903,8 +903,11 @@ class ImportService(
     // ================================================================
 
     private fun parseExifDisplay(exif: ExifInterface): ExifDisplayMetaData {
+        val make = exif.getAttribute(ExifInterface.TAG_MAKE) ?: ""
+        // 大疆特有 EXIF（写入 MAKER_NOTE 或自定义标签，这里读取常见字段）
+        val isDji = make.contains("DJI", ignoreCase = true)
         return ExifDisplayMetaData(
-            cameraMake = exif.getAttribute(ExifInterface.TAG_MAKE) ?: "",
+            cameraMake = make,
             cameraModel = exif.getAttribute(ExifInterface.TAG_MODEL) ?: "",
             lensModel = exif.getAttribute(ExifInterface.TAG_LENS_MODEL) ?: "",
             focalLength = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH) ?: "",
@@ -912,8 +915,53 @@ class ImportService(
             shutterSpeed = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME) ?: "",
             iso = exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY) ?: "",
             captureDate = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL) ?: "",
-            imageSize = "${exif.getAttribute(ExifInterface.TAG_IMAGE_WIDTH) ?: ""} x ${exif.getAttribute(ExifInterface.TAG_IMAGE_LENGTH) ?: ""}"
+            imageSize = "${exif.getAttribute(ExifInterface.TAG_IMAGE_WIDTH) ?: ""} x ${exif.getAttribute(ExifInterface.TAG_IMAGE_LENGTH) ?: ""}",
+            exposureCompensation = exif.getAttribute(ExifInterface.TAG_EXPOSURE_BIAS_VALUE) ?: "",
+            maxAperture = exif.getAttribute(ExifInterface.TAG_F_NUMBER) ?: exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE) ?: "",
+            focalLength35mm = exif.getAttribute(ExifInterface.TAG_FOCAL_LENGTH_IN_35MM_FILM) ?: "",
+            colorSpace = exif.getAttribute(ExifInterface.TAG_COLOR_SPACE) ?: "",
+            gpsLatitude = exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE)
+                ?.takeIf { it.isNotBlank() }?.let { formatGps(it, exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)) } ?: "",
+            gpsLongitude = exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE)
+                ?.takeIf { it.isNotBlank() }?.let { formatGps(it, exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF)) } ?: "",
+            gpsAltitude = exif.getAttribute(ExifInterface.TAG_GPS_ALTITUDE) ?: "",
+            whiteBalanceMode = exif.getAttribute(ExifInterface.TAG_WHITE_BALANCE)?.let { wb ->
+                when (wb) { "0" -> "Auto"; "1" -> "Manual"; else -> wb }
+            } ?: "",
+            // 大疆特有信息（从 EXIF user comment / 自定义标签读取）
+            djiFlightHeight = if (isDji) exif.getAttribute(ExifInterface.TAG_USER_COMMENT)
+                ?.takeIf { it.contains("FlightHeight", ignoreCase = true) } ?: "" else "",
+            djiGpsMode = if (isDji) exif.getAttribute(ExifInterface.TAG_USER_COMMENT)
+                ?.takeIf { it.contains("GpsMode", ignoreCase = true) } ?: "" else "",
+            djiGimbalPitch = if (isDji) exif.getAttribute(ExifInterface.TAG_USER_COMMENT)
+                ?.takeIf { it.contains("GimbalPitch", ignoreCase = true) } ?: "" else "",
+            // 华为/小米 AI 场景识别（写入 EXIF MAKER_NOTE / ImageDescription）
+            aiScene = exif.getAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION)
+                ?.takeIf { it.contains("Scene", ignoreCase = true) }
+                ?.substringAfter("Scene:")?.trim() ?: ""
         )
+    }
+
+    /** 格式化 GPS 坐标：将 "deg, min, sec" 转换为十进制字符串 */
+    private fun formatGps(coord: String, ref: String?): String {
+        return try {
+            val parts = coord.split(",").map { it.trim() }
+            val dms = parts.map { p ->
+                if (p.contains("/")) {
+                    val (n, dn) = p.split("/")
+                    n.toDouble() / dn.toDouble()
+                } else p.toDouble()
+            }
+            var deg = when {
+                dms.size >= 3 -> dms[0] + dms[1] / 60.0 + dms[2] / 3600.0
+                dms.size == 2 -> dms[0] + dms[1] / 60.0
+                else -> dms.getOrElse(0) { 0.0 }
+            }
+            if (ref == "S" || ref == "W") deg = -deg
+            "%.6f".format(deg)
+        } catch (_: Exception) {
+            coord
+        }
     }
 
     private fun parseShutterSpeedValue(s: String): Float {

@@ -144,6 +144,45 @@ fun ExportScreen(
                 }
             }
 
+            // DNG-specific note: non-destructive editing with XMP sidecar
+            if (viewModel.format == ExportFormat.DNG) {
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    tonalElevation = 1.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "DNG 非破坏性编辑",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "导出将原样保留原始 DNG 数据，编辑参数以 XMP sidecar（.xmp）" +
+                                    "形式写入同名文件，可被 Camera Raw 等工具重新读取。" +
+                                    "非 DNG 源（如 NEF/CR2/ARW）的 RAW→DNG 转换需要原生支持。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
             // Quality
             if (viewModel.format == ExportFormat.JPEG || viewModel.format == ExportFormat.ULTRA_HDR) {
                 Text(stringRes { exportQuality }.format("${viewModel.quality}"), style = MaterialTheme.typography.labelLarge)
@@ -289,6 +328,7 @@ fun ExportScreen(
                 value = viewModel.outputPath,
                 onValueChange = { viewModel.outputPath = it },
                 label = { Text(stringRes { exportOutputPath }) },
+                placeholder = { Text(stringRes { exportPathDefault }) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
@@ -298,6 +338,21 @@ fun ExportScreen(
                     }
                 }
             )
+
+            // 使用原始文件名
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = viewModel.useOriginalFilename,
+                    onCheckedChange = { viewModel.useOriginalFilename = it }
+                )
+                Text(
+                    stringRes { exportUseOriginalFilename },
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
 
             // Batch export
             Row(
@@ -479,6 +534,13 @@ fun ExportScreen(
                 Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringRes { exportImage })
+            }
+
+            // 导出成功后显示国内社交平台分享选项
+            val successResult = lastResult as? ExportService.ExportResult.Success
+            if (successResult != null && !isExporting) {
+                Spacer(modifier = Modifier.height(16.dp))
+                ShareOptionsPanel(exportedUri = successResult.uri)
             }
         }
     }

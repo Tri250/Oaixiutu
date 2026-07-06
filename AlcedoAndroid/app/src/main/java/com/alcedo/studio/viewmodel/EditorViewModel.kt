@@ -2,8 +2,11 @@ package com.alcedo.studio.viewmodel
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
@@ -13,12 +16,15 @@ import com.alcedo.studio.domain.service.MaskInferenceService
 import com.alcedo.studio.domain.service.MaskRenderService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.i18n.StringResources
-import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.alcedo.studio.ndk.AlcedoNativeBridge
+import com.alcedo.studio.ui.editor.CropAspectRatio
 import com.alcedo.studio.ui.editor.GamutOverlay
 import com.alcedo.studio.ui.editor.HistogramChannel
 import com.alcedo.studio.ui.editor.HistogramScale
 import com.alcedo.studio.ui.editor.ScopeAnalyzer
 import com.alcedo.studio.ui.editor.WaveformMode
+import com.alcedo.studio.ui.editor.BrushState
+import com.alcedo.studio.ui.editor.CompareMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,10 +38,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 
 class EditorViewModel(private val imageId: String) : ViewModel() {
 
     companion object {
+        private const val TAG = "EditorViewModel"
         private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
         // C8 修复: 预览处理使用降采样位图,避免 4096x4096 时 256MB float 数组 OOM
         // 2048x2048 = 4M 像素,float 数组 64MB,足够预览质量且不爆内存
@@ -65,6 +73,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing
+
+    // P2-8 锐化蒙版可视化
+    private val _showSharpeningMask = MutableStateFlow(false)
+    val showSharpeningMask: StateFlow<Boolean> = _showSharpeningMask.asStateFlow()
+
+    private val _sharpeningMaskBitmap = MutableStateFlow<Bitmap?>(null)
+    val sharpeningMaskBitmap: StateFlow<Bitmap?> = _sharpeningMaskBitmap
 
     // ── Pipeline parameters ──
 
@@ -106,6 +121,16 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private val _isCompareMode = MutableStateFlow(false)
     val isCompareMode: StateFlow<Boolean> = _isCompareMode
 
+    private val _compareMode = MutableStateFlow(CompareMode.SPLIT)
+    val compareMode: StateFlow<CompareMode> = _compareMode.asStateFlow()
+
+    private val _overlayOpacity = MutableStateFlow(0.5f)
+    val overlayOpacity: StateFlow<Float> = _overlayOpacity.asStateFlow()
+
+    // 剪裁预警开关（类似 Lightroom 的 J 键功能）
+    private val _showClippingWarning = MutableStateFlow(true)
+    val showClippingWarning: StateFlow<Boolean> = _showClippingWarning.asStateFlow()
+
     // ── Scope views ──
 
     private val _showHistogram = MutableStateFlow(true)
@@ -144,6 +169,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private val _presets = MutableStateFlow<List<PresetEntry>>(emptyList())
     val presets: StateFlow<List<PresetEntry>> = _presets
 
+    // P2-5 批量导出预设同步: 每张选中图片待应用的参数缓存 (key=imageId)
+    // ImageModel 本身不持久化 PipelineParams，因此缓存于 ViewModel，批量导出时统一应用
+    private val _batchParamsCache = MutableStateFlow<Map<Long, PipelineParams>>(emptyMap())
+    val batchParamsCache: StateFlow<Map<Long, PipelineParams>> = _batchParamsCache.asStateFlow()
+
     // ── Masks (AI local adjustments) ──
 
     val maskRenderService by lazy { MaskRenderService() }
@@ -160,6 +190,101 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     /** When true the mask overlay is drawn over the preview (mask panel open). */
     private val _showMaskOverlay = MutableStateFlow(true)
     val showMaskOverlay: StateFlow<Boolean> = _showMaskOverlay.asStateFlow()
+
+    // ── Brush overlay (画笔交互状态) ──
+    // 当前选中的 Brush 类型 sub-mask 在 maskContainers 中的索引。
+    // 当用户切换到 Brush 类型 sub-mask 时由 MaskPanel 设置。
+    private val _activeBrushSubMaskIndex = MutableStateFlow<Pair<String, Int>?>(null)
+    val activeBrushSubMaskIndex: StateFlow<Pair<String, Int>?> = _activeBrushSubMaskIndex.asStateFlow()
+
+    private val _brushState = mutableStateOf(BrushState())
+    val brushState get() = _brushState
+
+    /**
+     * 选中一个 Brush 类型 sub-mask 作为当前画笔操作目标。
+     * 会把该 sub-mask 已有的笔触、画笔参数同步到 [brushState]。
+     */
+    fun setActiveBrushSubMask(containerId: String, subMaskIndex: Int) {
+        val container = _maskContainers.value.firstOrNull { it.id == containerId } ?: return
+        val sub = container.subMasks.getOrNull(subMaskIndex) ?: return
+        if (sub.type != MaskType.BRUSH) return
+        _activeBrushSubMaskIndex.value = containerId to subMaskIndex
+        _brushState.value = BrushState(
+            strokes = sub.params.brushStrokes,
+            brushSize = sub.params.brushSize,
+            brushHardness = sub.params.brushHardness,
+            brushOpacity = sub.params.brushOpacity,
+            isEraser = false,
+            isDrawingMode = true
+        )
+    }
+
+    /** 退出画笔编辑（取消当前激活的 brush sub-mask）。 */
+    fun clearActiveBrushSubMask() {
+        _activeBrushSubMaskIndex.value = null
+    }
+
+    /**
+     * 接收 BrushOverlay 的状态更新。仅当存在激活的 brush sub-mask 时
+     * 才把笔触写回到 maskContainers；否则只更新本地 brushState。
+     */
+    fun updateBrushState(state: BrushState) {
+        _brushState.value = state
+        val active = _activeBrushSubMaskIndex.value
+        if (active != null) {
+            val (containerId, subIndex) = active
+            _maskContainers.value = _maskContainers.value.map { container ->
+                if (container.id == containerId) {
+                    val subs = container.subMasks.toMutableList()
+                    if (subIndex in subs.indices && subs[subIndex].type == MaskType.BRUSH) {
+                        val oldParams = subs[subIndex].params
+                        subs[subIndex] = subs[subIndex].copy(
+                            params = oldParams.copy(
+                                brushStrokes = state.strokes,
+                                brushSize = state.brushSize,
+                                brushHardness = state.brushHardness,
+                                brushOpacity = state.brushOpacity
+                            )
+                        )
+                    }
+                    container.copy(subMasks = subs)
+                } else container
+            }
+            regenerateMaskPreview()
+        }
+    }
+
+    fun undoLastBrushStroke() {
+        val s = _brushState.value
+        if (s.strokes.isEmpty()) return
+        updateBrushState(s.copy(strokes = s.strokes.dropLast(1), currentStroke = null))
+    }
+
+    fun clearAllBrushStrokes() {
+        val s = _brushState.value
+        if (s.strokes.isEmpty()) return
+        updateBrushState(s.copy(strokes = emptyList(), currentStroke = null))
+    }
+
+    fun setBrushSize(value: Float) {
+        _brushState.value = _brushState.value.copy(brushSize = value)
+    }
+
+    fun setBrushHardness(value: Float) {
+        _brushState.value = _brushState.value.copy(brushHardness = value)
+    }
+
+    fun setBrushOpacity(value: Float) {
+        _brushState.value = _brushState.value.copy(brushOpacity = value)
+    }
+
+    fun setBrushEraser(value: Boolean) {
+        _brushState.value = _brushState.value.copy(isEraser = value)
+    }
+
+    fun setBrushDrawingMode(value: Boolean) {
+        _brushState.value = _brushState.value.copy(isDrawingMode = value, currentStroke = null)
+    }
 
     // ── Export ──
 
@@ -362,6 +487,65 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    // ── P2-8 锐化蒙版可视化 ─────────────────────────────────────
+
+    /** 切换锐化蒙版显示状态。开启时自动生成蒙版预览。 */
+    fun setShowSharpeningMask(show: Boolean) {
+        _showSharpeningMask.value = show
+        if (show) generateSharpeningMaskPreview()
+        else _sharpeningMaskBitmap.value = null
+    }
+
+    /**
+     * 使用边缘检测生成锐化蒙版预览。
+     * 将当前预览位图转为 float 数组后调用原生边缘检测，
+     * 结果转回 Bitmap 供 UI 叠加层渲染。
+     */
+    fun generateSharpeningMaskPreview() {
+        viewModelScope.launch {
+            val currentBitmap = _previewBitmap.value ?: return@launch
+            val params = _params.value
+            val width = currentBitmap.width
+            val height = currentBitmap.height
+            val pixelCount = width * height
+            val pixels = IntArray(pixelCount)
+            currentBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+            // 转为 RGBA Float 数组
+            val floatArray = FloatArray(pixelCount * 4) { idx ->
+                val pixel = pixels[idx / 4]
+                when (idx % 4) {
+                    0 -> ((pixel shr 16) and 0xFF) / 255.0f   // R
+                    1 -> ((pixel shr 8) and 0xFF) / 255.0f    // G
+                    2 -> (pixel and 0xFF) / 255.0f             // B
+                    else -> ((pixel shr 24) and 0xFF) / 255.0f // A
+                }
+            }
+
+            val edgeData = AlcedoNativeBridge.generateEdgeMask(
+                floatArray, width, height,
+                params.sharpenAmount.coerceAtLeast(1f),  // radius 映射自 sharpenAmount
+                0.3f                                        // threshold
+            )
+
+            if (edgeData != null && edgeData.size == pixelCount) {
+                // 单通道边缘数据 → 白色高亮叠加（Alpha 通道表示强度）
+                val maskPixels = IntArray(pixelCount) { i ->
+                    val intensity = (edgeData[i] * 255).toInt().coerceIn(0, 255)
+                    0xFF shl 24 or (intensity shl 16) or (intensity shl 8) or intensity
+                }
+                try {
+                    val maskBitmap = Bitmap.createBitmap(maskPixels, width, height, Bitmap.Config.ARGB_8888)
+                    _sharpeningMaskBitmap.value = maskBitmap
+                } catch (_: OutOfMemoryError) {
+                    _sharpeningMaskBitmap.value = null
+                }
+            } else {
+                _sharpeningMaskBitmap.value = null
+            }
+        }
+    }
+
     fun updateFilmGrain(value: Float) {
         _params.value = _params.value.copy(filmGrainIntensity = value)
         recordTransaction(OperatorType.FILM_GRAIN, "filmGrainIntensity", value)
@@ -458,6 +642,64 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateVignette(strength: Float) {
         _params.value = _params.value.copy(lensVignetteStrength = strength)
         recordTransaction(OperatorType.GEOMETRY, "lensVignetteStrength", strength)
+        regeneratePreview()
+    }
+
+    // ================================================================
+    // Crop / Geometry (P1-7 裁剪工具交互)
+    // ================================================================
+
+    fun updateCropAspectRatio(ratio: CropAspectRatio) {
+        val currentParams = _params.value
+        // 根据比例更新 geometryCropLeft/Top/Right/Bottom
+        val currentWidth = 1f - currentParams.geometryCropLeft - (1f - currentParams.geometryCropRight)
+        val currentHeight = 1f - currentParams.geometryCropTop - (1f - currentParams.geometryCropBottom)
+        val cropWidth = currentParams.geometryCropRight - currentParams.geometryCropLeft
+        val cropHeight = currentParams.geometryCropBottom - currentParams.geometryCropTop
+
+        when (ratio.ratio) {
+            null -> return  // 自由裁剪，不调整
+            else -> {
+                val targetRatio = ratio.ratio
+                val currentRatio = cropWidth / cropHeight.coerceAtLeast(0.001f)
+                if (currentRatio > targetRatio) {
+                    // 需要裁掉左右
+                    val newWidth = cropHeight * targetRatio
+                    val excess = cropWidth - newWidth
+                    _params.value = currentParams.copy(
+                        geometryCropLeft = currentParams.geometryCropLeft + excess / 2f,
+                        geometryCropRight = currentParams.geometryCropRight - excess / 2f
+                    )
+                } else {
+                    // 需要裁掉上下
+                    val newHeight = cropWidth / targetRatio
+                    val excess = cropHeight - newHeight
+                    _params.value = currentParams.copy(
+                        geometryCropTop = currentParams.geometryCropTop + excess / 2f,
+                        geometryCropBottom = currentParams.geometryCropBottom - excess / 2f
+                    )
+                }
+            }
+        }
+        regeneratePreview()
+    }
+
+    fun updateCropRotation(degrees: Int) {
+        _params.value = _params.value.copy(cropRotation = degrees)
+        regeneratePreview()
+    }
+
+    fun updateCropFlip(flipH: Boolean, flipV: Boolean) {
+        _params.value = _params.value.copy(cropFlipHorizontal = flipH, cropFlipVertical = flipV)
+        regeneratePreview()
+    }
+
+    fun resetCrop() {
+        val params = _params.value
+        _params.value = params.copy(
+            geometryCropLeft = 0f, geometryCropTop = 0f, geometryCropRight = 1f, geometryCropBottom = 1f,
+            cropRotation = 0, cropFlipHorizontal = false, cropFlipVertical = false
+        )
         regeneratePreview()
     }
 
@@ -650,6 +892,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         _isCompareMode.value = !_isCompareMode.value
     }
 
+    fun updateCompareMode(mode: CompareMode) {
+        _compareMode.value = mode
+    }
+
+    fun updateOverlayOpacity(opacity: Float) {
+        _overlayOpacity.value = opacity.coerceIn(0f, 1f)
+    }
+
+    fun toggleClippingWarning() {
+        _showClippingWarning.value = !_showClippingWarning.value
+    }
+
     fun getOriginalBitmap(): Bitmap? = _originalBitmap.value
 
     // ================================================================
@@ -728,30 +982,130 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 val currentParams = _params.value
+                val previewBitmap = previewSourceBitmap ?: _previewBitmap.value ?: return@launch
 
-                // 计算自动曝光补偿
+                // 1. 自动曝光 — 基于直方图分析
                 val autoExposure = analyzeExposure()
-                val autoContrast = analyzeContrast()
-                val autoSaturation = analyzeSaturation()
 
-                // 应用自动调整
+                // 2. 自动白平衡 — 基于灰世界假设
+                val autoWB = analyzeWhiteBalance(previewBitmap)
+
+                // 3. 自动对比度
+                val autoContrast = analyzeContrast()
+
+                // 4. 自动高光/阴影恢复
+                val (autoHighlights, autoShadows) = analyzeHighlightsShadows(previewBitmap)
+
+                // 5. 自动饱和度/自然饱和度
+                val autoSaturation = analyzeSaturation()
+                val autoVibrance = analyzeVibrance(previewBitmap)
+
+                // 6. 自动清晰度
+                val autoClarity = analyzeClarity(previewBitmap)
+
                 _params.value = currentParams.copy(
                     exposure = autoExposure,
                     contrast = autoContrast,
-                    saturation = autoSaturation
+                    whiteBalanceTemp = autoWB.first,
+                    whiteBalanceTint = autoWB.second,
+                    highlights = autoHighlights,
+                    shadows = autoShadows,
+                    saturation = autoSaturation,
+                    vibrance = autoVibrance,
+                    clarityAmount = autoClarity
                 )
 
-                recordTransaction(OperatorType.EXPOSURE, "exposure", autoExposure)
-                recordTransaction(OperatorType.CONTRAST, "contrast", autoContrast)
-                recordTransaction(OperatorType.SATURATION, "saturation", autoSaturation)
-
                 // 记录到历史
+                recordTransaction(OperatorType.EXPOSURE, "autoEnhance", autoExposure)
                 saveVersion()
                 regeneratePreview()
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "autoEnhance failed", e)
             }
         }
+    }
+
+    private suspend fun analyzeWhiteBalance(bitmap: Bitmap): Pair<Float, Float> {
+        return withContext(Dispatchers.Default) {
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+
+            var avgR = 0.0
+            var avgG = 0.0
+            var avgB = 0.0
+            var count = 0
+
+            for (pixel in pixels step 4) {  // 采样每4个像素
+                avgR += ((pixel shr 16) and 0xFF) / 255.0
+                avgG += ((pixel shr 8) and 0xFF) / 255.0
+                avgB += (pixel and 0xFF) / 255.0
+                count++
+            }
+
+            if (count == 0) return@withContext Pair(6500f, 0f)
+
+            avgR /= count
+            avgG /= count
+            avgB /= count
+
+            // 灰世界假设: avgR ≈ avgG ≈ avgB
+            // 计算所需的色温偏移
+            val ratioR = avgG / avgR.coerceAtLeast(0.001)
+            val ratioB = avgG / avgB.coerceAtLeast(0.001)
+
+            // 简化映射: R/G ratio → 色温偏移, B/G ratio → tint偏移
+            val tempOffset = ((ratioR - 1.0) * 3000f).toFloat().coerceIn(-2000f, 2000f)
+            val tintOffset = ((ratioB - 1.0) * 200f).toFloat().coerceIn(-50f, 50f)
+
+            Pair((6500f + tempOffset).coerceIn(2000f, 15000f), tintOffset)
+        }
+    }
+
+    private suspend fun analyzeHighlightsShadows(bitmap: Bitmap): Pair<Float, Float> {
+        return withContext(Dispatchers.Default) {
+            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
+            val lum = histogram.luminance
+
+            // 检查高光溢出（亮度>240的像素占比）
+            var highlightClipped = 0f
+            var shadowClipped = 0f
+            var total = 0f
+            for (i in lum.indices) {
+                total += lum[i]
+                if (i > 240) highlightClipped += lum[i]
+                if (i < 15) shadowClipped += lum[i]
+            }
+
+            val highlightRatio = if (total > 0) highlightClipped / total else 0f
+            val shadowRatio = if (total > 0) shadowClipped / total else 0f
+
+            val autoHighlights = if (highlightRatio > 0.05f) -(highlightRatio * 2f).coerceIn(-1f, 0f) else 0f
+            val autoShadows = if (shadowRatio > 0.05f) (shadowRatio * 1.5f).coerceIn(0f, 1f) else 0f
+
+            Pair(autoHighlights, autoShadows)
+        }
+    }
+
+    private fun analyzeVibrance(bitmap: Bitmap): Float {
+        // 基于饱和度分布分析，低饱和度图像增加自然饱和度
+        val histogram = ScopeAnalyzer.computeHistogram(bitmap)
+        val lum = histogram.luminance
+        var total = 0f
+        var weighted = 0f
+        for (i in lum.indices) {
+            total += lum[i]
+            weighted += lum[i] * (i / 255f)
+        }
+        val avgBrightness = if (total > 0) weighted / total else 0.5f
+
+        // 中间调图像增加自然饱和度
+        return if (avgBrightness in 0.3f..0.7f) 0.15f else 0f
+    }
+
+    private fun analyzeClarity(bitmap: Bitmap): Float {
+        // 基于对比度分析，低对比度图像增加清晰度
+        val autoContrast = analyzeContrast()
+        return if (autoContrast < 0f) 0.1f else 0f
     }
 
     private suspend fun analyzeExposure(): Float {
@@ -926,6 +1280,22 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             reconstructParamsFromWorkingVersion()
         }
         updateUndoRedoState()
+    }
+
+    /**
+     * P2-6 撤销/重做可视化: 直接跳转到历史记录中的指定步骤。
+     *
+     * [stepCursor] 为目标游标位置（即应被应用的事务数量，范围 0..transactions.size）。
+     * 0 表示回到初始状态（无任何操作），transactions.size 表示应用全部操作。
+     * 跳转后重建参数并刷新预览。
+     */
+    fun jumpToHistoryStep(stepCursor: Int) {
+        val wv = _workingVersion.value
+        if (stepCursor in 0..wv.transactions.size) {
+            wv.cursor = stepCursor
+            reconstructParamsFromWorkingVersion()
+            updateUndoRedoState()
+        }
     }
 
     private fun updateUndoRedoState() {
@@ -1467,8 +1837,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
+    /**
+     * Apply a [PresetWithThumbnail] from the database-backed PresetService.
+     * Replaces all pipeline parameters and syncs derived UI state (tone curve,
+     * color wheels, HSL) so editor panels reflect the change immediately.
+     */
+    fun applyPreset(preset: com.alcedo.studio.domain.service.PresetWithThumbnail) {
+        applyPresetParams(preset.params)
+        recordTransaction(OperatorType.PRESET, "applyPreset:${preset.name}", 0f)
+    }
+
     fun applyPreset(preset: PresetEntry) {
         applyPresetParams(preset.params)
+        recordTransaction(OperatorType.PRESET, "applyPreset:${preset.name}", 0f)
     }
 
     /**
@@ -1501,9 +1882,114 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    /**
+     * Saves the current pipeline state as a named database-backed preset.
+     * The optional [description] is stored on the entity for display in the
+     * panel.  This method persists via Room; it does NOT modify the legacy
+     * in-memory [_presets] list.
+     */
+    fun saveCurrentAsPreset(name: String, category: String = "Custom", description: String = "") {
+        viewModelScope.launch {
+            try {
+                val previewBitmap = _previewBitmap.value?.let { bmp ->
+                    // Downsample for thumbnail to keep cache small.
+                    if (bmp.width > 256 || bmp.height > 256) {
+                        Bitmap.createScaledBitmap(bmp, 160, 160, true)
+                    } else {
+                        bmp
+                    }
+                }
+                presetService.createPreset(name, category, _params.value, previewBitmap, description)
+                Log.d(TAG, "Preset saved: $name")
+            } catch (_: Throwable) {
+                Log.e(TAG, "Failed to save preset", null)
+            }
+        }
+    }
+
+    /** Legacy convenience overload that only takes a name. */
     fun saveCurrentAsPreset(name: String) {
-        val newPreset = PresetEntry(name = name, params = _params.value)
-        _presets.value = _presets.value + newPreset
+        saveCurrentAsPreset(name, "Custom")
+    }
+
+    /** Deletes a database-backed preset by its row id. */
+    fun deletePreset(id: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                presetService.deletePreset(id)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * Imports a preset file via SAF [Uri]. Supports:
+     *   - `.json` – native JSON export format
+     *   - `.xmp`  – Adobe Lightroom XMP presets
+     *   - `.cube` – LUT files
+     *
+     * Returns the new preset id (> 0 on success), or -1 on failure.
+     */
+    suspend fun importPreset(uri: Uri): Long = withContext(Dispatchers.IO) {
+        try {
+            val context = AppModule.context
+            var result = -1L
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                val ext = uri.toString()
+                    .substringAfterLast(".", "").lowercase()
+                when (ext) {
+                    "xmp" -> {
+                        val tempFile = File.createTempFile("import_xmp_", ".xmp", context.cacheDir)
+                        tempFile.outputStream().use { inputStream.copyTo(it) }
+                        result = presetService.importXmpPreset(tempFile)
+                        tempFile.delete()
+                    }
+                    "cube" -> {
+                        val lutDir = File(context.filesDir, "luts")
+                        val tempFile = File.createTempFile("import_cube_", ".cube", context.cacheDir)
+                        tempFile.outputStream().use { inputStream.copyTo(it) }
+                        result = presetService.importCubePreset(tempFile, lutDir)
+                        tempFile.delete()
+                    }
+                    else -> {
+                        val tempFile = File.createTempFile("import_preset_", ".json", context.cacheDir)
+                        tempFile.outputStream().use { inputStream.copyTo(it) }
+                        result = presetService.importPreset(tempFile)
+                        tempFile.delete()
+                    }
+                }
+            }
+            Log.d(TAG, "Imported preset from URI, id=$result")
+            result
+        } catch (e: Throwable) {
+            Log.e(TAG, "Import preset failed", e)
+            -1L
+        }
+    }
+
+    /**
+     * Exports a single database-backed preset to a destination [Uri] via SAF.
+     * Writes JSON to a temporary file first, then copies into the output URI.
+     * Returns true on success.
+     */
+    suspend fun exportPreset(presetId: Long, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val context = AppModule.context
+            val tempFile = File.createTempFile("preset_export_", ".json", context.cacheDir)
+            val ok = presetService.exportPreset(presetId, tempFile)
+            if (ok) {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    tempFile.inputStream().use { it.copyTo(outputStream) }
+                }
+            } else {
+                Log.w(TAG, "Export service returned false for preset $presetId")
+            }
+            tempFile.delete()
+            Log.d(TAG, "Exported preset $presetId to $uri")
+            ok
+        } catch (e: Throwable) {
+            Log.e(TAG, "Export preset failed for preset $presetId", e)
+            false
+        }
     }
 
     // ================================================================
@@ -1695,6 +2181,47 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
+    // ================================================================
+    // P2-5 Batch export preset sync (批量导出预设同步)
+    // ================================================================
+
+    /**
+     * 将 [params] 应用到所有 [imageIds] 指定的图片。EditorViewModel 基于单图，
+     * [com.alcedo.studio.data.model.ImageModel] 不含 PipelineParams 字段，
+     * 因此参数缓存到 [_batchParamsCache]，由 [batchExport] 在导出时统一应用。
+     */
+    fun applyParamsToBatch(params: PipelineParams, imageIds: List<Long>) {
+        viewModelScope.launch {
+            val updated = _batchParamsCache.value.toMutableMap()
+            imageIds.forEach { id -> updated[id] = params }
+            _batchParamsCache.value = updated
+        }
+    }
+
+    /**
+     * 批量导出：对每张选中图片解码、应用管线（使用 [_batchParamsCache] 中的参数，
+     * 缺省回退到当前编辑参数 [_params]），然后导出。
+     */
+    fun batchExport(imageIds: List<Long>, settings: ExportSettings) {
+        viewModelScope.launch {
+            imageIds.forEach { id ->
+                val image = imageRepository.getImage(id) ?: return@forEach
+                val params = _batchParamsCache.value[id] ?: _params.value
+                withContext(Dispatchers.IO) {
+                    val bitmap = BitmapFactory.decodeFile(image.imagePath)
+                    val processed = if (bitmap != null) {
+                        val out = pipelineService.applyPipeline(bitmap, params)
+                        bitmap.recycle()
+                        out
+                    } else {
+                        null
+                    }
+                    exportService.exportImage(image.imagePath, settings, processed)
+                }
+            }
+        }
+    }
+
     fun exportBatch(items: List<ExportService.ExportBatchItem>, settings: ExportSettings) {
         viewModelScope.launch {
             try {
@@ -1830,6 +2357,7 @@ enum class EditorPanel(val labelKey: StringResources.() -> String) {
     DISPLAY_TRANSFORM({ editorPanelDisplayTransform }),
     LMT({ editorPanelLmt }),
     INSPECTOR({ editorPanelInspector }),
+    LENS_CORRECTION({ editorPanelLensCorrection }),
     MASKS({ editorPanelMasks }),
     PRESETS({ presetTitle })
 }

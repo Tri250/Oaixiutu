@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -32,8 +33,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -71,6 +74,9 @@ fun EditorScreen(
     val histogramScale by viewModel.histogramScale.collectAsStateWithLifecycle()
     val waveformMode by viewModel.waveformMode.collectAsStateWithLifecycle()
     val gamutOverlay by viewModel.gamutOverlay.collectAsStateWithLifecycle()
+    val compareMode by viewModel.compareMode.collectAsStateWithLifecycle()
+    val overlayOpacity by viewModel.overlayOpacity.collectAsStateWithLifecycle()
+    val showClippingWarning by viewModel.showClippingWarning.collectAsStateWithLifecycle()
 
     // 未保存修改拦截 + 自动保存
     var showUnsavedDialog by remember { mutableStateOf(false) }
@@ -206,6 +212,16 @@ fun EditorScreen(
                             else MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    // 剪裁预警开关（类似 Lightroom 的 J 键功能）
+                    IconButton(onClick = { viewModel.toggleClippingWarning() }) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = stringRes { editorClippingWarning },
+                            modifier = Modifier.size(24.dp),
+                            tint = if (showClippingWarning) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     // 专注模式开关 — RapidRAW 风格：自动折叠其它小节，仅保留当前活跃小节
                     IconButton(onClick = { focusMode.toggle() }) {
                         Icon(
@@ -262,6 +278,29 @@ fun EditorScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // P2-7 色彩空间工作流提示：在工具栏下方显示 输入→工作→输出 色彩空间链路
+            val currentParams = viewModel.params.value
+            val imgType = image?.imageType
+            val isRawImage = imgType != null && imgType in setOf(
+                ImageType.ARW, ImageType.CR2, ImageType.CR3,
+                ImageType.NEF, ImageType.DNG
+            )
+            val (csInput, csWorking, csOutput) = resolveColorSpaceFlow(currentParams, isRawImage)
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 4.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            ) {
+                ColorSpaceIndicator(
+                    inputSpace = csInput,
+                    workingSpace = csWorking,
+                    outputSpace = csOutput,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
             if (isTablet) {
                 // 平板：左右分栏布局
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -274,7 +313,11 @@ fun EditorScreen(
                         isCompareMode = isCompareMode,
                         previewBitmap = preview?.asImageBitmap(),
                         originalBitmap = originalBitmap?.asImageBitmap(),
-                        zoomableState = zoomableState
+                        zoomableState = zoomableState,
+                        viewModel = viewModel,
+                        selectedPanel = selectedPanel,
+                        compareMode = compareMode,
+                        overlayOpacity = overlayOpacity
                     )
 
                     // 编辑器面板
@@ -302,7 +345,11 @@ fun EditorScreen(
                         isCompareMode = isCompareMode,
                         previewBitmap = preview?.asImageBitmap(),
                         originalBitmap = originalBitmap?.asImageBitmap(),
-                        zoomableState = zoomableState
+                        zoomableState = zoomableState,
+                        viewModel = viewModel,
+                        selectedPanel = selectedPanel,
+                        compareMode = compareMode,
+                        overlayOpacity = overlayOpacity
                     )
 
                     // 面板标签（与下方可滑动 Pager 同步）
@@ -419,6 +466,7 @@ fun EditorScreen(
                                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                                     image = viewModel.imageModel.value
                                 )
+                                EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
                                 EditorPanel.MASKS -> MaskPanel(
                                     viewModel = viewModel,
                                     modifier = Modifier.fillMaxWidth()
@@ -448,6 +496,8 @@ fun EditorScreen(
                     onHistogramChannelChange = { viewModel.updateHistogramChannel(it) },
                     histogramScale = histogramScale,
                     onHistogramScaleChange = { viewModel.updateHistogramScale(it) },
+                    showClippingWarning = showClippingWarning,
+                    onToggleClippingWarning = { viewModel.toggleClippingWarning() },
                     waveformData = waveformData,
                     waveformMode = waveformMode,
                     onWaveformModeChange = { viewModel.updateWaveformMode(it) },
@@ -495,6 +545,8 @@ private fun ScopeAnalyzerPanel(
     onHistogramChannelChange: (HistogramChannel) -> Unit,
     histogramScale: HistogramScale,
     onHistogramScaleChange: (HistogramScale) -> Unit,
+    showClippingWarning: Boolean,
+    onToggleClippingWarning: () -> Unit,
     waveformData: WaveformData,
     waveformMode: WaveformMode,
     onWaveformModeChange: (WaveformMode) -> Unit,
@@ -561,6 +613,7 @@ private fun ScopeAnalyzerPanel(
                         histogramData = histogramData,
                         showChannels = histogramChannel,
                         scale = histogramScale,
+                        showClippingWarning = showClippingWarning,
                         modifier = Modifier.fillMaxWidth()
                     )
                     // 通道选择行
@@ -591,6 +644,24 @@ private fun ScopeAnalyzerPanel(
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                         }
+                    }
+                    // 剪裁预警切换行
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = showClippingWarning,
+                            onClick = onToggleClippingWarning,
+                            label = {
+                                Text(
+                                    "Clipping Warning",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            modifier = Modifier.height(26.dp)
+                        )
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -696,14 +767,69 @@ private fun ImagePreviewArea(
     isCompareMode: Boolean,
     previewBitmap: ImageBitmap?,
     originalBitmap: ImageBitmap?,
-    zoomableState: ZoomableState
+    zoomableState: ZoomableState,
+    viewModel: EditorViewModel,
+    selectedPanel: EditorPanel,
+    compareMode: CompareMode = CompareMode.SPLIT,
+    overlayOpacity: Float = 0.5f
 ) {
     // 长按对比 — 长按显示原图（修改前），松开恢复
     var showOriginalOverlay by remember { mutableStateOf(false) }
 
+    // 图片显示区域的计算
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+
+    // 计算 imageDisplayRect（考虑 ContentScale.Fit + zoomableState）
+    val bitmapWidth = previewBitmap?.width ?: 0
+    val bitmapHeight = previewBitmap?.height ?: 0
+
+    // ContentScale.Fit 下图片的理论尺寸（未缩放时）
+    val fitRect = remember(containerSize, bitmapWidth, bitmapHeight) {
+        if (containerSize.width <= 0 || containerSize.height <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) {
+            Rect.Zero
+        } else {
+            val scale = minOf(
+                containerSize.width.toFloat() / bitmapWidth,
+                containerSize.height.toFloat() / bitmapHeight
+            )
+            val fitW = bitmapWidth * scale
+            val fitH = bitmapHeight * scale
+            val left = (containerSize.width - fitW) / 2f
+            val top = (containerSize.height - fitH) / 2f
+            Rect(left, top, left + fitW, top + fitH)
+        }
+    }
+
+    // 考虑 zoomableState 的缩放与平移
+    val imageDisplayRect = remember(fitRect, zoomableState.scale, zoomableState.offsetX, zoomableState.offsetY) {
+        if (fitRect == Rect.Zero) Rect.Zero
+        else {
+            // 缩放后的尺寸
+            val scaledW = fitRect.width * zoomableState.scale
+            val scaledH = fitRect.height * zoomableState.scale
+            // 平移后的位置（fitRect 居中，TransformOrigin(0.5f,0.5f)）
+            val centerX = fitRect.left + fitRect.width / 2f
+            val centerY = fitRect.top + fitRect.height / 2f
+            val newLeft = centerX - scaledW / 2f + zoomableState.offsetX
+            val newTop = centerY - scaledH / 2f + zoomableState.offsetY
+            Rect(newLeft, newTop, newLeft + scaledW, newTop + scaledH)
+        }
+    }
+
+    // Brush 状态
+    val brushState by remember { viewModel.brushState }
+    val activeBrush = viewModel.activeBrushSubMaskIndex.collectAsState().value
+    val maskContainers = viewModel.maskContainers.collectAsState().value
+
+    // 当前激活的 Brush sub-mask 类型
+    val isBrushActive = activeBrush != null &&
+        maskContainers.firstOrNull { it.id == activeBrush.first }
+            ?.subMasks?.getOrNull(activeBrush.second)?.type == MaskType.BRUSH
+
     Box(
         modifier = modifier
             .background(Color(0xFF0D0D0D))
+            .onSizeChanged { size -> containerSize = size }
             .pointerInput(isCompareMode) {
                 // 对比模式下由 CompareView 负责交互，不拦截长按
                 if (isCompareMode) return@pointerInput
@@ -735,21 +861,61 @@ private fun ImagePreviewArea(
                     CircularProgressIndicator(color = Color.White)
                 }
                 "compare" -> {
-                    CompareView(
-                        originalImage = originalBitmap!!,
-                        editedImage = previewBitmap!!,
-                        compareMode = CompareMode.SPLIT,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // 对比模式切换器
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CompareMode.entries.forEach { mode ->
+                                FilterChip(
+                                    selected = compareMode == mode,
+                                    onClick = { viewModel.updateCompareMode(mode) },
+                                    label = {
+                                        Text(
+                                            mode.label,
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .height(28.dp)
+                                        .padding(horizontal = 2.dp)
+                                )
+                            }
+                        }
+                        CompareView(
+                            originalImage = originalBitmap!!,
+                            editedImage = previewBitmap!!,
+                            compareMode = compareMode,
+                            overlayOpacity = overlayOpacity,
+                            onOverlayOpacityChange = { viewModel.updateOverlayOpacity(it) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
                 else -> {
-                    ZoomableImageView(
-                        imageBitmap = previewBitmap,
-                        modifier = Modifier.fillMaxSize(),
-                        zoomableState = zoomableState
-                    )
+                        ZoomableImageView(
+                            imageBitmap = previewBitmap,
+                            modifier = Modifier.fillMaxSize(),
+                            zoomableState = zoomableState
+                        )
+
+                        // 当当前面板是 Mask 且有激活的 Brush sub-mask 时，显示画笔覆盖层
+                        if (selectedPanel == EditorPanel.MASKS && isBrushActive) {
+                            BrushOverlay(
+                                brushState = brushState,
+                                onBrushStateChanged = { newState ->
+                                    viewModel.updateBrushState(newState)
+                                },
+                                imageRect = imageDisplayRect,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
                 }
-            }
         }
 
         // 长按时叠加显示原图
@@ -757,6 +923,18 @@ private fun ImagePreviewArea(
             Image(
                 bitmap = originalBitmap,
                 contentDescription = stringRes { compareBefore },
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        // P2-8 锐化蒙版可视化：在图片上方叠加显示边缘蒙版（白色高亮锐化区域）
+        val showSharpeningMask by viewModel.showSharpeningMask.collectAsStateWithLifecycle()
+        val sharpeningMaskBitmap by viewModel.sharpeningMaskBitmap.collectAsStateWithLifecycle()
+        if (showSharpeningMask && sharpeningMaskBitmap != null) {
+            Image(
+                bitmap = sharpeningMaskBitmap!!.asImageBitmap(),
+                contentDescription = stringRes { effectsShowSharpeningMask },
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
@@ -872,6 +1050,7 @@ private fun EditorPanelColumn(
                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                     image = viewModel.imageModel.value
                 )
+                EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
                 EditorPanel.MASKS -> MaskPanel(
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxWidth()
@@ -1077,6 +1256,7 @@ private fun panelIcon(panel: EditorPanel): ImageVector = when (panel) {
     EditorPanel.DISPLAY_TRANSFORM -> Icons.Default.Layers
     EditorPanel.LMT -> Icons.Default.FilterVintage
     EditorPanel.INSPECTOR -> Icons.Default.Info
+    EditorPanel.LENS_CORRECTION -> Icons.Default.CameraAlt
     EditorPanel.MASKS -> Icons.Default.BlurOn
     EditorPanel.PRESETS -> Icons.Default.AutoAwesome
 }

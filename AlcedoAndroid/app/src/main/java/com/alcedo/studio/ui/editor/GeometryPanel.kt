@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
@@ -22,7 +23,7 @@ fun GeometryPanel(
     modifier: Modifier = Modifier
 ) {
     val params by remember { viewModel.params }
-    var selectedAspectRatio by remember { mutableStateOf(AspectRatio.FREE) }
+    var selectedCropAspectRatio by remember { mutableStateOf(CropAspectRatio.FREE) }
     var selectedOverlay by remember { mutableStateOf(CompositionOverlayType.NONE) }
     val view = LocalView.current
 
@@ -162,15 +163,8 @@ fun GeometryPanel(
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(
-                                    geometryCropLeft = 0f,
-                                    geometryCropTop = 0f,
-                                    geometryCropRight = 1f,
-                                    geometryCropBottom = 1f
-                                )
-                            )
-                            selectedAspectRatio = AspectRatio.FREE
+                            viewModel.resetCrop()
+                            selectedCropAspectRatio = CropAspectRatio.FREE
                         },
                         modifier = Modifier.size(24.dp)
                     ) {
@@ -184,82 +178,66 @@ fun GeometryPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    stringRes { editorAspectRatio },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // 裁剪比例选择 — 使用 CropAspectRatio
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    AspectRatio.entries.take(4).forEach { ratio ->
+                    CropAspectRatio.entries.forEach { ratio ->
                         FilterChip(
-                            selected = selectedAspectRatio == ratio,
+                            selected = selectedCropAspectRatio == ratio,
                             onClick = {
                                 HapticFeedback.click(view)
-                                selectedAspectRatio = ratio
-                                applyAspectRatioCrop(viewModel, params, ratio)
+                                selectedCropAspectRatio = ratio
+                                viewModel.updateCropAspectRatio(ratio)
                             },
-                            label = { Text(ratio.label(), style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
+                            label = { Text(ratio.label, style = MaterialTheme.typography.labelSmall) }
                         )
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    AspectRatio.entries.drop(4).forEach { ratio ->
-                        FilterChip(
-                            selected = selectedAspectRatio == ratio,
-                            onClick = {
-                                HapticFeedback.click(view)
-                                selectedAspectRatio = ratio
-                                applyAspectRatioCrop(viewModel, params, ratio)
-                            },
-                            label = { Text(ratio.label(), style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+            }
+        }
 
-                AdjustmentSlider(
-                    label = stringRes { editorCropLeft },
-                    value = params.geometryCropLeft,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateParams(params.copy(geometryCropLeft = it))
-                    },
-                    defaultValue = 0f
+        // ── Rotate / Flip ────────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    stringRes { editorSectionTransform },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                AdjustmentSlider(
-                    label = stringRes { editorCropTop },
-                    value = params.geometryCropTop,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateParams(params.copy(geometryCropTop = it))
-                    },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorCropRight },
-                    value = params.geometryCropRight,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateParams(params.copy(geometryCropRight = it))
-                    },
-                    defaultValue = 1f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorCropBottom },
-                    value = params.geometryCropBottom,
-                    range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateParams(params.copy(geometryCropBottom = it))
-                    },
-                    defaultValue = 1f
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = {
+                        val newRotation = ((params.cropRotation + 90) % 360)
+                        viewModel.updateCropRotation(newRotation)
+                    }) {
+                        Icon(Icons.Default.RotateRight, contentDescription = "Rotate 90°")
+                    }
+                    IconButton(onClick = {
+                        viewModel.updateCropFlip(!params.cropFlipHorizontal, params.cropFlipVertical)
+                    }) {
+                        Icon(Icons.Default.Flip, contentDescription = "Flip Horizontal")
+                    }
+                    IconButton(onClick = {
+                        viewModel.updateCropFlip(params.cropFlipHorizontal, !params.cropFlipVertical)
+                    }) {
+                        Icon(
+                            Icons.Default.Flip,
+                            contentDescription = "Flip Vertical",
+                            modifier = Modifier.graphicsLayer { scaleY = -1f }
+                        )
+                    }
+                    IconButton(onClick = {
+                        viewModel.resetCrop()
+                        selectedCropAspectRatio = CropAspectRatio.FREE
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                    }
+                }
             }
         }
 

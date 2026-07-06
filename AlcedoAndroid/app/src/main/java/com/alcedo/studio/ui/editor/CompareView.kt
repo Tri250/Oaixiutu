@@ -23,10 +23,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 
-enum class CompareMode {
-    SPLIT,
-    ONION_SKIN,
-    SIDE_BY_SIDE
+enum class CompareMode(val label: String) {
+    SPLIT("Split"),
+    ONION_SKIN("Overlay"),
+    SIDE_BY_SIDE("Parallel")
 }
 
 @Composable
@@ -34,11 +34,15 @@ fun CompareView(
     originalImage: ImageBitmap?,
     editedImage: ImageBitmap?,
     compareMode: CompareMode,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    overlayOpacity: Float = 0.5f,
+    onOverlayOpacityChange: ((Float) -> Unit)? = null
 ) {
     if (originalImage == null || editedImage == null) return
 
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
+    var localOpacity by remember { mutableFloatStateOf(overlayOpacity) }
+    val effectiveOpacity = if (onOverlayOpacityChange != null) overlayOpacity else localOpacity
     val accCompareDesc = stringRes { accCompareView }
 
     Column(
@@ -72,11 +76,32 @@ fun CompareView(
                 )
                 .semantics {
                     contentDescription = accCompareDesc
-                    stateDescription = "Split at ${(splitPosition * 100).toInt()}%"
+                    stateDescription = when (compareMode) {
+                        CompareMode.SPLIT -> "Split at ${(splitPosition * 100).toInt()}%"
+                        CompareMode.ONION_SKIN -> "Overlay opacity ${(effectiveOpacity * 100).toInt()}%"
+                        CompareMode.SIDE_BY_SIDE -> "Side by side"
+                    }
                 }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, _ ->
-                        splitPosition = (change.position.x / size.width).coerceIn(0f, 1f)
+                .pointerInput(compareMode) {
+                    when (compareMode) {
+                        CompareMode.SPLIT -> {
+                            detectDragGestures { change, _ ->
+                                splitPosition = (change.position.x / size.width).coerceIn(0f, 1f)
+                            }
+                        }
+                        CompareMode.ONION_SKIN -> {
+                            detectDragGestures { change, _ ->
+                                val newOpacity = (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                                if (onOverlayOpacityChange != null) {
+                                    onOverlayOpacityChange(newOpacity)
+                                } else {
+                                    localOpacity = newOpacity
+                                }
+                            }
+                        }
+                        CompareMode.SIDE_BY_SIDE -> {
+                            detectTapGestures()
+                        }
                     }
                 }
         ) {
@@ -108,6 +133,7 @@ fun CompareView(
                     )
                 }
                 CompareMode.ONION_SKIN -> {
+                    // 叠加模式：先绘制原图，再以可调透明度叠加编辑后图
                     drawImage(
                         image = originalImage,
                         dstSize = dstIntSize
@@ -115,21 +141,24 @@ fun CompareView(
                     drawImage(
                         image = editedImage,
                         dstSize = dstIntSize,
-                        alpha = 1f - splitPosition
+                        alpha = effectiveOpacity
                     )
                 }
                 CompareMode.SIDE_BY_SIDE -> {
+                    // 并排模式：左右两张完整图
                     val halfWidth = imageWidth / 2f
                     clipRect(0f, 0f, halfWidth, imageHeight) {
                         drawImage(
                             image = originalImage,
-                            dstSize = dstIntSize
+                            dstSize = IntSize(halfWidth.toInt(), imageHeight.toInt())
                         )
                     }
                     clipRect(halfWidth, 0f, imageWidth, imageHeight) {
                         drawImage(
                             image = editedImage,
-                            dstSize = dstIntSize
+                            srcSize = IntSize(originalImage.width, originalImage.height),
+                            dstSize = IntSize(halfWidth.toInt(), imageHeight.toInt()),
+                            dstOffset = androidx.compose.ui.unit.IntOffset(halfWidth.toInt(), 0)
                         )
                     }
                     // Divider line
@@ -144,29 +173,45 @@ fun CompareView(
             }
         }
 
-        // Labels below
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (compareMode == CompareMode.SIDE_BY_SIDE)
-                Arrangement.SpaceBetween else Arrangement.Center
-        ) {
-            if (compareMode == CompareMode.SIDE_BY_SIDE) {
+        // 控制提示 / 标签
+        when (compareMode) {
+            CompareMode.SPLIT -> {
                 Text(
-                    stringRes { compareBefore },
+                    "Drag to split · ${(splitPosition * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    stringRes { compareAfter },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    "${(splitPosition * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            }
+            CompareMode.ONION_SKIN -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Drag vertically to adjust opacity",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Opacity ${(effectiveOpacity * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            CompareMode.SIDE_BY_SIDE -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { compareBefore },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        stringRes { compareAfter },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

@@ -110,11 +110,13 @@ class ChineseSimplifiedStrings : StringResources {
     override val editorPanelDisplayTransform = "色彩科学"
     override val editorPanelLmt = "LMT"
     override val editorPanelInspector = "检查器"
+    override val editorPanelLensCorrection = "镜头校正"
     override val editorPanelMasks = "蒙版"
     override val editorUndo = "撤销"
     override val editorRedo = "重做"
     override val editorCompare = "对比"
     override val editorScopeAnalyzer = "示波器"
+    override val editorClippingWarning = "剪裁预警"
     override val editorSave = "保存"
     override val editorExport = "导出"
     override val editorBefore = "修改前"
@@ -125,6 +127,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val editorFocusMode = "专注模式"
     override val editorFocusModeOn = "专注模式已开启"
     override val editorFocusModeOff = "专注模式已关闭"
+    override val colorSpaceWorkflow = "色彩空间工作流"
 
     // Basic panel
     override val editorSectionLight = "光线"
@@ -158,6 +161,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val toneCurveDarks = "暗部"
     override val toneCurveShadows = "阴影"
     override val toneCurveSigmoidContrast = "S 形对比度"
+    override val editorSigmoidShoulder = "肩部亮度"
     override val toneCurvePointMode = "点"
     override val toneCurveParametricMode = "参数化"
 
@@ -255,6 +259,13 @@ class ChineseSimplifiedStrings : StringResources {
     override val cropAmount = "强度"
 
     // Effects panel
+    override val editorSectionLuminanceDenoise = "亮度降噪"
+    override val editorSectionChromaDenoise = "色彩降噪"
+    override val editorStrength = "强度"
+    override val editorDetailPreserve = "细节保留"
+    override val editorColorThreshold = "色彩阈值"
+    override val effectsResetLumaDenoise = "重置亮度降噪"
+    override val effectsResetChromaDenoise = "重置色彩降噪"
     override val editorSectionFilmGrain = "胶片颗粒"
     override val effectsResetGrain = "重置颗粒"
     override val editorIntensity = "强度"
@@ -265,6 +276,7 @@ class ChineseSimplifiedStrings : StringResources {
     override val editorRedBias = "红色偏移"
     override val editorSectionSharpen = "锐化"
     override val effectsResetSharpen = "重置锐化"
+    override val effectsShowSharpeningMask = "显示锐化蒙版"
     override val editorAmount = "数量"
     override val editorSectionClarity = "清晰度"
     override val effectsResetClarity = "重置清晰度"
@@ -352,6 +364,15 @@ class ChineseSimplifiedStrings : StringResources {
     override val exportBatchResult = "批量导出完成：成功 %s，失败 %s"
     override val exportHasselbladWatermark = "哈苏水印"
     override val exportWatermarkDescription = "添加哈苏品牌水印"
+    override val exportUseOriginalFilename = "使用原始文件名"
+    override val exportPathDefault = "默认：Pictures/AlcedoStudio"
+
+    // ── 分享（国内社交平台）──
+    override val shareImage = "分享图片"
+    override val shareToWechat = "微信"
+    override val shareToWeibo = "微博"
+    override val shareToRednote = "小红书"
+    override val shareToOther = "更多"
 
     // ── Accessibility ───────────────────────────────────────────────────
     override val accColorWheel = "色轮，用于调整提升、伽马或增益"
@@ -591,12 +612,16 @@ class ChineseSimplifiedStrings : StringResources {
     override val presetCategoryPortrait = "人像"
     override val presetCategoryLandscape = "风景"
     override val presetCategoryBW = "黑白"
+    override val presetCategoryStreet = "街拍"
+    override val presetCategoryImported = "导入"
+    override val presetCategoryLut = "LUT"
     override val presetApply = "应用"
     override val presetEdit = "编辑"
     override val presetDelete = "删除"
     override val presetExport = "导出"
     override val presetNamePrompt = "预设名称"
     override val presetCategoryPrompt = "分类"
+    override val presetDescriptionPrompt = "描述"
     override val presetCreated = "预设已创建"
     override val presetDeleted = "预设已删除"
     override val presetImported = "预设已导入"
@@ -773,6 +798,14 @@ class ChineseSimplifiedStrings : StringResources {
     override val maskName = "名称"
     override val maskBrushSize = "画笔大小"
     override val maskBrushHardness = "画笔硬度"
+    override val maskBrushOpacity = "不透明度"
+    override val maskBrushEdit = "编辑画笔"
+    override val maskBrushDone = "完成"
+    override val maskBrushDraw = "绘制"
+    override val maskBrushEraser = "橡皮擦"
+    override val maskBrushNavigate = "导航"
+    override val maskBrushUndo = "撤销笔触"
+    override val maskBrushClear = "清除全部"
     override val maskFeather = "羽化"
     override val maskAnalyzing = "正在分析图像…"
     override val maskApplyTo = "应用于"
@@ -847,6 +880,9 @@ class ChineseSimplifiedStrings : StringResources {
     override val batchPickPreset = "选择预设"
     override val batchClipboardFrom = "剪贴板来自图片 %s"
     override val batchClipboardEmpty = "剪贴板为空 — 请先复制调整"
+    override val batchSelectedCount = "已选 %s 张图片"
+    override val batchSyncParams = "同步参数"
+    override val batchIndividualAdjust = "单独调整（覆盖批量设置）"
 
     // ── 隐私政策与用户协议页面 ───────────────────────────────────────
     override val settingsPrivacyPolicy = "隐私政策"
@@ -859,6 +895,17 @@ class ChineseSimplifiedStrings : StringResources {
     override val privacyDisagree = "不同意"
     override val privacyEffectiveDate = "生效日期：2026年1月1日"
     override val userAgreementEffectiveDate = "生效日期：2026年1月1日"
+
+    // ── 关于页面 ──
+    override val aboutAppTagline = "专业照片编辑器"
+    override val aboutVersionInfo = "版本信息"
+    override val aboutAppName = "应用名称"
+    override val aboutVersion = "版本"
+    override val aboutBuildNumber = "版本号"
+    override val aboutPlatform = "平台"
+    override val aboutMinSdk = "最低 SDK"
+    override val aboutArchitecture = "架构"
+    override val aboutLicense = "许可证"
     override val privacyContent = """Alcedo Studio 隐私政策
 
 生效日期：2026年1月1日

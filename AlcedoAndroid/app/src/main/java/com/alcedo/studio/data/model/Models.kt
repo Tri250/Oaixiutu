@@ -19,6 +19,7 @@ data class PipelinePresetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val category: String = "",
+    @ColumnInfo(defaultValue = "") val description: String = "",
     val paramsJson: String,
     val createdTime: Long,
     val isBuiltIn: Boolean = false

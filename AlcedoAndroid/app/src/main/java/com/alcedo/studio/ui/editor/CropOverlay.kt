@@ -20,48 +20,37 @@ import androidx.compose.ui.semantics.stateDescription
 import com.alcedo.studio.i18n.stringRes
 import kotlin.math.*
 
-data class CropRect(
-    val left: Float = 0.1f,
-    val top: Float = 0.1f,
-    val right: Float = 0.9f,
-    val bottom: Float = 0.9f,
-    val rotation: Float = 0f
+data class CropState(
+    val left: Float = 0f,    // 0-1 相对于图片
+    val top: Float = 0f,     // 0-1 相对于图片
+    val right: Float = 1f,   // 0-1 相对于图片
+    val bottom: Float = 1f,  // 0-1 相对于图片
+    val rotation: Int = 0,   // 0, 90, 180, 270
+    val flipHorizontal: Boolean = false,
+    val flipVertical: Boolean = false,
+    val aspectRatio: CropAspectRatio = CropAspectRatio.FREE
 )
 
-enum class AspectRatio(val ratio: Float?) {
-    FREE(null),
-    ONE_ONE(1f),
-    FOUR_THREE(4f / 3f),
-    THREE_TWO(3f / 2f),
-    SIXTEEN_NINE(16f / 9f),
-    TWO_ONE(2f),
-    THREE_ONE(3f),
-    NINE_SIXTEEN(9f / 16f);
-
-    @androidx.compose.runtime.Composable
-    fun label(): String = when (this) {
-        FREE -> stringRes { ratioFree }
-        ONE_ONE -> stringRes { ratio1_1 }
-        FOUR_THREE -> stringRes { ratio4_3 }
-        THREE_TWO -> stringRes { ratio3_2 }
-        SIXTEEN_NINE -> stringRes { ratio16_9 }
-        TWO_ONE -> stringRes { ratio2_1 }
-        THREE_ONE -> stringRes { ratio3_1 }
-        NINE_SIXTEEN -> stringRes { ratio9_16 }
-    }
+enum class CropAspectRatio(val label: String, val ratio: Float?) {
+    FREE("自由", null),
+    RATIO_1_1("1:1", 1f),
+    RATIO_4_3("4:3", 4f / 3f),
+    RATIO_3_2("3:2", 3f / 2f),
+    RATIO_16_9("16:9", 16f / 9f),
+    RATIO_2_3("2:3", 2f / 3f),
+    RATIO_9_16("9:16", 9f / 16f)
 }
 
 @Composable
 fun CropOverlay(
-    cropRect: CropRect,
-    onCropChanged: (CropRect) -> Unit,
+    cropState: CropState,
+    onCropStateChanged: (CropState) -> Unit,
     modifier: Modifier = Modifier,
-    aspectRatio: AspectRatio = AspectRatio.FREE,
     showGrid: Boolean = true,
     compositionOverlay: CompositionOverlayType = CompositionOverlayType.NONE
 ) {
     var dragHandle by remember { mutableStateOf(CropHandle.NONE) }
-    var initialCropRect by remember { mutableStateOf(cropRect) }
+    var initialCropState by remember { mutableStateOf(cropState) }
     val accCropOverlayDesc = stringRes { accCropOverlay }
 
     Canvas(
@@ -69,39 +58,42 @@ fun CropOverlay(
             .fillMaxSize()
             .semantics {
                 contentDescription = accCropOverlayDesc
-                stateDescription = "Crop: L=${(cropRect.left * 100).toInt()}%, T=${(cropRect.top * 100).toInt()}%, R=${(cropRect.right * 100).toInt()}%, B=${(cropRect.bottom * 100).toInt()}%"
+                stateDescription = "Crop: L=${(cropState.left * 100).toInt()}%, T=${(cropState.top * 100).toInt()}%, R=${(cropState.right * 100).toInt()}%, B=${(cropState.bottom * 100).toInt()}%"
+                role = Role.Slider
             }
-            .pointerInput(aspectRatio) {
+            .pointerInput(cropState.aspectRatio) {
                 detectDragGestures(
                     onDragStart = { startOffset ->
-                        initialCropRect = cropRect
-                        val cr = cropRect
-                        val handleSize = 40f
+                        initialCropState = cropState
+                        val cr = cropState
+                        val hitSize = 48f
                         val left = cr.left * size.width
                         val top = cr.top * size.height
                         val right = cr.right * size.width
                         val bottom = cr.bottom * size.height
+                        val midX = (left + right) / 2f
+                        val midY = (top + bottom) / 2f
 
                         dragHandle = when {
-                            // Corners
-                            startOffset.x in (left - handleSize)..(left + handleSize) &&
-                                startOffset.y in (top - handleSize)..(top + handleSize) -> CropHandle.TOP_LEFT
-                            startOffset.x in (right - handleSize)..(right + handleSize) &&
-                                startOffset.y in (top - handleSize)..(top + handleSize) -> CropHandle.TOP_RIGHT
-                            startOffset.x in (left - handleSize)..(left + handleSize) &&
-                                startOffset.y in (bottom - handleSize)..(bottom + handleSize) -> CropHandle.BOTTOM_LEFT
-                            startOffset.x in (right - handleSize)..(right + handleSize) &&
-                                startOffset.y in (bottom - handleSize)..(bottom + handleSize) -> CropHandle.BOTTOM_RIGHT
-                            // Edges
-                            startOffset.y in (top - handleSize)..(top + handleSize) &&
-                                startOffset.x in left..right -> CropHandle.TOP
-                            startOffset.y in (bottom - handleSize)..(bottom + handleSize) &&
-                                startOffset.x in left..right -> CropHandle.BOTTOM
-                            startOffset.x in (left - handleSize)..(left + handleSize) &&
-                                startOffset.y in top..bottom -> CropHandle.LEFT
-                            startOffset.x in (right - handleSize)..(right + handleSize) &&
-                                startOffset.y in top..bottom -> CropHandle.RIGHT
-                            // Inside
+                            // 四角手柄（8dp 交互区域放大到 48f）
+                            startOffset.x in (left - hitSize)..(left + hitSize) &&
+                                startOffset.y in (top - hitSize)..(top + hitSize) -> CropHandle.TOP_LEFT
+                            startOffset.x in (right - hitSize)..(right + hitSize) &&
+                                startOffset.y in (top - hitSize)..(top + hitSize) -> CropHandle.TOP_RIGHT
+                            startOffset.x in (left - hitSize)..(left + hitSize) &&
+                                startOffset.y in (bottom - hitSize)..(bottom + hitSize) -> CropHandle.BOTTOM_LEFT
+                            startOffset.x in (right - hitSize)..(right + hitSize) &&
+                                startOffset.y in (bottom - hitSize)..(bottom + hitSize) -> CropHandle.BOTTOM_RIGHT
+                            // 四边中点手柄
+                            startOffset.y in (top - hitSize)..(top + hitSize) &&
+                                startOffset.x in (midX - hitSize)..(midX + hitSize) -> CropHandle.TOP
+                            startOffset.y in (bottom - hitSize)..(bottom + hitSize) &&
+                                startOffset.x in (midX - hitSize)..(midX + hitSize) -> CropHandle.BOTTOM
+                            startOffset.x in (left - hitSize)..(left + hitSize) &&
+                                startOffset.y in (midY - hitSize)..(midY + hitSize) -> CropHandle.LEFT
+                            startOffset.x in (right - hitSize)..(right + hitSize) &&
+                                startOffset.y in (midY - hitSize)..(midY + hitSize) -> CropHandle.RIGHT
+                            // 裁剪区域内移动
                             startOffset.x in left..right && startOffset.y in top..bottom -> CropHandle.MOVE
                             else -> CropHandle.NONE
                         }
@@ -110,7 +102,7 @@ fun CropOverlay(
                         if (dragHandle == CropHandle.NONE) return@detectDragGestures
                         val dx = dragAmount.x / size.width
                         val dy = dragAmount.y / size.height
-                        var newCrop = updateCropRect(initialCropRect, dragHandle, dx, dy, aspectRatio)
+                        var newCrop = updateCropState(initialCropState, dragHandle, dx, dy, cropState.aspectRatio)
 
                         // Clamp
                         newCrop = newCrop.copy(
@@ -120,7 +112,7 @@ fun CropOverlay(
                             bottom = newCrop.bottom.coerceIn(newCrop.top + 0.05f, 1f)
                         )
 
-                        onCropChanged(newCrop)
+                        onCropStateChanged(newCrop)
                     },
                     onDragEnd = { dragHandle = CropHandle.NONE }
                 )
@@ -128,34 +120,46 @@ fun CropOverlay(
             .pointerInput(Unit) {
                 detectTransformGestures { _, _, zoom, rotation ->
                     if (rotation != 0f) {
-                        val newRotation = (cropRect.rotation + rotation) % 360f
-                        onCropChanged(cropRect.copy(rotation = newRotation))
+                        val newRotation = (cropState.rotation + rotation.toInt()) % 360
+                        onCropStateChanged(cropState.copy(rotation = newRotation))
                     }
                 }
             }
     ) {
         val w = size.width
         val h = size.height
-        val left = cropRect.left * w
-        val top = cropRect.top * h
-        val right = cropRect.right * w
-        val bottom = cropRect.bottom * h
+        val left = cropState.left * w
+        val top = cropState.top * h
+        val right = cropState.right * w
+        val bottom = cropState.bottom * h
 
-        // Dimming outside
+        // 半透明黑色蒙版 — 裁剪区域外
+        // 上方
         drawRect(
             color = Color.Black.copy(alpha = 0.6f),
-            size = size
+            topLeft = Offset.Zero,
+            size = Size(w, top)
         )
-
-        // Clear crop area
+        // 下方
         drawRect(
-            color = Color.Transparent,
-            topLeft = Offset(left, top),
-            size = Size(right - left, bottom - top),
-            blendMode = BlendMode.Clear
+            color = Color.Black.copy(alpha = 0.6f),
+            topLeft = Offset(0f, bottom),
+            size = Size(w, h - bottom)
+        )
+        // 左方
+        drawRect(
+            color = Color.Black.copy(alpha = 0.6f),
+            topLeft = Offset(0f, top),
+            size = Size(left, bottom - top)
+        )
+        // 右方
+        drawRect(
+            color = Color.Black.copy(alpha = 0.6f),
+            topLeft = Offset(right, top),
+            size = Size(w - right, bottom - top)
         )
 
-        // Crop border
+        // 裁剪边框
         drawRect(
             color = Color.White,
             topLeft = Offset(left, top),
@@ -163,7 +167,7 @@ fun CropOverlay(
             style = Stroke(width = 2f)
         )
 
-        // Rule of thirds grid (legacy) or composition overlay
+        // 三分法网格线
         if (compositionOverlay != CompositionOverlayType.NONE) {
             drawCompositionOverlay(compositionOverlay, Rect(left, top, right, bottom))
         } else if (showGrid) {
@@ -176,39 +180,54 @@ fun CropOverlay(
             }
         }
 
-        // Handles
-        val handleSize = 24f
-        val handleColor = Color.White
-        val handleStroke = 2f
+        // 四角手柄 — 8dp 圆形
+        val cornerHandleRadius = 8.dp.toPx()
+        val edgeHandleRadius = 6.dp.toPx()
 
         listOf(
             Offset(left, top), Offset(right, top),
-            Offset(left, bottom), Offset(right, bottom),
-            Offset((left + right) / 2, top), Offset((left + right) / 2, bottom),
-            Offset(left, (top + bottom) / 2), Offset(right, (top + bottom) / 2)
+            Offset(left, bottom), Offset(right, bottom)
         ).forEach { pos ->
             drawCircle(
-                color = handleColor,
-                radius = handleSize / 2,
-                center = pos,
-                style = Stroke(width = handleStroke)
+                color = Color.White,
+                radius = cornerHandleRadius,
+                center = pos
             )
             drawCircle(
                 color = Color.Black.copy(alpha = 0.5f),
-                radius = handleSize / 2 - 2f,
+                radius = cornerHandleRadius - 2f,
+                center = pos
+            )
+        }
+
+        // 四边中点手柄
+        listOf(
+            Offset((left + right) / 2, top),
+            Offset((left + right) / 2, bottom),
+            Offset(left, (top + bottom) / 2),
+            Offset(right, (top + bottom) / 2)
+        ).forEach { pos ->
+            drawCircle(
+                color = Color.White,
+                radius = edgeHandleRadius,
+                center = pos
+            )
+            drawCircle(
+                color = Color.Black.copy(alpha = 0.5f),
+                radius = edgeHandleRadius - 2f,
                 center = pos
             )
         }
     }
 }
 
-private fun updateCropRect(
-    crop: CropRect,
+private fun updateCropState(
+    crop: CropState,
     handle: CropHandle,
     dx: Float,
     dy: Float,
-    aspectRatio: AspectRatio
-): CropRect {
+    aspectRatio: CropAspectRatio
+): CropState {
     var newCrop = when (handle) {
         CropHandle.TOP_LEFT -> crop.copy(left = crop.left + dx, top = crop.top + dy)
         CropHandle.TOP_RIGHT -> crop.copy(right = crop.right + dx, top = crop.top + dy)
@@ -234,7 +253,7 @@ private fun updateCropRect(
         val currentHeight = newCrop.bottom - newCrop.top
         if (currentWidth > 0 && currentHeight > 0) {
             val currentRatio = currentWidth / currentHeight
-            if (currentRatio != targetRatio) {
+            if (abs(currentRatio - targetRatio) > 0.001f) {
                 when (handle) {
                     CropHandle.TOP_LEFT, CropHandle.TOP_RIGHT,
                     CropHandle.BOTTOM_LEFT, CropHandle.BOTTOM_RIGHT -> {
@@ -268,6 +287,39 @@ private fun updateCropRect(
     }
 
     return newCrop
+}
+
+// ── Legacy compatibility types ──────────────────────────────────────────
+
+data class CropRect(
+    val left: Float = 0.1f,
+    val top: Float = 0.1f,
+    val right: Float = 0.9f,
+    val bottom: Float = 0.9f,
+    val rotation: Float = 0f
+)
+
+enum class AspectRatio(val ratio: Float?) {
+    FREE(null),
+    ONE_ONE(1f),
+    FOUR_THREE(4f / 3f),
+    THREE_TWO(3f / 2f),
+    SIXTEEN_NINE(16f / 9f),
+    TWO_ONE(2f),
+    THREE_ONE(3f),
+    NINE_SIXTEEN(9f / 16f);
+
+    @androidx.compose.runtime.Composable
+    fun label(): String = when (this) {
+        FREE -> stringRes { ratioFree }
+        ONE_ONE -> stringRes { ratio1_1 }
+        FOUR_THREE -> stringRes { ratio4_3 }
+        THREE_TWO -> stringRes { ratio3_2 }
+        SIXTEEN_NINE -> stringRes { ratio16_9 }
+        TWO_ONE -> stringRes { ratio2_1 }
+        THREE_ONE -> stringRes { ratio3_1 }
+        NINE_SIXTEEN -> stringRes { ratio9_16 }
+    }
 }
 
 private enum class CropHandle {

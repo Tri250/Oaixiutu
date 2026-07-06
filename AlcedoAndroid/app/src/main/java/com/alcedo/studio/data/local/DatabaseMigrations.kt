@@ -119,28 +119,18 @@ object DatabaseMigrations {
     }
 
     /**
-     * Framework stub for the v2 -> v3 migration.
+     * Migration from schema v2 to v3.
      *
-     * Schema v3 is not yet defined, so this migration has no SQL to run. The
-     * object is intentionally registered with [Migration] (not omitted) so
-     * that:
-     *   - bumping `version` to 3 without writing the migration body produces a
-     *     loud, explicit failure rather than silently falling back to
-     *     destructive migration, and
-     *   - the registration site in [SleeveDatabase] already references it, so
-     *     a future contributor only needs to fill in `migrate(...)` below.
-     *
-     * When v3 is introduced, replace the body of [migrate] with the required
-     * `ALTER TABLE` / `CREATE TABLE` statements (see the pattern in
-     * [MIGRATION_1_2]) and remove the `IllegalStateException`.
+     * v3 adds a `description` column to the `pipeline_presets` table so that
+     * each preset (built-in or user-created) can carry a human-readable
+     * description shown in the preset panel. The column is additive
+     * (`ALTER TABLE ... ADD COLUMN`), so all existing rows are preserved and
+     * simply default to an empty description.
      */
     val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            throw IllegalStateException(
-                "MIGRATION_2_3 has not been implemented yet. Schema v3 was " +
-                "requested but no migration path from v2 was provided. " +
-                "Implement DatabaseMigrations.MIGRATION_2_3#migrate(...) " +
-                "before bumping SleeveDatabase to version 3."
+            db.execSQL(
+                "ALTER TABLE pipeline_presets ADD COLUMN description TEXT NOT NULL DEFAULT ''"
             )
         }
     }

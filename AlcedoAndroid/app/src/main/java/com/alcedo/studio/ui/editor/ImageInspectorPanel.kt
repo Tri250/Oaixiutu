@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.ImageModel
+import com.alcedo.studio.data.model.ImageType
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 
@@ -36,6 +37,14 @@ fun ImageInspectorPanel(
 
     val exif = image.exifDisplay
     var showExifEditor by remember { mutableStateOf(false) }
+
+    // 判断是否为 RAW 文件
+    val isRaw = image.imageType in setOf(
+        ImageType.ARW, ImageType.CR2, ImageType.CR3,
+        ImageType.NEF, ImageType.DNG
+    )
+    // 判断是否为大疆相机
+    val isDji = exif.cameraMake.contains("DJI", ignoreCase = true)
 
     if (showExifEditor && image.imagePath.isNotEmpty()) {
         ExifEditorDialog(
@@ -69,7 +78,7 @@ fun ImageInspectorPanel(
                     if (image.width > 0 && image.height > 0) "${image.width} × ${image.height}" else ""
                 }
                 if (dims.isNotEmpty()) {
-                    InspectorRow("Dimensions", dims)
+                    InspectorRow("Dimensions", if (isRaw) "$dims (RAW)" else dims)
                 }
                 if (image.imageType.name.isNotEmpty()) {
                     InspectorRow("Format", image.imageType.name)
@@ -77,7 +86,160 @@ fun ImageInspectorPanel(
             }
         }
 
-        // ── EXIF Data ─────────────────────────────────────────────
+        // ── Camera ─────────────────────────────────────────────────
+        val cameraEntries = buildCameraEntries(exif)
+        if (cameraEntries.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Camera",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    cameraEntries.forEach { (key, value) ->
+                        InspectorRow(key, value)
+                    }
+                }
+            }
+        }
+
+        // ── Lens ───────────────────────────────────────────────────
+        val lensEntries = buildLensEntries(exif)
+        if (lensEntries.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Lens",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    lensEntries.forEach { (key, value) ->
+                        InspectorRow(key, value)
+                    }
+                }
+            }
+        }
+
+        // ── Capture Parameters ─────────────────────────────────────
+        val captureEntries = buildCaptureEntries(exif)
+        if (captureEntries.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Capture",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    captureEntries.forEach { (key, value) ->
+                        InspectorRow(key, value)
+                    }
+                }
+            }
+        }
+
+        // ── Color & Time ───────────────────────────────────────────
+        val colorTimeEntries = buildColorTimeEntries(exif)
+        if (colorTimeEntries.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "Color & Time",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    colorTimeEntries.forEach { (key, value) ->
+                        InspectorRow(key, value)
+                    }
+                }
+            }
+        }
+
+        // ── RAW-specific info ──────────────────────────────────────
+        if (isRaw) {
+            val rawEntries = buildRawEntries(exif)
+            if (rawEntries.isNotEmpty()) {
+                LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "RAW",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        rawEntries.forEach { (key, value) ->
+                            InspectorRow(key, value)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── DJI-specific info ──────────────────────────────────────
+        if (isDji) {
+            val djiEntries = buildDjiEntries(exif)
+            if (djiEntries.isNotEmpty()) {
+                LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "DJI Flight",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        djiEntries.forEach { (key, value) ->
+                            InspectorRow(key, value)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── AI Scene (Huawei/Xiaomi) ───────────────────────────────
+        val aiEntries = buildAiEntries(exif)
+        if (aiEntries.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "AI Scene",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    aiEntries.forEach { (key, value) ->
+                        InspectorRow(key, value)
+                    }
+                }
+            }
+        }
+
+        // ── GPS ────────────────────────────────────────────────────
+        if (exif.gpsLatitude.isNotEmpty() || exif.gpsLongitude.isNotEmpty()) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "GPS",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (exif.gpsLatitude.isNotEmpty()) {
+                        InspectorRow("Latitude", exif.gpsLatitude)
+                    }
+                    if (exif.gpsLongitude.isNotEmpty()) {
+                        InspectorRow("Longitude", exif.gpsLongitude)
+                    }
+                    if (exif.gpsAltitude.isNotEmpty()) {
+                        InspectorRow("Altitude", exif.gpsAltitude)
+                    }
+                }
+            }
+        }
+
+        // ── EXIF Data (raw view + edit) ────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -166,6 +328,107 @@ private fun buildExifEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaD
     if (exif.iso.isNotEmpty()) entries += "ISO" to exif.iso
     if (exif.captureDate.isNotEmpty()) entries += "Capture Date" to exif.captureDate
     return entries
+}
+
+/** 相机信息：品牌 + 型号 */
+private fun buildCameraEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.cameraMake.isNotEmpty()) entries += "Make" to exif.cameraMake
+    if (exif.cameraModel.isNotEmpty()) entries += "Model" to exif.cameraModel
+    return entries
+}
+
+/** 镜头信息：型号 + 焦距 + 最大光圈 */
+private fun buildLensEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.lensModel.isNotEmpty()) entries += "Model" to exif.lensModel
+    if (exif.focalLength.isNotEmpty()) entries += "Focal Length" to exif.focalLength.let {
+        if (it.endsWith("mm")) it else "$it mm"
+    }
+    if (exif.focalLength35mm.isNotEmpty()) entries += "35mm Equiv" to exif.focalLength35mm.let {
+        if (it.endsWith("mm")) it else "$it mm"
+    }
+    if (exif.maxAperture.isNotEmpty()) entries += "Max Aperture" to "f/${exif.maxAperture}"
+    return entries
+}
+
+/** 拍摄参数：ISO + 快门 + 光圈 + 曝光补偿 + 焦距 */
+private fun buildCaptureEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.iso.isNotEmpty()) entries += "ISO" to exif.iso
+    if (exif.shutterSpeed.isNotEmpty()) entries += "Shutter" to formatShutterSpeed(exif.shutterSpeed)
+    if (exif.aperture.isNotEmpty()) entries += "Aperture" to "f/${exif.aperture}"
+    if (exif.exposureCompensation.isNotEmpty()) entries += "Exposure" to "${exif.exposureCompensation} EV"
+    if (exif.focalLength.isNotEmpty()) entries += "Focal" to exif.focalLength.let {
+        if (it.endsWith("mm")) it else "$it mm"
+    }
+    return entries
+}
+
+/** 色彩与时间：色彩空间 + 拍摄日期 */
+private fun buildColorTimeEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.colorSpace.isNotEmpty()) entries += "Color Space" to formatColorSpace(exif.colorSpace)
+    if (exif.captureDate.isNotEmpty()) entries += "Capture Date" to exif.captureDate
+    return entries
+}
+
+/** RAW 特有信息：位深 + 白平衡 + 去马赛克算法 */
+private fun buildRawEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.bitsPerSample > 0) {
+        entries += "Bit Depth" to "${exif.bitsPerSample}-bit"
+    }
+    if (exif.whiteBalanceMode.isNotEmpty()) {
+        entries += "White Balance" to exif.whiteBalanceMode
+    }
+    if (exif.demosaicAlgorithm.isNotEmpty()) {
+        entries += "Demosaic" to exif.demosaicAlgorithm
+    } else {
+        // 默认显示当前使用的去马赛克算法
+        entries += "Demosaic" to "AHD (default)"
+    }
+    return entries
+}
+
+/** 大疆特有信息：飞行高度 + GPS 模式 + 云台角度 */
+private fun buildDjiEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.djiFlightHeight.isNotEmpty()) entries += "Flight Height" to exif.djiFlightHeight
+    if (exif.djiGpsMode.isNotEmpty()) entries += "GPS Mode" to exif.djiGpsMode
+    if (exif.djiGimbalPitch.isNotEmpty()) entries += "Gimbal Pitch" to exif.djiGimbalPitch
+    return entries
+}
+
+/** AI 场景识别 + 多帧合成（华为/小米） */
+private fun buildAiEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.aiScene.isNotEmpty()) entries += "AI Scene" to exif.aiScene
+    if (exif.multiFrameInfo.isNotEmpty()) entries += "Multi-Frame" to exif.multiFrameInfo
+    return entries
+}
+
+/** 格式化快门速度（"0.004" → "1/250", "1.5" → "1.5s"） */
+private fun formatShutterSpeed(value: String): String {
+    val seconds = value.toFloatOrNull() ?: return value
+    return when {
+        seconds == 0f -> value
+        seconds < 1f -> {
+            val denom = (1f / seconds).toInt()
+            "1/$denom"
+        }
+        else -> "${"%.1f".format(seconds)}s"
+    }
+}
+
+/** 格式化色彩空间代码 */
+private fun formatColorSpace(value: String): String {
+    return when (value) {
+        "1" -> "sRGB"
+        "2" -> "Adobe RGB"
+        "65535" -> "Uncalibrated"
+        else -> value.ifEmpty { "Unknown" }
+    }
 }
 
 @Composable

@@ -92,7 +92,7 @@ fun AboutPage(navController: NavController) {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Professional Photo Editor",
+                text = stringRes { aboutAppTagline },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -113,17 +113,17 @@ fun AboutPage(navController: NavController) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Version Information",
+                        text = stringRes { aboutVersionInfo },
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     HorizontalDivider()
-                    InfoRow(label = "App Name", value = "Alcedo Studio")
-                    InfoRow(label = "Version", value = versionName)
-                    InfoRow(label = "Build Number", value = versionCode.toString())
-                    InfoRow(label = "Platform", value = "Android")
-                    InfoRow(label = "Min SDK", value = "API 28 (Android 9+)")
-                    InfoRow(label = "Architecture", value = "ARM64 / x86_64")
+                    InfoRow(label = stringRes { aboutAppName }, value = "Alcedo Studio")
+                    InfoRow(label = stringRes { aboutVersion }, value = versionName)
+                    InfoRow(label = stringRes { aboutBuildNumber }, value = versionCode.toString())
+                    InfoRow(label = stringRes { aboutPlatform }, value = "Android")
+                    InfoRow(label = stringRes { aboutMinSdk }, value = "API 28 (Android 9+)")
+                    InfoRow(label = stringRes { aboutArchitecture }, value = "ARM64 / x86_64")
                 }
             }
 
@@ -143,12 +143,12 @@ fun AboutPage(navController: NavController) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "License",
+                        text = stringRes { aboutLicense },
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                     HorizontalDivider()
-                    InfoRow(label = "License", value = "GPL-3.0")
+                    InfoRow(label = stringRes { aboutLicense }, value = "GPL-3.0")
                     Text(
                         text = "This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.",
                         style = MaterialTheme.typography.bodySmall,

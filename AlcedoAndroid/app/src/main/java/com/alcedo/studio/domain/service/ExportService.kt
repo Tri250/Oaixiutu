@@ -100,8 +100,93 @@ class ExportService(private val context: Context) {
                 status = ExportStatus.EXPORTING
             )
 
+            // DNG export is non-destructive: it does not run through the bitmap
+            // rendering pipeline. Delegate to the dedicated DNG exporter which
+            // copies the original RAW/DNG bytes and writes an XMP sidecar.
+            if (settings.format == ExportFormat.DNG) {
+                updateItemProgress(0.1f)
+                val outputFile = createOutputFile(settings, sourcePath)
+                updateItemProgress(0.4f)
+                val dngResult = exportDng(sourcePath, outputFile.absolutePath, settings)
+                updateItemProgress(0.9f)
+
+                if (dngResult is ExportResult.Success) {
+                    // Scan both the DNG and its XMP sidecar for media visibility.
+                    val xmpPath = outputFile.absolutePath.substringBeforeLast('.') + ".xmp"
+                    MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(outputFile.absolutePath, xmpPath),
+                        null, null
+                    )
+                    _exportProgress.value = _exportProgress.value.copy(
+                        completedItems = 1,
+                        successCount = 1,
+                        currentItemProgress = 1f,
+                        overallProgress = 1f,
+                        status = ExportStatus.COMPLETED
+                    )
+                } else {
+                    _exportProgress.value = _exportProgress.value.copy(
+                        completedItems = 1,
+                        failureCount = 1,
+                        status = ExportStatus.ERROR
+                    )
+                }
+                return@withContext dngResult
+            }
+
             val bitmap = processedBitmap ?: decodeSampledBitmap(sourcePath, settings)
                 ?: return@withContext ExportResult.Error("Failed to decode source image: $sourcePath")
+
+            // Android 10+ : use MediaStore to write to public Pictures directory
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && settings.outputPath.isEmpty()) {
+                updateItemProgress(0f)
+
+                // 1. Color space conversion
+                val converted = applyColorSpaceConversion(bitmap, settings.colorSpace)
+                updateItemProgress(0.2f)
+
+                // 2. Resize if max dimension or max width/height specified
+                val resized = applyDimensionLimit(converted, settings)
+                updateItemProgress(0.3f)
+
+                // 2b. Apply watermark
+                val watermarked = when {
+                    settings.watermarkConfig.enabled ->
+                        watermarkService.applyWatermark(resized, settings.watermarkConfig)
+                    settings.hassebladWatermark ->
+                        applyHasselbladWatermark(resized)
+                    else -> resized
+                }
+                updateItemProgress(0.35f)
+
+                val result = exportToMediaStore(watermarked, settings, sourcePath)
+                updateItemProgress(0.9f)
+
+                // Recycle intermediate bitmaps if we created them
+                if (converted !== bitmap && converted !== resized) converted.recycle()
+                if (resized !== bitmap && resized !== converted && resized !== watermarked) resized.recycle()
+                if (watermarked !== resized && watermarked !== bitmap) watermarked.recycle()
+                if (processedBitmap == null && bitmap !== converted && bitmap !== resized) bitmap.recycle()
+
+                if (result is ExportResult.Success) {
+                    _exportProgress.value = _exportProgress.value.copy(
+                        completedItems = 1,
+                        successCount = 1,
+                        currentItemProgress = 1f,
+                        overallProgress = 1f,
+                        status = ExportStatus.COMPLETED
+                    )
+                } else {
+                    _exportProgress.value = _exportProgress.value.copy(
+                        completedItems = 1,
+                        failureCount = 1,
+                        status = ExportStatus.ERROR
+                    )
+                }
+
+                return@withContext result
+            }
 
             updateItemProgress(0f)
 
@@ -124,7 +209,7 @@ class ExportService(private val context: Context) {
             updateItemProgress(0.35f)
 
             // 3. Create output file
-            val outputFile = createOutputFile(settings)
+            val outputFile = createOutputFile(settings, sourcePath)
             updateItemProgress(0.4f)
 
             // 4. Write image data
@@ -192,6 +277,135 @@ class ExportService(private val context: Context) {
                 status = ExportStatus.ERROR
             )
             ExportResult.Error(e.message ?: "Export failed")
+        }
+    }
+
+    // ================================================================
+    // MediaStore export (Android 10+ Scoped Storage)
+    // ================================================================
+
+    private suspend fun exportToMediaStore(
+        bitmap: Bitmap,
+        settings: ExportSettings,
+        sourcePath: String
+    ): ExportResult = withContext(Dispatchers.IO) {
+        try {
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, generateExportFileName(settings, sourcePath))
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, getMimeType(settings.format))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/AlcedoStudio")
+                    put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+                }
+            }
+
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.provider.MediaStore.Images.Media.getContentUri(android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+
+            val uri = context.contentResolver.insert(collection, contentValues)
+                ?: return@withContext ExportResult.Error("Failed to create MediaStore entry")
+
+            // Write image data
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                writeBitmapToStream(bitmap, outputStream, settings)
+            } ?: return@withContext ExportResult.Error("Failed to open output stream")
+
+            // Clear IS_PENDING flag
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(uri, contentValues, null, null)
+            }
+
+            // Write EXIF metadata
+            if (settings.includeMetadata) {
+                writeMetadataViaUri(uri, sourcePath, settings)
+            }
+
+            ExportResult.Success(uri, uri.toString())
+        } catch (e: Exception) {
+            ExportResult.Error(e.message ?: "MediaStore export failed")
+        }
+    }
+
+    private fun generateExportFileName(settings: ExportSettings, sourcePath: String? = null): String {
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val ext = getExtension(settings.format)
+        val src = sourcePath ?: settings.sourceExifPath
+        // 自定义模板：支持 {name}(原始文件名) 与 {timestamp} 占位符
+        if (!settings.filenameTemplate.isNullOrBlank()) {
+            val originalName = src?.let { File(it).nameWithoutExtension } ?: ""
+            return settings.filenameTemplate
+                .replace("{name}", originalName)
+                .replace("{timestamp}", timestamp) + ".$ext"
+        }
+        if (settings.useOriginalFilename && src != null) {
+            val originalName = File(src).nameWithoutExtension
+            return "${originalName}_edited.$ext"
+        }
+        return "alcedo_export_$timestamp.$ext"
+    }
+
+    private fun getMimeType(format: ExportFormat): String = when (format) {
+        ExportFormat.JPEG -> "image/jpeg"
+        ExportFormat.PNG -> "image/png"
+        ExportFormat.TIFF -> "image/tiff"
+        ExportFormat.EXR -> "image/x-exr"
+        ExportFormat.DNG -> "image/x-adobe-dng"
+        ExportFormat.ULTRA_HDR -> "image/jpeg"
+    }
+
+    private fun writeBitmapToStream(bitmap: Bitmap, outputStream: java.io.OutputStream, settings: ExportSettings) {
+        when (settings.format) {
+            ExportFormat.JPEG -> bitmap.compress(Bitmap.CompressFormat.JPEG, settings.quality.coerceIn(1, 100), outputStream)
+            ExportFormat.PNG -> {
+                val outputBitmap = if (settings.bitDepth == 16) {
+                    bitmap.copy(Bitmap.Config.RGBA_F16, false) ?: bitmap
+                } else bitmap
+                outputBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                if (outputBitmap !== bitmap) outputBitmap.recycle()
+            }
+            ExportFormat.TIFF, ExportFormat.EXR -> {
+                // For TIFF/EXR, write to temp file then copy to stream
+                val tempFile = File.createTempFile("alcedo_export_", ".tmp", context.cacheDir)
+                try {
+                    writeImage(bitmap, tempFile, settings)
+                    tempFile.inputStream().use { it.copyTo(outputStream) }
+                } finally {
+                    tempFile.delete()
+                }
+            }
+            ExportFormat.DNG -> {
+                // DNG is handled by exportDng(), not via bitmap stream.
+                // This path should not be reached; no-op for safety.
+            }
+            ExportFormat.ULTRA_HDR -> {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, settings.quality.coerceIn(1, 100), outputStream)
+            }
+        }
+    }
+
+    private fun writeMetadataViaUri(uri: Uri, sourcePath: String, settings: ExportSettings) {
+        try {
+            // For MediaStore URIs, we need to get the file path to modify EXIF
+            // This is only practical for JPEG format
+            if (settings.format != ExportFormat.JPEG && settings.format != ExportFormat.ULTRA_HDR) return
+
+            // Get the file path from the MediaStore URI
+            val projection = arrayOf(android.provider.MediaStore.Images.Media.DATA)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val filePath = cursor.getString(0)
+                    if (filePath != null) {
+                        writeMetadata(File(filePath), sourcePath, settings)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Metadata writeback failure is non-fatal
         }
     }
 
@@ -526,6 +740,7 @@ class ExportService(private val context: Context) {
                 ExportFormat.PNG -> writePng(bitmap, file, settings)
                 ExportFormat.TIFF -> writeTiff(bitmap, file, settings)
                 ExportFormat.EXR -> writeExr(bitmap, file, settings)
+                ExportFormat.DNG -> false // handled by exportDng() directly
                 ExportFormat.ULTRA_HDR -> writeUltraHdr(bitmap, file, settings)
             }
         } catch (e: Exception) {
@@ -869,6 +1084,98 @@ class ExportService(private val context: Context) {
             return (sign or 0x7C00).toShort()
         }
         return (sign or (exponent shl 10) or (mantissa shr 13)).toShort()
+    }
+
+    // ================================================================
+    // DNG export (non-destructive: copy original + XMP sidecar)
+    // ================================================================
+
+    /**
+     * Export a DNG image. DNG export is non-destructive:
+     *  1. If the source is already a DNG (or TIFF-based), the original bytes are
+     *     copied verbatim and the edit parameters are written as an XMP sidecar
+     *     (`.xmp`) next to the DNG so any Camera Raw-compatible reader can
+     *     re-apply the adjustments.
+     *  2. If the source is another RAW format (NEF/CR2/ARW/...), a conversion
+     *     to DNG is required. This needs the Adobe DNG Converter SDK or a native
+     *     libraw-based encoder and is delegated to [convertRawToDng].
+     */
+    private suspend fun exportDng(
+        sourcePath: String,
+        outputPath: String,
+        settings: ExportSettings
+    ): ExportResult = withContext(Dispatchers.IO) {
+        try {
+            val sourceExt = File(sourcePath).extension.lowercase()
+            val isDngOrTiff = sourceExt == "dng" || sourceExt == "tiff" || sourceExt == "tif"
+
+            if (isDngOrTiff) {
+                // Copy the original DNG/TIFF bytes verbatim, then attach the
+                // edit parameters as an XMP sidecar.
+                File(sourcePath).copyTo(File(outputPath), overwrite = true)
+                settings.params?.let { writeXmpSidecar(outputPath, it) }
+                ExportResult.Success(Uri.fromFile(File(outputPath)), outputPath)
+            } else {
+                // Other RAW formats require a native RAW→DNG converter.
+                convertRawToDng(sourcePath, outputPath, settings)
+            }
+        } catch (e: Exception) {
+            ExportResult.Error(e.message ?: "DNG export failed")
+        }
+    }
+
+    /**
+     * Write an XMP sidecar (`.xmp`) next to the DNG file describing the edit
+     * parameters in the Adobe Camera Raw namespace (crs:*).
+     */
+    private fun writeXmpSidecar(dngPath: String, params: PipelineParams) {
+        val xmpPath = dngPath.substringBeforeLast('.') + ".xmp"
+        val xmpContent = buildXmpFromParams(params)
+        File(xmpPath).writeText(xmpContent)
+    }
+
+    /**
+     * Build an XMP packet from [PipelineParams] using the Camera Raw Settings
+     * namespace. Values are scaled to the integer ranges expected by the
+     * crs:* tags ( Exposure2012, Contrast2012, etc. are in -100..+100).
+     */
+    private fun buildXmpFromParams(params: PipelineParams): String {
+        return """
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/">
+   <crs:Exposure2012>${(params.exposure * 100).toInt()}</crs:Exposure2012>
+   <crs:Contrast2012>${(params.contrast * 100).toInt()}</crs:Contrast2012>
+   <crs:Highlights2012>${(params.highlights * 100).toInt()}</crs:Highlights2012>
+   <crs:Shadows2012>${(params.shadows * 100).toInt()}</crs:Shadows2012>
+   <crs:Whites2012>${0}</crs:Whites2012>
+   <crs:Blacks2012>${0}</crs:Blacks2012>
+   <crs:Saturation>${(params.saturation * 100).toInt()}</crs:Saturation>
+   <crs:Vibrance>${(params.vibrance * 100).toInt()}</crs:Vibrance>
+   <crs:Clarity2012>${(params.clarityAmount * 100).toInt()}</crs:Clarity2012>
+   <crs:Temperature>${params.whiteBalanceTemp.toInt()}</crs:Temperature>
+   <crs:Tint>${(params.whiteBalanceTint * 100).toInt()}</crs:Tint>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+""".trimIndent()
+    }
+
+    /**
+     * Convert an arbitrary RAW file to DNG. This requires a native encoder
+     * (Adobe DNG Converter SDK or a libraw-based writer) that is not bundled in
+     * this build, so it reports a clear error and lets the caller fall back to a
+     * rendered format (TIFF/JPEG).
+     */
+    private fun convertRawToDng(
+        sourcePath: String,
+        outputPath: String,
+        settings: ExportSettings
+    ): ExportResult {
+        return ExportResult.Error(
+            "RAW→DNG conversion is not available in this build; " +
+                "open the original DNG or export as TIFF/JPEG instead."
+        )
     }
 
     // ================================================================
@@ -1574,7 +1881,7 @@ class ExportService(private val context: Context) {
     // Output path management
     // ================================================================
 
-    private fun createOutputFile(settings: ExportSettings): File {
+    private fun createOutputFile(settings: ExportSettings, sourcePath: String? = null): File {
         val outputDir = if (settings.outputPath.isNotEmpty()) {
             // 用户指定路径:可能是 SAF content URI 或文件系统路径
             val path = settings.outputPath
@@ -1586,9 +1893,7 @@ class ExportService(private val context: Context) {
                 File(path)
             }
         } else {
-            // 默认输出目录:Android 10+ 必须用 app-specific 外部存储,
-            // 公共目录直接写入会抛 FileNotFoundException (Scoped Storage)
-            // (导出致命问题 3 修复)
+            // Android 10+ should use MediaStore, this is fallback only
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)?.resolve("AlcedoStudio")
                     ?: File(context.cacheDir, "exports")
@@ -1602,7 +1907,13 @@ class ExportService(private val context: Context) {
 
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val ext = getExtension(settings.format)
-        val baseName = "alcedo_export_$timestamp"
+        val src = sourcePath ?: settings.sourceExifPath
+        val baseName = if (settings.useOriginalFilename && src != null) {
+            val originalName = File(src).nameWithoutExtension
+            if (originalName.isNotBlank()) "${originalName}_edited" else "alcedo_export_$timestamp"
+        } else {
+            "alcedo_export_$timestamp"
+        }
 
         var file = File(outputDir, "$baseName.$ext")
         var counter = 1
@@ -1619,6 +1930,7 @@ class ExportService(private val context: Context) {
         ExportFormat.PNG -> "png"
         ExportFormat.TIFF -> "tiff"
         ExportFormat.EXR -> "exr"
+        ExportFormat.DNG -> "dng"
         ExportFormat.ULTRA_HDR -> "jpg"
     }
 

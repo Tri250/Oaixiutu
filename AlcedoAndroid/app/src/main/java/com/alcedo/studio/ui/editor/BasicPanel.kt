@@ -100,7 +100,7 @@ fun BasicPanel(
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
-                        label = "Sigmoid Shoulder",
+                        label = stringRes { editorSigmoidShoulder },
                         value = params.sigmoidShoulder,
                         range = 0f..1f,
                         onValueChange = { viewModel.updateSigmoidShoulder(it) },

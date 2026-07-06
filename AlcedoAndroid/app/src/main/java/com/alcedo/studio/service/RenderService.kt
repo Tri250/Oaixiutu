@@ -3,7 +3,7 @@ package com.alcedo.studio.service
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.alcedo.studio.utils.ThreadPool
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Future
@@ -51,17 +51,13 @@ class RenderService {
                 // Copy pixel array to prevent concurrent modification
                 val pixelsCopy = request.pixels.copyOf()
 
-                val result = AlcedoNdkBridge.processPipeline(
-                    pixelsCopy, request.width, request.height, request.channels,
-                    exposure = params.exposure,
-                    contrast = params.contrast,
-                    highlights = params.highlights,
-                    shadows = params.shadows,
-                    saturation = params.saturation,
-                    vibrance = params.vibrance,
-                    clarity = params.clarityAmount,
-                    sharpen = params.sharpenAmount
+                // Build float pipeline parameters array for unified native bridge
+                val paramsArray = buildRenderParamsArray(params)
+
+                val resultPixels = AlcedoNativeBridge.applyPipelineFloat(
+                    pixelsCopy, request.width, request.height, request.channels, paramsArray
                 )
+                val result = resultPixels != null
 
                 if (!cancelFlag.get() && request.callback != null) {
                     mainHandler.post {
@@ -100,5 +96,48 @@ class RenderService {
     fun shutdown() {
         isShutdown = true
         cancelAll()
+    }
+
+    private fun buildRenderParamsArray(params: com.alcedo.studio.data.model.PipelineParams): FloatArray {
+        val list = mutableListOf<Float>()
+        list += params.exposure
+        list += params.contrast
+        list += params.saturation
+        list += params.vibrance
+        list += params.highlights
+        list += params.shadows
+        list += params.midtones
+        list += params.whiteBalanceTemp
+        list += params.whiteBalanceTint
+        list += params.sharpenAmount
+        list += params.clarityAmount
+        list += params.clarityRadius
+        list += params.filmGrainIntensity
+        list += params.halationIntensity
+        list += params.halationThreshold
+        list += params.halationSpread
+        list += params.halationRedBias
+        list += params.sigmoidContrast
+        list += params.colorWheelLiftR
+        list += params.colorWheelLiftG
+        list += params.colorWheelLiftB
+        list += params.colorWheelGammaR
+        list += params.colorWheelGammaG
+        list += params.colorWheelGammaB
+        list += params.colorWheelGainR
+        list += params.colorWheelGainG
+        list += params.colorWheelGainB
+        list += params.tintHighlightHue
+        list += params.tintHighlightStrength
+        list += params.tintShadowHue
+        list += params.tintShadowStrength
+        list += params.tintBalance
+        list += params.displayTransform.colorScience.ordinal.toFloat()
+        list += params.displayTransform.eotf.ordinal.toFloat()
+        list += params.displayTransform.peakLuminance
+        list += params.displayTransform.displayColorSpace.ordinal.toFloat()
+        list += params.shadowBoundary
+        list += params.highlightBoundary
+        return list.toFloatArray()
     }
 }

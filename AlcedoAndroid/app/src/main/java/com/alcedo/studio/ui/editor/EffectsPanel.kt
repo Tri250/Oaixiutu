@@ -2,11 +2,13 @@ package com.alcedo.studio.ui.editor
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +45,8 @@ fun EffectsPanel(
 
     // 专注模式下用于切换活跃小节的小节标签
     val focusSections = listOf(
+        "effects.luma_denoise" to stringRes { editorSectionLuminanceDenoise },
+        "effects.chroma_denoise" to stringRes { editorSectionChromaDenoise },
         "effects.grain" to stringRes { editorSectionFilmGrain },
         "effects.halation" to stringRes { editorSectionHalation },
         "effects.sharpen" to stringRes { editorSectionSharpen },
@@ -56,6 +60,102 @@ fun EffectsPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         FocusSectionChips(focusMode = focusMode, sections = focusSections)
+
+        // ── Luminance Denoise ──
+        if (focusMode.shouldShowSection("effects.luma_denoise")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringRes { editorSectionLuminanceDenoise },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        IconButton(
+                            onClick = {
+                                HapticFeedback.heavyClick(view)
+                                viewModel.updateParams(params.copy(luminanceDenoiseStrength = 0f, luminanceDenoiseDetail = 0.5f))
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { effectsResetLumaDenoise },
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorStrength },
+                        value = params.luminanceDenoiseStrength,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.updateParams(params.copy(luminanceDenoiseStrength = it)) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorDetailPreserve },
+                        value = params.luminanceDenoiseDetail,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.updateParams(params.copy(luminanceDenoiseDetail = it)) },
+                        defaultValue = 0.5f
+                    )
+                }
+            }
+        }
+
+        // ── Chroma Denoise ──
+        if (focusMode.shouldShowSection("effects.chroma_denoise")) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringRes { editorSectionChromaDenoise },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        IconButton(
+                            onClick = {
+                                HapticFeedback.heavyClick(view)
+                                viewModel.updateParams(params.copy(chromaDenoiseStrength = 0f, chromaDenoiseThreshold = 0.5f))
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { effectsResetChromaDenoise },
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AdjustmentSlider(
+                        label = stringRes { editorStrength },
+                        value = params.chromaDenoiseStrength,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.updateParams(params.copy(chromaDenoiseStrength = it)) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorColorThreshold },
+                        value = params.chromaDenoiseThreshold,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.updateParams(params.copy(chromaDenoiseThreshold = it)) },
+                        defaultValue = 0.5f
+                    )
+                }
+            }
+        }
 
         // ── Film Grain ─────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.grain")) {
@@ -218,6 +318,34 @@ fun EffectsPanel(
                     onValueChange = { viewModel.updateSharpen(it) },
                     defaultValue = 0f
                 )
+                // P2-8 锐化蒙版可视化：切换显示边缘蒙版叠加层
+                val showSharpeningMask by viewModel.showSharpeningMask.collectAsStateWithLifecycle()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            HapticFeedback.click(view)
+                            viewModel.setShowSharpeningMask(!showSharpeningMask)
+                        }
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (showSharpeningMask) Icons.Default.Visibility
+                        else Icons.Default.VisibilityOff,
+                        contentDescription = stringRes { effectsShowSharpeningMask },
+                        tint = if (showSharpeningMask) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringRes { effectsShowSharpeningMask },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (showSharpeningMask) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         }

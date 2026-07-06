@@ -1,6 +1,5 @@
 package com.alcedo.studio.ui.editor
 
-import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -22,23 +21,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.domain.service.PresetService
 import com.alcedo.studio.domain.service.PresetWithThumbnail
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.viewmodel.EditorViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * Filter chips shown above the preset grid.
@@ -46,19 +43,26 @@ import java.io.File
 enum class PresetFilter(val labelKey: StringResources.() -> String) {
     ALL({ presetCategoryAll }),
     BUILTIN({ presetCategoryBuiltin }),
-    CUSTOM({ presetCategoryCustom }),
-    FILM({ presetCategoryFilm }),
     PORTRAIT({ presetCategoryPortrait }),
     LANDSCAPE({ presetCategoryLandscape }),
-    BW({ presetCategoryBW })
+    FILM({ presetCategoryFilm }),
+    STREET({ presetCategoryStreet }),
+    BW({ presetCategoryBW }),
+    CUSTOM({ presetCategoryCustom }),
+    IMPORTED({ presetCategoryImported }),
+    LUT({ presetCategoryLut })
 }
 
+/**
+ * Categories selectable in the create/edit preset dialog.
+ */
 private val PRESET_CATEGORIES = listOf(
-    PresetService.CATEGORY_FILM,
+    PresetService.CATEGORY_GENERAL,
     PresetService.CATEGORY_PORTRAIT,
     PresetService.CATEGORY_LANDSCAPE,
-    PresetService.CATEGORY_BW,
-    PresetService.CATEGORY_GENERAL
+    PresetService.CATEGORY_FILM,
+    PresetService.CATEGORY_STREET,
+    PresetService.CATEGORY_BW
 )
 
 private fun categoryColor(category: String): Color = when (category) {
@@ -66,6 +70,9 @@ private fun categoryColor(category: String): Color = when (category) {
     PresetService.CATEGORY_PORTRAIT -> Color(0xFFE07A9A)
     PresetService.CATEGORY_LANDSCAPE -> Color(0xFF5CB670)
     PresetService.CATEGORY_BW -> Color(0xFF9E9E9E)
+    PresetService.CATEGORY_STREET -> Color(0xFFB07ACC)
+    PresetService.CATEGORY_IMPORTED -> Color(0xFF5C9BB6)
+    PresetService.CATEGORY_LUT -> Color(0xFFE07A3A)
     else -> Color(0xFF5C9BB6)
 }
 
@@ -73,9 +80,12 @@ private fun categoryColor(category: String): Color = when (category) {
  * RapidRAW-inspired preset management panel.
  *
  * Shows a 3-column grid of presets with REAL pipeline-rendered thumbnails,
- * a search bar, category filter chips, long-press actions (Apply / Edit /
- * Export / Delete), a "Create from Current" action, import/export, and a
- * brief before/after preview overlay on tap.
+ * a search bar, category filter chips (All / Portrait / Landscape / Film /
+ * Street / B&W / Custom / Imported / LUT), long-press actions
+ * (Apply / Edit / Delete / Export), a "Save current as preset" action with a
+ * name/category/description dialog, multi-format import (.json / .xmp / .cube),
+ * and single-preset SAF export to .json. Tapping a preset applies it to the
+ * current image immediately.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +93,6 @@ fun PresetPanel(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val presetService = remember { viewModel.presetService }
@@ -95,10 +104,10 @@ fun PresetPanel(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(PresetFilter.ALL) }
     var contextMenuPreset by remember { mutableStateOf<PresetWithThumbnail?>(null) }
-    var previewOverlayPreset by remember { mutableStateOf<PresetWithThumbnail?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<PresetWithThumbnail?>(null) }
     var deleteTarget by remember { mutableStateOf<PresetWithThumbnail?>(null) }
+    var exportTarget by remember { mutableStateOf<PresetWithThumbnail?>(null) }
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var isBusy by remember { mutableStateOf(false) }
 
@@ -122,7 +131,9 @@ fun PresetPanel(
         }
     }
 
-    // Import launcher — picks a JSON file and imports it as a preset
+    // Import launcher — picks a preset file (.json / .xmp / .cube) and imports
+    // it. Dispatches by extension so XMP and CUBE files are parsed by the
+    // matching importer in PresetService.
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -130,13 +141,8 @@ fun PresetPanel(
             scope.launch {
                 isBusy = true
                 try {
-                    val tempFile = File(context.cacheDir, "import_preset_${System.currentTimeMillis()}.json")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        tempFile.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    presetService.importPreset(tempFile.absolutePath)
-                    snackbarMessage = importedMsg
-                    tempFile.delete()
+                    val id = viewModel.importPreset(uri)
+                    snackbarMessage = if (id > 0) importedMsg else errorMsg
                 } catch (_: Throwable) {
                     snackbarMessage = errorMsg
                 } finally {
@@ -146,12 +152,26 @@ fun PresetPanel(
         }
     }
 
-    // Auto-dismiss the before/after preview overlay
-    LaunchedEffect(previewOverlayPreset) {
-        if (previewOverlayPreset != null) {
-            delay(1200)
-            previewOverlayPreset = null
+    // Export launcher — SAF "create file" for a single preset as .json.
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val target = exportTarget
+        if (uri != null && target != null) {
+            scope.launch {
+                isBusy = true
+                try {
+                    val ok = viewModel.exportPreset(target.id, uri)
+                    snackbarMessage = if (ok) exportedFmt.format(target.name)
+                    else errorMsg
+                } catch (_: Throwable) {
+                    snackbarMessage = errorMsg
+                } finally {
+                    isBusy = false
+                }
+            }
         }
+        exportTarget = null
     }
 
     val filteredPresets = remember(presets, searchQuery, selectedFilter) {
@@ -161,19 +181,26 @@ fun PresetPanel(
             val matchesFilter = when (selectedFilter) {
                 PresetFilter.ALL -> true
                 PresetFilter.BUILTIN -> p.isBuiltIn
-                PresetFilter.CUSTOM -> !p.isBuiltIn
-                PresetFilter.FILM -> p.category == PresetService.CATEGORY_FILM
+                PresetFilter.CUSTOM -> !p.isBuiltIn &&
+                    p.category !in listOf(
+                        PresetService.CATEGORY_IMPORTED,
+                        PresetService.CATEGORY_LUT
+                    )
                 PresetFilter.PORTRAIT -> p.category == PresetService.CATEGORY_PORTRAIT
                 PresetFilter.LANDSCAPE -> p.category == PresetService.CATEGORY_LANDSCAPE
+                PresetFilter.FILM -> p.category == PresetService.CATEGORY_FILM
+                PresetFilter.STREET -> p.category == PresetService.CATEGORY_STREET
                 PresetFilter.BW -> p.category == PresetService.CATEGORY_BW
+                PresetFilter.IMPORTED -> p.category == PresetService.CATEGORY_IMPORTED
+                PresetFilter.LUT -> p.category == PresetService.CATEGORY_LUT
             }
             matchesSearch && matchesFilter
         }
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
-        // Manual column-of-rows grid (3 columns) — avoids nesting LazyVerticalGrid
-        // inside the editor's vertically scrolling panel container.
+        // Manual column-of-rows grid (3 columns) — avoids nesting
+        // LazyVerticalGrid inside the editor's vertically scrolling panel.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -185,6 +212,7 @@ fun PresetPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // "Save current as preset"
                 Button(
                     onClick = { showCreateDialog = true },
                     modifier = Modifier.weight(1f),
@@ -199,39 +227,26 @@ fun PresetPanel(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                // Import (.json / .xmp / .cube)
                 OutlinedButton(
-                    onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                    onClick = {
+                        importLauncher.launch(
+                            arrayOf(
+                                "application/json",
+                                "text/xml",
+                                "application/xml",
+                                "text/plain",
+                                "application/octet-stream",
+                                "*/*"
+                            )
+                        )
+                    },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
                 ) {
                     Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         stringRes { presetImport },
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1
-                    )
-                }
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            isBusy = true
-                            try {
-                                val dir = File(context.getExternalFilesDir(null), "presets").apply { mkdirs() }
-                                val count = presetService.exportAllPresets(dir.absolutePath)
-                                snackbarMessage = "${exportedFmt.format(dir.absolutePath)} ($count)"
-                            } catch (_: Throwable) {
-                                snackbarMessage = errorMsg
-                            } finally {
-                                isBusy = false
-                            }
-                        }
-                    },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp)
-                ) {
-                    Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        stringRes { presetExportAll },
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1
                     )
@@ -313,8 +328,10 @@ fun PresetPanel(
                                 preset = preset,
                                 modifier = Modifier.weight(1f),
                                 onTap = {
+                                    // Tap applies the preset to the current image.
                                     HapticFeedback.click(view)
-                                    previewOverlayPreset = preset
+                                    viewModel.applyPreset(preset)
+                                    snackbarMessage = preset.name
                                 },
                                 onLongPress = {
                                     HapticFeedback.heavyClick(view)
@@ -329,16 +346,6 @@ fun PresetPanel(
                     }
                 }
             }
-        }
-
-        // ── Before/after preview overlay ──
-        if (previewOverlayPreset != null) {
-            BeforeAfterPreviewOverlay(
-                preset = previewOverlayPreset!!,
-                presetService = presetService,
-                onDismiss = { previewOverlayPreset = null },
-                modifier = Modifier.fillMaxSize()
-            )
         }
 
         // ── Busy scrim ──
@@ -359,7 +366,7 @@ fun PresetPanel(
         )
     }
 
-    // ── Context menu (long-press) ──
+    // ── Context menu (long-press): Apply / Edit / Delete / Export ──
     if (contextMenuPreset != null) {
         PresetContextMenu(
             preset = contextMenuPreset!!,
@@ -367,41 +374,20 @@ fun PresetPanel(
             onApply = {
                 val target = contextMenuPreset!!
                 contextMenuPreset = null
-                scope.launch {
-                    isBusy = true
-                    try {
-                        val params = presetService.applyPreset(target.id)
-                        viewModel.applyPresetParams(params)
-                        snackbarMessage = target.name
-                    } catch (_: Throwable) {
-                        snackbarMessage = errorMsg
-                    } finally {
-                        isBusy = false
-                    }
-                }
+                viewModel.applyPreset(target)
+                snackbarMessage = target.name
             },
             onEdit = {
                 editTarget = contextMenuPreset
                 contextMenuPreset = null
             },
             onExport = {
-                val target = contextMenuPreset!!
+                exportTarget = contextMenuPreset
                 contextMenuPreset = null
-                scope.launch {
-                    isBusy = true
-                    try {
-                        val dir = File(context.getExternalFilesDir(null), "presets").apply { mkdirs() }
-                        val safeName = target.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        val out = File(dir, "$safeName.json")
-                        val ok = presetService.exportPreset(target.id, out.absolutePath)
-                        snackbarMessage = if (ok) exportedFmt.format(out.absolutePath)
-                        else errorMsg
-                    } catch (_: Throwable) {
-                        snackbarMessage = errorMsg
-                    } finally {
-                        isBusy = false
-                    }
-                }
+                // Launch SAF "create document" with a safe default filename.
+                val safeName = (exportTarget?.name ?: "preset")
+                    .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                exportLauncher.launch("$safeName.json")
             },
             onDelete = {
                 deleteTarget = contextMenuPreset
@@ -416,9 +402,10 @@ fun PresetPanel(
             title = stringRes { presetCreate },
             initialName = "",
             initialCategory = PresetService.CATEGORY_GENERAL,
+            initialDescription = "",
             confirmLabel = stringRes { presetCreate },
             onDismiss = { showCreateDialog = false },
-            onConfirm = { name, category, _ ->
+            onConfirm = { name, category, description, _ ->
                 showCreateDialog = false
                 scope.launch {
                     isBusy = true
@@ -427,7 +414,8 @@ fun PresetPanel(
                             name = name,
                             category = category,
                             params = viewModel.params.value,
-                            thumbnailBitmap = currentPreview
+                            thumbnailBitmap = currentPreview,
+                            description = description
                         )
                         snackbarMessage = createdMsg
                     } catch (_: Throwable) {
@@ -447,17 +435,18 @@ fun PresetPanel(
             title = stringRes { presetEdit },
             initialName = target.name,
             initialCategory = target.category,
+            initialDescription = target.description,
             confirmLabel = stringRes { presetEdit },
             allowUpdateParams = !target.isBuiltIn,
             onDismiss = { editTarget = null },
-            onConfirm = { name, category, updateParams ->
+            onConfirm = { name, category, description, updateParams ->
                 val t = target
                 editTarget = null
                 scope.launch {
                     isBusy = true
                     try {
                         val params = if (updateParams) viewModel.params.value else t.params
-                        presetService.updatePreset(t.id, name, category, params)
+                        presetService.updatePreset(t.id, name, category, params, description)
                         snackbarMessage = editedMsg
                     } catch (_: Throwable) {
                         snackbarMessage = errorMsg
@@ -564,7 +553,7 @@ private fun PresetCard(
                         Text(
                             stringRes { presetCategoryBuiltin },
                             style = MaterialTheme.typography.labelSmall,
-                            fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                            fontSize = TextUnit(9f, TextUnitType.Sp),
                             color = Color.White
                         )
                     }
@@ -580,6 +569,21 @@ private fun PresetCard(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+            // Description (optional, shown when present)
+            if (preset.description.isNotBlank()) {
+                Text(
+                    text = preset.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = TextUnit(9f, TextUnitType.Sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 1.dp)
+                )
+            }
             // Category badge
             val catColor = categoryColor(preset.category)
             Box(
@@ -592,7 +596,7 @@ private fun PresetCard(
                 Text(
                     text = preset.category.ifBlank { stringRes { presetCategoryCustom } },
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    fontSize = TextUnit(9f, TextUnitType.Sp),
                     color = catColor,
                     fontWeight = FontWeight.Medium
                 )
@@ -602,7 +606,7 @@ private fun PresetCard(
 }
 
 // ================================================================
-// Context menu (Apply / Edit / Export / Delete)
+// Context menu (Apply / Edit / Delete / Export)
 // ================================================================
 
 @Composable
@@ -666,116 +670,7 @@ private fun ContextMenuRow(
 }
 
 // ================================================================
-// Before/after preview overlay
-// ================================================================
-
-@Composable
-private fun BeforeAfterPreviewOverlay(
-    preset: PresetWithThumbnail,
-    presetService: PresetService,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Generate the "before" (default-params) thumbnail lazily.
-    var beforeBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(Unit) {
-        beforeBitmap = presetService.renderPreview(PipelineParams())
-    }
-
-    Surface(
-        modifier = modifier,
-        color = Color.Black.copy(alpha = 0.82f),
-        onClick = onDismiss
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                preset.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Before
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF1A1A1A)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        beforeBitmap?.let {
-                            Image(
-                                bitmap = it.asImageBitmap(),
-                                contentDescription = stringRes { compareBefore },
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } ?: CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        stringRes { compareBefore },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-                // After
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF1A1A1A)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        preset.thumbnail?.let {
-                            Image(
-                                bitmap = it.asImageBitmap(),
-                                contentDescription = stringRes { compareAfter },
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } ?: CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        stringRes { compareAfter },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                preset.category.ifBlank { stringRes { presetCategoryCustom } },
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
-
-// ================================================================
-// Name + category dialog (used for create & edit)
+// Name + category + description dialog (used for create & edit)
 // ================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -784,13 +679,15 @@ private fun PresetNameCategoryDialog(
     title: String,
     initialName: String,
     initialCategory: String,
+    initialDescription: String,
     confirmLabel: String,
     allowUpdateParams: Boolean = false,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, category: String, updateParams: Boolean) -> Unit
+    onConfirm: (name: String, category: String, description: String, updateParams: Boolean) -> Unit
 ) {
     var name by remember { mutableStateOf(initialName) }
     var category by remember { mutableStateOf(initialCategory) }
+    var description by remember { mutableStateOf(initialDescription) }
     var updateParams by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
 
@@ -834,6 +731,13 @@ private fun PresetNameCategoryDialog(
                         }
                     }
                 }
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text(stringRes { presetDescriptionPrompt }) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 if (allowUpdateParams) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = updateParams, onCheckedChange = { updateParams = it })
@@ -846,7 +750,7 @@ private fun PresetNameCategoryDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(name, category, updateParams) }) {
+            Button(onClick = { onConfirm(name, category, description, updateParams) }) {
                 Text(confirmLabel)
             }
         },

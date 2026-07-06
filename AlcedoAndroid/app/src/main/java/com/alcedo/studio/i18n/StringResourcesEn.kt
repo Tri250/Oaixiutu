@@ -110,11 +110,13 @@ class EnglishStrings : StringResources {
     override val editorPanelDisplayTransform = "Color Science"
     override val editorPanelLmt = "LMT"
     override val editorPanelInspector = "Inspector"
+    override val editorPanelLensCorrection = "Lens Correction"
     override val editorPanelMasks = "Masks"
     override val editorUndo = "Undo"
     override val editorRedo = "Redo"
     override val editorCompare = "Compare"
     override val editorScopeAnalyzer = "Scope Analyzer"
+    override val editorClippingWarning = "Clipping Warning"
     override val editorSave = "Save"
     override val editorExport = "Export"
     override val editorBefore = "Before"
@@ -125,6 +127,7 @@ class EnglishStrings : StringResources {
     override val editorFocusMode = "Focus Mode"
     override val editorFocusModeOn = "Focus mode on"
     override val editorFocusModeOff = "Focus mode off"
+    override val colorSpaceWorkflow = "Color Space Workflow"
 
     // Basic panel
     override val editorSectionLight = "Light"
@@ -158,6 +161,7 @@ class EnglishStrings : StringResources {
     override val toneCurveDarks = "Darks"
     override val toneCurveShadows = "Shadows"
     override val toneCurveSigmoidContrast = "Sigmoid Contrast"
+    override val editorSigmoidShoulder = "Sigmoid Shoulder"
     override val toneCurvePointMode = "Point"
     override val toneCurveParametricMode = "Parametric"
 
@@ -255,6 +259,13 @@ class EnglishStrings : StringResources {
     override val cropAmount = "Amount"
 
     // Effects panel
+    override val editorSectionLuminanceDenoise = "Luminance Denoise"
+    override val editorSectionChromaDenoise = "Chroma Denoise"
+    override val editorStrength = "Strength"
+    override val editorDetailPreserve = "Detail Preserve"
+    override val editorColorThreshold = "Color Threshold"
+    override val effectsResetLumaDenoise = "Reset Luminance Denoise"
+    override val effectsResetChromaDenoise = "Reset Chroma Denoise"
     override val editorSectionFilmGrain = "Film Grain"
     override val effectsResetGrain = "Reset Grain"
     override val editorIntensity = "Intensity"
@@ -265,6 +276,7 @@ class EnglishStrings : StringResources {
     override val editorRedBias = "Red Bias"
     override val editorSectionSharpen = "Sharpen"
     override val effectsResetSharpen = "Reset Sharpen"
+    override val effectsShowSharpeningMask = "Show Sharpening Mask"
     override val editorAmount = "Amount"
     override val editorSectionClarity = "Clarity"
     override val effectsResetClarity = "Reset Clarity"
@@ -352,6 +364,15 @@ class EnglishStrings : StringResources {
     override val exportBatchResult = "Batch complete: %s succeeded, %s failed"
     override val exportHasselbladWatermark = "Hasselblad Watermark"
     override val exportWatermarkDescription = "Add Hasselblad branding watermark"
+    override val exportUseOriginalFilename = "Use original filename"
+    override val exportPathDefault = "Default: Pictures/AlcedoStudio"
+
+    // ── Share (国内社交平台) ──
+    override val shareImage = "Share Image"
+    override val shareToWechat = "WeChat"
+    override val shareToWeibo = "Weibo"
+    override val shareToRednote = "Rednote"
+    override val shareToOther = "More"
 
     // ── Accessibility ───────────────────────────────────────────────────
     override val accColorWheel = "Color wheel for adjusting lift, gamma, or gain"
@@ -591,12 +612,16 @@ class EnglishStrings : StringResources {
     override val presetCategoryPortrait = "Portrait"
     override val presetCategoryLandscape = "Landscape"
     override val presetCategoryBW = "B&W"
+    override val presetCategoryStreet = "Street"
+    override val presetCategoryImported = "Imported"
+    override val presetCategoryLut = "LUT"
     override val presetApply = "Apply"
     override val presetEdit = "Edit"
     override val presetDelete = "Delete"
     override val presetExport = "Export"
     override val presetNamePrompt = "Preset name"
     override val presetCategoryPrompt = "Category"
+    override val presetDescriptionPrompt = "Description"
     override val presetCreated = "Preset created"
     override val presetDeleted = "Preset deleted"
     override val presetImported = "Preset imported"
@@ -773,6 +798,14 @@ class EnglishStrings : StringResources {
     override val maskName = "Name"
     override val maskBrushSize = "Brush Size"
     override val maskBrushHardness = "Brush Hardness"
+    override val maskBrushOpacity = "Opacity"
+    override val maskBrushEdit = "Edit Brush"
+    override val maskBrushDone = "Done"
+    override val maskBrushDraw = "Draw"
+    override val maskBrushEraser = "Eraser"
+    override val maskBrushNavigate = "Navigate"
+    override val maskBrushUndo = "Undo Stroke"
+    override val maskBrushClear = "Clear All"
     override val maskFeather = "Feather"
     override val maskAnalyzing = "Analyzing image…"
     override val maskApplyTo = "Apply To"
@@ -847,6 +880,9 @@ class EnglishStrings : StringResources {
     override val batchPickPreset = "Pick a Preset"
     override val batchClipboardFrom = "Clipboard from image %s"
     override val batchClipboardEmpty = "Clipboard is empty — copy adjustments first"
+    override val batchSelectedCount = "%s images selected"
+    override val batchSyncParams = "Sync Parameters"
+    override val batchIndividualAdjust = "Individual Adjustments (overrides batch)"
 
     // ── Privacy Policy & User Agreement screens ─────────────────────────
     override val settingsPrivacyPolicy = "Privacy Policy"
@@ -859,6 +895,17 @@ class EnglishStrings : StringResources {
     override val privacyDisagree = "Disagree"
     override val privacyEffectiveDate = "Effective Date: January 1, 2026"
     override val userAgreementEffectiveDate = "Effective Date: January 1, 2026"
+
+    // ── About Page ──
+    override val aboutAppTagline = "Professional Photo Editor"
+    override val aboutVersionInfo = "Version Information"
+    override val aboutAppName = "App Name"
+    override val aboutVersion = "Version"
+    override val aboutBuildNumber = "Build Number"
+    override val aboutPlatform = "Platform"
+    override val aboutMinSdk = "Min SDK"
+    override val aboutArchitecture = "Architecture"
+    override val aboutLicense = "License"
     override val privacyContent = """Alcedo Studio Privacy Policy
 
 Effective Date: January 1, 2026

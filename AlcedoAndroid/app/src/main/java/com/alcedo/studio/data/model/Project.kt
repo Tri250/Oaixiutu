@@ -159,7 +159,7 @@ data class TransferPreview(
 enum class TransferParamGroup {
     EXPOSURE, COLOR, TONE_CURVE, GEOMETRY, DETAIL,
     WHITE_BALANCE, HSL, COLOR_WHEEL, TINT,
-    LENS, FILM_GRAIN, HALATION, SHARPEN, CLARITY,
+    LENS, FILM_GRAIN, HALATION, SHARPEN, CLARITY, DENOISE,
     DISPLAY, RAW_DECODE, ALL
 }
 
@@ -240,12 +240,21 @@ data class ExportSettings(
     val tags: List<String> = emptyList(),
     val outputPath: String = "",
     val sourceExifPath: String? = null,
+    val useOriginalFilename: Boolean = true,
+    val filenameTemplate: String? = null,
     val hassebladWatermark: Boolean = false,
-    val watermarkConfig: WatermarkConfig = WatermarkConfig()
+    val watermarkConfig: WatermarkConfig = WatermarkConfig(),
+    /**
+     * Edit parameters used when exporting non-destructive formats (e.g. DNG).
+     * When present, an XMP sidecar describing these adjustments is written
+     * alongside the exported DNG so the edits can be re-applied by any
+     * Camera Raw-compatible reader.
+     */
+    val params: PipelineParams? = null
 )
 
 enum class ExportFormat {
-    JPEG, PNG, TIFF, EXR, ULTRA_HDR
+    JPEG, PNG, TIFF, EXR, DNG, ULTRA_HDR
 }
 
 enum class ColorSpace {
@@ -351,6 +360,9 @@ data class PipelineParams(
     val geometryCropTop: Float = 0f,
     val geometryCropRight: Float = 1f,
     val geometryCropBottom: Float = 1f,
+    val cropRotation: Int = 0,
+    val cropFlipHorizontal: Boolean = false,
+    val cropFlipVertical: Boolean = false,
     val geometryPerspectiveSrc: FloatArray = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
     val geometryPerspectiveDst: FloatArray = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
 
@@ -386,6 +398,12 @@ data class PipelineParams(
 
     // DNG warp
     val dngWarpCoeffs: FloatArray = floatArrayOf(0f, 0f, 0f, 0f),
+
+    // Denoise
+    val luminanceDenoiseStrength: Float = 0f,     // 0-1, 0=off
+    val luminanceDenoiseDetail: Float = 0.5f,     // 0-1, detail preservation
+    val chromaDenoiseStrength: Float = 0f,         // 0-1, 0=off
+    val chromaDenoiseThreshold: Float = 0.5f,      // 0-1, color threshold
 
     // Display transform
     val displayTransform: DisplayTransform = DisplayTransform(),

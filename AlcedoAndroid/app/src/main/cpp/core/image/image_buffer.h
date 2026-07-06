@@ -206,6 +206,12 @@ struct PipelineParams {
     std::string lut_path;
     bool lut_enabled = false;
 
+    // Denoise
+    float luminance_denoise_strength = 0.0f;
+    float luminance_denoise_detail = 0.5f;
+    float chroma_denoise_strength = 0.0f;
+    float chroma_denoise_threshold = 0.5f;
+
     // Geometry
     float geometry_rotate = 0.0f;
     float geometry_scale = 1.0f;

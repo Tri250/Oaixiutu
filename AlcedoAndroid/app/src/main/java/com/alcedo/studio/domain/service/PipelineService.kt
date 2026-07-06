@@ -2,12 +2,21 @@ package com.alcedo.studio.domain.service
 
 import android.graphics.Bitmap
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.ndk.AlcedoNativeBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class PipelineService {
 
-    private val nativeBridge = NativePipelineBridge()
+    private val nativeBridge = AlcedoNativeBridge
+
+    /**
+     * 可选的 GPU 管线服务实例。
+     *
+     * 由外部（如 [AlcedoApplication] 或 [EditorViewModel]）在检测到 GPU 支持并完成
+     * GL 线程初始化后注入；若为 null 则完全走 CPU 原生管线。
+     */
+    var gpuPipelineService: GpuPipelineService? = null
 
     // ================================================================
     // Main pipeline entry point
@@ -31,11 +40,38 @@ class PipelineService {
             floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
         }
 
-        // Build params array for native pipeline
-        val paramsArray = buildParamsArray(params)
+        // ── 尝试 GPU 加速路径 ──
+        var result: FloatArray? = null
 
-        // Run native pipeline
-        val result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+        if (gpuPipelineService != null && gpuPipelineService!!.checkGpuSupport()) {
+            try {
+                // 确保 GPU 渲染器已针对当前尺寸初始化
+                gpuPipelineService!!.initialize(width, height)
+
+                // 尝试 GPU 管线处理（仅执行 GPU 擅长的算子）
+                result = gpuPipelineService!!.processOnGpu(floatPixels, width, height, params)
+
+                // 若锐化量非零，追加 GPU 锐化 pass
+                if (result != null && params.sharpenAmount != 0f) {
+                    val sharpened = gpuPipelineService!!.sharpenOnGpu(
+                        params.sharpenAmount.coerceAtLeast(0f),
+                        5f // 默认锐化半径 5px
+                    )
+                    if (sharpened != null) {
+                        result = sharpened
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("PipelineService", "GPU path failed, fallback to CPU", e)
+                result = null
+            }
+        }
+
+        // ── 回退到 CPU 原生管线 ──
+        if (result == null) {
+            val paramsArray = buildParamsArray(params)
+            result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+        }
 
         // Convert back to Bitmap
         val resultPixels = IntArray(pixelCount)
@@ -118,7 +154,7 @@ class PipelineService {
     // ================================================================
 
     fun extractMetadata(path: String): String {
-        return nativeBridge.nativeExtractMetadata(path)
+        return nativeBridge.nativeExtractMetadataLegacy(path)
     }
 
     // ================================================================
@@ -489,6 +525,12 @@ class PipelineService {
 
         // ── LUT enable flag (idx 119); lutPath is a string, applied via separate native call ──
         list += if (params.lutEnabled) 1f else 0f
+
+        // ── Denoise (idx 120-123) ──
+        list += params.luminanceDenoiseStrength
+        list += params.luminanceDenoiseDetail
+        list += params.chromaDenoiseStrength
+        list += params.chromaDenoiseThreshold
 
         return list.toFloatArray()
     }

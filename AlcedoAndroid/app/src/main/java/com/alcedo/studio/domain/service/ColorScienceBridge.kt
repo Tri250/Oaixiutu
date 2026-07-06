@@ -1,13 +1,14 @@
 package com.alcedo.studio.domain.service
 
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.ndk.AlcedoNativeBridge
 
 /**
  * JNI bridge for color science operations.
  * Provides access to native ACES 2.0, OpenDRT, and color space transforms.
  */
 class ColorScienceBridge {
-    private val nativeBridge = NativePipelineBridge()
+    private val nativeBridge = AlcedoNativeBridge
 
     /**
      * Apply ACES 2.0 output rendering transform to float RGB data.

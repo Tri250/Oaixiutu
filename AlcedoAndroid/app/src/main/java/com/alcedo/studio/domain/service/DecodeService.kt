@@ -2,7 +2,7 @@ package com.alcedo.studio.domain.service
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.alcedo.studio.ndk.DecodeNdkBridge
+import com.alcedo.studio.ndk.AlcedoNativeBridge
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicLong
  * decoding with caching and cancellation.
  */
 class DecodeService(
-    private val decodeBridge: DecodeNdkBridge = DecodeNdkBridge
+    private val decodeBridge: AlcedoNativeBridge = AlcedoNativeBridge
 ) {
     companion object {
         private const val MAX_CACHE_ENTRIES = 64
@@ -83,7 +83,16 @@ class DecodeService(
         val gpsLatitude: Double = 0.0,
         val gpsLongitude: Double = 0.0,
         val gpsAltitude: Double = 0.0,
-        val rawJson: String = ""
+        val rawJson: String = "",
+        // 国内相机品牌 MakerNotes（大疆/华为/小米/哈苏）
+        val djiFlightHeight: Float = 0f,
+        val djiGimbalPitch: Float = 0f,
+        val djiGimbalRoll: Float = 0f,
+        val djiGpsMode: String = "",
+        val aiScene: String = "",
+        val multiFrameCount: Int = 0,
+        val aiEnhancement: String = "",
+        val hasselbladColorProfile: String = ""
     )
 
     data class RawImageInfo(
@@ -167,9 +176,105 @@ class DecodeService(
             return when {
                 header[0] == 0xFF.toByte() && header[1] == 0xD8.toByte() -> "JPEG"
                 header[0] == 0x89.toByte() && header[1] == 'P'.code.toByte() -> "PNG"
-                (header[0] == 0x49.toByte() || header[0] == 0x4D.toByte()) -> "RAW"
+                // TIFF-based formats: little-endian ("II" / 0x49 0x49) or big-endian ("MM" / 0x4D 0x4D)
+                (header[0] == 0x49.toByte() || header[0] == 0x4D.toByte()) -> {
+                    // DNG is a TIFF-based format. Distinguish DNG from generic RAW/TIFF
+                    // by looking for the DNGVersion tag (0xC612 / 50706) in the IFD, or
+                    // fall back to the file extension.
+                    detectTiffBasedFormat(file, header)
+                }
                 else -> "unknown"
             }
+        }
+    }
+
+    /**
+     * Distinguish DNG from generic TIFF/RAW among TIFF-based files.
+     *
+     * DNG files embed a DNGVersion tag (50706) in their main IFD. We scan the
+     * first IFD for this tag. If found (or the extension is .dng), the file is
+     * reported as "DNG"; otherwise it is reported as "RAW" (covers NEF, CR2,
+     * ARW, etc.) or "TIFF" for plain TIFFs.
+     */
+    private fun detectTiffBasedFormat(file: File, header: ByteArray): String {
+        val ext = file.extension.lowercase()
+        // Quick path: trust the .dng extension for TIFF-based files.
+        if (ext == "dng") return "DNG"
+        if (ext == "tiff" || ext == "tif") return "TIFF"
+
+        val isLittleEndian = header[0] == 0x49.toByte() // "II"
+        // Verify TIFF magic (42 = 0x2A) at offset 2-3.
+        val magic = if (isLittleEndian) {
+            (header[3].toInt() and 0xFF shl 8) or (header[2].toInt() and 0xFF)
+        } else {
+            (header[2].toInt() and 0xFF shl 8) or (header[3].toInt() and 0xFF)
+        }
+        if (magic != 42 && magic != 43) return "RAW"
+
+        try {
+            RandomAccessFile(file, "r").use { raf ->
+                // Read IFD offset (4 bytes at offset 4)
+                raf.seek(4)
+                val ifdOffset = if (isLittleEndian) {
+                    (raf.read().let { it and 0xFF }) or
+                        (raf.read().let { it and 0xFF } shl 8) or
+                        (raf.read().let { it and 0xFF } shl 16) or
+                        (raf.read().let { it and 0xFF } shl 24)
+                } else {
+                    (raf.read().let { it and 0xFF } shl 24) or
+                        (raf.read().let { it and 0xFF } shl 16) or
+                        (raf.read().let { it and 0xFF } shl 8) or
+                        (raf.read().let { it and 0xFF })
+                }
+                if (ifdOffset <= 0 || ifdOffset >= file.length()) return "RAW"
+
+                raf.seek(ifdOffset.toLong())
+                val entryCount = if (isLittleEndian) {
+                    (raf.read().let { it and 0xFF }) or (raf.read().let { it and 0xFF } shl 8)
+                } else {
+                    (raf.read().let { it and 0xFF } shl 8) or (raf.read().let { it and 0xFF })
+                }
+
+                // Each IFD entry is 12 bytes; the first 2 bytes are the tag id.
+                // DNGVersion tag = 50706 (0xC612).
+                for (i in 0 until entryCount) {
+                    val tag = if (isLittleEndian) {
+                        (raf.read().let { it and 0xFF }) or (raf.read().let { it and 0xFF } shl 8)
+                    } else {
+                        (raf.read().let { it and 0xFF } shl 8) or (raf.read().let { it and 0xFF })
+                    }
+                    if (tag == 50706) return "DNG" // DNGVersion tag found
+                    // Skip remaining 10 bytes of this entry
+                    raf.skipBytes(10)
+                }
+            }
+        } catch (_: Exception) {
+            // Ignore; fall through to RAW
+        }
+        return "RAW"
+    }
+
+    /**
+     * Detect the DNG sub-brand (DJI / Huawei / Xiaomi / Xiaomi-Leica) from the
+     * embedded EXIF metadata. Returns null when the make is unknown or not a
+     * recognized DNG sub-brand.
+     *
+     * - DJI DNG typically carries extra MakerNotes.
+     * - Huawei / Xiaomi DNG may use a special color matrix.
+     * - Xiaomi-Leica partnership lenses are reported via the lens model.
+     */
+    fun detectDngSubBrand(filePath: String): String? {
+        val metadata = runCatching {
+            kotlinx.coroutines.runBlocking { extractMetadata(filePath) }
+        }.getOrNull()
+        val make = metadata?.cameraMake?.lowercase() ?: ""
+        return when {
+            make.contains("dji") -> "dji"
+            make.contains("huawei") || make.contains("honor") -> "huawei"
+            make.contains("xiaomi") || make.contains("redmi") -> "xiaomi"
+            make.contains("leica") &&
+                metadata?.lensModel?.contains("Leica", ignoreCase = true) == true -> "xiaomi_leica"
+            else -> null
         }
     }
 
@@ -218,42 +323,12 @@ class DecodeService(
     suspend fun decodeRaw(
         filePath: String,
         options: DecodeOptions = DecodeOptions()
-    ): DecodedRaw? {
+    ): DecodedRaw? = withContext(Dispatchers.IO) {
         val jobId = nextJobId.getAndIncrement()
-        val job = scope.launch {
-            _decodeProgress.value = DecodeProgress.Running(jobId, 0f, "Starting RAW decode")
+        _decodeProgress.value = DecodeProgress.Running(jobId, 0f, "Starting RAW decode")
 
-            try {
-                val result = decodeBridge.nativeDecodeRaw(
-                    filePath,
-                    options.demosaic.nativeValue,
-                    options.highlightReconstruction,
-                    options.useCameraMatrix,
-                    options.halfResolution,
-                    options.outputFloat,
-                    options.extractThumbnail,
-                    options.extractPreview,
-                    options.maxThumbnailDimension,
-                    options.whiteBalanceIlluminant.nativeValue
-                )
-
-                if (result != null) {
-                    _decodeProgress.value = DecodeProgress.Completed(jobId, result)
-                } else {
-                    _decodeProgress.value = DecodeProgress.Failed(jobId, "Decode returned null")
-                }
-            } catch (e: CancellationException) {
-                _decodeProgress.value = DecodeProgress.Failed(jobId, "Cancelled")
-                throw e
-            } catch (e: Exception) {
-                _decodeProgress.value = DecodeProgress.Failed(jobId, e.message ?: "Unknown error")
-            }
-        }
-
-        activeJobs[jobId] = job
-
-        return try {
-            val result = decodeBridge.nativeDecodeRaw(
+        try {
+            val result = decodeBridge.nativeDecodeRawFull(
                 filePath,
                 options.demosaic.nativeValue,
                 options.highlightReconstruction,
@@ -266,20 +341,28 @@ class DecodeService(
                 options.whiteBalanceIlluminant.nativeValue
             )
 
-            val metadata = extractMetadata(filePath)
-            result?.let { r ->
+            if (result != null) {
+                _decodeProgress.value = DecodeProgress.Completed(jobId, result)
+                val metadata = extractMetadata(filePath)
                 DecodedRaw(
-                    rgbData = r.rgbFloatData,
-                    width = r.width,
-                    height = r.height,
-                    rawInfo = r.rawInfo,
-                    thumbnailData = r.thumbnailData,
-                    previewData = r.previewData,
+                    rgbData = result.rgbFloatData,
+                    width = result.width,
+                    height = result.height,
+                    rawInfo = result.rawInfo,
+                    thumbnailData = result.thumbnailData,
+                    previewData = result.previewData,
                     metadata = metadata
                 )
+            } else {
+                _decodeProgress.value = DecodeProgress.Failed(jobId, "Decode returned null")
+                null
             }
         } catch (e: CancellationException) {
+            _decodeProgress.value = DecodeProgress.Failed(jobId, "Cancelled")
             decodeBridge.nativeCancelDecode(jobId)
+            null
+        } catch (e: Exception) {
+            _decodeProgress.value = DecodeProgress.Failed(jobId, e.message ?: "Unknown error")
             null
         }
     }
@@ -304,8 +387,23 @@ class DecodeService(
     private fun parseMetadataJson(json: String, filePath: String): DecodedMetadata {
         return try {
             val obj = JSONObject(json)
+            val make = obj.optString("make", "")
+            // 国内相机品牌 MakerNotes 兼容解析
+            val makernote = obj.optJSONObject("makernote")
+            val dji = if (make.contains("DJI", ignoreCase = true)) {
+                parseDjiMakerNotes(obj, makernote)
+            } else null
+            val ai = if (make.contains("HUAWEI", ignoreCase = true) ||
+                make.contains("Xiaomi", ignoreCase = true)
+            ) {
+                parseHuaweiXiaomiMetadata(obj, makernote)
+            } else null
+            val hasselbladProfile = if (make.contains("Hasselblad", ignoreCase = true)) {
+                parseHasselbladMetadata(obj, makernote)
+            } else ""
+
             DecodedMetadata(
-                cameraMake = obj.optString("make", ""),
+                cameraMake = make,
                 cameraModel = obj.optString("model", ""),
                 lensModel = obj.optString("lens", ""),
                 focalLength = obj.optDouble("focal", 0.0).toFloat(),
@@ -322,11 +420,85 @@ class DecodeService(
                 gpsLatitude = obj.optDouble("gps_lat", 0.0),
                 gpsLongitude = obj.optDouble("gps_lon", 0.0),
                 gpsAltitude = obj.optDouble("gps_altitude", 0.0),
-                rawJson = json
+                rawJson = json,
+                // 国内品牌 MakerNotes
+                djiFlightHeight = dji?.flightHeight ?: 0f,
+                djiGimbalPitch = dji?.gimbalPitch ?: 0f,
+                djiGimbalRoll = dji?.gimbalRoll ?: 0f,
+                djiGpsMode = dji?.gpsMode ?: "",
+                aiScene = ai?.aiScene ?: "",
+                multiFrameCount = ai?.multiFrameCount ?: 0,
+                aiEnhancement = ai?.aiEnhancement ?: "",
+                hasselbladColorProfile = hasselbladProfile
             )
         } catch (e: Exception) {
             DecodedMetadata()
         }
+    }
+
+    // ============================================================
+    // 国内相机品牌 MakerNotes 解析
+    // ============================================================
+
+    private data class DjiMakerNotes(
+        val flightHeight: Float = 0f,
+        val gimbalPitch: Float = 0f,
+        val gimbalRoll: Float = 0f,
+        val gpsMode: String = ""
+    )
+
+    private data class AiMetadata(
+        val aiScene: String = "",
+        val multiFrameCount: Int = 0,
+        val aiEnhancement: String = ""
+    )
+
+    /** 在 makernote 子对象中查找键，找不到时回退到顶层 JSON。 */
+    private fun makernoteString(makernote: JSONObject?, obj: JSONObject, key: String): String {
+        makernote?.let { if (it.has(key)) return it.optString(key, "") }
+        return obj.optString(key, "")
+    }
+
+    private fun makernoteFloat(makernote: JSONObject?, obj: JSONObject, key: String): Float {
+        makernote?.let { if (it.has(key)) return it.optDouble(key, 0.0).toFloat() }
+        return obj.optDouble(key, 0.0).toFloat()
+    }
+
+    private fun makernoteInt(makernote: JSONObject?, obj: JSONObject, key: String): Int {
+        makernote?.let { if (it.has(key)) return it.optInt(key, 0) }
+        return obj.optInt(key, 0)
+    }
+
+    /**
+     * 大疆 MakerNotes：包含飞行高度、云台俯仰/横滚角度、GPS 模式等。
+     * 适用于 DJI 无人机（Mavic/Air/Mini 系列）及搭载相机。
+     */
+    private fun parseDjiMakerNotes(obj: JSONObject, makernote: JSONObject?): DjiMakerNotes {
+        return DjiMakerNotes(
+            flightHeight = makernoteFloat(makernote, obj, "FlightHeight"),
+            gimbalPitch = makernoteFloat(makernote, obj, "GimbalPitch"),
+            gimbalRoll = makernoteFloat(makernote, obj, "GimbalRoll"),
+            gpsMode = makernoteString(makernote, obj, "GpsMode")
+        )
+    }
+
+    /**
+     * 华为/小米 MakerNotes：包含 AI 场景识别、多帧合成张数、AI 增强信息等。
+     * 适用于华为 P/Mate 系列、小米数字系列等多帧合成机型。
+     */
+    private fun parseHuaweiXiaomiMetadata(obj: JSONObject, makernote: JSONObject?): AiMetadata {
+        return AiMetadata(
+            aiScene = makernoteString(makernote, obj, "AiScene"),
+            multiFrameCount = makernoteInt(makernote, obj, "MultiFrameCount"),
+            aiEnhancement = makernoteString(makernote, obj, "AiEnhancement")
+        )
+    }
+
+    /**
+     * 哈苏（国产版，大疆收购）MakerNotes：提取色彩配置信息。
+     */
+    private fun parseHasselbladMetadata(obj: JSONObject, makernote: JSONObject?): String {
+        return makernoteString(makernote, obj, "HasselbladColorProfile")
     }
 
     // ============================================================
