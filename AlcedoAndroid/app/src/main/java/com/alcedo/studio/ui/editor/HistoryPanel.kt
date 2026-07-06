@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -471,7 +473,7 @@ private fun HistoryItem(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.circle)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
                 )
             }
         }
@@ -487,7 +489,7 @@ private fun buildTransactionLabel(tx: EditTransaction): String {
         }
         else -> tx.operatorType.name.replaceFirstChar { it.uppercase() }.let {
             val key = extractDescriptionKey(tx.paramsAfter)
-            key.takeIf { it.isNotBlank() } ?: it
+            key?.takeIf { k -> k.isNotBlank() } ?: it
         }
     }
 }

@@ -390,7 +390,7 @@ class GpuPipelineRenderer {
         // 预分配 width*height*4 通道 * 4 字节/float
         GLES31.glBufferData(
             GLES31.GL_PIXEL_PACK_BUFFER,
-            (w * h * 4 * 4).toLong(),
+            w * h * 4 * 4,
             null,
             GLES31.GL_DYNAMIC_READ
         )
@@ -409,57 +409,50 @@ class GpuPipelineRenderer {
         val byteCount = width * height * 4 * 4
         val out = FloatArray(width * height * 4)
 
-        // 方案 A（简单稳定）：直接通过 glReadPixels 读取绑定的 FBO。
-        // 由于本类未创建 FBO，这里采用 glReadPixels 绑定纹理到 framebuffer 的
-        // 替代路径 —— 使用 glGetTexImage 在 ES 3.1 上不可用，因此回退到 PBO
-        // + glReadPixels 是 ES 标准做法，但需要先 attach 到 FBO。
-        //
-        // 为保持实现简洁且不依赖额外 FBO，这里采用 PBO 直接从 texture 读取
-        // 的兼容写法：通过临时 FBO。
         val fboId = IntArray(1)
         GLES31.glGenFramebuffers(1, fboId, 0)
-        GLES31.glBindFramebuffer(GLES31.GL_FRAMEBUFFER, fboId[0])
-        GLES31.glFramebufferTexture2D(
-            GLES31.GL_FRAMEBUFFER,
-            GLES31.GL_COLOR_ATTACHMENT0,
-            GLES31.GL_TEXTURE_2D,
-            textureId,
-            0
-        )
+        try {
+            GLES31.glBindFramebuffer(GLES31.GL_FRAMEBUFFER, fboId[0])
+            GLES31.glFramebufferTexture2D(
+                GLES31.GL_FRAMEBUFFER,
+                GLES31.GL_COLOR_ATTACHMENT0,
+                GLES31.GL_TEXTURE_2D,
+                textureId,
+                0
+            )
 
-        val status = GLES31.glCheckFramebufferStatus(GLES31.GL_FRAMEBUFFER)
-        if (status != GLES31.GL_FRAMEBUFFER_COMPLETE) {
-            Log.e(TAG, "FBO incomplete: 0x${status.toString(16)}")
+            val status = GLES31.glCheckFramebufferStatus(GLES31.GL_FRAMEBUFFER)
+            if (status != GLES31.GL_FRAMEBUFFER_COMPLETE) {
+                Log.e(TAG, "FBO incomplete: 0x${status.toString(16)}")
+                return null
+            }
+
+            GLES31.glBindBuffer(GLES31.GL_PIXEL_PACK_BUFFER, pixelBufferId)
+            GLES31.glReadPixels(
+                0, 0, width, height,
+                GLES31.GL_RGBA, GLES31.GL_FLOAT, 0
+            )
+
+            val mapped = GLES31.glMapBufferRange(
+                GLES31.GL_PIXEL_PACK_BUFFER, 0, byteCount,
+                GLES31.GL_MAP_READ_BIT
+            ) as? java.nio.ByteBuffer
+            if (mapped != null) {
+                mapped.order(ByteOrder.nativeOrder())
+                mapped.asFloatBuffer().get(out, 0, out.size)
+                GLES31.glUnmapBuffer(GLES31.GL_PIXEL_PACK_BUFFER)
+            } else {
+                Log.e(TAG, "glMapBufferRange returned null")
+            }
+
+            GLES31.glBindBuffer(GLES31.GL_PIXEL_PACK_BUFFER, 0)
+            checkGlError("readbackTexture")
+
+            return if (mapped != null) out else null
+        } finally {
             GLES31.glBindFramebuffer(GLES31.GL_FRAMEBUFFER, 0)
             GLES31.glDeleteFramebuffers(1, fboId, 0)
-            return null
         }
-
-        // 通过 PBO 读取
-        GLES31.glBindBuffer(GLES31.GL_PIXEL_PACK_BUFFER, pixelBufferId)
-        GLES31.glReadPixels(
-            0, 0, width, height,
-            GLES31.GL_RGBA, GLES31.GL_FLOAT, 0
-        )
-
-        val mapped = GLES31.glMapBufferRange(
-            GLES31.GL_PIXEL_PACK_BUFFER, 0, byteCount.toLong(),
-            GLES31.GL_MAP_READ_BIT
-        ) as? java.nio.ByteBuffer
-        if (mapped != null) {
-            mapped.order(ByteOrder.nativeOrder())
-            mapped.asFloatBuffer().get(out, 0, out.size)
-            GLES31.glUnmapBuffer(GLES31.GL_PIXEL_PACK_BUFFER)
-        } else {
-            Log.e(TAG, "glMapBufferRange returned null")
-        }
-
-        GLES31.glBindBuffer(GLES31.GL_PIXEL_PACK_BUFFER, 0)
-        GLES31.glBindFramebuffer(GLES31.GL_FRAMEBUFFER, 0)
-        GLES31.glDeleteFramebuffers(1, fboId, 0)
-        checkGlError("readbackTexture")
-
-        return if (mapped != null) out else null
     }
 
     // ================================================================

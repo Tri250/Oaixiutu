@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 import kotlin.math.*
 
@@ -59,7 +60,7 @@ fun CropOverlay(
             .semantics {
                 contentDescription = accCropOverlayDesc
                 stateDescription = "Crop: L=${(cropState.left * 100).toInt()}%, T=${(cropState.top * 100).toInt()}%, R=${(cropState.right * 100).toInt()}%, B=${(cropState.bottom * 100).toInt()}%"
-                role = Role.Slider
+                role = Role.Image
             }
             .pointerInput(cropState.aspectRatio) {
                 detectDragGestures(

@@ -36,7 +36,7 @@ class FocusModeState {
         if (!enabled) activeSection = null
     }
 
-    fun setActiveSection(section: String) {
+    fun selectSection(section: String) {
         if (enabled) activeSection = section
     }
 
@@ -68,7 +68,7 @@ fun FocusSectionChips(
     val sectionIds = sections.map { it.first }
     LaunchedEffect(focusMode.enabled, sectionIds) {
         if (focusMode.activeSection == null || focusMode.activeSection !in sectionIds) {
-            focusMode.setActiveSection(sectionIds.first())
+            focusMode.selectSection(sectionIds.first())
         }
     }
 
@@ -81,7 +81,7 @@ fun FocusSectionChips(
         sections.forEach { (id, label) ->
             FilterChip(
                 selected = focusMode.activeSection == id,
-                onClick = { focusMode.setActiveSection(id) },
+                onClick = { focusMode.selectSection(id) },
                 label = {
                     Text(
                         label,

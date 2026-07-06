@@ -2575,4 +2575,60 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeRasterizeBrushStrokes(
     return output;
 }
 
+// ============================================================
+// Edge Mask Generation (锐化蒙版可视化 — Sobel 边缘检测)
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateEdgeMask(
+    JNIEnv *env, jobject thiz,
+    jfloatArray input, jint width, jint height,
+    jfloat radius, jfloat threshold) {
+
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    int channels = 4; // RGBA
+    std::vector<float> gray(width * height);
+
+    // RGBA → 灰度
+    for (int i = 0; i < width * height; ++i) {
+        gray[i] = 0.299f * pixels[i * 4] + 0.587f * pixels[i * 4 + 1] + 0.114f * pixels[i * 4 + 2];
+    }
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    // Sobel 边缘检测
+    int r = std::max(1, static_cast<int>(radius));
+    std::vector<float> edges(width * height, 0.0f);
+
+    for (int y = r; y < height - r; ++y) {
+        for (int x = r; x < width - r; ++x) {
+            // Sobel X
+            float gx = -gray[(y-1)*width + (x-1)] - 2*gray[y*width + (x-1)] - gray[(y+1)*width + (x-1)]
+                      + gray[(y-1)*width + (x+1)] + 2*gray[y*width + (x+1)] + gray[(y+1)*width + (x+1)];
+            // Sobel Y
+            float gy = -gray[(y-1)*width + (x-1)] - 2*gray[(y-1)*width + x] - gray[(y-1)*width + (x+1)]
+                      + gray[(y+1)*width + (x-1)] + 2*gray[(y+1)*width + x] + gray[(y+1)*width + (x+1)];
+
+            float mag = std::sqrt(gx * gx + gy * gy);
+            // 应用阈值
+            float threshVal = threshold * 0.5f;
+            if (mag > threshVal) {
+                edges[y * width + x] = std::min(1.0f, mag / (threshVal * 4.0f + 1e-6f));
+            }
+        }
+    }
+
+    // 返回单通道 mask
+    jfloatArray output = env->NewFloatArray(width * height);
+    if (!output || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for edge mask");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(output, 0, width * height, edges.data());
+    return output;
+}
+
 } // extern "C"

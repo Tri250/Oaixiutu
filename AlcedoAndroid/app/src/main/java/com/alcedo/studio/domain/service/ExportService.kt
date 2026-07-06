@@ -163,11 +163,31 @@ class ExportService(private val context: Context) {
                 val result = exportToMediaStore(watermarked, settings, sourcePath)
                 updateItemProgress(0.9f)
 
-                // Recycle intermediate bitmaps if we created them
-                if (converted !== bitmap && converted !== resized) converted.recycle()
-                if (resized !== bitmap && resized !== converted && resized !== watermarked) resized.recycle()
-                if (watermarked !== resized && watermarked !== bitmap) watermarked.recycle()
-                if (processedBitmap == null && bitmap !== converted && bitmap !== resized) bitmap.recycle()
+                // 安全回收中间 bitmap — 使用 Set 避免重复回收
+                // 修复：当所有操作都返回同一个 bitmap 对象时，原逻辑不会回收任何 bitmap，导致内存泄漏
+                val recycled = mutableSetOf<Bitmap>()
+                fun safeRecycle(b: Bitmap?) {
+                    if (b != null && recycled.add(b)) b.recycle()
+                }
+
+                // 回收中间产物，保留最终产物（watermarked 已传入 exportToMediaStore，由其内部处理）
+                // 注意：processedBitmap 是外部传入的，不应回收
+                if (processedBitmap == null) {
+                    // 我们创建了 bitmap，可以回收它（如果它不等于其他仍需使用的 bitmap）
+                    safeRecycle(converted)
+                    safeRecycle(resized)
+                    safeRecycle(watermarked)
+                    // 如果 bitmap 与上述任何一个不同，单独回收
+                    if (bitmap !== converted && bitmap !== resized && bitmap !== watermarked) {
+                        safeRecycle(bitmap)
+                    }
+                } else {
+                    // processedBitmap 是外部传入的，不回收它
+                    // 只回收由它产生的中间产物
+                    if (converted !== processedBitmap) safeRecycle(converted)
+                    if (resized !== processedBitmap && resized !== converted) safeRecycle(resized)
+                    if (watermarked !== processedBitmap && watermarked !== resized && watermarked !== converted) safeRecycle(watermarked)
+                }
 
                 if (result is ExportResult.Success) {
                     _exportProgress.value = _exportProgress.value.copy(
@@ -245,11 +265,31 @@ class ExportService(private val context: Context) {
                 null, null
             )
 
-            // Recycle intermediate bitmaps if we created them
-            if (converted !== bitmap && converted !== resized) converted.recycle()
-            if (resized !== bitmap && resized !== converted && resized !== watermarked) resized.recycle()
-            if (watermarked !== resized && watermarked !== bitmap) watermarked.recycle()
-            if (processedBitmap == null && bitmap !== converted && bitmap !== resized) bitmap.recycle()
+            // 安全回收中间 bitmap — 使用 Set 避免重复回收
+            // 修复：当所有操作都返回同一个 bitmap 对象时，原逻辑不会回收任何 bitmap，导致内存泄漏
+            val recycled = mutableSetOf<Bitmap>()
+            fun safeRecycle(b: Bitmap?) {
+                if (b != null && recycled.add(b)) b.recycle()
+            }
+
+            // 回收中间产物，保留最终产物（watermarked 已写入 outputFile）
+            // 注意：processedBitmap 是外部传入的，不应回收
+            if (processedBitmap == null) {
+                // 我们创建了 bitmap，可以回收它
+                safeRecycle(converted)
+                safeRecycle(resized)
+                safeRecycle(watermarked)
+                // 如果 bitmap 与上述任何一个不同，单独回收
+                if (bitmap !== converted && bitmap !== resized && bitmap !== watermarked) {
+                    safeRecycle(bitmap)
+                }
+            } else {
+                // processedBitmap 是外部传入的，不回收它
+                // 只回收由它产生的中间产物
+                if (converted !== processedBitmap) safeRecycle(converted)
+                if (resized !== processedBitmap && resized !== converted) safeRecycle(resized)
+                if (watermarked !== processedBitmap && watermarked !== resized && watermarked !== converted) safeRecycle(watermarked)
+            }
 
             val uri = try {
                 FileProvider.getUriForFile(

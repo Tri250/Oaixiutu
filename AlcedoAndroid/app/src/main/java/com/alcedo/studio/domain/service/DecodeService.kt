@@ -263,9 +263,9 @@ class DecodeService(
      * - Huawei / Xiaomi DNG may use a special color matrix.
      * - Xiaomi-Leica partnership lenses are reported via the lens model.
      */
-    fun detectDngSubBrand(filePath: String): String? {
+    suspend fun detectDngSubBrand(filePath: String): String? {
         val metadata = runCatching {
-            kotlinx.coroutines.runBlocking { extractMetadata(filePath) }
+            extractMetadata(filePath)
         }.getOrNull()
         val make = metadata?.cameraMake?.lowercase() ?: ""
         return when {

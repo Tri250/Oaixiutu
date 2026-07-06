@@ -1035,7 +1035,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             var avgB = 0.0
             var count = 0
 
-            for (pixel in pixels step 4) {  // 采样每4个像素
+            for (i in pixels.indices step 4) {  // 采样每4个像素
+                val pixel = pixels[i]
                 avgR += ((pixel shr 16) and 0xFF) / 255.0
                 avgG += ((pixel shr 8) and 0xFF) / 255.0
                 avgB += (pixel and 0xFF) / 255.0
@@ -1086,84 +1087,94 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
-    private fun analyzeVibrance(bitmap: Bitmap): Float {
-        // 基于饱和度分布分析，低饱和度图像增加自然饱和度
-        val histogram = ScopeAnalyzer.computeHistogram(bitmap)
-        val lum = histogram.luminance
-        var total = 0f
-        var weighted = 0f
-        for (i in lum.indices) {
-            total += lum[i]
-            weighted += lum[i] * (i / 255f)
-        }
-        val avgBrightness = if (total > 0) weighted / total else 0.5f
+    private suspend fun analyzeVibrance(bitmap: Bitmap): Float {
+        return withContext(Dispatchers.Default) {
+            // 基于饱和度分布分析，低饱和度图像增加自然饱和度
+            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
+            val lum = histogram.luminance
+            var total = 0f
+            var weighted = 0f
+            for (i in lum.indices) {
+                total += lum[i]
+                weighted += lum[i] * (i / 255f)
+            }
+            val avgBrightness = if (total > 0) weighted / total else 0.5f
 
-        // 中间调图像增加自然饱和度
-        return if (avgBrightness in 0.3f..0.7f) 0.15f else 0f
+            // 中间调图像增加自然饱和度
+            if (avgBrightness in 0.3f..0.7f) 0.15f else 0f
+        }
     }
 
-    private fun analyzeClarity(bitmap: Bitmap): Float {
-        // 基于对比度分析，低对比度图像增加清晰度
-        val autoContrast = analyzeContrast()
-        return if (autoContrast < 0f) 0.1f else 0f
+    private suspend fun analyzeClarity(bitmap: Bitmap): Float {
+        return withContext(Dispatchers.Default) {
+            // 基于对比度分析，低对比度图像增加清晰度
+            val autoContrast = analyzeContrast()
+            if (autoContrast < 0f) 0.1f else 0f
+        }
     }
 
     private suspend fun analyzeExposure(): Float {
-        // 基于预览位图分析直方图，计算最佳曝光补偿
-        val previewBitmap = _previewBitmap.value ?: return 0f
-        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
-        val lum = histogram.luminance
-        var total = 0f
-        var weighted = 0f
-        for (i in lum.indices) {
-            total += lum[i]
-            weighted += lum[i] * (i / 255f)
+        return withContext(Dispatchers.Default) {
+            // 基于预览位图分析直方图，计算最佳曝光补偿
+            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
+            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val lum = histogram.luminance
+            var total = 0f
+            var weighted = 0f
+            for (i in lum.indices) {
+                total += lum[i]
+                weighted += lum[i] * (i / 255f)
+            }
+            val avgBrightness = if (total > 0f) weighted / total else 0.5f
+            // 目标亮度: 0.5 (中灰)
+            ((0.5f - avgBrightness) * 2f).coerceIn(-2f, 2f)
         }
-        val avgBrightness = if (total > 0f) weighted / total else 0.5f
-        // 目标亮度: 0.5 (中灰)
-        return ((0.5f - avgBrightness) * 2f).coerceIn(-2f, 2f)
     }
 
     private suspend fun analyzeContrast(): Float {
-        val previewBitmap = _previewBitmap.value ?: return 0f
-        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
-        val lum = histogram.luminance
-        var total = 0f
-        var weighted = 0f
-        for (i in lum.indices) {
-            total += lum[i]
-            weighted += lum[i] * (i / 255f)
+        return withContext(Dispatchers.Default) {
+            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
+            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val lum = histogram.luminance
+            var total = 0f
+            var weighted = 0f
+            for (i in lum.indices) {
+                total += lum[i]
+                weighted += lum[i] * (i / 255f)
+            }
+            val mean = if (total > 0f) weighted / total else 0.5f
+            var variance = 0f
+            for (i in lum.indices) {
+                val diff = (i / 255f) - mean
+                variance += lum[i] * diff * diff
+            }
+            val stddev = if (total > 0f) kotlin.math.sqrt(variance / total) else 0f
+            // 对比度调整: 标准差小于0.25时增加对比度
+            ((0.25f - stddev) * 2f).coerceIn(-0.5f, 0.5f)
         }
-        val mean = if (total > 0f) weighted / total else 0.5f
-        var variance = 0f
-        for (i in lum.indices) {
-            val diff = (i / 255f) - mean
-            variance += lum[i] * diff * diff
-        }
-        val stddev = if (total > 0f) kotlin.math.sqrt(variance / total) else 0f
-        // 对比度调整: 标准差小于0.25时增加对比度
-        return ((0.25f - stddev) * 2f).coerceIn(-0.5f, 0.5f)
     }
 
     private suspend fun analyzeSaturation(): Float {
-        val previewBitmap = _previewBitmap.value ?: return 0f
-        val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
-        val r = histogram.r
-        val g = histogram.g
-        val b = histogram.b
-        var total = 0f
-        var weighted = 0f
-        for (i in r.indices) {
-            val maxC = maxOf(r[i], g[i], b[i])
-            val minC = minOf(r[i], g[i], b[i])
-            val count = (r[i] + g[i] + b[i]) / 3f
-            val sat = if (maxC > 0f) (maxC - minC) / maxC else 0f
-            total += count
-            weighted += sat * count
+        return withContext(Dispatchers.Default) {
+            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
+            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val r = histogram.r
+            val g = histogram.g
+            val b = histogram.b
+            var total = 0f
+            var weighted = 0f
+            for (i in r.indices) {
+                val maxC = maxOf(r[i], g[i], b[i])
+                val minC = minOf(r[i], g[i], b[i])
+                val count = (r[i] + g[i] + b[i]) / 3f
+                val sat = if (maxC > 0f) (maxC - minC) / maxC else 0f
+                total += count
+                weighted += sat * count
+            }
+            val avgSat = if (total > 0f) weighted / total else 0.4f
+            // 目标饱和度: 0.4
+            ((0.4f - avgSat) * 1.5f).coerceIn(-0.5f, 0.5f)
         }
-        val avgSat = if (total > 0f) weighted / total else 0.4f
-        // 目标饱和度: 0.4
-        return ((0.4f - avgSat) * 1.5f).coerceIn(-0.5f, 0.5f)
     }
 
     // ================================================================

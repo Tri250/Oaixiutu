@@ -137,7 +137,9 @@ private fun shareToSystem(context: Context, uri: Uri, chooserTitle: String) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     try {
-        context.startActivity(Intent.createChooser(intent, chooserTitle))
+        val chooser = Intent.createChooser(intent, chooserTitle)
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(chooser)
     } catch (_: ActivityNotFoundException) {
         // 无可处理分享的应用，忽略
     }
