@@ -152,7 +152,7 @@ fun BackgroundTaskBar(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (runningTasks.size == 1) runningTasks.first().title
-                            else stringRes { activeTasks }.format(runningTasks.size),
+                            else stringRes { this.activeTasks }.format(runningTasks.size),
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis

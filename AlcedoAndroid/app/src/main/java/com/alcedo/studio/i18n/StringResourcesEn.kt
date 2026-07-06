@@ -530,13 +530,11 @@ class EnglishStrings : StringResources {
     // ── AI Model Manager page ──────────────────────────────────────────
     override val aiModelPrivacy = "Local · Privacy Safe"
     override val aiModelPrivacyDesc = "All AI inference runs locally, no images uploaded to cloud"
-    override val aiModelDownloaded = "Downloaded %s/%s models · %sMB"
     override val aiModelUsage = "Model Usage"
     override val aiModelRequired = "Required"
     override val aiModelDeleteTitle = "Delete Model"
     override val aiModelDeleteMessage = "Delete model \"%s\"? This cannot be undone."
     override val aiModelDownloadFailed = "Download failed"
-    override val aiModelDownloading = "Downloading"
 
     // ── Editor additions ───────────────────────────────────────────────
     override val editorUnsavedTitle = "Unsaved Changes"
@@ -664,8 +662,6 @@ class EnglishStrings : StringResources {
     override val sliderReset = "Reset"
     override val compareOriginal = "Original"
     override val compareEdited = "Edited"
-    override val compareBefore = "Before"
-    override val compareAfter = "After"
 
     // Background task bar
     override val tasksCompleted = "%s tasks completed"

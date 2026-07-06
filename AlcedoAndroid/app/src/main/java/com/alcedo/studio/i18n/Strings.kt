@@ -534,13 +534,11 @@ interface StringResources {
     // ── AI 模型管理页 ──────────────────────────────────────────────────
     val aiModelPrivacy: String
     val aiModelPrivacyDesc: String
-    val aiModelDownloaded: String
     val aiModelUsage: String
     val aiModelRequired: String
     val aiModelDeleteTitle: String
     val aiModelDeleteMessage: String
     val aiModelDownloadFailed: String
-    val aiModelDownloading: String
 
     // ── 编辑器补充 ─────────────────────────────────────────────────────
     val editorUnsavedTitle: String
@@ -668,8 +666,6 @@ interface StringResources {
     val sliderReset: String
     val compareOriginal: String
     val compareEdited: String
-    val compareBefore: String
-    val compareAfter: String
 
     // Background task bar
     val tasksCompleted: String // "{count} tasks completed"

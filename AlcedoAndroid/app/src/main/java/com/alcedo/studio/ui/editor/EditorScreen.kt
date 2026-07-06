@@ -293,10 +293,23 @@ fun EditorScreen(
                                     params = viewModel.params.value,
                                     onParamsChanged = { viewModel.updateParams(it) }
                                 )
-                                EditorPanel.LMT -> LmtPanel(
-                                    params = viewModel.params.value,
-                                    onParamsChanged = { viewModel.updateParams(it) }
-                                )
+                                EditorPanel.LMT -> {
+                                    val lmtParams = viewModel.params.value
+                                    LmtPanel(
+                                        lmtEnabled = lmtParams.lutEnabled,
+                                        lmtPath = lmtParams.lutPath,
+                                        lmtIntensity = lmtParams.lutIntensity,
+                                        onLmtChanged = { enabled, path, intensity ->
+                                            viewModel.updateParams(
+                                                lmtParams.copy(
+                                                    lutEnabled = enabled,
+                                                    lutPath = path,
+                                                    lutIntensity = intensity
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
                                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                                     image = viewModel.imageModel.value
                                 )
@@ -334,11 +347,12 @@ fun EditorScreen(
             }
 
             // 后台任务进度浮层
-            LoadingOverlay(
-                isProcessing,
-                message = stringRes { editorProcessing },
-                modifier = Modifier.fillMaxSize()
-            )
+            if (isProcessing) {
+                LoadingOverlay(
+                    message = stringRes { editorProcessing },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 
@@ -608,8 +622,9 @@ private fun ImagePreviewArea(
                 }
                 "compare" -> {
                     CompareView(
-                        originalBitmap = originalBitmap!!,
-                        editedBitmap = previewBitmap!!,
+                        originalImage = originalBitmap!!,
+                        editedImage = previewBitmap!!,
+                        compareMode = CompareMode.SPLIT,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -703,10 +718,23 @@ private fun EditorPanelColumn(
                     params = viewModel.params.value,
                     onParamsChanged = { viewModel.updateParams(it) }
                 )
-                EditorPanel.LMT -> LmtPanel(
-                    params = viewModel.params.value,
-                    onParamsChanged = { viewModel.updateParams(it) }
-                )
+                EditorPanel.LMT -> {
+                    val lmtParams = viewModel.params.value
+                    LmtPanel(
+                        lmtEnabled = lmtParams.lutEnabled,
+                        lmtPath = lmtParams.lutPath,
+                        lmtIntensity = lmtParams.lutIntensity,
+                        onLmtChanged = { enabled, path, intensity ->
+                            viewModel.updateParams(
+                                lmtParams.copy(
+                                    lutEnabled = enabled,
+                                    lutPath = path,
+                                    lutIntensity = intensity
+                                )
+                            )
+                        }
+                    )
+                }
                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                     image = viewModel.imageModel.value
                 )

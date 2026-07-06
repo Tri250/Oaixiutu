@@ -21,6 +21,7 @@ find_library(android-log-lib log)
 find_library(android-lib android)
 find_library(egl-lib EGL)
 find_library(gles-lib GLESv3)
+find_library(mediandk-lib mediandk)  # AMediaCodec / AMediaFormat (Nikon HE decode)
 
 # Core library
 add_library(
@@ -118,6 +119,7 @@ target_link_libraries(alcedo
     ${android-lib}
     ${egl-lib}
     ${gles-lib}
+    ${mediandk-lib}
 )
 
 # Hide all symbols by default

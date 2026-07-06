@@ -3,9 +3,9 @@ package com.alcedo.studio.ui.ai
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.animateItemPlacement
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,7 +47,7 @@ data class AiRatingResult(
 
 data class AnalysisProgress(val current: Int, val total: Int)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AiRatingScreen(
     navController: NavController,
@@ -54,7 +55,7 @@ fun AiRatingScreen(
 ) {
     val images by albumViewModel.filteredImages.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val aiService = remember { AppModule.appAiService }
+    val aiService = remember { AppModule.aiService }
     val coroutineScope = rememberCoroutineScope()
     val analysisProgress = remember { MutableStateFlow(AnalysisProgress(0, 0)) }
 
@@ -367,7 +368,7 @@ suspend fun predictRatingSafely(
     // 调用真实 AI 评分服务
     val (score, description) = if (bitmap != null) {
         try {
-            aiService.predictRating(imageId.toUInt(), bitmap)
+            aiService.rateImage(imageId.toUInt(), bitmap)
         } catch (e: Exception) {
             3 to "评分失败：${e.message}"
         }

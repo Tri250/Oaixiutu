@@ -1518,7 +1518,7 @@ bool RawDecoder::decompress_nikon_he(const uint8_t* compressed_data, size_t comp
                 ssize_t eosIdx = AMediaCodec_dequeueInputBuffer(codec, 5000000);
                 if (eosIdx >= 0) {
                     AMediaCodec_queueInputBuffer(codec, eosIdx, 0, 0, 0,
-                                                 AMEDIACODEC_BUFFER_FLAG_EOS);
+                                                 AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
                 }
 
                 // Dequeue decoded output

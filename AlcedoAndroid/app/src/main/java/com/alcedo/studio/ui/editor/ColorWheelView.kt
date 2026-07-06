@@ -62,6 +62,7 @@ fun CdlColorWheel(
 
     var hueAngle by remember { mutableFloatStateOf(wheelState.first) }
     var magnitude by remember { mutableFloatStateOf(wheelState.second) }
+    val accColorWheelDesc = stringRes { accColorWheel }
 
     // Update when external values change
     LaunchedEffect(r, g, b) {
@@ -78,8 +79,7 @@ fun CdlColorWheel(
             modifier = Modifier
                 .size(wheelSizeDp)
                 .semantics {
-                    contentDescription = stringRes { accColorWheel }
-                    role = Role.Slider
+                    contentDescription = accColorWheelDesc
                     stateDescription = "R: ${"%.2f".format(r)}, G: ${"%.2f".format(g)}, B: ${"%.2f".format(b)}"
                     customActions = listOf(
                         CustomAccessibilityAction("Reset color wheel") {

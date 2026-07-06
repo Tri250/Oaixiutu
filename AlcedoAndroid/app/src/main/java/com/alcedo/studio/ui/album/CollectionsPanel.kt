@@ -56,7 +56,7 @@ fun CollectionsPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(stringRes { collections }, style = MaterialTheme.typography.titleMedium)
+            Text(stringRes { this.collections }, style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = stringRes { newCollection })
             }

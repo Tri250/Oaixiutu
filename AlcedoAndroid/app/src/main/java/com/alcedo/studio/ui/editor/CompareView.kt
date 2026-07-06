@@ -13,13 +13,13 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 
@@ -31,14 +31,15 @@ enum class CompareMode {
 
 @Composable
 fun CompareView(
-    originalImage: android.graphics.Bitmap?,
-    editedImage: android.graphics.Bitmap?,
+    originalImage: ImageBitmap?,
+    editedImage: ImageBitmap?,
     compareMode: CompareMode,
     modifier: Modifier = Modifier
 ) {
     if (originalImage == null || editedImage == null) return
 
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
+    val accCompareDesc = stringRes { accCompareView }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -70,8 +71,7 @@ fun CompareView(
                     originalImage.width.toFloat() / originalImage.height.toFloat()
                 )
                 .semantics {
-                    contentDescription = stringRes { accCompareView }
-                    role = Role.Slider
+                    contentDescription = accCompareDesc
                     stateDescription = "Split at ${(splitPosition * 100).toInt()}%"
                 }
                 .pointerInput(Unit) {
@@ -82,19 +82,20 @@ fun CompareView(
         ) {
             val imageWidth = size.width
             val imageHeight = size.height
+            val dstIntSize = IntSize(imageWidth.toInt(), imageHeight.toInt())
 
             when (compareMode) {
                 CompareMode.SPLIT -> {
                     // Draw edited image first (full)
                     drawImage(
-                        image = editedImage.asComposeImageBitmap(),
-                        dstSize = Size(imageWidth, imageHeight)
+                        image = editedImage,
+                        dstSize = dstIntSize
                     )
                     // Draw original on the left side
                     clipRect(0f, 0f, imageWidth * splitPosition, imageHeight) {
                         drawImage(
-                            image = originalImage.asComposeImageBitmap(),
-                            dstSize = Size(imageWidth, imageHeight)
+                            image = originalImage,
+                            dstSize = dstIntSize
                         )
                     }
                     // Draw split line
@@ -108,12 +109,12 @@ fun CompareView(
                 }
                 CompareMode.ONION_SKIN -> {
                     drawImage(
-                        image = originalImage.asComposeImageBitmap(),
-                        dstSize = Size(imageWidth, imageHeight)
+                        image = originalImage,
+                        dstSize = dstIntSize
                     )
                     drawImage(
-                        image = editedImage.asComposeImageBitmap(),
-                        dstSize = Size(imageWidth, imageHeight),
+                        image = editedImage,
+                        dstSize = dstIntSize,
                         alpha = 1f - splitPosition
                     )
                 }
@@ -121,14 +122,14 @@ fun CompareView(
                     val halfWidth = imageWidth / 2f
                     clipRect(0f, 0f, halfWidth, imageHeight) {
                         drawImage(
-                            image = originalImage.asComposeImageBitmap(),
-                            dstSize = Size(imageWidth, imageHeight)
+                            image = originalImage,
+                            dstSize = dstIntSize
                         )
                     }
                     clipRect(halfWidth, 0f, imageWidth, imageHeight) {
                         drawImage(
-                            image = editedImage.asComposeImageBitmap(),
-                            dstSize = Size(imageWidth, imageHeight)
+                            image = editedImage,
+                            dstSize = dstIntSize
                         )
                     }
                     // Divider line
@@ -171,5 +172,3 @@ fun CompareView(
     }
 }
 
-private fun android.graphics.Bitmap.asComposeImageBitmap() =
-    androidx.compose.ui.graphics.asImageBitmap()

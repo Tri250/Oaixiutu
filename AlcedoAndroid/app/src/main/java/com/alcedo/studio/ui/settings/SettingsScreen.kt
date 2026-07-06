@@ -708,7 +708,7 @@ fun SettingsScreen(navController: NavController) {
         ConfirmDialog(
             title = stringRes { settingsClearCacheTitle },
             message = stringRes { settingsClearCacheMessage },
-            confirmText = stringRes { clear },
+            confirmLabel = stringRes { clear },
             onConfirm = {
                 // Actually clear thumbnail and temp caches
                 clearAppCache(context)
@@ -716,7 +716,7 @@ fun SettingsScreen(navController: NavController) {
                 showClearCacheDialog = false
             },
             onDismiss = { showClearCacheDialog = false },
-            isDestructive = true
+            destructive = true
         )
     }
 
@@ -724,7 +724,7 @@ fun SettingsScreen(navController: NavController) {
         ConfirmDialog(
             title = stringRes { settingsClearModelsTitle },
             message = stringRes { settingsClearModelsMessage },
-            confirmText = stringRes { clear },
+            confirmLabel = stringRes { clear },
             onConfirm = {
                 // Actually delete AI model files
                 clearAiModels(context)
@@ -732,7 +732,7 @@ fun SettingsScreen(navController: NavController) {
                 showClearModelsDialog = false
             },
             onDismiss = { showClearModelsDialog = false },
-            isDestructive = true
+            destructive = true
         )
     }
 }

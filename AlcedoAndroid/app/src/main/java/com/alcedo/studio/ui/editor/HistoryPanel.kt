@@ -263,6 +263,7 @@ fun HistoryPanel(
 
     // ── Create version dialog ──────────────────────────────────────
     if (showCreateDialog) {
+        val defaultVersionName = "${stringRes { historyVersions }} ${orderedVersions.size + 1}"
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
             title = { Text(stringRes { historyNewVersion }) },
@@ -271,7 +272,7 @@ fun HistoryPanel(
                     value = newVersionName,
                     onValueChange = { newVersionName = it },
                     label = { Text(stringRes { historyVersionName }) },
-                    placeholder = { Text("${stringRes { historyVersions }} ${orderedVersions.size + 1}") },
+                    placeholder = { Text(defaultVersionName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -279,7 +280,7 @@ fun HistoryPanel(
             confirmButton = {
                 Button(onClick = {
                     HapticFeedback.success(context)
-                    viewModel.createVersion(newVersionName.ifEmpty { "${stringRes { historyVersions }} ${orderedVersions.size + 1}" })
+                    viewModel.createVersion(newVersionName.ifEmpty { defaultVersionName })
                     showCreateDialog = false
                 }) {
                     Text(stringRes { historyCreate })
