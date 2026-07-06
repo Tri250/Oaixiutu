@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.domain.service.MaskInferenceService
+import com.alcedo.studio.domain.service.MaskRenderService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.ndk.AlcedoNdkBridge
@@ -44,6 +46,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private val pipelineService by lazy { AppModule.pipelineService }
     private val exportService by lazy { AppModule.exportService }
     private val thumbnailService by lazy { AppModule.thumbnailService }
+    val presetService by lazy { AppModule.presetService }
 
     // ── Image state ──
 
@@ -140,6 +143,23 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _presets = MutableStateFlow<List<PresetEntry>>(emptyList())
     val presets: StateFlow<List<PresetEntry>> = _presets
+
+    // ── Masks (AI local adjustments) ──
+
+    val maskRenderService by lazy { MaskRenderService() }
+
+    private val _maskContainers = MutableStateFlow<List<MaskContainer>>(emptyList())
+    val maskContainers: StateFlow<List<MaskContainer>> = _maskContainers.asStateFlow()
+
+    private val _maskPreviewBitmap = MutableStateFlow<Bitmap?>(null)
+    val maskPreviewBitmap: StateFlow<Bitmap?> = _maskPreviewBitmap.asStateFlow()
+
+    private val _isAnalyzingMask = MutableStateFlow(false)
+    val isAnalyzingMask: StateFlow<Boolean> = _isAnalyzingMask.asStateFlow()
+
+    /** When true the mask overlay is drawn over the preview (mask panel open). */
+    private val _showMaskOverlay = MutableStateFlow(true)
+    val showMaskOverlay: StateFlow<Boolean> = _showMaskOverlay.asStateFlow()
 
     // ── Export ──
 
@@ -1401,36 +1421,195 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private fun loadPresets() {
         _presets.value = builtInPresets
+        // Seed the database-backed preset system (RapidRAW-style) on first launch.
+        viewModelScope.launch {
+            try {
+                presetService.ensureBuiltInPresetsInitialized()
+            } catch (_: Throwable) {
+                // Non-fatal: preset panel will simply show an empty state.
+            }
+        }
     }
 
     fun applyPreset(preset: PresetEntry) {
-        _params.value = preset.params
-        _toneCurveX.value = preset.params.toneCurveX
-        _toneCurveY.value = preset.params.toneCurveY
+        applyPresetParams(preset.params)
+    }
+
+    /**
+     * Applies a [PipelineParams] (e.g. loaded from a database preset) and syncs
+     * all derived UI state (tone curve / color wheels / HSL) so the editor
+     * panels reflect the preset immediately.
+     */
+    fun applyPresetParams(params: PipelineParams) {
+        _params.value = params
+        _toneCurveX.value = params.toneCurveX
+        _toneCurveY.value = params.toneCurveY
         _colorWheelLift.value = floatArrayOf(
-            preset.params.colorWheelLiftR,
-            preset.params.colorWheelLiftG,
-            preset.params.colorWheelLiftB
+            params.colorWheelLiftR,
+            params.colorWheelLiftG,
+            params.colorWheelLiftB
         )
         _colorWheelGamma.value = floatArrayOf(
-            preset.params.colorWheelGammaR,
-            preset.params.colorWheelGammaG,
-            preset.params.colorWheelGammaB
+            params.colorWheelGammaR,
+            params.colorWheelGammaG,
+            params.colorWheelGammaB
         )
         _colorWheelGain.value = floatArrayOf(
-            preset.params.colorWheelGainR,
-            preset.params.colorWheelGainG,
-            preset.params.colorWheelGainB
+            params.colorWheelGainR,
+            params.colorWheelGainG,
+            params.colorWheelGainB
         )
-        _hslHueShift.value = preset.params.hslHueShift
-        _hslSaturationScale.value = preset.params.hslSaturationScale
-        _hslLuminanceScale.value = preset.params.hslLuminanceScale
+        _hslHueShift.value = params.hslHueShift
+        _hslSaturationScale.value = params.hslSaturationScale
+        _hslLuminanceScale.value = params.hslLuminanceScale
         regeneratePreview()
     }
 
     fun saveCurrentAsPreset(name: String) {
         val newPreset = PresetEntry(name = name, params = _params.value)
         _presets.value = _presets.value + newPreset
+    }
+
+    // ================================================================
+    // Masks (AI local adjustments)
+    // ================================================================
+
+    private fun newId(): String = java.util.UUID.randomUUID().toString()
+
+    /** Create a new mask container with an initial whole-image sub-mask. */
+    fun addMaskContainer(initialType: MaskType = MaskType.WHOLE_IMAGE) {
+        val subMask = SubMask(
+            id = newId(),
+            type = initialType,
+            combineMode = MaskCombineMode.ADDITIVE,
+            name = maskTypeName(initialType),
+            params = MaskParams.defaultFor(initialType)
+        )
+        val container = MaskContainer(
+            id = newId(),
+            name = "Mask ${_maskContainers.value.size + 1}",
+            subMasks = listOf(subMask)
+        )
+        _maskContainers.value = _maskContainers.value + container
+        regenerateMaskPreview()
+    }
+
+    fun removeMaskContainer(containerId: String) {
+        _maskContainers.value = _maskContainers.value.filterNot { it.id == containerId }
+        maskRenderService.invalidate()
+        regenerateMaskPreview()
+    }
+
+    fun updateMaskContainer(updated: MaskContainer) {
+        _maskContainers.value = _maskContainers.value.map {
+            if (it.id == updated.id) updated else it
+        }
+        regenerateMaskPreview()
+    }
+
+    /** Add a sub-mask of [type] to [containerId], combined with [combineMode]. */
+    fun addSubMask(
+        containerId: String,
+        type: MaskType,
+        combineMode: MaskCombineMode = MaskCombineMode.ADDITIVE
+    ) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                container.copy(
+                    subMasks = container.subMasks + SubMask(
+                        id = newId(),
+                        type = type,
+                        combineMode = combineMode,
+                        name = maskTypeName(type),
+                        params = MaskParams.defaultFor(type)
+                    )
+                )
+            } else container
+        }
+        regenerateMaskPreview()
+    }
+
+    fun removeSubMask(containerId: String, subMaskId: String) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                container.copy(subMasks = container.subMasks.filterNot { it.id == subMaskId })
+            } else container
+        }
+        maskRenderService.invalidate(subMaskId)
+        regenerateMaskPreview()
+    }
+
+    /** Reorder sub-masks within a container (simple move [fromIndex] → [toIndex]). */
+    fun moveSubMask(containerId: String, fromIndex: Int, toIndex: Int) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                val subs = container.subMasks.toMutableList()
+                if (fromIndex in subs.indices && toIndex in 0..subs.size) {
+                    val moved = subs.removeAt(fromIndex)
+                    val target = if (toIndex > fromIndex) toIndex - 1 else toIndex
+                    subs.add(target.coerceIn(0, subs.size), moved)
+                }
+                container.copy(subMasks = subs)
+            } else container
+        }
+        regenerateMaskPreview()
+    }
+
+    fun setShowMaskOverlay(show: Boolean) {
+        _showMaskOverlay.value = show
+    }
+
+    /**
+     * Re-render the red mask overlay over the current preview bitmap. Runs AI
+     * inference for any SUBJECT/SKY/FOREGROUND sub-masks; debounced so rapid
+     * edits don't queue up work.
+     */
+    private var maskPreviewJob: Job? = null
+    fun regenerateMaskPreview() {
+        maskPreviewJob?.cancel()
+        maskPreviewJob = viewModelScope.launch {
+            delay(80) // debounce
+            val source = previewSourceBitmap ?: _originalBitmap.value ?: return@launch
+            val containers = _maskContainers.value
+            if (containers.isEmpty() || containers.all { !it.visible }) {
+                _maskPreviewBitmap.value = null
+                return@launch
+            }
+            _isAnalyzingMask.value = true
+            try {
+                _maskPreviewBitmap.value =
+                    maskRenderService.renderMaskOverlay(containers, source)
+            } catch (e: Throwable) {
+                Log.e("EditorVM", "regenerateMaskPreview failed", e)
+            } finally {
+                _isAnalyzingMask.value = false
+            }
+        }
+    }
+
+    /** Apply all mask adjustments to the current preview bitmap and return it. */
+    suspend fun applyMasksToPreview(): Bitmap? {
+        val source = previewSourceBitmap ?: _originalBitmap.value ?: return null
+        val containers = _maskContainers.value
+        if (containers.isEmpty()) return source
+        return try {
+            maskRenderService.applyMasks(containers, source)
+        } catch (e: Throwable) {
+            Log.e("EditorVM", "applyMasksToPreview failed", e)
+            source
+        }
+    }
+
+    private fun maskTypeName(type: MaskType): String = when (type) {
+        MaskType.SUBJECT -> "Subject"
+        MaskType.SKY -> "Sky"
+        MaskType.FOREGROUND -> "Foreground"
+        MaskType.LINEAR -> "Linear"
+        MaskType.RADIAL -> "Radial"
+        MaskType.BRUSH -> "Brush"
+        MaskType.COLOR_RANGE -> "Color Range"
+        MaskType.LUMINANCE_RANGE -> "Luminance"
+        MaskType.WHOLE_IMAGE -> "Whole Image"
     }
 
     fun resetAllParams() {
@@ -1614,7 +1793,9 @@ enum class EditorPanel(val labelKey: StringResources.() -> String) {
     HISTORY({ editorPanelHistory }),
     DISPLAY_TRANSFORM({ editorPanelDisplayTransform }),
     LMT({ editorPanelLmt }),
-    INSPECTOR({ editorPanelInspector })
+    INSPECTOR({ editorPanelInspector }),
+    MASKS({ editorPanelMasks }),
+    PRESETS({ presetTitle })
 }
 
 enum class ScopeType(val labelKey: StringResources.() -> String) {

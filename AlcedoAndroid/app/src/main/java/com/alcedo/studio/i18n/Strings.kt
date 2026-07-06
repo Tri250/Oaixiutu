@@ -114,6 +114,7 @@ interface StringResources {
     val editorPanelDisplayTransform: String
     val editorPanelLmt: String
     val editorPanelInspector: String
+    val editorPanelMasks: String
     val editorUndo: String
     val editorRedo: String
     val editorCompare: String
@@ -549,6 +550,31 @@ interface StringResources {
     val editorAutoEnhance: String
     val editorPresets: String
 
+    // ── Preset Management (RapidRAW-inspired) ──────────────────────────
+    val presetTitle: String
+    val presetSearch: String
+    val presetCreate: String
+    val presetImport: String
+    val presetExportAll: String
+    val presetCategoryAll: String
+    val presetCategoryBuiltin: String
+    val presetCategoryCustom: String
+    val presetCategoryFilm: String
+    val presetCategoryPortrait: String
+    val presetCategoryLandscape: String
+    val presetCategoryBW: String
+    val presetApply: String
+    val presetEdit: String
+    val presetDelete: String
+    val presetExport: String
+    val presetNamePrompt: String
+    val presetCategoryPrompt: String
+    val presetCreated: String
+    val presetDeleted: String
+    val presetImported: String
+    val presetExported: String
+    val presetAppliedToBatch: String
+
     // ── Stats ──────────────────────────────────────────────────────────
     val statsLibraryOverview: String
     val statsTotalImages: String
@@ -649,6 +675,33 @@ interface StringResources {
     val inspectorAddTag: String
     val inspectorAdd: String
     val inspectorQualityScore: String
+
+    // Mask panel (AI masks for local adjustments)
+    val maskTitle: String
+    val maskNewMask: String
+    val maskSubject: String
+    val maskSky: String
+    val maskForeground: String
+    val maskLinear: String
+    val maskRadial: String
+    val maskBrush: String
+    val maskColorRange: String
+    val maskLuminanceRange: String
+    val maskWholeImage: String
+    val maskAdditive: String
+    val maskSubtractive: String
+    val maskIntersect: String
+    val maskInvert: String
+    val maskOpacity: String
+    val maskVisible: String
+    val maskName: String
+    val maskBrushSize: String
+    val maskBrushHardness: String
+    val maskFeather: String
+    val maskAnalyzing: String
+    val maskApplyTo: String
+    val maskDeleteMask: String
+    val maskDeleteSubMask: String
 
     // Common components
     val loadingDefault: String

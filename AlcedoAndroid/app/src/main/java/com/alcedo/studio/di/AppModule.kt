@@ -120,6 +120,14 @@ object AppModule {
         PipelineService()
     }
 
+    val presetService: PresetService by lazy {
+        PresetService(
+            presetDao = pipelinePresetDao,
+            pipelineService = pipelineService,
+            editHistoryRepository = editHistoryRepository
+        )
+    }
+
     val aiService: AiService by lazy {
         AiService(this.context)
     }

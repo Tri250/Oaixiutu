@@ -390,6 +390,14 @@ fun EditorScreen(
                                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                                     image = viewModel.imageModel.value
                                 )
+                                EditorPanel.MASKS -> MaskPanel(
+                                    viewModel = viewModel,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                EditorPanel.PRESETS -> PresetPanel(
+                                    viewModel = viewModel,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
                             }
                         }
                     }
@@ -834,6 +842,14 @@ private fun EditorPanelColumn(
                 EditorPanel.INSPECTOR -> ImageInspectorPanel(
                     image = viewModel.imageModel.value
                 )
+                EditorPanel.MASKS -> MaskPanel(
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                EditorPanel.PRESETS -> PresetPanel(
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -1031,6 +1047,8 @@ private fun panelIcon(panel: EditorPanel): ImageVector = when (panel) {
     EditorPanel.DISPLAY_TRANSFORM -> Icons.Default.Layers
     EditorPanel.LMT -> Icons.Default.FilterVintage
     EditorPanel.INSPECTOR -> Icons.Default.Info
+    EditorPanel.MASKS -> Icons.Default.BlurOn
+    EditorPanel.PRESETS -> Icons.Default.AutoAwesome
 }
 
 @Composable

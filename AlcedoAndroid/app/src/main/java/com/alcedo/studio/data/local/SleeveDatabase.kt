@@ -151,7 +151,12 @@ abstract class SleeveDatabase : RoomDatabase() {
                 appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
             )
             .openHelperFactory(factory)
-            .fallbackToDestructiveMigration()
+            .addMigrations(*DatabaseMigrations.ALL)
+            // Safe fallback: only allow destructive recreation on DOWNGRADE
+            // (e.g. a user sideloads an older APK). Upgrades must go through
+            // the explicit migrations in DatabaseMigrations so user data is
+            // never silently wiped.
+            .fallbackToDestructiveMigrationOnDowngrade()
             .setJournalMode(JournalMode.AUTOMATIC)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -166,7 +171,10 @@ abstract class SleeveDatabase : RoomDatabase() {
             return Room.databaseBuilder(
                 appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
             )
-            .fallbackToDestructiveMigration()
+            .addMigrations(*DatabaseMigrations.ALL)
+            // Safe fallback: only allow destructive recreation on DOWNGRADE.
+            // See buildEncryptedDatabase for rationale.
+            .fallbackToDestructiveMigrationOnDowngrade()
             .setJournalMode(JournalMode.AUTOMATIC)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {

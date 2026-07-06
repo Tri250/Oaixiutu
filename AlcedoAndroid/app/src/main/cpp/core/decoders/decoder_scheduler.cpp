@@ -281,7 +281,10 @@ uint64_t DecoderScheduler::submit_full_decode_from_memory(const uint8_t* data, s
 // ── Cancellation ──
 
 bool DecoderScheduler::cancel_task(uint64_t task_id) {
-    // Check active tasks first
+    // 1. Check active tasks first. If the task is currently being processed by
+    //    a worker, mark it as cancelled so the worker bails out at its next
+    //    cancellation checkpoint. We cannot remove it from the worker, but the
+    //    cancelled flag is checked between work units.
     {
         std::lock_guard<std::mutex> lock(active_mutex_);
         auto it = active_tasks_.find(task_id);
@@ -292,11 +295,53 @@ bool DecoderScheduler::cancel_task(uint64_t task_id) {
         }
     }
 
-    // Check queues (need to mark as cancelled; we can't remove from priority_queue easily)
-    // For simplicity, we mark the task as cancelled and it will be skipped when dequeued
-    // Full implementation would rebuild the queue
-    LOGW("cancel_task: full queue removal not implemented for task %llu", (unsigned long long)task_id);
-    return false;
+    // 2. Check the pending queues. std::priority_queue exposes no erase(), so
+    //    removing a specific task requires rebuilding the queue without it.
+    //    We drain each queue into a fresh priority_queue, skipping the task
+    //    whose id matches, then move-assign the rebuilt queue back. The
+    //    move-assignment transfers the underlying container without copying
+    //    any DecodeTask elements (DecodeTask holds std::atomic members and is
+    //    copy-only, so element-level moves are not available, but the queue
+    //    container itself is movable).
+    //
+    //    This is O(n) per queue, but cancellation is rare relative to
+    //    enqueue/dequeue, and the queues are bounded by max_queue_size_.
+    bool removed = false;
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+
+        auto rebuild = [&](std::priority_queue<DecodeTask>& q) -> bool {
+            if (q.empty()) return false;
+            std::priority_queue<DecodeTask> rebuilt;
+            bool found = false;
+            while (!q.empty()) {
+                const DecodeTask& top = q.top();
+                if (!found && top.task_id == task_id) {
+                    // Drop the cancelled task: do not re-push it.
+                    found = true;
+                } else {
+                    rebuilt.push(top); // copy (DecodeTask is copyable)
+                }
+                q.pop();
+            }
+            q = std::move(rebuilt); // move the container, no element copies
+            return found;
+        };
+
+        if (rebuild(metadata_queue_))   removed = true;
+        if (rebuild(thumbnail_queue_))  removed = true;
+        if (rebuild(full_decode_queue_)) removed = true;
+    }
+
+    if (removed) {
+        total_cancelled_++;
+        LOGI("cancel_task: removed queued task %llu",
+             (unsigned long long)task_id);
+    } else {
+        LOGW("cancel_task: task %llu not found in active set or queues",
+             (unsigned long long)task_id);
+    }
+    return removed;
 }
 
 void DecoderScheduler::cancel_all() {
