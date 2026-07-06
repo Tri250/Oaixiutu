@@ -12,7 +12,11 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.ndk.AlcedoNdkBridge
+import com.alcedo.studio.ui.editor.GamutOverlay
+import com.alcedo.studio.ui.editor.HistogramChannel
+import com.alcedo.studio.ui.editor.HistogramScale
 import com.alcedo.studio.ui.editor.ScopeAnalyzer
+import com.alcedo.studio.ui.editor.WaveformMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -383,18 +387,6 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateVignette(strength: Float) {
         _params.value = _params.value.copy(lensVignetteStrength = strength)
         recordTransaction(OperatorType.GEOMETRY, "lensVignetteStrength", strength)
-        regeneratePreview()
-    }
-
-    fun updateSigmoidShoulder(value: Float) {
-        _params.value = _params.value.copy(sigmoidShoulder = value)
-        recordTransaction(OperatorType.CONTRAST, "sigmoidShoulder", value)
-        regeneratePreview()
-    }
-
-    fun updateShadowBoundary(value: Float) {
-        _params.value = _params.value.copy(shadowBoundary = value)
-        recordTransaction(OperatorType.TONE_REGION, "shadowBoundary", value)
         regeneratePreview()
     }
 

@@ -1,8 +1,6 @@
 package com.alcedo.studio.ui.editor
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,23 +11,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.alcedo.studio.data.model.ImageMetadata
+import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 
 @Composable
 fun ImageInspectorPanel(
-    metadata: ImageMetadata?,
-    rating: Int,
-    onRatingChanged: (Int) -> Unit,
-    tags: List<String>,
-    onTagsChanged: (List<String>) -> Unit,
-    aiAnalysis: String?,
+    image: ImageModel?,
     modifier: Modifier = Modifier
 ) {
-    var newTagText by remember { mutableStateOf("") }
-
-    if (metadata == null) {
+    if (image == null) {
         Box(
             modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
@@ -42,6 +33,8 @@ fun ImageInspectorPanel(
         }
         return
     }
+
+    val exif = image.exifDisplay
 
     Column(
         modifier = modifier
@@ -58,17 +51,20 @@ fun ImageInspectorPanel(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                metadata.fileName?.let {
-                    InspectorRow("File", it)
+                if (image.imageName.isNotEmpty()) {
+                    InspectorRow("File", image.imageName)
                 }
-                metadata.fileSize?.let {
-                    InspectorRow("Size", formatFileSize(it))
+                if (image.fileSize > 0) {
+                    InspectorRow("Size", formatFileSize(image.fileSize))
                 }
-                metadata.dimensions?.let {
-                    InspectorRow("Dimensions", it)
+                val dims = exif.imageSize.ifEmpty {
+                    if (image.width > 0 && image.height > 0) "${image.width} × ${image.height}" else ""
                 }
-                metadata.format?.let {
-                    InspectorRow("Format", it)
+                if (dims.isNotEmpty()) {
+                    InspectorRow("Dimensions", dims)
+                }
+                if (image.imageType.name.isNotEmpty()) {
+                    InspectorRow("Format", image.imageType.name)
                 }
             }
         }
@@ -82,14 +78,15 @@ fun ImageInspectorPanel(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                if (metadata.exifData.isEmpty()) {
+                val entries = buildExifEntries(exif)
+                if (entries.isEmpty()) {
                     Text(
                         stringRes { inspectorNoExif },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    metadata.exifData.forEach { (key, value) ->
+                    entries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
                 }
@@ -97,23 +94,21 @@ fun ImageInspectorPanel(
         }
 
         // ── Rating ─────────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    stringRes { inspectorRating },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    (1..5).forEach { star ->
-                        IconButton(
-                            onClick = { onRatingChanged(if (rating == star) 0 else star) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
+        val rating = exif.rating.coerceIn(0, 5)
+        if (rating > 0) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        stringRes { inspectorRating },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        (1..5).forEach { star ->
                             Icon(
                                 if (star <= rating) Icons.Default.Star else Icons.Default.StarOutline,
                                 contentDescription = null,
@@ -126,98 +121,20 @@ fun ImageInspectorPanel(
                 }
             }
         }
-
-        // ── Tags ───────────────────────────────────────────────────
-        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        stringRes { inspectorTags },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (tags.isNotEmpty()) {
-                        TextButton(onClick = { onTagsChanged(emptyList()) }) {
-                            Text(stringRes { inspectorClear })
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Tag chips
-                if (tags.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        tags.forEach { tag ->
-                            InputChip(
-                                selected = true,
-                                onClick = { onTagsChanged(tags - tag) },
-                                label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
-                                trailingIcon = {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                // Add tag input
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newTagText,
-                        onValueChange = { newTagText = it },
-                        placeholder = { Text(stringRes { inspectorAddTag }) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = {
-                            if (newTagText.isNotBlank() && newTagText !in tags) {
-                                onTagsChanged(tags + newTagText.trim())
-                                newTagText = ""
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = stringRes { inspectorAdd })
-                    }
-                }
-            }
-        }
-
-        // ── AI Analysis ────────────────────────────────────────────
-        if (aiAnalysis != null) {
-            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        stringRes { inspectorAiAnalysis },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        aiAnalysis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
     }
+}
+
+private fun buildExifEntries(exif: com.alcedo.studio.data.model.ExifDisplayMetaData): List<Pair<String, String>> {
+    val entries = mutableListOf<Pair<String, String>>()
+    if (exif.cameraMake.isNotEmpty()) entries += "Camera Make" to exif.cameraMake
+    if (exif.cameraModel.isNotEmpty()) entries += "Camera Model" to exif.cameraModel
+    if (exif.lensModel.isNotEmpty()) entries += "Lens" to exif.lensModel
+    if (exif.focalLength.isNotEmpty()) entries += "Focal Length" to exif.focalLength
+    if (exif.aperture.isNotEmpty()) entries += "Aperture" to exif.aperture
+    if (exif.shutterSpeed.isNotEmpty()) entries += "Shutter Speed" to exif.shutterSpeed
+    if (exif.iso.isNotEmpty()) entries += "ISO" to exif.iso
+    if (exif.captureDate.isNotEmpty()) entries += "Capture Date" to exif.captureDate
+    return entries
 }
 
 @Composable

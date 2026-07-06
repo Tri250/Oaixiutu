@@ -457,14 +457,14 @@ class AiRatingService(
     // ── JSON Builder Helpers ──
 
     private fun buildJsonObject(builder: JsonObjectBuilder.() -> Unit): String {
-        return JsonObject(builder).toString()
+        return kotlinx.serialization.json.buildJsonObject(builder).toString()
     }
 
     private fun JsonObjectBuilder.putJsonArray(key: String, builder: JsonArrayBuilder.() -> Unit) {
-        put(key, JsonArray(builder))
+        put(key, kotlinx.serialization.json.buildJsonArray(builder))
     }
 
     private fun JsonObjectBuilder.putJsonObject(key: String, builder: JsonObjectBuilder.() -> Unit) {
-        put(key, JsonObject(builder))
+        put(key, kotlinx.serialization.json.buildJsonObject(builder))
     }
 }

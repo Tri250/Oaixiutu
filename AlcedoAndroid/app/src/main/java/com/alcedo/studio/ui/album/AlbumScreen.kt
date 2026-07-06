@@ -16,7 +16,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
-import androidx.compose.foundation.lazy.grid.animateItemPlacement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,7 +30,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -788,7 +789,7 @@ private fun ThumbnailCard(
             }
 
             // 选择指示器（带动画）
-            AnimatedVisibility(
+            this@Card.AnimatedVisibility(
                 visible = isSelected,
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
                 exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeOut()
@@ -1064,6 +1065,7 @@ fun FilterBottomSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FilterSheetContent(
     viewModel: AlbumViewModel,
@@ -1076,8 +1078,8 @@ private fun FilterSheetContent(
     var cameraMakes by remember { mutableStateOf(currentFilter?.cameraMakes?.toSet() ?: emptySet()) }
     var cameraModels by remember { mutableStateOf(currentFilter?.cameraModels?.toSet() ?: emptySet()) }
     var lensModel by remember { mutableStateOf(currentFilter?.lensModel ?: "") }
-    var startDate by remember { mutableStateOf(currentFilter?.startDate ?: "") }
-    var endDate by remember { mutableStateOf(currentFilter?.endDate ?: "") }
+    var startDate by remember { mutableStateOf(currentFilter?.startDate?.toString() ?: "") }
+    var endDate by remember { mutableStateOf(currentFilter?.endDate?.toString() ?: "") }
     var selectedRating by remember { mutableIntStateOf(currentFilter?.rating ?: 0) }
     var selectedFileTypes by remember { mutableStateOf(currentFilter?.fileTypes?.toSet() ?: emptySet()) }
     var selectedAiLabels by remember { mutableStateOf(currentFilter?.aiLabels?.toSet() ?: emptySet()) }
@@ -1114,8 +1116,8 @@ private fun FilterSheetContent(
                             cameraMakes = cameraMakes.toList(),
                             cameraModels = cameraModels.toList(),
                             lensModel = lensModel,
-                            startDate = startDate,
-                            endDate = endDate,
+                            startDate = startDate.toLongOrNull() ?: 0L,
+                            endDate = endDate.toLongOrNull() ?: Long.MAX_VALUE,
                             rating = selectedRating,
                             fileTypes = selectedFileTypes.toList(),
                             aiLabels = selectedAiLabels.toList()
@@ -1261,6 +1263,22 @@ enum class SortMode(val labelKey: StringResources.() -> String) {
 }
 
 /**
+ * Album filter state. All fields default to "no filter" so callers can
+ * construct a partial FilterState (e.g. `FilterState(rating = 4)` for
+ * the "favorites" smart album).
+ */
+data class FilterState(
+    val cameraMakes: List<String> = emptyList(),
+    val cameraModels: List<String> = emptyList(),
+    val lensModel: String = "",
+    val startDate: Long = 0L,
+    val endDate: Long = Long.MAX_VALUE,
+    val rating: Int = 0,
+    val fileTypes: List<String> = emptyList(),
+    val aiLabels: List<String> = emptyList()
+)
+
+/**
  * Star rating picker dialog. Replaces the previous hardcoded rating value (3)
  * wired into the context menu's "Rate" action.
  */
@@ -1345,6 +1363,4 @@ private fun RatingPickerDialog(
 }
 
 // 将 Bitmap 转换为 Compose 使用的 ImageBitmap 的辅助函数
-private fun android.graphics.Bitmap.asImageBitmap(): androidx.compose.ui.graphics.ImageBitmap {
-    return androidx.compose.ui.graphics.asImageBitmap()
-}
+// (Uses androidx.compose.ui.graphics.asImageBitmap extension directly via import.)
