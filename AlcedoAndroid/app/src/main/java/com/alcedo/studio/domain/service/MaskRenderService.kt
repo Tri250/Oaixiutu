@@ -82,7 +82,7 @@ class MaskRenderService(
     suspend fun renderMaskOverlay(
         containers: List<MaskContainer>,
         bitmap: Bitmap,
-        argbColor: Int = 0xCCFF3030
+        argbColor: Int = 0xCCFF3030.toInt()
     ): Bitmap = withContext(Dispatchers.Default) {
         val w = bitmap.width
         val h = bitmap.height

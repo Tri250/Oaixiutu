@@ -181,7 +181,7 @@ class PresetService(
     }
 
     /** Deletes a preset by id. */
-    suspend fun deletePreset(presetId: Long) = withContext(Dispatchers.IO) {
+    suspend fun deletePreset(presetId: Long): Unit = withContext(Dispatchers.IO) {
         presetDao.deleteById(presetId)
         thumbnailCache.remove(presetId)
     }

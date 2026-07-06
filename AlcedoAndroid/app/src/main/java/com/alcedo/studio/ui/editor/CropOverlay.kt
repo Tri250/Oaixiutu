@@ -57,7 +57,8 @@ fun CropOverlay(
     onCropChanged: (CropRect) -> Unit,
     modifier: Modifier = Modifier,
     aspectRatio: AspectRatio = AspectRatio.FREE,
-    showGrid: Boolean = true
+    showGrid: Boolean = true,
+    compositionOverlay: CompositionOverlayType = CompositionOverlayType.NONE
 ) {
     var dragHandle by remember { mutableStateOf(CropHandle.NONE) }
     var initialCropRect by remember { mutableStateOf(cropRect) }
@@ -162,8 +163,10 @@ fun CropOverlay(
             style = Stroke(width = 2f)
         )
 
-        // Rule of thirds grid
-        if (showGrid) {
+        // Rule of thirds grid (legacy) or composition overlay
+        if (compositionOverlay != CompositionOverlayType.NONE) {
+            drawCompositionOverlay(compositionOverlay, Rect(left, top, right, bottom))
+        } else if (showGrid) {
             val gridColor = Color.White.copy(alpha = 0.3f)
             for (i in 1..2) {
                 val gx = left + (right - left) * i / 3f

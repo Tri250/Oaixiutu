@@ -104,6 +104,16 @@ fun PresetPanel(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Precompute string resources in the @Composable scope so they can be
+    // referenced inside coroutines / try-catch blocks (composables cannot be
+    // invoked from those contexts).
+    val errorMsg = stringRes { error }
+    val importedMsg = stringRes { presetImported }
+    val exportedFmt = stringRes { presetExported }
+    val createdMsg = stringRes { presetCreated }
+    val editedMsg = stringRes { presetEdit }
+    val deletedMsg = stringRes { presetDeleted }
+
     // Show snackbar messages
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let {
@@ -125,10 +135,10 @@ fun PresetPanel(
                         tempFile.outputStream().use { output -> input.copyTo(output) }
                     }
                     presetService.importPreset(tempFile.absolutePath)
-                    snackbarMessage = stringRes { presetImported }
+                    snackbarMessage = importedMsg
                     tempFile.delete()
                 } catch (_: Throwable) {
-                    snackbarMessage = stringRes { error }
+                    snackbarMessage = errorMsg
                 } finally {
                     isBusy = false
                 }
@@ -208,9 +218,9 @@ fun PresetPanel(
                             try {
                                 val dir = File(context.getExternalFilesDir(null), "presets").apply { mkdirs() }
                                 val count = presetService.exportAllPresets(dir.absolutePath)
-                                snackbarMessage = "${stringRes { presetExported }.format(dir.absolutePath)} ($count)"
+                                snackbarMessage = "${exportedFmt.format(dir.absolutePath)} ($count)"
                             } catch (_: Throwable) {
-                                snackbarMessage = stringRes { error }
+                                snackbarMessage = errorMsg
                             } finally {
                                 isBusy = false
                             }
@@ -364,7 +374,7 @@ fun PresetPanel(
                         viewModel.applyPresetParams(params)
                         snackbarMessage = target.name
                     } catch (_: Throwable) {
-                        snackbarMessage = stringRes { error }
+                        snackbarMessage = errorMsg
                     } finally {
                         isBusy = false
                     }
@@ -384,10 +394,10 @@ fun PresetPanel(
                         val safeName = target.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
                         val out = File(dir, "$safeName.json")
                         val ok = presetService.exportPreset(target.id, out.absolutePath)
-                        snackbarMessage = if (ok) stringRes { presetExported }.format(out.absolutePath)
-                        else stringRes { error }
+                        snackbarMessage = if (ok) exportedFmt.format(out.absolutePath)
+                        else errorMsg
                     } catch (_: Throwable) {
-                        snackbarMessage = stringRes { error }
+                        snackbarMessage = errorMsg
                     } finally {
                         isBusy = false
                     }
@@ -408,7 +418,7 @@ fun PresetPanel(
             initialCategory = PresetService.CATEGORY_GENERAL,
             confirmLabel = stringRes { presetCreate },
             onDismiss = { showCreateDialog = false },
-            onConfirm = { name, category ->
+            onConfirm = { name, category, _ ->
                 showCreateDialog = false
                 scope.launch {
                     isBusy = true
@@ -419,9 +429,9 @@ fun PresetPanel(
                             params = viewModel.params.value,
                             thumbnailBitmap = currentPreview
                         )
-                        snackbarMessage = stringRes { presetCreated }
+                        snackbarMessage = createdMsg
                     } catch (_: Throwable) {
-                        snackbarMessage = stringRes { error }
+                        snackbarMessage = errorMsg
                     } finally {
                         isBusy = false
                     }
@@ -448,9 +458,9 @@ fun PresetPanel(
                     try {
                         val params = if (updateParams) viewModel.params.value else t.params
                         presetService.updatePreset(t.id, name, category, params)
-                        snackbarMessage = stringRes { presetEdit }
+                        snackbarMessage = editedMsg
                     } catch (_: Throwable) {
-                        snackbarMessage = stringRes { error }
+                        snackbarMessage = errorMsg
                     } finally {
                         isBusy = false
                     }
@@ -475,9 +485,9 @@ fun PresetPanel(
                             isBusy = true
                             try {
                                 presetService.deletePreset(t.id)
-                                snackbarMessage = stringRes { presetDeleted }
+                                snackbarMessage = deletedMsg
                             } catch (_: Throwable) {
-                                snackbarMessage = stringRes { error }
+                                snackbarMessage = errorMsg
                             } finally {
                                 isBusy = false
                             }

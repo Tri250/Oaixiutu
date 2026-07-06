@@ -354,6 +354,16 @@ data class PipelineParams(
     val geometryPerspectiveSrc: FloatArray = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
     val geometryPerspectiveDst: FloatArray = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
 
+    // Enhanced perspective transform (RapidRAW-style, all -100..+100)
+    val perspectiveDistortion: Float = 0f,
+    val perspectiveVertical: Float = 0f,
+    val perspectiveHorizontal: Float = 0f,
+    val perspectiveRotation: Float = 0f,
+    val perspectiveAspect: Float = 0f,
+    val perspectiveScale: Float = 0f,
+    val perspectiveXOffset: Float = 0f,
+    val perspectiveYOffset: Float = 0f,
+
     // Lens correction
     val lensK1: Float = 0f,
     val lensK2: Float = 0f,
@@ -364,6 +374,15 @@ data class PipelineParams(
     val lensCy: Float = 0.5f,
     val lensFocalRatio: Float = 1f,
     val lensVignetteStrength: Float = 0f,
+    val lensAutoDetect: Boolean = false,
+    val lensMaker: String = "",
+    val lensModel: String = "",
+    val lensCorrectDistortion: Boolean = false,
+    val lensCorrectVignette: Boolean = false,
+    val lensCorrectTca: Boolean = false,
+    val lensDistortionAmount: Float = 0f,
+    val lensVignetteAmount: Float = 0f,
+    val lensTcaAmount: Float = 0f,
 
     // DNG warp
     val dngWarpCoeffs: FloatArray = floatArrayOf(0f, 0f, 0f, 0f),

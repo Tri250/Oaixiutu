@@ -1256,6 +1256,25 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         map["lensP1"] = JsonPrimitive(p.lensP1)
         map["lensP2"] = JsonPrimitive(p.lensP2)
         map["lensVignetteStrength"] = JsonPrimitive(p.lensVignetteStrength)
+        // Enhanced perspective transform (RapidRAW-style)
+        map["perspectiveDistortion"] = JsonPrimitive(p.perspectiveDistortion)
+        map["perspectiveVertical"] = JsonPrimitive(p.perspectiveVertical)
+        map["perspectiveHorizontal"] = JsonPrimitive(p.perspectiveHorizontal)
+        map["perspectiveRotation"] = JsonPrimitive(p.perspectiveRotation)
+        map["perspectiveAspect"] = JsonPrimitive(p.perspectiveAspect)
+        map["perspectiveScale"] = JsonPrimitive(p.perspectiveScale)
+        map["perspectiveXOffset"] = JsonPrimitive(p.perspectiveXOffset)
+        map["perspectiveYOffset"] = JsonPrimitive(p.perspectiveYOffset)
+        // Lens profile + correction toggles/amounts
+        map["lensAutoDetect"] = JsonPrimitive(p.lensAutoDetect)
+        map["lensMaker"] = JsonPrimitive(p.lensMaker)
+        map["lensModel"] = JsonPrimitive(p.lensModel)
+        map["lensCorrectDistortion"] = JsonPrimitive(p.lensCorrectDistortion)
+        map["lensCorrectVignette"] = JsonPrimitive(p.lensCorrectVignette)
+        map["lensCorrectTca"] = JsonPrimitive(p.lensCorrectTca)
+        map["lensDistortionAmount"] = JsonPrimitive(p.lensDistortionAmount)
+        map["lensVignetteAmount"] = JsonPrimitive(p.lensVignetteAmount)
+        map["lensTcaAmount"] = JsonPrimitive(p.lensTcaAmount)
         map["channelMixerMonochrome"] = JsonPrimitive(p.channelMixerMonochrome)
         // HSL / channelMixerMatrix / toneCurve 数组通过索引展开
         p.hslHueShift.forEachIndexed { i, v -> map["hslHueShift[$i]"] = JsonPrimitive(v) }
@@ -1378,6 +1397,23 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 lensP1 = f("lensP1"),
                 lensP2 = f("lensP2"),
                 lensVignetteStrength = f("lensVignetteStrength"),
+                perspectiveDistortion = f("perspectiveDistortion"),
+                perspectiveVertical = f("perspectiveVertical"),
+                perspectiveHorizontal = f("perspectiveHorizontal"),
+                perspectiveRotation = f("perspectiveRotation"),
+                perspectiveAspect = f("perspectiveAspect"),
+                perspectiveScale = f("perspectiveScale"),
+                perspectiveXOffset = f("perspectiveXOffset"),
+                perspectiveYOffset = f("perspectiveYOffset"),
+                lensAutoDetect = json["lensAutoDetect"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                lensMaker = json["lensMaker"]?.jsonPrimitive?.content ?: "",
+                lensModel = json["lensModel"]?.jsonPrimitive?.content ?: "",
+                lensCorrectDistortion = json["lensCorrectDistortion"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                lensCorrectVignette = json["lensCorrectVignette"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                lensCorrectTca = json["lensCorrectTca"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                lensDistortionAmount = f("lensDistortionAmount"),
+                lensVignetteAmount = f("lensVignetteAmount"),
+                lensTcaAmount = f("lensTcaAmount"),
                 channelMixerMatrix = channelMixer,
                 channelMixerMonochrome = json["channelMixerMonochrome"]?.jsonPrimitive?.content?.toBoolean() ?: false,
                 hslHueShift = hslHueShift,

@@ -77,14 +77,15 @@ class UltraHdrWriter private constructor(private val context: Context) {
         // 2. Build the gain-map bitmap from the SDR/HDR luminance ratio.
         val gainmapBitmap = createGainmap(baseBitmap, hdrBitmap)
 
-        // 3. Wrap the gain-map bitmap with ISO 21496-1 metadata.
-        val gainmap = android.graphics.Gainmap(gainmapBitmap).apply {
-            ratioMax = RATIO_MAX
-            ratioMin = RATIO_MIN
-            gamma = GAMMA
-            epsilonSdr = EPSILON
-            epsilonHdr = EPSILON
-        }
+        // 3. Wrap the gain-map bitmap with ISO 21496-1 metadata. The Gainmap
+        //    setters take per-channel (R, G, B) float values; for a single-plane
+        //    gainmap all three channels must be identical.
+        val gainmap = android.graphics.Gainmap(gainmapBitmap)
+        gainmap.setRatioMax(RATIO_MAX, RATIO_MAX, RATIO_MAX)
+        gainmap.setRatioMin(RATIO_MIN, RATIO_MIN, RATIO_MIN)
+        gainmap.setGamma(GAMMA, GAMMA, GAMMA)
+        gainmap.setEpsilonSdr(EPSILON, EPSILON, EPSILON)
+        gainmap.setEpsilonHdr(EPSILON, EPSILON, EPSILON)
 
         // 4. Attach the gainmap to the base SDR bitmap.
         baseBitmap.setGainmap(gainmap)

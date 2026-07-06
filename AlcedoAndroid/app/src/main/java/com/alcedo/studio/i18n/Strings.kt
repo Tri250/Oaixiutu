@@ -230,6 +230,34 @@ interface StringResources {
     val ratio3_1: String
     val ratio9_16: String
 
+    // Composition & perspective overlays
+    val cropOverlayNone: String
+    val cropOverlayThirds: String
+    val cropOverlayDiagonal: String
+    val cropOverlayTriangle: String
+    val cropOverlayGoldenSpiral: String
+    val cropOverlayPhiGrid: String
+    val cropOverlayArmature: String
+    val cropOverlayCycle: String
+    val cropCompositionGuide: String
+    val cropPerspectiveTransform: String
+    val cropDistortion: String
+    val cropVerticalPerspective: String
+    val cropHorizontalPerspective: String
+    val cropRotationFine: String
+    val cropAspect: String
+    val cropScale: String
+    val cropXOffset: String
+    val cropYOffset: String
+    val cropLensCorrection: String
+    val cropLensAutoDetect: String
+    val cropLensMaker: String
+    val cropLensModel: String
+    val cropCorrectDistortion: String
+    val cropCorrectVignette: String
+    val cropCorrectTca: String
+    val cropAmount: String
+
     // Effects panel
     val editorSectionFilmGrain: String
     val effectsResetGrain: String

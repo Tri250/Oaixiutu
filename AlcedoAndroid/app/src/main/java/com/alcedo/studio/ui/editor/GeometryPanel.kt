@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,6 +23,7 @@ fun GeometryPanel(
 ) {
     val params by remember { viewModel.params }
     var selectedAspectRatio by remember { mutableStateOf(AspectRatio.FREE) }
+    var selectedOverlay by remember { mutableStateOf(CompositionOverlayType.NONE) }
     val view = LocalView.current
 
     Column(
@@ -261,7 +263,38 @@ fun GeometryPanel(
             }
         }
 
-        // ── Perspective Correction ─────────────────────────────────
+        // ── Composition Guide ─────────────────────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    stringRes { cropCompositionGuide },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                CompositionOverlaySelector(
+                    selected = selectedOverlay,
+                    onSelect = {
+                        HapticFeedback.click(view)
+                        selectedOverlay = it
+                    }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    CompositionOverlay(
+                        overlayType = selectedOverlay,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        // ── Perspective Transform ─────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -270,7 +303,7 @@ fun GeometryPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        stringRes { editorSectionPerspective },
+                        stringRes { cropPerspectiveTransform },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -279,7 +312,14 @@ fun GeometryPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.updateParams(
                                 params.copy(
-                                    geometryPerspectiveDst = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+                                    perspectiveDistortion = 0f,
+                                    perspectiveVertical = 0f,
+                                    perspectiveHorizontal = 0f,
+                                    perspectiveRotation = 0f,
+                                    perspectiveAspect = 0f,
+                                    perspectiveScale = 0f,
+                                    perspectiveXOffset = 0f,
+                                    perspectiveYOffset = 0f
                                 )
                             )
                         },
@@ -295,30 +335,30 @@ fun GeometryPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
 
-                AdjustmentSlider(
-                    label = stringRes { editorHorizontal },
-                    value = (params.geometryPerspectiveDst[0] + params.geometryPerspectiveDst[2]) / 2f,
-                    range = -0.5f..0.5f,
-                    onValueChange = {
-                        val newPersp = params.geometryPerspectiveDst.clone()
-                        newPersp[0] = 0f + it
-                        newPersp[2] = 1f + it
-                        viewModel.updateParams(params.copy(geometryPerspectiveDst = newPersp))
-                    },
-                    defaultValue = 0f
-                )
-                AdjustmentSlider(
-                    label = stringRes { editorVertical },
-                    value = (params.geometryPerspectiveDst[1] + params.geometryPerspectiveDst[5]) / 2f,
-                    range = -0.5f..0.5f,
-                    onValueChange = {
-                        val newPersp = params.geometryPerspectiveDst.clone()
-                        newPersp[1] = 0f + it
-                        newPersp[5] = 1f + it
-                        viewModel.updateParams(params.copy(geometryPerspectiveDst = newPersp))
-                    },
-                    defaultValue = 0f
-                )
+                PerspectiveTransformSlider(stringRes { cropDistortion }, params.perspectiveDistortion) {
+                    viewModel.updateParams(params.copy(perspectiveDistortion = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropVerticalPerspective }, params.perspectiveVertical) {
+                    viewModel.updateParams(params.copy(perspectiveVertical = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropHorizontalPerspective }, params.perspectiveHorizontal) {
+                    viewModel.updateParams(params.copy(perspectiveHorizontal = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropRotationFine }, params.perspectiveRotation) {
+                    viewModel.updateParams(params.copy(perspectiveRotation = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropAspect }, params.perspectiveAspect) {
+                    viewModel.updateParams(params.copy(perspectiveAspect = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropScale }, params.perspectiveScale) {
+                    viewModel.updateParams(params.copy(perspectiveScale = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropXOffset }, params.perspectiveXOffset) {
+                    viewModel.updateParams(params.copy(perspectiveXOffset = it))
+                }
+                PerspectiveTransformSlider(stringRes { cropYOffset }, params.perspectiveYOffset) {
+                    viewModel.updateParams(params.copy(perspectiveYOffset = it))
+                }
             }
         }
 
@@ -331,14 +371,31 @@ fun GeometryPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        stringRes { editorSectionLensCorrection },
+                        stringRes { cropLensCorrection },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateLensCorrection(0f, 0f, 0f, 0f, 0f)
+                            viewModel.updateParams(
+                                params.copy(
+                                    lensK1 = 0f,
+                                    lensK2 = 0f,
+                                    lensK3 = 0f,
+                                    lensP1 = 0f,
+                                    lensP2 = 0f,
+                                    lensAutoDetect = false,
+                                    lensMaker = "",
+                                    lensModel = "",
+                                    lensCorrectDistortion = false,
+                                    lensCorrectVignette = false,
+                                    lensCorrectTca = false,
+                                    lensDistortionAmount = 0f,
+                                    lensVignetteAmount = 0f,
+                                    lensTcaAmount = 0f
+                                )
+                            )
                         },
                         modifier = Modifier.size(24.dp)
                     ) {
@@ -352,6 +409,147 @@ fun GeometryPanel(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
 
+                // Auto-detect toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { cropLensAutoDetect },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = params.lensAutoDetect,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updateParams(params.copy(lensAutoDetect = it))
+                        },
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Manual lens fields
+                OutlinedTextField(
+                    value = params.lensMaker,
+                    onValueChange = { viewModel.updateParams(params.copy(lensMaker = it)) },
+                    label = { Text(stringRes { cropLensMaker }, style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !params.lensAutoDetect
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = params.lensModel,
+                    onValueChange = { viewModel.updateParams(params.copy(lensModel = it)) },
+                    label = { Text(stringRes { cropLensModel }, style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !params.lensAutoDetect
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Correction toggles + amounts
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { cropCorrectDistortion },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = params.lensCorrectDistortion,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updateParams(params.copy(lensCorrectDistortion = it))
+                        },
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
+                if (params.lensCorrectDistortion) {
+                    AdjustmentSlider(
+                        label = stringRes { cropAmount },
+                        value = params.lensDistortionAmount,
+                        range = 0f..100f,
+                        onValueChange = {
+                            viewModel.updateParams(params.copy(lensDistortionAmount = it))
+                        },
+                        defaultValue = 0f,
+                        valueDisplayTransform = { "%.0f%%".format(it) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { cropCorrectVignette },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = params.lensCorrectVignette,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updateParams(params.copy(lensCorrectVignette = it))
+                        },
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
+                if (params.lensCorrectVignette) {
+                    AdjustmentSlider(
+                        label = stringRes { cropAmount },
+                        value = params.lensVignetteAmount,
+                        range = 0f..100f,
+                        onValueChange = {
+                            viewModel.updateParams(params.copy(lensVignetteAmount = it))
+                        },
+                        defaultValue = 0f,
+                        valueDisplayTransform = { "%.0f%%".format(it) }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { cropCorrectTca },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = params.lensCorrectTca,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updateParams(params.copy(lensCorrectTca = it))
+                        },
+                        modifier = Modifier.height(24.dp)
+                    )
+                }
+                if (params.lensCorrectTca) {
+                    AdjustmentSlider(
+                        label = stringRes { cropAmount },
+                        value = params.lensTcaAmount,
+                        range = 0f..100f,
+                        onValueChange = {
+                            viewModel.updateParams(params.copy(lensTcaAmount = it))
+                        },
+                        defaultValue = 0f,
+                        valueDisplayTransform = { "%.0f%%".format(it) }
+                    )
+                }
+
+                // Legacy manual K1/K2 sliders (always visible for advanced use)
+                Spacer(modifier = Modifier.height(4.dp))
                 AdjustmentSlider(
                     label = stringRes { geometryDistortionK1 },
                     value = params.lensK1,
@@ -377,6 +575,22 @@ fun GeometryPanel(
             }
         }
     }
+}
+
+/** Convenience wrapper: -100..+100 slider for perspective transform parameters. */
+@Composable
+private fun PerspectiveTransformSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit
+) {
+    AdjustmentSlider(
+        label = label,
+        value = value,
+        range = -100f..100f,
+        onValueChange = onValueChange,
+        defaultValue = 0f
+    )
 }
 
 /**
