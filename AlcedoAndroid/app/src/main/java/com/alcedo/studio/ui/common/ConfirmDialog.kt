@@ -2,7 +2,14 @@ package com.alcedo.studio.ui.common
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import com.alcedo.studio.i18n.stringRes
+
+/**
+ * CompositionLocal that tracks whether editor interactions are currently
+ * enabled (e.g. disabled while a preview is regenerating).
+ */
+val LocalEditorEnabled = compositionLocalOf<Boolean> { true }
 
 @Composable
 fun ConfirmDialog(

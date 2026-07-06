@@ -61,13 +61,13 @@ fun CropOverlay(
 ) {
     var dragHandle by remember { mutableStateOf(CropHandle.NONE) }
     var initialCropRect by remember { mutableStateOf(cropRect) }
+    val accCropOverlayDesc = stringRes { accCropOverlay }
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .semantics {
-                contentDescription = stringRes { accCropOverlay }
-                role = Role.Slider
+                contentDescription = accCropOverlayDesc
                 stateDescription = "Crop: L=${(cropRect.left * 100).toInt()}%, T=${(cropRect.top * 100).toInt()}%, R=${(cropRect.right * 100).toInt()}%, B=${(cropRect.bottom * 100).toInt()}%"
             }
             .pointerInput(aspectRatio) {

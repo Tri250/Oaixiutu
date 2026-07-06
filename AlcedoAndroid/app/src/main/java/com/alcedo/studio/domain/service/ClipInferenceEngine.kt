@@ -196,16 +196,16 @@ class ClipInferenceEngine(private val context: Context) {
             }
 
             try {
-                val config = activeModelConfig ?: return FloatArray(embeddingDim)
-                val env = ortEnv ?: return FloatArray(embeddingDim)
+                val config = activeModelConfig ?: return@withContext FloatArray(embeddingDim)
+                val env = ortEnv ?: return@withContext FloatArray(embeddingDim)
                 val inputTensor = preprocessImage(bitmap, config.imageSize, env)
 
-                val session = visionSession ?: return FloatArray(embeddingDim)
+                val session = visionSession ?: return@withContext FloatArray(embeddingDim)
                 val inputName = resolveVisionInputName(session)
                 val inputMap = mapOf(inputName to inputTensor)
 
                 val output = session.run(inputMap)
-                val outputTensor = output[0].value as? Array<FloatArray> ?: return FloatArray(embeddingDim)
+                val outputTensor = output[0].value as? Array<FloatArray> ?: return@withContext FloatArray(embeddingDim)
 
                 val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)
@@ -238,19 +238,19 @@ class ClipInferenceEngine(private val context: Context) {
                     attentionMask[i] = if (tokenIds[i] != ClipTokenizer.PAD_TOKEN.toLong()) 1L else 0L
                 }
 
-                val env = ortEnv ?: return FloatArray(embeddingDim)
+                val env = ortEnv ?: return@withContext FloatArray(embeddingDim)
                 val inputIdsTensor = OnnxTensor.createTensor(env, arrayOf(tokenIds))
                 val attentionMaskTensor = OnnxTensor.createTensor(env, arrayOf(attentionMask))
 
-                val session = textSession ?: return FloatArray(embeddingDim)
+                val session = textSession ?: return@withContext FloatArray(embeddingDim)
                 val inputNames = resolveTextInputNames(session)
                 val inputMap = mutableMapOf<String, OnnxTensor>()
                 inputMap[inputNames.first] = inputIdsTensor
-                val attentionName = inputNames.second ?: return FloatArray(embeddingDim)
+                val attentionName = inputNames.second ?: return@withContext FloatArray(embeddingDim)
                 inputMap[attentionName] = attentionMaskTensor
 
                 val output = session.run(inputMap)
-                val outputTensor = output[0].value as? Array<FloatArray> ?: return FloatArray(embeddingDim)
+                val outputTensor = output[0].value as? Array<FloatArray> ?: return@withContext FloatArray(embeddingDim)
 
                 val embedding = outputTensor[0].copyOf()
                 normalizeEmbedding(embedding)

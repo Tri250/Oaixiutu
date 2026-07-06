@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * Mobile-idiomatic batch export dialog rendered as a ModalBottomSheet.
  * Replaces the previous desktop-style AlertDialog that overflowed on small screens.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AlbumExportDialog(
     images: List<ImageModel>,

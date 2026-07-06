@@ -45,14 +45,14 @@ fun ToneCurveView(
 
     var draggedPointIndex by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
+    val accToneCurveDesc = stringRes { accToneCurve }.format(controlPoints.size)
 
     Canvas(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .semantics {
-                contentDescription = stringRes { accToneCurve }.format(controlPoints.size)
-                role = Role.Slider
+                contentDescription = accToneCurveDesc
                 stateDescription = "${controlPoints.size} control points"
             }
             .pointerInput(controlPoints) {

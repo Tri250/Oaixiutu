@@ -1,6 +1,7 @@
 package com.alcedo.studio.ui.export
 
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -51,24 +52,26 @@ fun ExportScreen(
     val scope = rememberCoroutineScope()
 
     // Directory picker for output path
+    val context = LocalContext.current
     val directoryPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: android.net.Uri? ->
         if (uri != null) {
             val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            LocalContext.current.contentResolver.takePersistableUriPermission(uri, flags)
+            context.contentResolver.takePersistableUriPermission(uri, flags)
             viewModel.outputPath = uri.toString()
         }
     }
 
     // Multiple image picker for batch export
+    var batchImageUris by remember { mutableStateOf<List<String>>(emptyList()) }
     val batchImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<android.net.Uri> ->
         for (uri in uris) {
-            if (uri.toString() !in viewModel.batchImageIds) {
-                viewModel.batchImageIds = viewModel.batchImageIds + uri.toString()
+            if (uri.toString() !in batchImageUris) {
+                batchImageUris = batchImageUris + uri.toString()
             }
         }
     }
@@ -266,9 +269,9 @@ fun ExportScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (viewModel.batchImageIds.isNotEmpty()) {
+                if (batchImageUris.isNotEmpty()) {
                     Text(
-                        stringRes { exportBatchSelected }.format("${viewModel.batchImageIds.size}"),
+                        stringRes { exportBatchSelected }.format("${batchImageUris.size}"),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -304,8 +307,7 @@ fun ExportScreen(
                             } else {
                                 stringRes { exportExporting }
                             },
-                            showPercentage = true,
-                            onCancel = if (isExporting) ({ viewModel.cancelExport() }) else null
+                            onCancel = { viewModel.cancelExport() }
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -409,8 +411,8 @@ fun ExportScreen(
             Button(
                 onClick = {
                 viewModel.resetState()
-                if (viewModel.showBatchExport && viewModel.batchImageIds.isNotEmpty()) {
-                    viewModel.exportBatchByIds(viewModel.batchImageIds)
+                if (viewModel.showBatchExport && batchImageUris.isNotEmpty()) {
+                    viewModel.exportBatchByIds(batchImageUris)
                 } else {
                     viewModel.exportSingleById(imageId)
                 }

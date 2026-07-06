@@ -14,6 +14,14 @@ local.properties
 *.o
 *.so
 *.a
+.cxx/
+compile_commands.json
+*.ninja
+*.ninja_deps
+*.ninja_log
+CMakeCache.txt
+build.ninja
+configure_fingerprint.bin
 
 # OS files
 .DS_Store

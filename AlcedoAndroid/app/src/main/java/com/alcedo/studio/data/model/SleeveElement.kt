@@ -859,7 +859,7 @@ data class CameraFilterNode(
         cameraModel?.let { conditions.add("camera_model LIKE '%' || ? || '%'") }
         return conditions.joinToString(" AND ")
     }
-    override fun getBindArgs(): Array<Any?> = arrayOfNotNull(cameraMake, cameraModel)
+    override fun getBindArgs(): Array<Any?> = listOf(cameraMake, cameraModel).filterNotNull().toTypedArray()
     override fun toJson(): String = """{"type":"CAMERA","cameraMake":"$cameraMake","cameraModel":"$cameraModel"}"""
     override fun fromJson(json: String) {
         val obj = JSONObject(json)
@@ -878,7 +878,7 @@ data class LensFilterNode(
 ) : SleeveFilter(FilterType.EXIF) {
     override fun resetFilter() { lensModel = null }
     override fun getPredicate(): String = lensModel?.let { "lens_model LIKE '%' || ? || '%'" } ?: ""
-    override fun getBindArgs(): Array<Any?> = arrayOfNotNull(lensModel)
+    override fun getBindArgs(): Array<Any?> = listOf(lensModel).filterNotNull().toTypedArray()
     override fun toJson(): String = """{"type":"LENS","lensModel":"$lensModel"}"""
     override fun fromJson(json: String) {
         val obj = JSONObject(json)

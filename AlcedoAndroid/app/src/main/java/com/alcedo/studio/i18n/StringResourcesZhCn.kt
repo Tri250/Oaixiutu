@@ -530,13 +530,11 @@ class ChineseSimplifiedStrings : StringResources {
     // ── AI 模型管理页 ──────────────────────────────────────────────────
     override val aiModelPrivacy = "本地运行 · 隐私安全"
     override val aiModelPrivacyDesc = "所有 AI 推理在本地完成，不上传任何图片到云端"
-    override val aiModelDownloaded = "已下载 %s/%s 个模型 · %sMB"
     override val aiModelUsage = "模型使用说明"
     override val aiModelRequired = "必需"
     override val aiModelDeleteTitle = "删除模型"
     override val aiModelDeleteMessage = "确定要删除模型 \"%s\" 吗？此操作不可撤销。"
     override val aiModelDownloadFailed = "下载失败"
-    override val aiModelDownloading = "下载中"
 
     // ── 编辑器补充 ─────────────────────────────────────────────────────
     override val editorUnsavedTitle = "未保存的修改"
@@ -664,8 +662,6 @@ class ChineseSimplifiedStrings : StringResources {
     override val sliderReset = "重置"
     override val compareOriginal = "原图"
     override val compareEdited = "已编辑"
-    override val compareBefore = "原图"
-    override val compareAfter = "编辑后"
 
     // Background task bar
     override val tasksCompleted = "%s 个任务已完成"
