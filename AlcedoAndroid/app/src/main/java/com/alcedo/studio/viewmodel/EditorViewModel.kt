@@ -25,6 +25,7 @@ import com.alcedo.studio.ui.editor.ScopeAnalyzer
 import com.alcedo.studio.ui.editor.WaveformMode
 import com.alcedo.studio.ui.editor.BrushState
 import com.alcedo.studio.ui.editor.CompareMode
+import com.alcedo.studio.utils.MemoryGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -383,12 +384,24 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         }
                         BitmapFactory.decodeFile(it.imagePath, options)
 
-                        // Calculate sample size for large images
-                        val sampleSize = calculateSampleSize(options.outWidth, options.outHeight)
+                        // Calculate sample size with MemoryGuard protection
+                        val rawSampleSize = calculateSampleSize(options.outWidth, options.outHeight)
+                        val estimatedBytes = MemoryGuard.estimateBitmapBytes(
+                            options.outWidth / rawSampleSize, options.outHeight / rawSampleSize
+                        )
+                        val finalSampleSize = if (!MemoryGuard.canAllocateBitmap(estimatedBytes)) {
+                            // Increase sampling to fit available memory
+                            MemoryGuard.calculateSafeSampleSize(
+                                options.outWidth, options.outHeight,
+                                MemoryGuard.availableHeapBytes() - 32L * 1024 * 1024 // 32MB overhead
+                            )
+                        } else {
+                            rawSampleSize
+                        }
 
                         // Load with sampling
                         val decodeOptions = BitmapFactory.Options().apply {
-                            inSampleSize = sampleSize
+                            inSampleSize = finalSampleSize
                             inPreferredConfig = Bitmap.Config.ARGB_8888
                         }
                         BitmapFactory.decodeFile(it.imagePath, decodeOptions)

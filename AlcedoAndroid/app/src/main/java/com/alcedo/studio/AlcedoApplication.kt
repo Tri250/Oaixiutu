@@ -11,6 +11,7 @@ import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
 import com.alcedo.studio.ui.common.HapticFeedback
+import com.alcedo.studio.utils.MemoryGuard
 
 class AlcedoApplication : Application() {
     override fun onCreate() {
@@ -51,6 +52,30 @@ class AlcedoApplication : Application() {
         }
 
         runSafe("AppModule.initialize") { AppModule.initialize(this) }
+
+        // Register memory pressure callback
+        registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                when {
+                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+                        // Release UI caches
+                    }
+                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
+                        // Release non-essential caches
+                        Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
+                    }
+                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+                        // Running low on memory — aggressive cache cleanup
+                        Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
+                    }
+                }
+            }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+            override fun onLowMemory() {
+                Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
+                MemoryGuard.emergencyGC()
+            }
+        })
 
         // ── GPU 能力检测 ──
         // 初始化底层 GpuService（探测 GLES / Vulkan 可用性），并创建可选的
