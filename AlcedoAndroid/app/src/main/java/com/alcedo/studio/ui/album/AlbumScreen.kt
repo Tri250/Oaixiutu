@@ -159,11 +159,10 @@ fun AlbumScreen(
                             scope.launch { drawerState.close() }
                         },
                         onSmartAlbumSelected = { type ->
-                            // 智能相册：根据类型应用对应筛选/排序
                             when (type) {
                                 "favorites" -> viewModel.applyFilter(FilterState(rating = 4))
                                 "recent" -> viewModel.setSortMode(SortMode.DATE)
-                                "to_export" -> { /* 待导出：保留入口，筛选逻辑后续扩展 */ }
+                                "to_export" -> viewModel.applyFilter(FilterState(rating = 3))
                             }
                             scope.launch { drawerState.close() }
                         },

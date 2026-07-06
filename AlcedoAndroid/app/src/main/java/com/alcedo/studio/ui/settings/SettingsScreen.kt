@@ -30,7 +30,7 @@ import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
 
-private val APP_VERSION = BuildConfig.VERSION_NAME.ifBlank { "1.1.5" }
+private val APP_VERSION = BuildConfig.VERSION_NAME
 private const val DEVELOPER_NAME = "带娃的小陈工"
 private val DEFAULT_EXPORT_PATH = ""  // 使用系统默认存储路径
 

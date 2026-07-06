@@ -260,13 +260,28 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // Take persistable read permission so thumbnail generation
+                // and later access don't throw SecurityException
+                val resolver = AppModule.context.contentResolver
                 for (uri in uris) {
-                    importService.importImage(uri)
+                    try {
+                        resolver.takePersistableUriPermission(
+                            uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) {
+                        // Photo Picker URIs may not support persistable permission;
+                        // that's OK — we still have read access for this process.
+                    }
                 }
+
+                // Use two-phase import for better UX (fast scan + background metadata)
+                importService.importTwoPhase(uris)
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
+                _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
             } finally {
                 _isLoading.value = false
             }

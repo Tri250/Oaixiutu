@@ -959,7 +959,7 @@ class ImportService(
     }
 
     private fun generateImageId(): Long {
-        return (System.nanoTime() / 1000) + (Math.random() * 1000).toLong()
+        return java.util.UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
     }
 
     private fun buildCancelledResult(

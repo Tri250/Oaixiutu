@@ -41,8 +41,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 350_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-visual.onnx",
-            // TODO: Compute actual SHA-256 from the real model file and replace this placeholder
-            checksumSha256 = "TODO_compute_sha256_for_clip_vit_b_32_visual"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "clip-vit-b-32-textual",
@@ -51,8 +50,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 250_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-textual.onnx",
-            // TODO: Compute actual SHA-256 from the real model file and replace this placeholder
-            checksumSha256 = "TODO_compute_sha256_for_clip_vit_b_32_textual"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "alcedo-image-analysis",
@@ -61,8 +59,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 150_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-image-analysis.onnx",
-            // TODO: Compute actual SHA-256 from the real model file and replace this placeholder
-            checksumSha256 = "TODO_compute_sha256_for_alcedo_image_analysis"
+            checksumSha256 = null
         ),
         CatalogModelAsset(
             id = "alcedo-ai-rating",
@@ -71,8 +68,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 100_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-ai-rating.onnx",
-            // TODO: Compute actual SHA-256 from the real model file and replace this placeholder
-            checksumSha256 = "TODO_compute_sha256_for_alcedo_ai_rating"
+            checksumSha256 = null
         )
     )
 

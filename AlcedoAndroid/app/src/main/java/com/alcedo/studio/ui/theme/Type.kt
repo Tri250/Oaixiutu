@@ -9,12 +9,20 @@ import androidx.compose.ui.unit.sp
 import com.alcedo.studio.R
 
 // ═══════════════════════════════════════════════════════════════════
-// 2026 Flagship Typography System – OPPO Sans
+// 2026 Flagship Typography System – OPPO Sans + Noto Sans SC fallback
 // ═══════════════════════════════════════════════════════════════════
 // OPPO Sans:理性人文主义设计哲学,几何骨架+东方书法笔意
 // 字面率86%-88%,高于思源黑体,文本块密度均衡、呼吸感强
+// Noto Sans SC 作为兜底字体确保生僻字覆盖
 // ═══════════════════════════════════════════════════════════════════
 
+private val OppoSansFamily = FontFamily(
+    Font(R.font.opposans_regular, FontWeight.Normal),
+    Font(R.font.opposans_medium, FontWeight.Medium),
+    Font(R.font.opposans_bold, FontWeight.Bold),
+)
+
+// 主字体:OPPO Sans 优先,系统 Sans 兜底(覆盖生僻字/特殊符号)
 val AlcedoFontFamily = FontFamily(
     Font(R.font.opposans_regular, FontWeight.Normal),
     Font(R.font.opposans_medium, FontWeight.Medium),

@@ -125,37 +125,36 @@ fun LiquidGlassSurface(
     val (tint, border, highlight) = glassColors()
 
     Box(
-        modifier = modifier
-            .clip(shape)
-            .glassBlur(LiquidGlassDefaults.SURFACE_BLUR)
-            .drawBehind {
-                // Multi-layer glass background:
-                // 1. Base tint fill
-                drawRect(tint)
-                // 2. Top highlight line (light refraction simulation)
-                drawLine(
-                    highlight, Offset(0f, 0f), Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx()
-                )
-                // 3. Subtle inner glow at top
-                val glowBrush = Brush.verticalGradient(
-                    colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
-                    startY = 0f,
-                    endY = size.height * 0.15f
-                )
-                drawRect(glowBrush)
-            }
-            .border(
-                width = 0.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(border, border.copy(alpha = 0.05f)),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                ),
-                shape = shape
-            ),
+        modifier = modifier.clip(shape),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassBlur(LiquidGlassDefaults.SURFACE_BLUR)
+                .drawBehind {
+                    drawRect(tint)
+                    drawLine(
+                        highlight, Offset(0f, 0f), Offset(size.width, 0f),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    val glowBrush = Brush.verticalGradient(
+                        colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
+                        startY = 0f,
+                        endY = size.height * 0.15f
+                    )
+                    drawRect(glowBrush)
+                }
+                .border(
+                    width = 0.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(border, border.copy(alpha = 0.05f)),
+                        start = Offset(0f, 0f),
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                    ),
+                    shape = shape
+                )
+        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             content = content
@@ -172,33 +171,36 @@ fun LiquidGlassPanel(
     val (tint, border, highlight) = glassColors()
 
     Box(
-        modifier = modifier
-            .clip(shape)
-            .glassBlur(LiquidGlassDefaults.PANEL_BLUR)
-            .drawBehind {
-                drawRect(tint)
-                drawLine(
-                    highlight, Offset(0f, 0f), Offset(size.width, 0f),
-                    strokeWidth = 1.5.dp.toPx()
-                )
-                val glowBrush = Brush.verticalGradient(
-                    colors = listOf(highlight.copy(alpha = 0.08f), Color.Transparent),
-                    startY = 0f,
-                    endY = size.height * 0.2f
-                )
-                drawRect(glowBrush)
-            }
-            .border(
-                width = 0.75.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(border, border.copy(alpha = 0.06f)),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                ),
-                shape = shape
-            ),
+        modifier = modifier.clip(shape),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassBlur(LiquidGlassDefaults.PANEL_BLUR)
+                .drawBehind {
+                    drawRect(tint)
+                    drawLine(
+                        highlight, Offset(0f, 0f), Offset(size.width, 0f),
+                        strokeWidth = 1.5.dp.toPx()
+                    )
+                    val glowBrush = Brush.verticalGradient(
+                        colors = listOf(highlight.copy(alpha = 0.08f), Color.Transparent),
+                        startY = 0f,
+                        endY = size.height * 0.2f
+                    )
+                    drawRect(glowBrush)
+                }
+                .border(
+                    width = 0.75.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(border, border.copy(alpha = 0.06f)),
+                        start = Offset(0f, 0f),
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                    ),
+                    shape = shape
+                )
+        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             content = content
@@ -215,33 +217,36 @@ fun LiquidGlassFloating(
     val (tint, border, highlight) = glassColors()
 
     Box(
-        modifier = modifier
-            .clip(shape)
-            .glassBlur(LiquidGlassDefaults.FLOATING_BLUR)
-            .drawBehind {
-                drawRect(tint)
-                drawLine(
-                    highlight, Offset(0f, 0f), Offset(size.width, 0f),
-                    strokeWidth = 2.dp.toPx()
-                )
-                val glowBrush = Brush.verticalGradient(
-                    colors = listOf(highlight.copy(alpha = 0.1f), Color.Transparent),
-                    startY = 0f,
-                    endY = size.height * 0.3f
-                )
-                drawRect(glowBrush)
-            }
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(border, border.copy(alpha = 0.08f)),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                ),
-                shape = shape
-            ),
+        modifier = modifier.clip(shape),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassBlur(LiquidGlassDefaults.FLOATING_BLUR)
+                .drawBehind {
+                    drawRect(tint)
+                    drawLine(
+                        highlight, Offset(0f, 0f), Offset(size.width, 0f),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                    val glowBrush = Brush.verticalGradient(
+                        colors = listOf(highlight.copy(alpha = 0.1f), Color.Transparent),
+                        startY = 0f,
+                        endY = size.height * 0.3f
+                    )
+                    drawRect(glowBrush)
+                }
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(border, border.copy(alpha = 0.08f)),
+                        start = Offset(0f, 0f),
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                    ),
+                    shape = shape
+                )
+        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             content = content
@@ -259,32 +264,38 @@ fun LiquidGlassToolbar(
 
     Box(
         modifier = modifier
-            .clip(shape)
-            .glassBlur(LiquidGlassDefaults.PANEL_BLUR)
-            .drawBehind {
-                drawRect(tint)
-                drawLine(
-                    highlight, Offset(0f, 0f), Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx()
-                )
-                val glowBrush = Brush.verticalGradient(
-                    colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
-                    startY = 0f,
-                    endY = size.height * 0.2f
-                )
-                drawRect(glowBrush)
-            }
-            .border(
-                width = 0.5.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(border, border.copy(alpha = 0.05f)),
-                    start = Offset.Zero,
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                ),
-                shape = shape
-            ),
+            .clip(shape),
         contentAlignment = Alignment.Center
     ) {
+        // Blur background layer — ONLY blurs what's behind, not the content
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassBlur(LiquidGlassDefaults.PANEL_BLUR)
+                .drawBehind {
+                    drawRect(tint)
+                    drawLine(
+                        highlight, Offset(0f, 0f), Offset(size.width, 0f),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    val glowBrush = Brush.verticalGradient(
+                        colors = listOf(highlight.copy(alpha = 0.06f), Color.Transparent),
+                        startY = 0f,
+                        endY = size.height * 0.2f
+                    )
+                    drawRect(glowBrush)
+                }
+                .border(
+                    width = 0.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(border, border.copy(alpha = 0.05f)),
+                        start = Offset.Zero,
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                    ),
+                    shape = shape
+                )
+        )
+        // Content layer — rendered on top, NO blur applied
         content()
     }
 }

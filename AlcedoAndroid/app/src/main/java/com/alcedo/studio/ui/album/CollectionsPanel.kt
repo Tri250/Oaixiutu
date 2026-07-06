@@ -41,6 +41,7 @@ fun CollectionsPanel(
     onAddImageToCollection: (Long, Long) -> Unit,
     onRemoveImageFromCollection: (Long, Long) -> Unit,
     onImageClick: (Long) -> Unit,
+    onPickImages: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -115,7 +116,8 @@ fun CollectionsPanel(
                 onBack = { onSelectCollection(-1L) },
                 onAddImage = { imageId -> onAddImageToCollection(selectedCollection.collectionId, imageId) },
                 onRemoveImage = { imageId -> onRemoveImageFromCollection(selectedCollection.collectionId, imageId) },
-                onImageClick = onImageClick
+                onImageClick = onImageClick,
+                onPickImages = onPickImages
             )
         }
     }
@@ -223,7 +225,8 @@ private fun CollectionDetailView(
     onBack: () -> Unit,
     onAddImage: (Long) -> Unit,
     onRemoveImage: (Long) -> Unit,
-    onImageClick: (Long) -> Unit
+    onImageClick: (Long) -> Unit,
+    onPickImages: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Header with back
@@ -246,7 +249,7 @@ private fun CollectionDetailView(
                     )
                 }
             }
-            IconButton(onClick = { /* Open image picker */ }) {
+            IconButton(onClick = onPickImages) {
                 Icon(Icons.Default.AddPhotoAlternate, contentDescription = stringRes { addImages })
             }
         }
@@ -274,7 +277,7 @@ private fun CollectionDetailView(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(onClick = { /* Open image picker */ }) {
+                    OutlinedButton(onClick = onPickImages) {
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(stringRes { addImages })

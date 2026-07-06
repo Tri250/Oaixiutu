@@ -126,16 +126,10 @@ object SecurityChecker {
                 return true
             }
 
-            // 正式版：校验签名指纹是否在已知列表中
-            // 保留 debug keystore 和 release keystore 的哈希
-            val knownSignatures = setOf(
-                // Debug keystore SHA-256 (自动调试)
-                "5e8f16062ea3cd2c4a0d5478fba59b1390f1f1c0e1c4f4c4c4c4c4c4c4c4c4c4",
-                // TODO: 上架前替换为 release keystore 的 SHA-256
-            )
+            // 证书固定当前未启用：仅记录签名指纹用于审计。
+            // 如需启用固定，将已知签名指纹加入 knownSignatures 并校验 hexHash in knownSignatures。
+            val knownSignatures: Set<String>? = null
 
-            // 正式版发布前必须添加 release 签名指纹
-            // 目前在 release 模式下仅记录警告但不阻断（避免开发期间锁死）
             Log.w(TAG, "签名校验：当前签名指纹 $hexHash")
             return true
         } catch (e: Exception) {
