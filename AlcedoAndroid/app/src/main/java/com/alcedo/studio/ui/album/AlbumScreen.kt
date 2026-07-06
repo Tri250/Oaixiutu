@@ -9,10 +9,11 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
@@ -27,16 +28,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,12 +53,50 @@ import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.data.model.SleeveFolder
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
-import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.ui.common.*
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.permission.rememberPermissionState
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+// ═══════════════════════════════════════════════════════════════════
+// PixCake-inspired view model & grid density
+// ═══════════════════════════════════════════════════════════════════
+
+enum class AlbumViewMode(val label: String) {
+    PHOTO("照片"),
+    PROJECT("项目");
+
+    val icon: ImageVector
+        get() = when (this) {
+            PHOTO -> Icons.Default.PhotoLibrary
+            PROJECT -> Icons.Default.FolderCopy
+        }
+}
+
+enum class GridDensity(val columns: Int, val label: String) {
+    COMFORTABLE(3, "舒适"),
+    STANDARD(4, "标准"),
+    COMPACT(5, "紧凑");
+
+    val icon: ImageVector
+        get() = when (this) {
+            COMFORTABLE -> Icons.Default.ViewModule
+            STANDARD -> Icons.Default.GridView
+            COMPACT -> Icons.Default.Apps
+        }
+}
+
+/**
+ * Date-based photo group for PixCake-style date section headers.
+ */
+data class DateGroup(
+    val dateKey: String,        // "2024:03:15" or "unknown"
+    val displayLabel: String,   // "2024年3月15日" or "未知日期"
+    val relativeLabel: String,  // "今天" / "昨天" / "本周" etc.
+    val images: List<ImageModel>
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -69,10 +113,13 @@ fun AlbumScreen(
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val sortMode by viewModel.sortMode.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    // 缩略图缓存通过 LruCache 存储，UI 通过版本号触发重组，
-    // 实际 bitmap 通过 viewModel.getThumbnail(id) 直接访问
     val thumbnailCacheVersion by viewModel.thumbnailCacheVersion.collectAsStateWithLifecycle()
     val hasMorePages by viewModel.hasMorePages.collectAsStateWithLifecycle()
+
+    // ── PixCake 视图状态 ──
+    var viewMode by remember { mutableStateOf(AlbumViewMode.PHOTO) }
+    var gridDensity by remember { mutableStateOf(GridDensity.STANDARD) }
+    val collapsedDateGroups = remember { mutableStateOf(setOf<String>()) }
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var showFolderSidebar by remember { mutableStateOf(false) }
@@ -95,19 +142,16 @@ fun AlbumScreen(
             if (allGranted) {
                 viewModel.refresh()
             } else {
-                // 检查是否应该显示解释
                 val shouldShowRationale = PermissionHelper.shouldShowRationale(context)
                 if (shouldShowRationale) {
                     showPermissionRationale = true
                 } else {
-                    // 永久拒绝 — 引导去设置
                     viewModel.setPermissionError("权限被拒绝，请在设置中开启存储访问权限")
                 }
             }
         }
     )
 
-    // 首次启动时请求媒体权限
     LaunchedEffect(Unit) {
         if (!PermissionHelper.hasReadMediaAccess(context)) {
             permissionState.requestMediaAccess()
@@ -115,7 +159,7 @@ fun AlbumScreen(
     }
 
     val configuration = LocalConfiguration.current
-    val columns = when {
+    val baseColumns = when {
         configuration.screenWidthDp >= 840 -> 5
         configuration.screenWidthDp >= 600 -> 4
         else -> 3
@@ -136,15 +180,6 @@ fun AlbumScreen(
     ) { treeUri: Uri? ->
         treeUri?.let {
             viewModel.importFromSafDirectory(it)
-        }
-    }
-
-    // ── 传统文件选择器启动器（回退）─────────────────────
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            viewModel.importFromPhotoPicker(uris)
         }
     }
 
@@ -185,9 +220,13 @@ fun AlbumScreen(
                 showSearch = showSearch,
                 semanticEnabled = semanticEnabled,
                 sortMode = sortMode,
-                columns = columns,
+                baseColumns = baseColumns,
                 thumbnailCacheVersion = thumbnailCacheVersion,
                 hasMorePages = hasMorePages,
+                viewMode = viewMode,
+                gridDensity = gridDensity,
+                collapsedDateGroups = collapsedDateGroups,
+                folders = folders,
                 onGetThumbnail = viewModel::getThumbnail,
                 onLoadMore = viewModel::loadMoreImages,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -209,7 +248,20 @@ fun AlbumScreen(
                 onImport = { showImport = true },
                 onSettings = { navController.navigate("settings") },
                 onImageContextMenu = { contextMenuImage = it },
-                onLoadThumbnail = viewModel::loadThumbnail
+                onLoadThumbnail = viewModel::loadThumbnail,
+                onViewModeChange = { viewMode = it },
+                onGridDensityChange = { gridDensity = it },
+                onToggleDateGroup = { dateKey ->
+                    collapsedDateGroups.value = if (dateKey in collapsedDateGroups.value) {
+                        collapsedDateGroups.value - dateKey
+                    } else {
+                        collapsedDateGroups.value + dateKey
+                    }
+                },
+                onNavigateToFolder = { folderId ->
+                    viewModel.navigateToFolder(folderId)
+                    viewMode = AlbumViewMode.PHOTO
+                }
             )
         }
     } else {
@@ -223,9 +275,13 @@ fun AlbumScreen(
             showSearch = showSearch,
             semanticEnabled = semanticEnabled,
             sortMode = sortMode,
-            columns = columns,
+            baseColumns = baseColumns,
             thumbnailCacheVersion = thumbnailCacheVersion,
             hasMorePages = hasMorePages,
+            viewMode = viewMode,
+            gridDensity = gridDensity,
+            collapsedDateGroups = collapsedDateGroups,
+            folders = folders,
             onGetThumbnail = viewModel::getThumbnail,
             onLoadMore = viewModel::loadMoreImages,
             onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -244,7 +300,20 @@ fun AlbumScreen(
             onImport = { showImport = true },
             onSettings = { navController.navigate("settings") },
             onImageContextMenu = { contextMenuImage = it },
-            onLoadThumbnail = viewModel::loadThumbnail
+            onLoadThumbnail = viewModel::loadThumbnail,
+            onViewModeChange = { viewMode = it },
+            onGridDensityChange = { gridDensity = it },
+            onToggleDateGroup = { dateKey ->
+                collapsedDateGroups.value = if (dateKey in collapsedDateGroups.value) {
+                    collapsedDateGroups.value - dateKey
+                } else {
+                    collapsedDateGroups.value + dateKey
+                }
+            },
+            onNavigateToFolder = { folderId ->
+                viewModel.navigateToFolder(folderId)
+                viewMode = AlbumViewMode.PHOTO
+            }
         )
     }
 
@@ -270,13 +339,9 @@ fun AlbumScreen(
             onDismiss = { showImport = false },
             onSelectFiles = {
                 showImport = false
-                if (PhotoPickerHelper.isAvailable()) {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                } else {
-                    filePickerLauncher.launch(arrayOf("image/*"))
-                }
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             },
             onSelectDirectory = {
                 showImport = false
@@ -313,7 +378,7 @@ fun AlbumScreen(
         )
     }
 
-    // 评分选择对话框（替代之前硬编码的评分值）
+    // 评分选择对话框
     ratingTarget?.let { image ->
         RatingPickerDialog(
             imageName = image.imageName,
@@ -343,7 +408,7 @@ fun AlbumScreen(
         )
     }
 
-    // 批量评分对话框（复用 RatingPickerDialog）
+    // 批量评分对话框
     if (showBatchRatingDialog) {
         RatingPickerDialog(
             imageName = "${selectedImages.size} 张图片",
@@ -383,7 +448,6 @@ fun AlbumScreen(
             dismissButton = {
                 TextButton(onClick = {
                     showPermissionRationale = false
-                    // 跳转系统设置
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.fromParts("package", context.packageName, null)
                     }
@@ -427,9 +491,13 @@ private fun AlbumContent(
     showSearch: Boolean,
     semanticEnabled: Boolean,
     sortMode: SortMode,
-    columns: Int,
+    baseColumns: Int,
     thumbnailCacheVersion: Int,
     hasMorePages: Boolean,
+    viewMode: AlbumViewMode,
+    gridDensity: GridDensity,
+    collapsedDateGroups: State<Set<String>>,
+    folders: List<SleeveFolder>,
     onGetThumbnail: (Long) -> android.graphics.Bitmap?,
     onLoadMore: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -448,14 +516,17 @@ private fun AlbumContent(
     onImport: () -> Unit,
     onSettings: () -> Unit,
     onImageContextMenu: (ImageModel) -> Unit,
-    onLoadThumbnail: (Long) -> Unit
+    onLoadThumbnail: (Long) -> Unit,
+    onViewModeChange: (AlbumViewMode) -> Unit,
+    onGridDensityChange: (GridDensity) -> Unit,
+    onToggleDateGroup: (String) -> Unit,
+    onNavigateToFolder: (Long) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            // 使用 Box 叠加两个 TopAppBar，让退出动画能够正常播放
             Box {
                 // 普通模式顶栏
                 AnimatedVisibility(
@@ -499,7 +570,7 @@ private fun AlbumContent(
                                 Text(
                                     "Alcedo Studio",
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         },
@@ -520,9 +591,8 @@ private fun AlbumContent(
                                         Text(
                                             "AI",
                                             style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (semanticEnabled)
-                                                androidx.compose.ui.text.font.FontWeight.SemiBold
-                                            else androidx.compose.ui.text.font.FontWeight.Medium
+                                            fontWeight = if (semanticEnabled) FontWeight.SemiBold
+                                            else FontWeight.Medium
                                         )
                                     },
                                     shape = RoundedCornerShape(50),
@@ -544,7 +614,7 @@ private fun AlbumContent(
                             IconButton(onClick = onOpenFolderSidebar) {
                                 Icon(
                                     Icons.Default.Folder,
-                                    contentDescription = stringRes { folders },
+                                    contentDescription = stringRes { albumFolders },
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -559,7 +629,7 @@ private fun AlbumContent(
                         scrollBehavior = scrollBehavior
                     )
                 }
-                // 选择模式顶栏（带动画）
+                // 选择模式顶栏
                 AnimatedVisibility(
                     visible = selectedImages.isNotEmpty(),
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -573,22 +643,18 @@ private fun AlbumContent(
                             }
                         },
                         actions = {
-                            // 批量 AI 标签
                             IconButton(onClick = onBatchAiTag) {
                                 Icon(Icons.Default.Label, contentDescription = stringRes { aiTag },
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
-                            // 批量评分
                             IconButton(onClick = onBatchRating) {
                                 Icon(Icons.Default.Star, contentDescription = stringRes { aiRatingTitle },
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
-                            // 批量导出选中图片
                             IconButton(onClick = onBatchExport) {
                                 Icon(Icons.Default.Share, contentDescription = stringRes { export },
                                     tint = MaterialTheme.colorScheme.onSurface)
                             }
-                            // 删除
                             IconButton(onClick = onDeleteSelected) {
                                 Icon(Icons.Default.Delete, contentDescription = stringRes { delete },
                                     tint = MaterialTheme.colorScheme.error)
@@ -632,12 +698,12 @@ private fun AlbumContent(
             when {
                 isLoading -> {
                     SkeletonAlbumGrid(
-                        columns = columns,
+                        columns = baseColumns,
                         itemCount = 12,
                         modifier = Modifier.padding(12.dp)
                     )
                 }
-                images.isEmpty() -> {
+                images.isEmpty() && viewMode == AlbumViewMode.PHOTO -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         EmptyState(
                             icon = Icons.Default.PhotoLibrary,
@@ -662,72 +728,56 @@ private fun AlbumContent(
                     }
                 }
                 else -> {
-                    Column {
-                        // 排序/筛选栏
-                        SortFilterBar(
-                            sortMode = sortMode,
-                            onSortModeChange = onSortModeChange,
-                            imageCount = images.size
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // ── PixCake 视图切换栏 ──
+                        ViewModeTabBar(
+                            viewMode = viewMode,
+                            onViewModeChange = onViewModeChange,
+                            gridDensity = gridDensity,
+                            onGridDensityChange = onGridDensityChange,
+                            imageCount = images.size,
+                            folderCount = folders.size
                         )
 
-                        // 分页加载：当剩余可见项不足阈值时自动请求下一页
-                        val gridState = rememberLazyGridState()
-                        val shouldLoadMore by remember {
-                            derivedStateOf {
-                                if (!hasMorePages || images.isEmpty()) return@derivedStateOf false
-                                val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
-                                    ?: return@derivedStateOf false
-                                lastVisible >= images.size - 10
-                            }
-                        }
-                        LaunchedEffect(shouldLoadMore) {
-                            if (shouldLoadMore) onLoadMore()
-                        }
-
-                        // 缩略图网格 – 加大间距贴合 Pixel Cake 旗舰观感
-                        LazyVerticalGrid(
-                            state = gridState,
-                            columns = GridCells.Fixed(columns),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(images, key = { it.imageId }) { image ->
-                                ThumbnailCard(
-                                    image = image,
-                                    isSelected = image.imageId in selectedImages,
-                                    thumbnailBitmap = onGetThumbnail(image.imageId),
-                                    onClick = {
+                        when (viewMode) {
+                            AlbumViewMode.PHOTO -> {
+                                // 排序/筛选栏
+                                SortFilterBar(
+                                    sortMode = sortMode,
+                                    onSortModeChange = onSortModeChange,
+                                    imageCount = images.size
+                                )
+                                PhotoGridSection(
+                                    images = images,
+                                    selectedImages = selectedImages,
+                                    gridDensity = gridDensity,
+                                    collapsedDateGroups = collapsedDateGroups,
+                                    hasMorePages = hasMorePages,
+                                    onGetThumbnail = onGetThumbnail,
+                                    onLoadMore = onLoadMore,
+                                    onLoadThumbnail = onLoadThumbnail,
+                                    onImageClick = { image ->
                                         if (selectedImages.isNotEmpty()) {
                                             onToggleImageSelection(image.imageId)
                                         } else {
                                             navController.navigate("editor/${image.imageId}")
                                         }
                                     },
-                                    onLongClick = {
+                                    onImageLongClick = { image ->
                                         if (selectedImages.isEmpty()) {
                                             onImageContextMenu(image)
                                         } else {
                                             onToggleImageSelection(image.imageId)
                                         }
                                     },
-                                    modifier = Modifier.animateItemPlacement()
+                                    onToggleDateGroup = onToggleDateGroup
                                 )
                             }
-                            if (hasMorePages) {
-                                item(span = { GridItemSpan(columns) }) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                    }
-                                }
+                            AlbumViewMode.PROJECT -> {
+                                ProjectGridSection(
+                                    folders = folders,
+                                    onFolderClick = onNavigateToFolder
+                                )
                             }
                         }
                     }
@@ -737,64 +787,541 @@ private fun AlbumContent(
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// PixCake View Mode Tab Bar – segmented control with grid density
+// ═══════════════════════════════════════════════════════════════════
+
 @Composable
-private fun SortFilterBar(
-    sortMode: SortMode,
-    onSortModeChange: (SortMode) -> Unit,
-    imageCount: Int
+private fun ViewModeTabBar(
+    viewMode: AlbumViewMode,
+    onViewModeChange: (AlbumViewMode) -> Unit,
+    gridDensity: GridDensity,
+    onGridDensityChange: (GridDensity) -> Unit,
+    imageCount: Int,
+    folderCount: Int
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f)
+                    )
+                )
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            stringRes { albumImagesCount }.format(imageCount),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+        // Segmented control – Photo | Project
+        SegmentedControl(
+            selected = viewMode,
+            onSelect = onViewModeChange
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.horizontalScroll(rememberScrollState())
-        ) {
-            SortMode.entries.forEach { mode ->
-                val selected = sortMode == mode
-                FilterChip(
-                    selected = selected,
-                    onClick = { onSortModeChange(mode) },
-                    label = {
-                        Text(
-                            stringRes(mode.labelKey),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
-                            else androidx.compose.ui.text.font.FontWeight.Medium
+
+        // Right side: grid density (photo mode) or count summary
+        if (viewMode == AlbumViewMode.PHOTO) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                GridDensityCycleButton(
+                    density = gridDensity,
+                    onChange = onGridDensityChange
+                )
+            }
+        } else {
+            Text(
+                text = "$folderCount 个项目",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentedControl(
+    selected: AlbumViewMode,
+    onSelect: (AlbumViewMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(modifier = Modifier.padding(4.dp)) {
+            AlbumViewMode.entries.forEach { option ->
+                val isSelected = option == selected
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .clickable { onSelect(option) },
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = option.icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    },
-                    shape = RoundedCornerShape(50),
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = selected,
-                        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        selectedBorderColor = Color.Transparent,
-                        borderWidth = 0.5.dp,
-                        selectedBorderWidth = 0.dp
+                        Text(
+                            text = option.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GridDensityCycleButton(
+    density: GridDensity,
+    onChange: (GridDensity) -> Unit
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .clickable {
+                val next = when (density) {
+                    GridDensity.COMFORTABLE -> GridDensity.STANDARD
+                    GridDensity.STANDARD -> GridDensity.COMPACT
+                    GridDensity.COMPACT -> GridDensity.COMFORTABLE
+                }
+                onChange(next)
+                HapticFeedback.click(view)
+            },
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = density.icon,
+                contentDescription = density.label,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = density.columns.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Photo Grid Section – date-grouped grid with pinch-to-zoom
+// ═══════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PhotoGridSection(
+    images: List<ImageModel>,
+    selectedImages: Set<Long>,
+    gridDensity: GridDensity,
+    collapsedDateGroups: State<Set<String>>,
+    hasMorePages: Boolean,
+    onGetThumbnail: (Long) -> android.graphics.Bitmap?,
+    onLoadMore: () -> Unit,
+    onLoadThumbnail: (Long) -> Unit,
+    onImageClick: (ImageModel) -> Unit,
+    onImageLongClick: (ImageModel) -> Unit,
+    onToggleDateGroup: (String) -> Unit
+) {
+    val dateGroups = remember(images) { groupImagesByDate(images) }
+    val density = LocalDensity.current
+    var columns by remember(gridDensity) { mutableStateOf(gridDensity.columns) }
+
+    // 同步密度切换
+    LaunchedEffect(gridDensity) {
+        columns = gridDensity.columns
+    }
+
+    val gridState = rememberLazyGridState()
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            if (!hasMorePages || images.isEmpty()) return@derivedStateOf false
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+                ?: return@derivedStateOf false
+            lastVisible >= images.size - 10
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
+
+    // 收集当前可见项目用于缩略图加载
+    LaunchedEffect(gridState, images, columns) {
+        val visible = gridState.layoutInfo.visibleItemsInfo
+        visible.forEach { info ->
+            // 通过 index 找到 imageId，触发缩略图加载
+            if (info.index < images.size) {
+                onLoadThumbnail(images[info.index].imageId)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // 双指捏合调整列数 (PixCake 风格 3-6 张/行)
+            .pointerInput(Unit) {
+                detectTransformGestures { _, _, zoom, _ ->
+                    val target = (columns.toFloat() / zoom).roundToInt().coerceIn(2, 6)
+                    if (target != columns) columns = target
+                }
+            }
+    ) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 12.dp, end = 12.dp, top = 8.dp, bottom = 96.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            dateGroups.forEach { group ->
+                // 日期分组头部 – 跨整行
+                item(span = { GridItemSpan(maxLineSpan) }, key = "header-${group.dateKey}") {
+                    DateSectionHeader(
+                        group = group,
+                        isCollapsed = group.dateKey in collapsedDateGroups.value,
+                        onToggle = { onToggleDateGroup(group.dateKey) }
                     )
+                }
+                // 折叠时跳过照片项
+                if (group.dateKey !in collapsedDateGroups.value) {
+                    items(group.images, key = { "img-${it.imageId}" }) { image ->
+                        ThumbnailCard(
+                            image = image,
+                            isSelected = image.imageId in selectedImages,
+                            thumbnailBitmap = onGetThumbnail(image.imageId),
+                            onClick = { onImageClick(image) },
+                            onLongClick = { onImageLongClick(image) },
+                            modifier = Modifier.animateItemPlacement()
+                        )
+                    }
+                }
+            }
+            if (hasMorePages) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DateSectionHeader(
+    group: DateGroup,
+    isCollapsed: Boolean,
+    onToggle: () -> Unit
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isCollapsed) -90f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "chevronRotation"
+    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onToggle),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.6f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 日期标题
+                Column {
+                    Text(
+                        text = group.displayLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (group.relativeLabel.isNotEmpty()) {
+                        Text(
+                            text = group.relativeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 照片数量胶囊
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = "${group.images.size}",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                // 折叠按钮 (◀)
+                Icon(
+                    imageVector = Icons.Default.ChevronLeft,
+                    contentDescription = if (isCollapsed) "展开" else "折叠",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(chevronRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Project Grid Section – 2-column project cards (PixCake style)
+// ═══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ProjectGridSection(
+    folders: List<SleeveFolder>,
+    onFolderClick: (Long) -> Unit
+) {
+    if (folders.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            EmptyState(
+                icon = Icons.Default.FolderCopy,
+                title = "暂无项目",
+                message = "导入图片后将自动按文件夹创建项目"
+            )
+        }
+        return
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(folders, key = { it.elementId }) { folder ->
+            ProjectCard(
+                folder = folder,
+                onClick = { onFolderClick(folder.elementId) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProjectCard(
+    folder: SleeveFolder,
+    onClick: () -> Unit
+) {
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        label = "projectScale"
+    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // 项目图标区 – 渐变背景
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                            ),
+                            start = Offset(0f, 0f),
+                            end = Offset.Infinite
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            // 项目名称
+            Text(
+                text = folder.elementName,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            // 照片数量
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    modifier = Modifier.size(13.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringRes { albumFilesCount }.format(folder.fileCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Date grouping helper
+// ═══════════════════════════════════════════════════════════════════
+
+private fun groupImagesByDate(images: List<ImageModel>): List<DateGroup> {
+    if (images.isEmpty()) return emptyList()
+    return images
+        .groupBy { image ->
+            val cd = image.exifDisplay.captureDate
+            if (cd.length >= 10) cd.substring(0, 10) else "unknown"
+        }
+        .map { (dateKey, imgs) ->
+            DateGroup(
+                dateKey = dateKey,
+                displayLabel = formatDateLabel(dateKey),
+                relativeLabel = computeRelativeLabel(dateKey),
+                images = imgs
+            )
+        }
+        .sortedWith(
+            compareByDescending<DateGroup> { it.dateKey }
+                .thenBy { it.dateKey == "unknown" }
+        )
+}
+
+private fun formatDateLabel(dateKey: String): String {
+    if (dateKey == "unknown") return "未知日期"
+    return try {
+        // dateKey format: "yyyy:MM:dd"
+        val parts = dateKey.split(":")
+        if (parts.size == 3) {
+            "${parts[0]}年${parts[1].toInt()}月${parts[2].toInt()}日"
+        } else {
+            dateKey
+        }
+    } catch (_: Exception) {
+        dateKey
+    }
+}
+
+private fun computeRelativeLabel(dateKey: String): String {
+    if (dateKey == "unknown") return ""
+    return try {
+        val parts = dateKey.split(":")
+        if (parts.size != 3) return ""
+        val cal = java.util.Calendar.getInstance()
+        val today = java.util.Calendar.getInstance()
+        cal.clear()
+        cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
+
+        val dayDiff = (today.timeInMillis - cal.timeInMillis) / (24 * 60 * 60 * 1000)
+        when {
+            dayDiff <= 0 -> "今天"
+            dayDiff == 1L -> "昨天"
+            dayDiff <= 7 -> "本周"
+            dayDiff <= 30 -> "${dayDiff}天前"
+            dayDiff <= 365 -> "${dayDiff / 30}个月前"
+            else -> "${dayDiff / 365}年前"
+        }
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Thumbnail Card – premium PixCake aesthetics
+// ═══════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -814,7 +1341,7 @@ private fun ThumbnailCard(
         ),
         label = "selectScale"
     )
-    val elevation by androidx.compose.animation.core.animateDpAsState(
+    val elevation by animateDpAsState(
         targetValue = if (isSelected) 8.dp else 2.dp,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -863,17 +1390,17 @@ private fun ThumbnailCard(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // 首字母占位符 – 更柔和的暖色调
+                    // 首字母占位符 – 暖色调
                     Text(
                         image.imageName.take(1).uppercase(),
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Light
+                        fontWeight = FontWeight.Light
                     )
                 }
             }
 
-            // 选择指示器（带动画）
+            // 选择指示器
             this@Card.AnimatedVisibility(
                 visible = isSelected,
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
@@ -905,7 +1432,7 @@ private fun ThumbnailCard(
                 }
             }
 
-            // 评分浮层 – 暖金色,稍大尺寸提升可读性
+            // 评分浮层 – 暖金色
             val rating = image.exifDisplay.rating
             if (rating > 0) {
                 Row(
@@ -948,12 +1475,12 @@ private fun ThumbnailCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         fontSize = 9.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            // 图片名称浮层 – 暖色渐变,更佳可读性
+            // 图片名称浮层 – 暖色渐变
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -974,12 +1501,79 @@ private fun ThumbnailCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     fontSize = 10.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Sort Filter Bar
+// ═══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SortFilterBar(
+    sortMode: SortMode,
+    onSortModeChange: (SortMode) -> Unit,
+    imageCount: Int
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            stringRes { albumImagesCount }.format(imageCount),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            SortMode.entries.forEach { mode ->
+                val selected = sortMode == mode
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSortModeChange(mode) },
+                    label = {
+                        Text(
+                            stringRes(mode.labelKey),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selected) FontWeight.SemiBold
+                            else FontWeight.Medium
+                        )
+                    },
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selected,
+                        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        selectedBorderColor = Color.Transparent,
+                        borderWidth = 0.5.dp,
+                        selectedBorderWidth = 0.dp
+                    )
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Folder Sidebar – PixCake premium feel
+// ═══════════════════════════════════════════════════════════════════
 
 @Composable
 private fun FolderSidebar(
@@ -991,97 +1585,180 @@ private fun FolderSidebar(
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(280.dp)
+            .width(300.dp)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                )
+            )
     ) {
+        // 头部
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 20.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(stringRes { albumFolders }, style = MaterialTheme.typography.titleMedium)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    stringRes { albumFolders },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = stringRes { close })
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringRes { close },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
         LazyColumn {
             // ── 智能相册分区 ──
             item {
-                Text(
-                    "智能相册",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                SectionLabel("智能相册")
+            }
+            item {
+                SidebarItem(
+                    icon = Icons.Default.Favorite,
+                    label = "收藏夹",
+                    onClick = { onSmartAlbumSelected("favorites") }
                 )
             }
             item {
-                ListItem(
-                    headlineContent = { Text("收藏夹") },
-                    leadingContent = {
-                        Icon(Icons.Default.Favorite, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable { onSmartAlbumSelected("favorites") }
+                SidebarItem(
+                    icon = Icons.Default.Schedule,
+                    label = "最近查看",
+                    onClick = { onSmartAlbumSelected("recent") }
                 )
             }
             item {
-                ListItem(
-                    headlineContent = { Text("最近查看") },
-                    leadingContent = {
-                        Icon(Icons.Default.Schedule, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable { onSmartAlbumSelected("recent") }
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text("待导出") },
-                    leadingContent = {
-                        Icon(Icons.Default.FileDownload, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable { onSmartAlbumSelected("to_export") }
+                SidebarItem(
+                    icon = Icons.Default.FileDownload,
+                    label = "待导出",
+                    onClick = { onSmartAlbumSelected("to_export") }
                 )
             }
 
             item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
             }
 
             // ── 文件夹分区 ──
             item {
-                Text(
-                    stringRes { albumFolders },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                SectionLabel(stringRes { albumFolders })
             }
             item {
-                ListItem(
-                    headlineContent = { Text(stringRes { albumAllImages }) },
-                    leadingContent = {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable { onFolderSelected(0L) }
+                SidebarItem(
+                    icon = Icons.Default.PhotoLibrary,
+                    label = stringRes { albumAllImages },
+                    onClick = { onFolderSelected(0L) }
                 )
             }
             items(folders, key = { it.elementId }) { folder: SleeveFolder ->
-                ListItem(
-                    headlineContent = { Text(folder.elementName) },
-                    supportingContent = { Text(stringRes { albumFilesCount }.format(folder.fileCount)) },
-                    leadingContent = {
-                        Icon(Icons.Default.Folder, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable {
-                        onFolderSelected(folder.elementId)
-                    }
+                SidebarItem(
+                    icon = Icons.Default.Folder,
+                    label = folder.elementName,
+                    supportingText = stringRes { albumFilesCount }.format(folder.fileCount),
+                    onClick = { onFolderSelected(folder.elementId) }
                 )
             }
         }
     }
 }
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+    )
+}
+
+@Composable
+private fun SidebarItem(
+    icon: ImageVector,
+    label: String,
+    supportingText: String? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Column {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (supportingText != null) {
+                Text(
+                    supportingText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Import Dialog – PixCake premium design
+// ═══════════════════════════════════════════════════════════════════
 
 @Composable
 private fun ImportDialog(
@@ -1091,59 +1768,87 @@ private fun ImportDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
-            shadowElevation = 8.dp
+            shadowElevation = 12.dp
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 暖色圆形图标背景 – premium photographic feel
+                // 顶部 hero 图标 – 渐变背景
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset.Infinite
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.AddPhotoAlternate,
                         contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
                     )
                 }
 
-                Text(
-                    stringRes { albumImportTitle },
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                // 标题与说明
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        stringRes { albumImportTitle },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "选择单张照片或整个目录导入到相册",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                // 选择文件按钮 – 启动 Photo Picker 或文件选择器 (primary warm accent)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 选择文件按钮 – primary
                 Button(
                     onClick = onSelectFiles,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
                     Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         stringRes { albumSelectFiles },
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                // 选择目录按钮 – 启动 SAF 目录选择器 (subtle outline)
+                // 选择目录按钮 – outlined
                 OutlinedButton(
                     onClick = onSelectDirectory,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
                     shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    )
                 ) {
                     Icon(
                         Icons.Default.FolderOpen,
@@ -1154,11 +1859,16 @@ private fun ImportDialog(
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         stringRes { albumSelectDirectory },
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
 
                 Text(
                     stringRes { albumDragDrop },
@@ -1176,6 +1886,10 @@ private fun ImportDialog(
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Filter Bottom Sheet
+// ═══════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1234,7 +1948,6 @@ private fun FilterSheetContent(
             .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 头部
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1264,7 +1977,6 @@ private fun FilterSheetContent(
             }
         }
 
-        // 相机品牌
         Text(stringRes { albumFilterCameraMake }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             realCameraMakes.forEach { make ->
@@ -1280,7 +1992,6 @@ private fun FilterSheetContent(
             }
         }
 
-        // 相机型号
         Text(stringRes { albumFilterCameraModel }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             realCameraModels.forEach { model ->
@@ -1296,7 +2007,6 @@ private fun FilterSheetContent(
             }
         }
 
-        // 镜头
         Text(stringRes { albumFilterLensModel }, style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(
             value = lensModel,
@@ -1307,7 +2017,6 @@ private fun FilterSheetContent(
             leadingIcon = { Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(18.dp)) }
         )
 
-        // 日期范围
         Text(stringRes { albumFilterDateRange }, style = MaterialTheme.typography.labelLarge)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1330,7 +2039,6 @@ private fun FilterSheetContent(
             )
         }
 
-        // 评分
         Text(stringRes { albumFilterRating }, style = MaterialTheme.typography.labelLarge)
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1356,7 +2064,6 @@ private fun FilterSheetContent(
             }
         }
 
-        // 文件类型
         Text(stringRes { albumFilterFileType }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             realFileTypes.forEach { type ->
@@ -1372,7 +2079,6 @@ private fun FilterSheetContent(
             }
         }
 
-        // AI 标签
         Text(stringRes { albumFilterAiLabels }, style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             realAiLabels.forEach { label ->
@@ -1424,7 +2130,7 @@ private fun RatingPickerDialog(
     onPick: (Int) -> Unit
 ) {
     var selectedRating by remember { mutableIntStateOf(0) }
-    val view = androidx.compose.ui.platform.LocalView.current
+    val view = LocalView.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1434,7 +2140,7 @@ private fun RatingPickerDialog(
                 stringRes { aiRatingTitle }.format(imageName),
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
         },
         text = {
@@ -1450,7 +2156,7 @@ private fun RatingPickerDialog(
                         IconButton(
                             onClick = {
                                 selectedRating = if (selectedRating == star) 0 else star
-                                com.alcedo.studio.ui.common.HapticFeedback.click(view)
+                                HapticFeedback.click(view)
                             },
                             modifier = Modifier.size(44.dp)
                         ) {
@@ -1496,6 +2202,3 @@ private fun RatingPickerDialog(
         }
     )
 }
-
-// 将 Bitmap 转换为 Compose 使用的 ImageBitmap 的辅助函数
-// (Uses androidx.compose.ui.graphics.asImageBitmap extension directly via import.)

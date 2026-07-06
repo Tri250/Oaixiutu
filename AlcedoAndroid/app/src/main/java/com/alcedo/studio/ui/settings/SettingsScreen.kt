@@ -784,6 +784,7 @@ fun SettingsScreen(navController: NavController) {
 @Composable
 private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
     return when (variant) {
+        AlcedoThemeVariant.PIXCAKE -> variant.displayName
         AlcedoThemeVariant.DEEP_SPACE -> variant.displayName
         AlcedoThemeVariant.HASSELBLAD -> stringRes { themeHasselblad }
         AlcedoThemeVariant.GOLD -> stringRes { themeGold }
@@ -800,6 +801,7 @@ private fun getThemeVariantDisplayName(variant: AlcedoThemeVariant): String {
  */
 private fun getThemeSwatchColor(variant: AlcedoThemeVariant): Color {
     return when (variant) {
+        AlcedoThemeVariant.PIXCAKE -> Color(0xFFFF6B35)
         AlcedoThemeVariant.DEEP_SPACE -> Color(0xFF000000)
         AlcedoThemeVariant.HASSELBLAD -> Color(0xFFFF7A3D)
         AlcedoThemeVariant.GOLD -> Color(0xFFD4A843)

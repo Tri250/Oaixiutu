@@ -352,9 +352,10 @@ class ImportService(
                 try {
                     // Extract full EXIF metadata
                     val exif = try {
-                        val parcelFd = context.contentResolver.openFileDescriptor(info.uri, "r")
-                        parcelFd?.let { ExifInterface(it.fileDescriptor) }
-                    } catch (_: Exception) { null }
+                        context.contentResolver.openFileDescriptor(info.uri, "r")?.use { pfd ->
+                            ExifInterface(pfd.fileDescriptor)
+                        }
+                    } catch (_: Throwable) { null }
 
                     val exifDisplay = exif?.let { parseExifDisplay(it) } ?: ExifDisplayMetaData()
                     val imageDimensions = getImageDimensions(info.uri)
@@ -418,7 +419,7 @@ class ImportService(
                             hasThumbnail = true
                         ))
                     }
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                     // Thumbnail failure is non-fatal
                 }
 
@@ -465,8 +466,6 @@ class ImportService(
         val imageType = try {
             context.contentResolver.openInputStream(uri)?.use { detectImageType(it) }
                 ?: detectImageTypeByExtension(fileName)
-        } catch (_: Exception) {
-            detectImageTypeByExtension(fileName)
         } catch (_: Throwable) {
             detectImageTypeByExtension(fileName)
         }
@@ -543,9 +542,10 @@ class ImportService(
 
             // Extract EXIF metadata
             val exif = try {
-                val parcelFd = context.contentResolver.openFileDescriptor(uri, "r")
-                parcelFd?.let { ExifInterface(it.fileDescriptor) }
-            } catch (_: Exception) {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    ExifInterface(pfd.fileDescriptor)
+                }
+            } catch (_: Throwable) {
                 null
             }
 
@@ -721,15 +721,15 @@ class ImportService(
             }
 
             // HEIC/HEIF check
-            if (header[4] == 0x66.toByte() && header[5] == 0x74.toByte() && header[6] == 0x79.toByte() && header[7] == 0x70.toByte()) {
-                if (header[8] == 0x68.toByte() && header[9] == 0x65.toByte() && header[10] == 0x69.toByte()) {
+            if (bytesRead >= 8 && header[4] == 0x66.toByte() && header[5] == 0x74.toByte() && header[6] == 0x79.toByte() && header[7] == 0x70.toByte()) {
+                if (bytesRead >= 11 && header[8] == 0x68.toByte() && header[9] == 0x65.toByte() && header[10] == 0x69.toByte()) {
                     return ImageType.HEIC
                 }
                 return ImageType.HEIF
             }
 
             return ImageType.DEFAULT
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             return ImageType.DEFAULT
         }
     }
@@ -793,7 +793,7 @@ class ImportService(
                 result = (result shl 8) or (hash[i].toLong() and 0xFF)
             }
             return result
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             return 0L
         }
     }
@@ -866,7 +866,7 @@ class ImportService(
         try {
             val bitmap = generateThumbnail(uri, 256)
             bitmap?.let { thumbnailDiskCache.put(imageId, it) }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             // Thumbnail failure is non-fatal
         }
     }
@@ -891,7 +891,7 @@ class ImportService(
                     BitmapFactory.decodeStream(it, null, opts)
                 }
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }
@@ -903,7 +903,7 @@ class ImportService(
                 BitmapFactory.decodeStream(it, null, options)
             }
             options.outWidth to options.outHeight
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             0 to 0
         }
     }

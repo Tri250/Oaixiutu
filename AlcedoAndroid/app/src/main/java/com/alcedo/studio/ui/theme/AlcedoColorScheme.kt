@@ -47,6 +47,40 @@ data class AlcedoColorScheme(
 )
 
 // ═══════════════════════════════════════════════════════════════════
+// PixCake – 2026 flagship design standard
+// Deep ink-charcoal backgrounds with refined warm coral accent.
+// Premium photography app aesthetic: clean, sophisticated, immersive.
+// Inspired by PixCake Android / desktop design language.
+// ═══════════════════════════════════════════════════════════════════
+val PixCakeDarkColors = AlcedoColorScheme(
+    bgDeep = Color(0xFF080706), bgBase = Color(0xFF121110), bgPanel = Color(0xFF1C1A18), bgCanvas = Color(0xFF161412),
+    primary = Color(0xFFFF6B35), onPrimary = Color(0xFF1A0500), primaryContainer = Color(0xFF3D1E10), onPrimaryContainer = Color(0xFFFFD0B0),
+    secondary = Color(0xFFE0D5C8), onSecondary = Color(0xFF2A2018), secondaryContainer = Color(0xFF4A3D30), onSecondaryContainer = Color(0xFFF5E8D8),
+    tertiary = Color(0xFFD4B896), onTertiary = Color(0xFF1E1408), tertiaryContainer = Color(0xFF443422), onTertiaryContainer = Color(0xFFF0D8B0),
+    surface = Color(0xFF121110), onSurface = Color(0xFFF2EDE8), surfaceVariant = Color(0xFF4A423C), onSurfaceVariant = Color(0xFFCDC4BC),
+    surfaceContainerLowest = Color(0xFF080605), surfaceContainerLow = Color(0xFF1A1816), surfaceContainer = Color(0xFF1F1D1B), surfaceContainerHigh = Color(0xFF2A2724), surfaceContainerHighest = Color(0xFF35322E),
+    error = Color(0xFFFFB4AB), onError = Color(0xFF690005), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
+    outline = Color(0xFF9A8F85), outlineVariant = Color(0xFF4A423C),
+    inverseSurface = Color(0xFFF2EDE8), inverseOnSurface = Color(0xFF2A2724), inversePrimary = Color(0xFF8B4E2C),
+    scrim = Color(0xFF000000), accent = Color(0xFFFF6B35), onAccent = Color(0xFF1A0500),
+    glassTint = Color(0x33FF6B35), glassBorder = Color(0x26FFD0B0), glassHighlight = Color(0x1AFFFFFF)
+)
+
+val PixCakeLightColors = AlcedoColorScheme(
+    bgDeep = Color(0xFFF5F1EC), bgBase = Color(0xFFFAF7F3), bgPanel = Color(0xFFEDE7E0), bgCanvas = Color(0xFFFCFAF7),
+    primary = Color(0xFFB5431C), onPrimary = Color(0xFFFFFFFF), primaryContainer = Color(0xFFFFD0B0), onPrimaryContainer = Color(0xFF3D1E10),
+    secondary = Color(0xFF6B5D4F), onSecondary = Color(0xFFFFFFFF), secondaryContainer = Color(0xFFF5E8D8), onSecondaryContainer = Color(0xFF1E1810),
+    tertiary = Color(0xFF6B5638), onTertiary = Color(0xFFFFFFFF), tertiaryContainer = Color(0xFFF0D8B0), onTertiaryContainer = Color(0xFF141008),
+    surface = Color(0xFFFAF7F3), onSurface = Color(0xFF1A1612), surfaceVariant = Color(0xFFE8E0D8), onSurfaceVariant = Color(0xFF4A423C),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF8F4EF), surfaceContainer = Color(0xFFF2EDE7), surfaceContainerHigh = Color(0xFFECE6E0), surfaceContainerHighest = Color(0xFFE5DFD8),
+    error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
+    outline = Color(0xFF7D7269), outlineVariant = Color(0xFFCDC4BC),
+    inverseSurface = Color(0xFF2A2724), inverseOnSurface = Color(0xFFF2EDE8), inversePrimary = Color(0xFFFF6B35),
+    scrim = Color(0xFF000000), accent = Color(0xFFD84315), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x26B5431C), glassBorder = Color(0x1AFF6B35), glassHighlight = Color(0x33FFFFFF)
+)
+
+// ═══════════════════════════════════════════════════════════════════
 // Hasselblad Orange – Inspired by the iconic Hasselblad camera brand
 // Warm burnt-orange primary, premium photographic feel, 2026 flagship
 // ═══════════════════════════════════════════════════════════════════

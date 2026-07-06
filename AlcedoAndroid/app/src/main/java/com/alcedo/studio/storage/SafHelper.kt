@@ -17,14 +17,36 @@ object SafHelper {
         }
     }
 
-    // List files in a SAF directory
+    // Supported image extensions for directory import filtering
+    private val IMAGE_EXTENSIONS = setOf(
+        "jpg", "jpeg", "png", "tiff", "tif", "arw", "cr2", "cr3", "nef", "dng",
+        "heic", "heif", "webp", "bmp", "gif", "exr"
+    )
+
+    fun isImageFile(fileName: String, mimeType: String): Boolean {
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return ext in IMAGE_EXTENSIONS ||
+            mimeType.startsWith("image/")
+    }
+
+    // List files in a SAF directory (non-recursive)
     fun listDirectory(context: Context, treeUri: Uri): List<SafFileInfo> {
         val files = mutableListOf<SafFileInfo>()
         val resolver = context.contentResolver
 
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
-            treeUri, DocumentsContract.getDocumentId(treeUri)
-        )
+        // CRITICAL: For tree URIs returned by OpenDocumentTree, we must use
+        // getTreeDocumentId() — not getDocumentId(). getDocumentId() returns
+        // null for tree URIs because the path segment is "tree/..." not
+        // "document/...", which produces a malformed children URI and an
+        // empty query result (the root cause of "no photos imported").
+        val docId = try {
+            DocumentsContract.getTreeDocumentId(treeUri)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get tree document ID", e)
+            return emptyList()
+        }
+
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, docId)
 
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
@@ -61,6 +83,81 @@ object SafHelper {
         }
 
         return files
+    }
+
+    // Recursively list all image files in a SAF directory tree
+    fun listImageFilesRecursive(context: Context, treeUri: Uri): List<SafFileInfo> {
+        val imageFiles = mutableListOf<SafFileInfo>()
+        val visitedDirs = mutableSetOf<String>()
+        listImageFilesRecursiveInternal(context, treeUri, treeUri, imageFiles, visitedDirs, maxDepth = 10)
+        return imageFiles
+    }
+
+    private fun listImageFilesRecursiveInternal(
+        context: Context,
+        treeUri: Uri,
+        currentDirUri: Uri,
+        results: MutableList<SafFileInfo>,
+        visitedDirs: MutableSet<String>,
+        maxDepth: Int
+    ) {
+        if (maxDepth <= 0) return
+
+        val currentDocId = try {
+            if (currentDirUri == treeUri) {
+                DocumentsContract.getTreeDocumentId(treeUri)
+            } else {
+                DocumentsContract.getDocumentId(currentDirUri)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get document ID for $currentDirUri", e)
+            return
+        }
+
+        if (!visitedDirs.add(currentDocId)) return
+
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
+
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
+        )
+
+        try {
+            context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val docId = cursor.getString(0)
+                    val displayName = cursor.getString(1) ?: ""
+                    val mimeType = cursor.getString(2) ?: ""
+                    val size = cursor.getLong(3)
+                    val lastModified = cursor.getLong(4)
+
+                    val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    val isDir = mimeType == DocumentsContract.Document.MIME_TYPE_DIR
+
+                    if (isDir) {
+                        listImageFilesRecursiveInternal(
+                            context, treeUri, documentUri, results, visitedDirs, maxDepth - 1
+                        )
+                    } else if (isImageFile(displayName, mimeType)) {
+                        results.add(SafFileInfo(
+                            uri = documentUri,
+                            name = displayName,
+                            mimeType = mimeType,
+                            size = size,
+                            lastModified = lastModified,
+                            isDirectory = false,
+                            isRaw = MediaStoreHelper.isRawFile(displayName, mimeType)
+                        ))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to list directory $currentDirUri", e)
+        }
     }
 
     data class SafFileInfo(

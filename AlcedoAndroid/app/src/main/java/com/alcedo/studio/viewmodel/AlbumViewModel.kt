@@ -248,8 +248,10 @@ class AlbumViewModel : ViewModel() {
                     // Some providers don't support persistable permission
                 }
 
-                val files = SafHelper.listDirectory(AppModule.context, treeUri)
-                val imageFiles = files.filter { !it.isDirectory }
+                // Use recursive listing to find all image files in the
+                // directory tree (including subdirectories), filtered by
+                // image extensions to avoid importing non-image files.
+                val imageFiles = SafHelper.listImageFilesRecursive(AppModule.context, treeUri)
 
                 if (imageFiles.isEmpty()) {
                     _permissionRationale.value = "所选目录中没有图片文件"
