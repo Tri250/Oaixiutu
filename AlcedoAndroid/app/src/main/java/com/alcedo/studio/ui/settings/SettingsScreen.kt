@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -159,365 +160,166 @@ fun SettingsScreen(navController: NavController) {
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 24.dp)
-        ) {
-            // ── 顶部用户信息卡 ─────────────────────────────────────────────
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                        modifier = Modifier.size(72.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(20.dp))
-                    Column {
-                        Text(
-                            text = "Alcedo Studio",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "v$APP_VERSION",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+        val isWideScreen = LocalConfiguration.current.screenWidthDp >= 600
 
-            // ── 通用设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsAppearance })
-            SettingsCard(
+        if (isWideScreen) {
+            // ── 宽屏两列布局 ──
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp)
             ) {
-                SettingsRow(
-                    icon = if (darkMode == "dark") Icons.Default.DarkMode
-                    else if (darkMode == "light") Icons.Default.LightMode
-                    else Icons.Default.BrightnessAuto,
-                    title = stringRes { settingsTheme },
-                    value = selectedTheme,
-                    onClick = { showThemeDialog = true }
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Palette,
-                    title = stringRes { settingsThemeVariant },
-                    value = getThemeVariantDisplayName(currentVariant),
-                    onClick = { showThemeVariantDialog = true }
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Language,
-                    title = stringRes { settingsLanguage },
-                    value = selectedLanguage,
-                    onClick = { showLanguageDialog = true }
-                )
-            }
-
-            // ── 相册设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsAlbumSection })
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                SettingsRow(
-                    icon = Icons.Default.Sort,
-                    title = stringRes { settingsDefaultSort },
-                    value = sortLabel,
-                    onClick = { showSortDialog = true },
-                    important = false
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Image,
-                    title = stringRes { settingsThumbnailQuality },
-                    value = thumbQualityLabel,
-                    onClick = { showThumbQualityDialog = true },
-                    important = false
-                )
-            }
-
-            // ── 编辑设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsEditorSection })
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                SettingsRow(
-                    icon = Icons.Default.FilePresent,
-                    title = stringRes { settingsDefaultExportFormat },
-                    value = exportFormatLabel,
-                    onClick = { showExportFormatDialog = true },
-                    important = false
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.HighQuality,
-                    title = stringRes { settingsDefaultExportQuality },
-                    value = exportQualityLabel,
-                    onClick = { showExportQualityDialog = true },
-                    important = false
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.ColorLens,
-                    title = stringRes { settingsDefaultColorSpace },
-                    value = colorSpaceLabel,
-                    onClick = { showColorSpaceDialog = true },
-                    important = false
-                )
-            }
-
-            // ── 存储管理 ─────────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsStorage })
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Storage,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                // 左列: 外观 / 相册 / 编辑器
+                Column(modifier = Modifier.weight(1f)) {
+                    SettingsUserCard(APP_VERSION)
+                    SettingsAppearanceSection(
+                        darkMode = darkMode,
+                        selectedTheme = selectedTheme,
+                        currentVariant = currentVariant,
+                        selectedLanguage = selectedLanguage,
+                        onThemeClick = { showThemeDialog = true },
+                        onThemeVariantClick = { showThemeVariantDialog = true },
+                        onLanguageClick = { showLanguageDialog = true }
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringRes { settingsCacheSize },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = cacheSize,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(onClick = { showClearCacheDialog = true }) {
-                        Text(stringRes { settingsClearThumbnails })
-                    }
-                    TextButton(onClick = { showClearModelsDialog = true }) {
-                        Text(stringRes { settingsClearModels })
-                    }
-                }
-                SectionDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
+                    SettingsAlbumSection(
+                        sortLabel = sortLabel,
+                        thumbQualityLabel = thumbQualityLabel,
+                        onSortClick = { showSortDialog = true },
+                        onThumbQualityClick = { showThumbQualityDialog = true }
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    OutlinedTextField(
-                        value = exportCachePath,
-                        onValueChange = {
+                    SettingsEditorSection(
+                        exportFormatLabel = exportFormatLabel,
+                        exportQualityLabel = exportQualityLabel,
+                        colorSpaceLabel = colorSpaceLabel,
+                        onExportFormatClick = { showExportFormatDialog = true },
+                        onExportQualityClick = { showExportQualityDialog = true },
+                        onColorSpaceClick = { showColorSpaceDialog = true }
+                    )
+                }
+                // 右列: 存储 / 隐私 / 统计 / 关于
+                Column(modifier = Modifier.weight(1f)) {
+                    SettingsStorageSection(
+                        cacheSize = cacheSize,
+                        exportCachePath = exportCachePath,
+                        onExportCachePathChange = {
                             exportCachePath = it
                             persistSetting("export_cache_path", it)
                         },
-                        label = { Text(stringRes { settingsExportCachePath }) },
-                        placeholder = { Text(stringRes { settingsSelectExportPath }) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        onClearCacheClick = { showClearCacheDialog = true },
+                        onClearModelsClick = { showClearModelsDialog = true }
                     )
+                    SettingsPrivacySection(
+                        aiProcessingConsent = aiProcessingConsent,
+                        analyticsConsent = analyticsConsent,
+                        onAiConsentChange = {
+                            aiProcessingConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
+                        },
+                        onAnalyticsConsentChange = {
+                            analyticsConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
+                        }
+                    )
+                    SettingsStatisticsSection(
+                        onStatsClick = { navController.navigate("stats") }
+                    )
+                    SettingsAboutSection(
+                        appVersion = APP_VERSION,
+                        crashReportsConsent = crashReportsConsent,
+                        onCrashReportsConsentChange = {
+                            crashReportsConsent = it
+                            if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                            else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                            CrashReportService.setUploadEnabled(it)
+                        },
+                        onPrivacyPolicyClick = { navController.navigate("privacy_policy") },
+                        onUserAgreementClick = { navController.navigate("user_agreement") },
+                        onAboutClick = { navController.navigate("about") }
+                    )
+                    SettingsDeveloperCard()
+                    SettingsFooter(developerName = DEVELOPER_NAME)
                 }
             }
-
-            // ── 隐私设置 ─────────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsPrivacySection })
-            SettingsCard(
+        } else {
+            // ── 窄屏单列布局 ──
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 24.dp)
             ) {
-                SwitchRow(
-                    icon = Icons.Default.Psychology,
-                    title = stringRes { settingsLocalAi },
-                    subtitle = stringRes { settingsLocalAiDesc },
-                    checked = aiProcessingConsent,
-                    onCheckedChange = {
+                SettingsUserCard(APP_VERSION)
+                SettingsAppearanceSection(
+                    darkMode = darkMode,
+                    selectedTheme = selectedTheme,
+                    currentVariant = currentVariant,
+                    selectedLanguage = selectedLanguage,
+                    onThemeClick = { showThemeDialog = true },
+                    onThemeVariantClick = { showThemeVariantDialog = true },
+                    onLanguageClick = { showLanguageDialog = true }
+                )
+                SettingsAlbumSection(
+                    sortLabel = sortLabel,
+                    thumbQualityLabel = thumbQualityLabel,
+                    onSortClick = { showSortDialog = true },
+                    onThumbQualityClick = { showThumbQualityDialog = true }
+                )
+                SettingsEditorSection(
+                    exportFormatLabel = exportFormatLabel,
+                    exportQualityLabel = exportQualityLabel,
+                    colorSpaceLabel = colorSpaceLabel,
+                    onExportFormatClick = { showExportFormatDialog = true },
+                    onExportQualityClick = { showExportQualityDialog = true },
+                    onColorSpaceClick = { showColorSpaceDialog = true }
+                )
+                SettingsStorageSection(
+                    cacheSize = cacheSize,
+                    exportCachePath = exportCachePath,
+                    onExportCachePathChange = {
+                        exportCachePath = it
+                        persistSetting("export_cache_path", it)
+                    },
+                    onClearCacheClick = { showClearCacheDialog = true },
+                    onClearModelsClick = { showClearModelsDialog = true }
+                )
+                SettingsPrivacySection(
+                    aiProcessingConsent = aiProcessingConsent,
+                    analyticsConsent = analyticsConsent,
+                    onAiConsentChange = {
                         aiProcessingConsent = it
                         if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.AI_PROCESSING)
                         else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.AI_PROCESSING)
-                    }
-                )
-                SectionDivider()
-                SwitchRow(
-                    icon = Icons.Default.Analytics,
-                    title = stringRes { settingsUsageAnalytics },
-                    subtitle = stringRes { settingsUsageAnalyticsDesc },
-                    checked = analyticsConsent,
-                    onCheckedChange = {
+                    },
+                    onAnalyticsConsentChange = {
                         analyticsConsent = it
                         if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.ANALYTICS)
                         else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.ANALYTICS)
                     }
                 )
-            }
-
-            // 统计分析
-            SettingsSectionHeader(stringRes { settingsStatistics })
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                SettingsRow(
-                    icon = Icons.Default.BarChart,
-                    title = stringRes { navStats },
-                    value = stringRes { settingsStatisticsDesc },
-                    onClick = { navController.navigate("stats") }
+                SettingsStatisticsSection(
+                    onStatsClick = { navController.navigate("stats") }
                 )
-            }
-
-            // ── 法律与关于 ───────────────────────────────────────────────
-            SettingsSectionHeader(stringRes { settingsAbout })
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                SettingsRow(
-                    icon = Icons.Default.PrivacyTip,
-                    title = stringRes { settingsPrivacyPolicy },
-                    value = stringRes { privacyPolicyTitle },
-                    onClick = { navController.navigate("privacy_policy") }
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Description,
-                    title = stringRes { settingsUserAgreement },
-                    value = stringRes { userAgreementTitle },
-                    onClick = { navController.navigate("user_agreement") }
-                )
-                SectionDivider()
-                SwitchRow(
-                    icon = Icons.Default.BugReport,
-                    title = stringRes { settingsCrashReporting },
-                    subtitle = stringRes { settingsCrashReportingDesc },
-                    checked = crashReportsConsent,
-                    onCheckedChange = {
+                SettingsAboutSection(
+                    appVersion = APP_VERSION,
+                    crashReportsConsent = crashReportsConsent,
+                    onCrashReportsConsentChange = {
                         crashReportsConsent = it
-                        if (it) {
-                            PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                        } else {
-                            PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
-                        }
-                        // Sync the reporting service so uploads respect consent.
+                        if (it) PrivacyManager.grantConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
+                        else PrivacyManager.revokeConsent(PrivacyManager.ConsentType.CRASH_REPORTS)
                         CrashReportService.setUploadEnabled(it)
-                    }
+                    },
+                    onPrivacyPolicyClick = { navController.navigate("privacy_policy") },
+                    onUserAgreementClick = { navController.navigate("user_agreement") },
+                    onAboutClick = { navController.navigate("about") }
                 )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Info,
-                    title = stringRes { settingsVersionInfo },
-                    value = "v$APP_VERSION"
-                )
-                SectionDivider()
-                SettingsRow(
-                    icon = Icons.Default.Info,
-                    title = stringRes { settingsAbout },
-                    value = stringRes { settingsAboutDesc },
-                    onClick = { navController.navigate("about") }
-                )
+                SettingsDeveloperCard()
+                SettingsFooter(developerName = DEVELOPER_NAME)
             }
-
-            // 开发者卡片 – 更佳间距与暖色调
-            SettingsCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = stringRes { settingsDeveloper },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = DEVELOPER_NAME,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-
-            // ── 底部署名 ─────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Made with ❤ by $DEVELOPER_NAME",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            )
         }
     }
 
@@ -1072,4 +874,401 @@ private fun formatFileSize(bytes: Long): String {
         bytes >= 1_024 -> "%.1f KB".format(bytes / 1_024.0)
         else -> "$bytes B"
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 提取的设置分区 Composable — 供宽屏/窄屏布局复用
+// ═══════════════════════════════════════════════════════════════════
+
+@Composable
+private fun SettingsUserCard(appVersion: String) {
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                modifier = Modifier.size(72.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(20.dp))
+            Column {
+                Text(
+                    text = "Alcedo Studio",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "v$appVersion",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsAppearanceSection(
+    darkMode: String,
+    selectedTheme: String,
+    currentVariant: AlcedoThemeVariant,
+    selectedLanguage: String,
+    onThemeClick: () -> Unit,
+    onThemeVariantClick: () -> Unit,
+    onLanguageClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsAppearance })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SettingsRow(
+            icon = if (darkMode == "dark") Icons.Default.DarkMode
+            else if (darkMode == "light") Icons.Default.LightMode
+            else Icons.Default.BrightnessAuto,
+            title = stringRes { settingsTheme },
+            value = selectedTheme,
+            onClick = onThemeClick
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Palette,
+            title = stringRes { settingsThemeVariant },
+            value = getThemeVariantDisplayName(currentVariant),
+            onClick = onThemeVariantClick
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Language,
+            title = stringRes { settingsLanguage },
+            value = selectedLanguage,
+            onClick = onLanguageClick
+        )
+    }
+}
+
+@Composable
+private fun SettingsAlbumSection(
+    sortLabel: String,
+    thumbQualityLabel: String,
+    onSortClick: () -> Unit,
+    onThumbQualityClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsAlbumSection })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SettingsRow(
+            icon = Icons.Default.Sort,
+            title = stringRes { settingsDefaultSort },
+            value = sortLabel,
+            onClick = onSortClick,
+            important = false
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Image,
+            title = stringRes { settingsThumbnailQuality },
+            value = thumbQualityLabel,
+            onClick = onThumbQualityClick,
+            important = false
+        )
+    }
+}
+
+@Composable
+private fun SettingsEditorSection(
+    exportFormatLabel: String,
+    exportQualityLabel: String,
+    colorSpaceLabel: String,
+    onExportFormatClick: () -> Unit,
+    onExportQualityClick: () -> Unit,
+    onColorSpaceClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsEditorSection })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SettingsRow(
+            icon = Icons.Default.FilePresent,
+            title = stringRes { settingsDefaultExportFormat },
+            value = exportFormatLabel,
+            onClick = onExportFormatClick,
+            important = false
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.HighQuality,
+            title = stringRes { settingsDefaultExportQuality },
+            value = exportQualityLabel,
+            onClick = onExportQualityClick,
+            important = false
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.ColorLens,
+            title = stringRes { settingsDefaultColorSpace },
+            value = colorSpaceLabel,
+            onClick = onColorSpaceClick,
+            important = false
+        )
+    }
+}
+
+@Composable
+private fun SettingsStorageSection(
+    cacheSize: String,
+    exportCachePath: String,
+    onExportCachePathChange: (String) -> Unit,
+    onClearCacheClick: () -> Unit,
+    onClearModelsClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsStorage })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Storage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringRes { settingsCacheSize },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = cacheSize,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onClearCacheClick) {
+                Text(stringRes { settingsClearThumbnails })
+            }
+            TextButton(onClick = onClearModelsClick) {
+                Text(stringRes { settingsClearModels })
+            }
+        }
+        SectionDivider()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            OutlinedTextField(
+                value = exportCachePath,
+                onValueChange = onExportCachePathChange,
+                label = { Text(stringRes { settingsExportCachePath }) },
+                placeholder = { Text(stringRes { settingsSelectExportPath }) },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsPrivacySection(
+    aiProcessingConsent: Boolean,
+    analyticsConsent: Boolean,
+    onAiConsentChange: (Boolean) -> Unit,
+    onAnalyticsConsentChange: (Boolean) -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsPrivacySection })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SwitchRow(
+            icon = Icons.Default.Psychology,
+            title = stringRes { settingsLocalAi },
+            subtitle = stringRes { settingsLocalAiDesc },
+            checked = aiProcessingConsent,
+            onCheckedChange = onAiConsentChange
+        )
+        SectionDivider()
+        SwitchRow(
+            icon = Icons.Default.Analytics,
+            title = stringRes { settingsUsageAnalytics },
+            subtitle = stringRes { settingsUsageAnalyticsDesc },
+            checked = analyticsConsent,
+            onCheckedChange = onAnalyticsConsentChange
+        )
+    }
+}
+
+@Composable
+private fun SettingsStatisticsSection(
+    onStatsClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsStatistics })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SettingsRow(
+            icon = Icons.Default.BarChart,
+            title = stringRes { navStats },
+            value = stringRes { settingsStatisticsDesc },
+            onClick = onStatsClick
+        )
+    }
+}
+
+@Composable
+private fun SettingsAboutSection(
+    appVersion: String,
+    crashReportsConsent: Boolean,
+    onCrashReportsConsentChange: (Boolean) -> Unit,
+    onPrivacyPolicyClick: () -> Unit,
+    onUserAgreementClick: () -> Unit,
+    onAboutClick: () -> Unit
+) {
+    SettingsSectionHeader(stringRes { settingsAbout })
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        SettingsRow(
+            icon = Icons.Default.PrivacyTip,
+            title = stringRes { settingsPrivacyPolicy },
+            value = stringRes { privacyPolicyTitle },
+            onClick = onPrivacyPolicyClick
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Description,
+            title = stringRes { settingsUserAgreement },
+            value = stringRes { userAgreementTitle },
+            onClick = onUserAgreementClick
+        )
+        SectionDivider()
+        SwitchRow(
+            icon = Icons.Default.BugReport,
+            title = stringRes { settingsCrashReporting },
+            subtitle = stringRes { settingsCrashReportingDesc },
+            checked = crashReportsConsent,
+            onCheckedChange = onCrashReportsConsentChange
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Info,
+            title = stringRes { settingsVersionInfo },
+            value = "v$appVersion"
+        )
+        SectionDivider()
+        SettingsRow(
+            icon = Icons.Default.Info,
+            title = stringRes { settingsAbout },
+            value = stringRes { settingsAboutDesc },
+            onClick = onAboutClick
+        )
+    }
+}
+
+@Composable
+private fun SettingsDeveloperCard() {
+    SettingsCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = stringRes { settingsDeveloper },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = DEVELOPER_NAME,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsFooter(developerName: String) {
+    Spacer(modifier = Modifier.height(20.dp))
+    Text(
+        text = "Made with ❤ by $developerName",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    )
 }

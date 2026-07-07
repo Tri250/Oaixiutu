@@ -15,14 +15,18 @@ import com.alcedo.studio.data.model.*
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.ndk.AiNdkBridge
+import com.alcedo.studio.service.TaskNotificationHelper
 import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.storage.MediaStoreHelper
 import com.alcedo.studio.storage.PhotoPickerHelper
 import com.alcedo.studio.storage.SafHelper
 import com.alcedo.studio.ui.album.FilterState
 import com.alcedo.studio.ui.album.SortMode
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -173,6 +177,21 @@ class AlbumViewModel : ViewModel() {
     private val _permissionRationale = MutableStateFlow<String?>(null)
     val permissionRationale: StateFlow<String?> = _permissionRationale
 
+    // ── Snackbar events ──
+    private val _snackbarEvent = MutableSharedFlow<String>()
+    val snackbarEvent: SharedFlow<String> = _snackbarEvent.asSharedFlow()
+
+    fun showSnackbar(message: String) {
+        viewModelScope.launch {
+            _snackbarEvent.emit(message)
+        }
+    }
+
+    // ── Import progress ──
+
+    private val _importProgress = MutableStateFlow<ImportProgress?>(null)
+    val importProgress: StateFlow<ImportProgress?> = _importProgress.asStateFlow()
+
     init {
         try {
             checkPermissions()
@@ -248,9 +267,10 @@ class AlbumViewModel : ViewModel() {
     fun importFromSafDirectory(treeUri: Uri) {
         viewModelScope.launch {
             _isLoading.value = true
+            val context = AppModule.context
             try {
                 // Persist tree URI permission so we can access files later
-                val resolver = AppModule.context.contentResolver
+                val resolver = context.contentResolver
                 try {
                     resolver.takePersistableUriPermission(
                         treeUri,
@@ -263,7 +283,7 @@ class AlbumViewModel : ViewModel() {
                 // Use recursive listing to find all image files in the
                 // directory tree (including subdirectories), filtered by
                 // image extensions to avoid importing non-image files.
-                val imageFiles = SafHelper.listImageFilesRecursive(AppModule.context, treeUri)
+                val imageFiles = SafHelper.listImageFilesRecursive(context, treeUri)
 
                 if (imageFiles.isEmpty()) {
                     _permissionRationale.value = "所选目录中没有图片文件"
@@ -271,12 +291,17 @@ class AlbumViewModel : ViewModel() {
                 }
 
                 val uris = imageFiles.map { it.uri }
+                _importProgress.value = ImportProgress(0, uris.size, "importing")
+                TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
                 importService.importTwoPhase(uris)
+                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, uris.size)
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromSafDirectory failed", e)
                 _permissionRationale.value = "目录导入失败: ${e.message ?: "未知错误"}"
+                _importProgress.value = null
             } finally {
                 _isLoading.value = false
             }
@@ -290,14 +315,20 @@ class AlbumViewModel : ViewModel() {
     fun importFromPhotoPicker(uris: List<Uri>) {
         viewModelScope.launch {
             _isLoading.value = true
+            val context = AppModule.context
             try {
                 // Use two-phase import for better UX (fast scan + background metadata)
+                _importProgress.value = ImportProgress(0, uris.size, "importing")
+                TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
                 importService.importTwoPhase(uris)
+                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, uris.size)
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
                 _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
+                _importProgress.value = null
             } finally {
                 _isLoading.value = false
             }
@@ -568,14 +599,22 @@ class AlbumViewModel : ViewModel() {
     fun importFromStorage(uris: List<Uri>) {
         viewModelScope.launch {
             _isLoading.value = true
+            val context = AppModule.context
             try {
-                for (uri in uris) {
+                _importProgress.value = ImportProgress(0, uris.size, "importing")
+                TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
+                for ((index, uri) in uris.withIndex()) {
                     importService.importImage(uri)
+                    _importProgress.value = ImportProgress(index + 1, uris.size, "importing")
+                    TaskNotificationHelper.notifyImportProgress(context, index + 1, uris.size)
                 }
+                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, uris.size)
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromStorage failed", e)
+                _importProgress.value = null
             } finally {
                 _isLoading.value = false
             }
@@ -844,6 +883,7 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val ids = _selectedImages.value.toList()
+                val count = ids.size
                 ids.map { id ->
                     async {
                         // 完整删除链路 (F-2 修复):
@@ -860,6 +900,7 @@ class AlbumViewModel : ViewModel() {
                 clearSelection()
                 loadImages()
                 loadFolders()
+                showSnackbar("已删除 $count 张图片")
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
                 _permissionError.value = "删除失败: ${e.message ?: "未知错误"}"
@@ -989,14 +1030,18 @@ class AlbumViewModel : ViewModel() {
     /** 批量为多张图片生成 AI 标签 */
     fun generateLabelsForImages(ids: List<Long>) {
         viewModelScope.launch {
+            val context = AppModule.context
             try {
-                for (imageId in ids) {
+                for ((index, imageId) in ids.withIndex()) {
+                    TaskNotificationHelper.notifyAiTaggingProgress(context, index + 1, ids.size)
                     val image = imageRepository.getImage(imageId) ?: continue
                     val result = thumbnailService.loadThumbnail(imageId)
                     if (result is ThumbnailService.ThumbnailResult.Success) {
                         aiService.generateLabels(imageId.toUInt(), result.bitmap)
                     }
                 }
+                TaskNotificationHelper.notifyAiTaggingComplete(context, ids.size)
+                showSnackbar("已为 ${ids.size} 张图片生成标签")
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
             }
@@ -1006,10 +1051,14 @@ class AlbumViewModel : ViewModel() {
     /** 批量为多张图片设置评分 */
     fun rateImages(ids: List<Long>, rating: Int) {
         viewModelScope.launch {
+            val context = AppModule.context
             try {
-                for (imageId in ids) {
+                for ((index, imageId) in ids.withIndex()) {
+                    TaskNotificationHelper.notifyAiRatingProgress(context, index + 1, ids.size)
                     sleeveRepository.setRating(imageId, rating)
                 }
+                TaskNotificationHelper.notifyAiRatingComplete(context, ids.size)
+                showSnackbar("评分完成")
                 // 批量评分后刷新 UI (S-1 修复)
                 val idSet = ids.toSet()
                 val updated = _images.value.map { img ->
@@ -1111,6 +1160,7 @@ class AlbumViewModel : ViewModel() {
                 _clipboardParams.value = params
                 _clipboardSourceId.value = sourceId
                 _batchEditMessage.value = "Adjustments copied from image $sourceId"
+                showSnackbar("调整已复制")
             } catch (e: Throwable) {
                 Log.e("AlbumVM", "copyAdjustments failed", e)
                 _batchEditMessage.value = "Copy failed: ${e.message ?: "unknown error"}"
@@ -1132,6 +1182,7 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             val outcome = batchEditService.pasteAdjustments(targets, params)
             _batchEditMessage.value = messageForOutcome(outcome, "Paste")
+            showSnackbar("调整已粘贴到 ${targets.size} 张图片")
         }
     }
 
@@ -1162,6 +1213,7 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             val outcome = batchEditService.resetAdjustments(targets)
             _batchEditMessage.value = messageForOutcome(outcome, "Reset")
+            showSnackbar("调整已重置")
         }
     }
 
@@ -1228,4 +1280,10 @@ class AlbumViewModel : ViewModel() {
 data class FolderBreadcrumb(
     val folderId: Long,
     val name: String
+)
+
+data class ImportProgress(
+    val current: Int = 0,
+    val total: Int = 0,
+    val phase: String = "scanning" // "scanning" | "importing" | "completed"
 )

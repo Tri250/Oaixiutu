@@ -44,6 +44,8 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -53,8 +55,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -76,6 +80,7 @@ import com.alcedo.studio.privacy.PrivacyConsentDialog
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.album.AlbumScreen
 import com.alcedo.studio.ui.album.StatsView
+import com.alcedo.studio.viewmodel.AlbumViewModel
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.ai.AiSearchScreen
@@ -84,6 +89,7 @@ import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
 import com.alcedo.studio.ui.common.NavTransitions
+import com.alcedo.studio.ui.onboarding.OnboardingScreen
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
 import com.alcedo.studio.ui.settings.AboutPage
@@ -155,6 +161,16 @@ fun MainScreen(
     val context = LocalContext.current
     val view = LocalView.current
 
+    // Snackbar 统一反馈: 收集 AlbumViewModel 的事件流
+    val snackbarHostState = remember { SnackbarHostState() }
+    val albumViewModel: AlbumViewModel = viewModel()
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        albumViewModel.snackbarEvent.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     // 通知权限请求 (Android 13+)
     val notificationPermissionState = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -190,7 +206,19 @@ fun MainScreen(
         }
     }
 
+    // 首次启动引导教程
+    val prefs = remember { com.alcedo.studio.di.AppModule.context.getSharedPreferences("alcedo_prefs", 0) }
+    val onboardingCompleted = remember { prefs.getBoolean("onboarding_completed", false) }
+    var showOnboarding by remember { mutableStateOf(!onboardingCompleted) }
+
+    if (showOnboarding) {
+        OnboardingScreen(onFinish = {
+            showOnboarding = false
+            prefs.edit().putBoolean("onboarding_completed", true).apply()
+        })
+    } else {
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
                 // 干净的 Material3 底部导航栏 – surfaceContainer 暖色背景,贴合 Hasselblad Dark 旗舰观感
@@ -232,7 +260,7 @@ fun MainScreen(
                     popEnterTransition = { alcedoNavPopEnter(this) },
                     popExitTransition = { alcedoNavPopExit(this) }
                 ) {
-                    alcedoNavGraph(navController)
+                    alcedoNavGraph(navController, albumViewModel)
                 }
             }
             NavigationType.NAVIGATION_RAIL -> {
@@ -285,7 +313,7 @@ fun MainScreen(
                         popEnterTransition = { alcedoNavPopEnter(this) },
                         popExitTransition = { alcedoNavPopExit(this) }
                     ) {
-                        alcedoNavGraph(navController)
+                        alcedoNavGraph(navController, albumViewModel)
                     }
                 }
             }
@@ -374,7 +402,7 @@ fun MainScreen(
                         popEnterTransition = { alcedoNavPopEnter(this) },
                         popExitTransition = { alcedoNavPopExit(this) }
                     ) {
-                        alcedoNavGraph(navController)
+                        alcedoNavGraph(navController, albumViewModel)
                     }
                 }
             }
@@ -394,6 +422,7 @@ fun MainScreen(
         }
         }
     }
+    } // end else (onboarding)
 
     // 首次启动隐私同意弹窗
     if (showPrivacyDialog) {
@@ -515,9 +544,12 @@ private fun AlcedoNavIcon(
 }
 
 // 导航图 – 注册所有页面路由
-private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
+private fun NavGraphBuilder.alcedoNavGraph(
+    navController: NavHostController,
+    albumViewModel: AlbumViewModel
+) {
     composable(MainDestination.ALBUM.route) {
-        AlbumScreen(navController = navController)
+        AlbumScreen(navController = navController, viewModel = albumViewModel)
     }
     composable(MainDestination.CREATE.route) {
         AiSearchScreen(navController = navController)
@@ -549,6 +581,11 @@ private fun NavGraphBuilder.alcedoNavGraph(navController: NavHostController) {
         UserAgreementScreen(navController = navController)
     }
     composable("stats") {
-        StatsView(navController = navController)
+        StatsView(
+            navController = navController,
+            onNavigateToImage = { imageId ->
+                navController.navigate("editor/$imageId")
+            }
+        )
     }
 }

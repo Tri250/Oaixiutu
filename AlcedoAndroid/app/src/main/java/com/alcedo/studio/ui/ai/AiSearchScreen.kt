@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -51,8 +52,10 @@ fun AiSearchScreen(
     val searchResults by albumViewModel.searchResults.collectAsStateWithLifecycle()
     val semanticEnabled by albumViewModel.semanticSearchEnabled.collectAsStateWithLifecycle()
     val images by albumViewModel.filteredImages.collectAsStateWithLifecycle()
+    val aiModelLoaded = remember { mutableStateOf(com.alcedo.studio.di.AppModule.aiService.isModelLoaded()) }
     // 缩略图通过 LruCache 存储；订阅版本号触发重组，bitmap 直接访问
     @Suppress("UNUSED_VARIABLE") val thumbnailCacheVersion by albumViewModel.thumbnailCacheVersion.collectAsStateWithLifecycle()
+    var showAiModelToast by remember { mutableStateOf(false) }
 
     var inputText by remember { mutableStateOf("") }
     var searchHistory by remember { mutableStateOf(loadSearchHistory()) }
@@ -71,7 +74,18 @@ fun AiSearchScreen(
         )
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show toast when AI model is not loaded
+    LaunchedEffect(showAiModelToast) {
+        if (showAiModelToast) {
+            snackbarHostState.showSnackbar("请先下载AI模型")
+            showAiModelToast = false
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -137,7 +151,13 @@ fun AiSearchScreen(
                     }
                     FilterChip(
                         selected = semanticEnabled,
-                        onClick = { albumViewModel.toggleSemanticSearch() },
+                        onClick = {
+                            if (!aiModelLoaded.value) {
+                                showAiModelToast = true
+                            } else {
+                                albumViewModel.toggleSemanticSearch()
+                            }
+                        },
                         label = {
                             Text(
                                 "AI",
@@ -160,7 +180,7 @@ fun AiSearchScreen(
                     AiQuickActionCard(
                         icon = Icons.Default.AutoAwesome,
                         title = stringRes { navAiRating },
-                        subtitle = "智能评分",
+                        subtitle = if (aiModelLoaded.value) "智能评分" else "智能评分(本地模式)",
                         onClick = { navController.navigate("ai_rating") }
                     )
                 }
@@ -384,10 +404,10 @@ fun AiSearchScreen(
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
-                                AiCapabilityRow(Icons.Default.Image, "语义搜索", "用自然语言描述图片内容")
-                                AiCapabilityRow(Icons.Default.Label, "标签匹配", "自动识别图片中的场景和对象")
-                                AiCapabilityRow(Icons.Default.Camera, "EXIF 搜索", "按相机、镜头、参数筛选")
-                                AiCapabilityRow(Icons.Default.Star, "智能评分", "AI 分析图片质量并推荐")
+                                AiCapabilityRow(Icons.Default.Image, "语义搜索", "用自然语言描述图片内容", enabled = aiModelLoaded.value)
+                                AiCapabilityRow(Icons.Default.Label, "标签匹配", "自动识别图片中的场景和对象", enabled = aiModelLoaded.value)
+                                AiCapabilityRow(Icons.Default.Camera, "EXIF 搜索", "按相机、镜头、参数筛选", enabled = true)
+                                AiCapabilityRow(Icons.Default.Star, "智能评分", "AI 分析图片质量并推荐", enabled = true)
                             }
                         }
                     }
@@ -447,11 +467,22 @@ fun AiSearchScreen(
 }
 
 @Composable
-private fun AiCapabilityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, desc: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun AiCapabilityRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    desc: String,
+    enabled: Boolean = true
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (!enabled) Modifier.alpha(0.5f) else Modifier)
+    ) {
         Surface(
             shape = androidx.compose.foundation.shape.CircleShape,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            color = if (enabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
             modifier = Modifier.size(32.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -459,14 +490,34 @@ private fun AiCapabilityRow(icon: androidx.compose.ui.graphics.vector.ImageVecto
                     icon,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = if (enabled) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Text(
+                desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+        if (!enabled) {
+            Text(
+                "需下载模型",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
@@ -514,21 +565,21 @@ private fun SearchResultCard(
                 }
             }
 
-            // Similarity badge — 暖色强调
+            // Similarity badge — 半透明匹配度百分比
             if (similarity != null) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+                        .padding(4.dp),
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
                 ) {
                     Text(
                         "${(similarity * 100).toInt()}%",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }

@@ -1,6 +1,9 @@
 package com.alcedo.studio.ui.settings
 
-import androidx.compose.foundation.layout.*
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -244,6 +247,25 @@ fun AboutPage(navController: NavController) {
                         supportingContent = { Text("github.com/alcedo-studio/alcedo/issues") },
                         leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth()
+                    )
+                    // 发送反馈 — 通过邮件
+                    ListItem(
+                        headlineContent = { Text("发送反馈") },
+                        supportingContent = { Text("通过邮件告诉我们你的想法") },
+                        leadingContent = {
+                            Icon(Icons.Default.Feedback, contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:feedback@alcedo.studio")
+                                    putExtra(Intent.EXTRA_SUBJECT, "Alcedo Studio 用户反馈")
+                                    putExtra(Intent.EXTRA_TEXT, "设备: ${Build.MODEL}\n系统: Android ${Build.VERSION.RELEASE}\n版本: ${BuildConfig.VERSION_NAME}\n\n反馈内容:\n")
+                                }
+                                context.startActivity(Intent.createChooser(intent, "发送反馈"))
+                            }
                     )
                 }
             }

@@ -13,6 +13,7 @@ import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.PipelineService
+import com.alcedo.studio.service.TaskNotificationHelper
 import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -474,6 +475,7 @@ class ExportViewModel : ViewModel() {
                 completedItems = 0,
                 currentItem = 0
             )
+            val context = AppModule.context
             try {
                 val items = _batchItems.value
                 val totalItems = items.size
@@ -482,6 +484,10 @@ class ExportViewModel : ViewModel() {
                 for ((index, item) in items.withIndex()) {
                     val image = imageRepository.getImage(item.imageId)
                     if (image != null) {
+                        // Notify progress in notification bar
+                        TaskNotificationHelper.notifyExportProgress(
+                            context, index + 1, totalItems, image.imageName
+                        )
                         val options = BitmapFactory.Options().apply {
                             inJustDecodeBounds = true
                             BitmapFactory.decodeFile(image.imagePath, this)
@@ -520,8 +526,12 @@ class ExportViewModel : ViewModel() {
                 exportService.exportBatch(exportItems, exportSettings)
 
                 _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
+                // Notify completion in notification bar
+                TaskNotificationHelper.notifyExportComplete(context, items.size, totalItems)
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportBatch failed", e)
+                // Notify failure in notification bar
+                TaskNotificationHelper.notifyExportFailed(context, e.message ?: "导出失败")
             } finally {
                 _isExporting.value = false
             }
@@ -549,13 +559,19 @@ class ExportViewModel : ViewModel() {
                 completedItems = 0,
                 currentItem = 0
             )
+            val context = AppModule.context
             try {
                 val exportSettings = _settings.value
+                // Notify initial progress
+                TaskNotificationHelper.notifyExportProgress(context, 0, items.size)
                 val result = exportService.exportBatch(items, exportSettings)
                 _batchResult.value = result
                 _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
+                // Notify completion in notification bar
+                TaskNotificationHelper.notifyExportComplete(context, result.successCount, items.size)
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportBatch(items) failed", e)
+                TaskNotificationHelper.notifyExportFailed(context, e.message ?: "导出失败")
             } finally {
                 _isExporting.value = false
             }
@@ -608,6 +624,7 @@ class ExportViewModel : ViewModel() {
 
     fun cancelExport() {
         exportService.cancelExport()
+        TaskNotificationHelper.cancelExport(AppModule.context)
         _isExporting.value = false
     }
 

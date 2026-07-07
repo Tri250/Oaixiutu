@@ -29,8 +29,11 @@ import com.alcedo.studio.utils.MemoryGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -74,6 +77,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing
+
+    // ── Image load error ──
+    private val _imageLoadError = MutableStateFlow(false)
+    val imageLoadError: StateFlow<Boolean> = _imageLoadError.asStateFlow()
+
+    // ── Snackbar events ──
+    private val _snackbarEvent = MutableSharedFlow<String>()
+    val snackbarEvent: SharedFlow<String> = _snackbarEvent.asSharedFlow()
+
+    fun showSnackbar(message: String) {
+        viewModelScope.launch { _snackbarEvent.emit(message) }
+    }
 
     // P2-8 锐化蒙版可视化
     private val _showSharpeningMask = MutableStateFlow(false)
@@ -371,6 +386,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private fun loadImage() {
         viewModelScope.launch {
+            _imageLoadError.value = false
             val id = imageId.toLongOrNull() ?: return@launch
             val img = imageRepository.getImage(id)
             _imageModel.value = img
@@ -415,10 +431,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     System.gc()
                     _originalBitmap.value = null
                     _previewBitmap.value = null
+                    _imageLoadError.value = true
                 } catch (e: Exception) {
                     Log.e("EditorVM", "Failed to load image", e)
                     _originalBitmap.value = null
                     _previewBitmap.value = null
+                    _imageLoadError.value = true
                 }
                 _history.value = editHistoryRepository.getHistory(id.toUInt())
                     ?: EditHistory(boundImageId = id.toUInt())
@@ -430,6 +448,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 loadPresets()
             }
         }
+    }
+
+    /** Retry loading the image after a failure. */
+    fun retryLoadImage() {
+        loadImage()
     }
 
     // ================================================================
@@ -1869,11 +1892,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun applyPreset(preset: com.alcedo.studio.domain.service.PresetWithThumbnail) {
         applyPresetParams(preset.params)
         recordTransaction(OperatorType.PRESET, "applyPreset:${preset.name}", 0f)
+        showSnackbar("预设已应用")
     }
 
     fun applyPreset(preset: PresetEntry) {
         applyPresetParams(preset.params)
         recordTransaction(OperatorType.PRESET, "applyPreset:${preset.name}", 0f)
+        showSnackbar("预设已应用")
     }
 
     /**
@@ -1925,6 +1950,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 }
                 presetService.createPreset(name, category, _params.value, previewBitmap, description)
                 Log.d(TAG, "Preset saved: $name")
+                showSnackbar("预设已保存")
             } catch (_: Throwable) {
                 Log.e(TAG, "Failed to save preset", null)
             }
@@ -1941,6 +1967,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 presetService.deletePreset(id)
+                showSnackbar("预设已删除")
             } catch (_: Throwable) {}
         }
     }

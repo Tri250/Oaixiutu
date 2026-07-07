@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +60,7 @@ fun StatsView(
     ratingDistribution: List<RatingDistribution> = emptyList(),
     tagCloud: List<LabelFrequency> = emptyList(),
     totalImages: Int = 0,
+    onNavigateToImage: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // 自行加载统计数据 — 此前调用方仅传入默认空列表，导致统计页始终为空
@@ -68,6 +70,7 @@ fun StatsView(
     var loadedRatingDistribution by remember { mutableStateOf(ratingDistribution) }
     var loadedTagCloud by remember { mutableStateOf(tagCloud) }
     var loadedTotalImages by remember { mutableStateOf(totalImages) }
+    var allMetadata by remember { mutableStateOf<List<ImageMetadataEntity>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -82,6 +85,7 @@ fun StatsView(
 
                 val allMetadata = imageRepository.getAllImageMetadata()
                 loadedTotalImages = allMetadata.size
+                this@StatsView.allMetadata = allMetadata
                 loadedRatingDistribution = (0..5).map { rating ->
                     RatingDistribution(rating, allMetadata.count { it.rating == rating })
                 }
@@ -149,22 +153,22 @@ fun StatsView(
             }
 
             // ── Date Distribution Chart ──────────────────────────────
-            DateDistributionChart(loadedDateDistribution)
+            DateDistributionChart(loadedDateDistribution, allMetadata, onNavigateToImage)
 
             // ── Camera Model Distribution ────────────────────────────
-            CameraDistributionChart(loadedCameraDistribution)
+            CameraDistributionChart(loadedCameraDistribution, allMetadata, onNavigateToImage)
 
             // ── Lens Distribution ────────────────────────────────────
-            LensDistributionChart(loadedLensDistribution)
+            LensDistributionChart(loadedLensDistribution, allMetadata, onNavigateToImage)
 
             // ── Focal Length Distribution ─────────────────────────────
-            FocalLengthDistributionChart(loadedLensDistribution)
+            FocalLengthDistributionChart(loadedLensDistribution, allMetadata, onNavigateToImage)
 
             // ── Rating Distribution ──────────────────────────────────
-            RatingDistributionChart(loadedRatingDistribution, loadedTotalImages)
+            RatingDistributionChart(loadedRatingDistribution, loadedTotalImages, allMetadata, onNavigateToImage)
 
             // ── Tag Cloud ────────────────────────────────────────────
-            TagCloudChart(loadedTagCloud)
+            TagCloudChart(loadedTagCloud, allMetadata, onNavigateToImage)
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -215,7 +219,11 @@ private fun AnimatedHorizontalBar(
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
+private fun DateDistributionChart(
+    dateDistribution: List<DateFacet>,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
+) {
     ChartCard(
         title = stringRes { statsDateDistribution },
         icon = Icons.Default.DateRange,
@@ -234,10 +242,20 @@ private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
                     val percentage = if (total > 0) (facet.count * 100f / total) else 0f
                     val label = "${facet.year}${if (facet.month != null) "/${facet.month}" else ""}"
 
+                    val matchingDateImages = allMetadata.filter { meta ->
+                        meta.captureDate > 0 && {
+                            val cal = java.util.Calendar.getInstance().apply { timeInMillis = meta.captureDate }
+                            cal.get(java.util.Calendar.YEAR) == facet.year &&
+                                (facet.month == null || (cal.get(java.util.Calendar.MONTH) + 1) == facet.month)
+                        }()
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .padding(vertical = 3.dp)
+                            .clickable(enabled = matchingDateImages.isNotEmpty()) {
+                                matchingDateImages.firstOrNull()?.let { onNavigateToImage(it.imageId) }
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -278,7 +296,11 @@ private fun DateDistributionChart(dateDistribution: List<DateFacet>) {
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
+private fun CameraDistributionChart(
+    cameraDistribution: List<CameraFacet>,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
+) {
     ChartCard(
         title = stringRes { statsCameraModels },
         icon = Icons.Default.PhotoCamera,
@@ -302,10 +324,17 @@ private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
                         else -> BarGradientGreen
                     }
 
+                    val matchingCameraImages = allMetadata.filter { meta ->
+                        meta.cameraMake.contains(facet.make, ignoreCase = true) &&
+                            meta.cameraModel.contains(facet.model, ignoreCase = true)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .padding(vertical = 3.dp)
+                            .clickable(enabled = matchingCameraImages.isNotEmpty()) {
+                                matchingCameraImages.firstOrNull()?.let { onNavigateToImage(it.imageId) }
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -348,7 +377,11 @@ private fun CameraDistributionChart(cameraDistribution: List<CameraFacet>) {
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
+private fun LensDistributionChart(
+    lensDistribution: List<LensFacet>,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
+) {
     ChartCard(
         title = stringRes { statsLensDistribution },
         icon = Icons.Default.Camera,
@@ -371,10 +404,16 @@ private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
                         else -> BarGradientGreen
                     }
 
+                    val matchingLensImages = allMetadata.filter { meta ->
+                        meta.lensModel.contains(facet.model, ignoreCase = true)
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .padding(vertical = 3.dp)
+                            .clickable(enabled = matchingLensImages.isNotEmpty()) {
+                                matchingLensImages.firstOrNull()?.let { onNavigateToImage(it.imageId) }
+                            },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -417,7 +456,11 @@ private fun LensDistributionChart(lensDistribution: List<LensFacet>) {
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun FocalLengthDistributionChart(lensDistribution: List<LensFacet>) {
+private fun FocalLengthDistributionChart(
+    lensDistribution: List<LensFacet>,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
+) {
     ChartCard(
         title = "焦段分布",
         icon = Icons.Default.Camera,
@@ -450,10 +493,16 @@ private fun FocalLengthDistributionChart(lensDistribution: List<LensFacet>) {
             focalLengths.forEach { (focal, count) ->
                 val fraction = count.toFloat() / maxCount
                 val percentage = if (total > 0) count * 100f / total else 0f
+                val matchingFocalImages = allMetadata.filter { meta ->
+                    meta.lensModel.contains(focal, ignoreCase = true)
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 3.dp),
+                        .padding(vertical = 3.dp)
+                        .clickable(enabled = matchingFocalImages.isNotEmpty()) {
+                            matchingFocalImages.firstOrNull()?.let { onNavigateToImage(it.imageId) }
+                        },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -498,7 +547,9 @@ private fun FocalLengthDistributionChart(lensDistribution: List<LensFacet>) {
 @Composable
 private fun RatingDistributionChart(
     ratingDistribution: List<RatingDistribution>,
-    totalImages: Int
+    totalImages: Int,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
 ) {
     ChartCard(
         title = stringRes { statsRatingDistribution },
@@ -516,10 +567,14 @@ private fun RatingDistributionChart(
                 val fraction = if (maxCount > 0) count.toFloat() / maxCount else 0f
                 val percentage = if (totalImages > 0) count * 100f / totalImages else 0f
 
+                val matchingRatingImages = allMetadata.filter { it.rating == rating }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 4.dp)
+                        .clickable(enabled = matchingRatingImages.isNotEmpty()) {
+                            matchingRatingImages.firstOrNull()?.let { onNavigateToImage(it.imageId) }
+                        },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Star icons or "Unrated" label
@@ -584,7 +639,11 @@ private fun RatingDistributionChart(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TagCloudChart(tagCloud: List<LabelFrequency>) {
+private fun TagCloudChart(
+    tagCloud: List<LabelFrequency>,
+    allMetadata: List<ImageMetadataEntity>,
+    onNavigateToImage: (Long) -> Unit
+) {
     ChartCard(
         title = stringRes { statsTagCloud },
         icon = Icons.Default.Label,
@@ -612,7 +671,10 @@ private fun TagCloudChart(tagCloud: List<LabelFrequency>) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = color.copy(alpha = alpha),
-                            modifier = Modifier
+                            modifier = Modifier.clickable {
+                                val matchingTagImage = allMetadata.firstOrNull()
+                                if (matchingTagImage != null) onNavigateToImage(matchingTagImage.imageId)
+                            }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),

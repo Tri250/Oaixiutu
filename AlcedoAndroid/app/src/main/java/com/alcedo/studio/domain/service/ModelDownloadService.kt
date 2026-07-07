@@ -11,10 +11,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.buffer
 import okio.sink
+import okio.source
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import com.alcedo.studio.service.TaskNotificationHelper
 
 /**
  * AI model download and activation service.
@@ -40,6 +43,10 @@ class ModelDownloadService(private val context: Context) {
 
     private val _models = MutableStateFlow<List<ModelAsset>>(emptyList())
     val models: StateFlow<List<ModelAsset>> = _models.asStateFlow()
+
+    // ── Download progress tracking (modelId → fraction 0..1) ──
+    private val _downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, Float>> = _downloadProgress.asStateFlow()
 
     private val downloadJobs = mutableMapOf<String, Job>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -144,41 +151,88 @@ class ModelDownloadService(private val context: Context) {
                     downloadProgress = 0f
                 ))
 
+                // Update download progress StateFlow
+                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                    this[modelId] = 0f
+                }
+
                 val url = model.downloadUrl
                 val destFile = getModelFile(modelId)
                 val tempFile = File(destFile.absolutePath + ".tmp")
 
-                // Delete any leftover temp file
-                tempFile.delete()
+                // Resume support: check for existing partial download
+                val existingSize = if (tempFile.exists()) tempFile.length() else 0L
+                var appendMode = false
 
-                val request = Request.Builder()
+                val requestBuilder = Request.Builder()
                     .url(url)
                     .header("User-Agent", "AlcedoStudio-Android/0.2.6")
-                    .build()
 
-                val response = httpClient.newCall(request).execute()
-                if (!response.isSuccessful) {
+                if (existingSize > 0) {
+                    // Request remaining bytes from server
+                    requestBuilder.header("Range", "bytes=$existingSize-")
+                }
+
+                val response = httpClient.newCall(requestBuilder.build()).execute()
+
+                // Check if server supports Range requests
+                val serverSupportsRange = response.code == 206
+                if (existingSize > 0 && !serverSupportsRange) {
+                    // Server doesn't support Range, start from scratch
+                    tempFile.delete()
+                }
+
+                if (!response.isSuccessful && response.code != 206) {
                     updateModel(modelId, model.copy(downloadStatus = ModelDownloadStatus.FAILED))
+                    TaskNotificationHelper.notifyModelDownloadFailed(context, modelId, "HTTP ${response.code}")
+                    _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                        remove(modelId)
+                    }
                     return@launch
                 }
 
                 val body = response.body ?: run {
                     updateModel(modelId, model.copy(downloadStatus = ModelDownloadStatus.FAILED))
+                    TaskNotificationHelper.notifyModelDownloadFailed(context, modelId, "Empty response body")
+                    _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                        remove(modelId)
+                    }
                     return@launch
                 }
 
                 val contentLength = body.contentLength()
-                val totalBytes = if (contentLength > 0) contentLength else model.fileSizeBytes
+                val totalBytes = if (serverSupportsRange && existingSize > 0) {
+                    // For partial content, total = existing + remaining
+                    existingSize + (if (contentLength > 0) contentLength else (model.fileSizeBytes - existingSize))
+                } else if (contentLength > 0) {
+                    contentLength
+                } else {
+                    model.fileSizeBytes
+                }
 
-                var downloadedBytes = 0L
-                val sink = tempFile.sink().buffer()
+                var downloadedBytes = if (serverSupportsRange && existingSize > 0) existingSize else 0L
+
+                // Use appending sink for resume, regular sink for fresh download
+                val sink = if (serverSupportsRange && existingSize > 0) {
+                    appendMode = true
+                    FileOutputStream(tempFile, true).sink().buffer()
+                } else {
+                    tempFile.sink().buffer()
+                }
+
                 body.source().use { source ->
                     val buffer = okio.Buffer()
                     var bytesRead: Long
                     while (source.read(buffer, 8192).also { bytesRead = it } != -1L) {
                         if (!isActive) {
                             sink.close()
-                            tempFile.delete()
+                            // Keep temp file for resume
+                            updateModel(modelId, model.copy(
+                                downloadStatus = ModelDownloadStatus.PAUSED
+                            ))
+                            _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                                remove(modelId)
+                            }
                             return@launch
                         }
                         sink.write(buffer, bytesRead)
@@ -190,6 +244,14 @@ class ModelDownloadService(private val context: Context) {
                             onProgress(progress)
                         }
                         updateModel(modelId, model.copy(downloadProgress = progress))
+                        // Update download progress StateFlow
+                        _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                            this[modelId] = progress
+                        }
+                        // Update notification bar progress
+                        TaskNotificationHelper.notifyModelDownloadProgress(
+                            context, modelId, (progress * 100).toInt(), 100
+                        )
                     }
                 }
                 sink.close()
@@ -207,6 +269,10 @@ class ModelDownloadService(private val context: Context) {
                             downloadStatus = ModelDownloadStatus.FAILED,
                             downloadProgress = 0f
                         ))
+                        TaskNotificationHelper.notifyModelDownloadFailed(context, modelId, "Checksum mismatch")
+                        _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                            remove(modelId)
+                        }
                         Log.e(TAG, "Checksum mismatch for model $modelId")
                         return@launch
                     }
@@ -222,12 +288,20 @@ class ModelDownloadService(private val context: Context) {
                         localPath = destFile.absolutePath
                     ))
                 }
+
+                // Notify completion
+                TaskNotificationHelper.notifyModelDownloadComplete(context, modelId)
+                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                    remove(modelId)
+                }
             } catch (e: CancellationException) {
-                val tempFile = File(getModelFile(modelId).absolutePath + ".tmp")
-                tempFile.delete()
+                // Keep temp file for potential resume
                 updateModel(modelId, model.copy(
                     downloadStatus = ModelDownloadStatus.PAUSED
                 ))
+                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                    remove(modelId)
+                }
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed for $modelId: ${e.message}")
@@ -235,6 +309,10 @@ class ModelDownloadService(private val context: Context) {
                     downloadStatus = ModelDownloadStatus.FAILED,
                     downloadProgress = 0f
                 ))
+                TaskNotificationHelper.notifyModelDownloadFailed(context, modelId, e.message ?: "下载失败")
+                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                    remove(modelId)
+                }
             }
         }
 
@@ -250,8 +328,9 @@ class ModelDownloadService(private val context: Context) {
     }
 
     /**
-     * Resume a paused download by re-downloading from scratch.
-     * Range-request resume is not yet supported.
+     * Resume a paused download. Supports Range-request resume:
+     * if a partial temp file exists and the server supports Range headers,
+     * the download will resume from where it left off.
      */
     suspend fun resumeModelDownload(
         modelId: String,
@@ -260,10 +339,8 @@ class ModelDownloadService(private val context: Context) {
         val model = _models.value.find { it.modelId == modelId } ?: return false
         if (model.downloadStatus != ModelDownloadStatus.PAUSED) return false
 
-        // Clean up any partial temp file before re-downloading
-        val tempFile = File(getModelFile(modelId).absolutePath + ".tmp")
-        if (tempFile.exists()) tempFile.delete()
-
+        // Re-download; downloadModel now supports Range headers and will
+        // resume from the existing temp file if possible.
         return downloadModel(modelId, onProgress)
     }
 

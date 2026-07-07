@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +63,7 @@ fun EditorScreen(
     val image by viewModel.imageModel.collectAsStateWithLifecycle()
     val preview by viewModel.previewBitmap.collectAsStateWithLifecycle()
     val isProcessing by viewModel.isProcessing.collectAsStateWithLifecycle()
+    val imageLoadError by viewModel.imageLoadError.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
 
@@ -92,6 +94,15 @@ fun EditorScreen(
     LaunchedEffect(Unit) {
         viewModel.startAutoSave()
     }
+
+    // Snackbar 统一反馈: 收集 EditorViewModel 的事件流
+    val editorSnackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.snackbarEvent.collect { message ->
+            editorSnackbarHostState.showSnackbar(message)
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopAutoSave()
@@ -154,6 +165,7 @@ fun EditorScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(editorSnackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -310,6 +322,8 @@ fun EditorScreen(
                             .weight(1f)
                             .fillMaxHeight(),
                         isProcessing = isProcessing,
+                        imageLoadError = imageLoadError,
+                        onRetryLoad = { viewModel.retryLoadImage() },
                         isCompareMode = isCompareMode,
                         previewBitmap = preview?.asImageBitmap(),
                         originalBitmap = originalBitmap?.asImageBitmap(),
@@ -342,6 +356,8 @@ fun EditorScreen(
                             .fillMaxWidth()
                             .weight(0.5f),
                         isProcessing = isProcessing,
+                        imageLoadError = imageLoadError,
+                        onRetryLoad = { viewModel.retryLoadImage() },
                         isCompareMode = isCompareMode,
                         previewBitmap = preview?.asImageBitmap(),
                         originalBitmap = originalBitmap?.asImageBitmap(),
@@ -764,6 +780,8 @@ private fun ScopeAnalyzerPanel(
 private fun ImagePreviewArea(
     modifier: Modifier = Modifier,
     isProcessing: Boolean,
+    imageLoadError: Boolean = false,
+    onRetryLoad: () -> Unit = {},
     isCompareMode: Boolean,
     previewBitmap: ImageBitmap?,
     originalBitmap: ImageBitmap?,
@@ -941,19 +959,54 @@ private fun ImagePreviewArea(
         }
 
         if (previewBitmap == null && !isProcessing) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Image,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = Color.White.copy(alpha = 0.3f)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    stringRes { editorNoImage },
-                    color = Color.White.copy(alpha = 0.3f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+            if (imageLoadError) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = Color.White.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        stringRes { editorNoImage },
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = onRetryLoad,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("重试")
+                    }
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = Color.White.copy(alpha = 0.3f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        stringRes { editorNoImage },
+                        color = Color.White.copy(alpha = 0.3f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }

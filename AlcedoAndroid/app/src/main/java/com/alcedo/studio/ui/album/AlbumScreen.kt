@@ -141,6 +141,8 @@ fun AlbumScreen(
     val permissionRationale by viewModel.permissionRationale.collectAsStateWithLifecycle()
     // S-8 修复: 收集 batchExportResult,导出完成时弹出提示
     val batchExportResult by viewModel.batchExportResult.collectAsStateWithLifecycle()
+    // Import progress for showing top bar during bulk imports
+    val importProgress by viewModel.importProgress.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -169,6 +171,7 @@ fun AlbumScreen(
     }
 
     val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
     val baseColumns = when {
         configuration.screenWidthDp >= 840 -> 5
         configuration.screenWidthDp >= 600 -> 4
@@ -193,30 +196,43 @@ fun AlbumScreen(
         }
     }
 
-    if (showFolderSidebar) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
+    // ── 侧边栏内容提取为独立 Composable,供 Modal/Permanent Drawer 复用 ──
+    val sidebarContent: @Composable () -> Unit = {
+        FolderSidebar(
+            folders = folders,
+            onFolderSelected = { folderId ->
+                viewModel.navigateToFolder(folderId)
+                if (!isWideScreen) {
+                    scope.launch { drawerState.close() }
+                }
+            },
+            onSmartAlbumSelected = { type ->
+                when (type) {
+                    "favorites" -> viewModel.applyFilter(FilterState(rating = 4))
+                    "recent" -> viewModel.setSortMode(SortMode.DATE)
+                    "to_export" -> viewModel.applyFilter(FilterState(rating = 3))
+                }
+                if (!isWideScreen) {
+                    scope.launch { drawerState.close() }
+                }
+            },
+            onClose = {
+                if (!isWideScreen) {
+                    scope.launch { drawerState.close() }
+                }
+                showFolderSidebar = false
+            }
+        )
+    }
+
+    if (isWideScreen) {
+        // ── 宽屏: 永久侧边栏 ──
+        PermanentNavigationDrawer(
             drawerContent = {
-                ModalDrawerSheet {
-                    FolderSidebar(
-                        folders = folders,
-                        onFolderSelected = { folderId ->
-                            viewModel.navigateToFolder(folderId)
-                            scope.launch { drawerState.close() }
-                        },
-                        onSmartAlbumSelected = { type ->
-                            when (type) {
-                                "favorites" -> viewModel.applyFilter(FilterState(rating = 4))
-                                "recent" -> viewModel.setSortMode(SortMode.DATE)
-                                "to_export" -> viewModel.applyFilter(FilterState(rating = 3))
-                            }
-                            scope.launch { drawerState.close() }
-                        },
-                        onClose = {
-                            scope.launch { drawerState.close() }
-                            showFolderSidebar = false
-                        }
-                    )
+                PermanentDrawerSheet(
+                    modifier = Modifier.width(280.dp)
+                ) {
+                    sidebarContent()
                 }
             }
         ) {
@@ -237,6 +253,70 @@ fun AlbumScreen(
                 gridDensity = gridDensity,
                 collapsedDateGroups = collapsedDateGroups,
                 folders = folders,
+                importProgress = importProgress,
+                onGetThumbnail = viewModel::getThumbnail,
+                onLoadMore = viewModel::loadMoreImages,
+                onSearchQueryChange = viewModel::onSearchQueryChange,
+                onToggleSearch = viewModel::toggleSearch,
+                onToggleSemantic = viewModel::toggleSemanticSearch,
+                onToggleImageSelection = viewModel::toggleImageSelection,
+                onClearSelection = viewModel::clearSelection,
+                onDeleteSelected = { showBatchDeleteConfirm = true },
+                onBatchAiTag = { showBatchAiTagDialog = true },
+                onBatchRating = { showBatchRatingDialog = true },
+                onBatchExport = { showBatchExportDialog = true },
+                onBatchEdit = { showBatchEditPanel = true },
+                onRefresh = viewModel::refresh,
+                onSortModeChange = viewModel::setSortMode,
+                onOpenFilter = { showFilterSheet = true },
+                onOpenFolderSidebar = { /* 宽屏下侧边栏已常驻,无需操作 */ },
+                onImport = { showImport = true },
+                onSettings = { navController.navigate("settings") },
+                onImageContextMenu = { contextMenuImage = it },
+                onLoadThumbnail = viewModel::loadThumbnail,
+                onViewModeChange = { viewMode = it },
+                onGridDensityChange = { gridDensity = it },
+                onToggleDateGroup = { dateKey ->
+                    collapsedDateGroups.value = if (dateKey in collapsedDateGroups.value) {
+                        collapsedDateGroups.value - dateKey
+                    } else {
+                        collapsedDateGroups.value + dateKey
+                    }
+                },
+                onNavigateToFolder = { folderId ->
+                    viewModel.navigateToFolder(folderId)
+                    viewMode = AlbumViewMode.PHOTO
+                }
+            )
+        }
+    } else if (showFolderSidebar) {
+        // ── 窄屏: 模态侧边栏 ──
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    sidebarContent()
+                }
+            }
+        ) {
+            AlbumContent(
+                navController = navController,
+                images = images,
+                isLoading = isLoading,
+                isRefreshing = isRefreshing,
+                searchQuery = searchQuery,
+                selectedImages = selectedImages,
+                showSearch = showSearch,
+                semanticEnabled = semanticEnabled,
+                sortMode = sortMode,
+                baseColumns = baseColumns,
+                thumbnailCacheVersion = thumbnailCacheVersion,
+                hasMorePages = hasMorePages,
+                viewMode = viewMode,
+                gridDensity = gridDensity,
+                collapsedDateGroups = collapsedDateGroups,
+                folders = folders,
+                importProgress = importProgress,
                 onGetThumbnail = viewModel::getThumbnail,
                 onLoadMore = viewModel::loadMoreImages,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -254,7 +334,6 @@ fun AlbumScreen(
                 onSortModeChange = viewModel::setSortMode,
                 onOpenFilter = { showFilterSheet = true },
                 onOpenFolderSidebar = {
-                    showFolderSidebar = true
                     scope.launch { drawerState.open() }
                 },
                 onImport = { showImport = true },
@@ -294,6 +373,7 @@ fun AlbumScreen(
             gridDensity = gridDensity,
             collapsedDateGroups = collapsedDateGroups,
             folders = folders,
+            importProgress = importProgress,
             onGetThumbnail = viewModel::getThumbnail,
             onLoadMore = viewModel::loadMoreImages,
             onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -622,6 +702,7 @@ private fun AlbumContent(
     gridDensity: GridDensity,
     collapsedDateGroups: State<Set<String>>,
     folders: List<SleeveFolder>,
+    importProgress: com.alcedo.studio.viewmodel.ImportProgress?,
     onGetThumbnail: (Long) -> android.graphics.Bitmap?,
     onLoadMore: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -823,6 +904,27 @@ private fun AlbumContent(
             }
         }
     ) { padding ->
+        // Import progress bar shown during bulk imports
+        importProgress?.let { progress ->
+            if (progress.phase != "completed" && progress.total > 0) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = padding.calculateTopPadding())
+                ) {
+                    LinearProgressIndicator(
+                        progress = { progress.current.toFloat() / progress.total.toFloat() },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "正在导入 ${progress.current}/${progress.total}...",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
         AlcedoPullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,

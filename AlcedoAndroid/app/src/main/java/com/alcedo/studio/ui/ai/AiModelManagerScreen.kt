@@ -58,6 +58,14 @@ fun AiModelManagerScreen(navController: NavController) {
     // 下载协程任务，用于支持取消
     val downloadJobs = remember { mutableStateMapOf<String, Job>() }
 
+    // Observe the service's download progress StateFlow for real-time updates
+    val serviceDownloadProgress by modelDownloadService.downloadProgress.collectAsState()
+    LaunchedEffect(serviceDownloadProgress) {
+        serviceDownloadProgress.forEach { (modelId, progress) ->
+            downloadProgress[modelId] = progress
+        }
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(downloadErrors.toMap()) {
         downloadErrors.values.lastOrNull()?.let { error ->
