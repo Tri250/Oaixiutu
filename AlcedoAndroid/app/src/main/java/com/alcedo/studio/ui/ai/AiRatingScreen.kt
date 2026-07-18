@@ -1,8 +1,7 @@
 package com.alcedo.studio.ui.ai
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
+import com.alcedo.studio.util.BitmapDecoder
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -487,7 +486,7 @@ suspend fun predictRatingSafely(
 ): RatingPrediction = withContext(Dispatchers.Default) {
     // 加载图片（采样到合理尺寸）
     val bitmap = try {
-        decodeSampledBitmap(context, imagePath, 512, 512)
+        BitmapDecoder.decodeSampledBitmap(context, imagePath, 512, 512)
     } catch (e: Exception) {
         null
     }
@@ -617,53 +616,4 @@ private fun analyzeImageDimensions(bitmap: Bitmap): List<Int> {
     val colorScore = (saturation * 3).coerceIn(0, 100)
 
     return listOf(compositionScore.toInt(), exposureScore.toInt(), colorScore.toInt(), sharpnessScore.toInt())
-}
-
-private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
-    var inSampleSize = 1
-    if (outHeight > reqHeight || outWidth > reqWidth) {
-        val halfHeight = outHeight / 2
-        val halfWidth = outWidth / 2
-        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-            inSampleSize *= 2
-        }
-    }
-    return inSampleSize
-}
-
-/**
- * 支持从文件路径或 URI 加载采样后的 Bitmap。
- * 当 imagePath 以 content:// 开头时使用 ContentResolver，否则使用文件系统。
- */
-private fun decodeSampledBitmap(context: android.content.Context, imagePath: String, reqWidth: Int, reqHeight: Int): Bitmap? {
-    val uri = Uri.parse(imagePath)
-    val isContentUri = imagePath.startsWith("content://")
-
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-
-    // 第一步：获取图片尺寸
-    if (isContentUri) {
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        }
-    } else {
-        BitmapFactory.decodeFile(imagePath, options)
-    }
-
-    if (options.outWidth <= 0 || options.outHeight <= 0) {
-        return null
-    }
-
-    // 计算采样率
-    options.inSampleSize = calculateInSampleSize(options.outWidth, options.outHeight, reqWidth, reqHeight)
-    options.inJustDecodeBounds = false
-
-    // 第二步：加载采样后的图片
-    return if (isContentUri) {
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        }
-    } else {
-        BitmapFactory.decodeFile(imagePath, options)
-    }
 }

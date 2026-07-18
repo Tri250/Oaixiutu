@@ -2,7 +2,6 @@ package com.alcedo.studio.domain.service
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Log
 import com.alcedo.studio.data.local.ImageMetadataDao
 import com.alcedo.studio.util.BitmapDecoder
@@ -250,19 +249,6 @@ class SemanticGenerationService(
             Log.e(TAG, "Failed to load bitmap: ${e.message}")
             null
         }
-    }
-
-    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
-        if (reqWidth <= 0 || reqHeight <= 0) return 1
-        var inSampleSize = 1
-        if (outHeight > reqHeight || outWidth > reqWidth) {
-            val halfHeight = outHeight / 2
-            val halfWidth = outWidth / 2
-            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
     }
 
     suspend fun getExistingLabels(imageId: Long): List<SemanticLabel> {

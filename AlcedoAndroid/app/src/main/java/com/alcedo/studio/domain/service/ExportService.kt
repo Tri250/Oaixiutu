@@ -16,6 +16,7 @@ import android.os.Environment
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import com.alcedo.studio.data.model.*
+import com.alcedo.studio.util.BitmapDecoder
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -456,50 +457,7 @@ class ExportService(private val context: Context) {
     private fun decodeSampledBitmap(path: String, settings: ExportSettings): Bitmap? {
         val reqWidth = settings.maxWidth ?: settings.maxDimension ?: 0
         val reqHeight = settings.maxHeight ?: settings.maxDimension ?: 0
-        return decodeSampledBitmap(context, path, reqWidth, reqHeight)
-    }
-
-    private fun decodeSampledBitmap(context: Context, path: String, reqWidth: Int, reqHeight: Int): Bitmap? {
-        val uri = Uri.parse(path)
-        val isContentUri = path.startsWith("content://")
-
-        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-
-        if (isContentUri) {
-            context.contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, opts)
-            }
-        } else {
-            BitmapFactory.decodeFile(path, opts)
-        }
-
-        if (opts.outWidth <= 0 || opts.outHeight <= 0) {
-            return null
-        }
-
-        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, reqWidth, reqHeight)
-        opts.inJustDecodeBounds = false
-
-        return if (isContentUri) {
-            context.contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, opts)
-            }
-        } else {
-            BitmapFactory.decodeFile(path, opts)
-        }
-    }
-
-    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
-        if (reqWidth <= 0 || reqHeight <= 0) return 1
-        var inSampleSize = 1
-        if (outHeight > reqHeight || outWidth > reqWidth) {
-            val halfHeight = outHeight / 2
-            val halfWidth = outWidth / 2
-            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
+        return BitmapDecoder.decodeSampledBitmap(context, path, reqWidth, reqHeight)
     }
 
     // ================================================================
