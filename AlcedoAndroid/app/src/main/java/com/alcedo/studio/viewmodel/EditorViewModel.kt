@@ -2220,16 +2220,80 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun export(settings: ExportSettings) {
         viewModelScope.launch {
+            var bitmap: Bitmap? = null
+            var processedBitmap: Bitmap? = null
             try {
                 val img = _imageModel.value ?: return@launch
-                val finalBitmap = _previewBitmap.value ?: return@launch
-                val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
-                val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
+                val params = _params.value
+                // 填充导出参数：EXIF 路径 + DNG 非破坏性编辑参数
+                val settingsWithExif = settings.copy(
+                    sourceExifPath = img.imagePath,
+                    params = if (settings.format == ExportFormat.DNG) params else null
+                )
+
+                // 重新解码原图（全分辨率），避免使用降采样的预览位图导致导出分辨率损失
+                bitmap = withContext(Dispatchers.IO) {
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                        BitmapFactory.decodeFile(img.imagePath, this)
+                        inSampleSize = calculateInSampleSize(
+                            outWidth, outHeight,
+                            settings.maxWidth ?: 0,
+                            settings.maxHeight ?: 0
+                        )
+                        inJustDecodeBounds = false
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    BitmapFactory.decodeFile(img.imagePath, options)
+                }
+
+                if (bitmap == null) {
+                    android.util.Log.e("EditorVM", "export: failed to decode original image")
+                    return@launch
+                }
+
+                // 对全分辨率原图应用管线
+                processedBitmap = withContext(Dispatchers.IO) {
+                    pipelineService.applyPipeline(bitmap, params)
+                }
+
+                if (processedBitmap == null) {
+                    android.util.Log.e("EditorVM", "export: pipeline processing failed")
+                    return@launch
+                }
+
+                val result = exportService.exportImage(img.imagePath, settingsWithExif, processedBitmap)
                 _lastExportResult.value = result
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
+            } finally {
+                // 清理中间位图（processedBitmap 已由 exportService 内部接管）
+                bitmap?.let { b ->
+                    if (b !== processedBitmap) b.recycle()
+                }
             }
         }
+    }
+
+    /** 计算 inSampleSize 以适配导出尺寸限制 */
+    private fun calculateInSampleSize(
+        rawWidth: Int,
+        rawHeight: Int,
+        maxWidth: Int,
+        maxHeight: Int
+    ): Int {
+        if (maxWidth <= 0 && maxHeight <= 0) return 1
+        var sampleSize = 1
+        val w = if (maxWidth > 0) maxWidth else Int.MAX_VALUE
+        val h = if (maxHeight > 0) maxHeight else Int.MAX_VALUE
+        if (rawHeight > h || rawWidth > w) {
+            val halfHeight = rawHeight / 2
+            val halfWidth = rawWidth / 2
+            while ((halfHeight / sampleSize) >= h && (halfWidth / sampleSize) >= w) {
+                sampleSize *= 2
+            }
+        }
+        return sampleSize
     }
 
     // ================================================================
@@ -2259,7 +2323,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val image = imageRepository.getImage(id) ?: return@forEach
                 val params = _batchParamsCache.value[id] ?: _params.value
                 withContext(Dispatchers.IO) {
-                    val bitmap = BitmapFactory.decodeFile(image.imagePath)
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                        BitmapFactory.decodeFile(image.imagePath, this)
+                        inSampleSize = calculateInSampleSize(
+                            outWidth, outHeight,
+                            settings.maxWidth ?: 0,
+                            settings.maxHeight ?: 0
+                        )
+                        inJustDecodeBounds = false
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val bitmap = BitmapFactory.decodeFile(image.imagePath, options)
                     val processed = if (bitmap != null) {
                         val out = pipelineService.applyPipeline(bitmap, params)
                         bitmap.recycle()
@@ -2267,7 +2342,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     } else {
                         null
                     }
-                    exportService.exportImage(image.imagePath, settings, processed)
+                    if (processed != null) {
+                        val batchSettings = settings.copy(
+                            sourceExifPath = image.imagePath,
+                            params = if (settings.format == ExportFormat.DNG) params else null
+                        )
+                        exportService.exportImage(image.imagePath, batchSettings, processed)
+                    }
                 }
             }
         }

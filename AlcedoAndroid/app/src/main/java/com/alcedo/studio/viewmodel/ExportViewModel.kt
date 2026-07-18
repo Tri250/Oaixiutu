@@ -398,7 +398,8 @@ class ExportViewModel : ViewModel() {
                 processedBitmap = pipelineService.applyPipeline(bitmap, params)
 
                 val exportSettings = _settings.value.copy(
-                    sourceExifPath = sourceExifPath ?: imagePath
+                    sourceExifPath = sourceExifPath ?: imagePath,
+                    params = if (_settings.value.format == ExportFormat.DNG) params else null
                 )
 
                 val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
