@@ -2,8 +2,8 @@ package com.alcedo.studio.viewmodel
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Log
+import com.alcedo.studio.util.BitmapDecoder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.ColorSpace
@@ -286,9 +286,7 @@ class ExportViewModel : ViewModel() {
     // ================================================================
 
     fun loadSourceDimensions(imagePath: String) {
-        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(imagePath, options)
-        _sourceDimensions.value = Pair(options.outWidth, options.outHeight)
+        _sourceDimensions.value = BitmapDecoder.decodeJustBounds(AppModule.context, imagePath)
     }
 
     // ================================================================
@@ -349,23 +347,6 @@ class ExportViewModel : ViewModel() {
     }
 
     // ================================================================
-    // Bitmap sampling helper
-    // ================================================================
-
-    private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
-        if (reqWidth <= 0 || reqHeight <= 0) return 1
-        var inSampleSize = 1
-        if (outHeight > reqHeight || outWidth > reqWidth) {
-            val halfHeight = outHeight / 2
-            val halfWidth = outWidth / 2
-            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
-    }
-
-    // ================================================================
     // Single image export
     // ================================================================
 
@@ -379,17 +360,8 @@ class ExportViewModel : ViewModel() {
             var bitmap: Bitmap? = null
             var processedBitmap: Bitmap? = null
             try {
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                    BitmapFactory.decodeFile(imagePath, this)
-                    inSampleSize = calculateInSampleSize(
-                        outWidth, outHeight,
-                        _settings.value.maxWidth ?: 0,
-                        _settings.value.maxHeight ?: 0
-                    )
-                    inJustDecodeBounds = false
-                }
-                bitmap = BitmapFactory.decodeFile(imagePath, options)
+                val settings = _settings.value
+                bitmap = BitmapDecoder.decodeSampledBitmap(AppModule.context, imagePath, settings.maxWidth ?: 0, settings.maxHeight ?: 0)
                 if (bitmap == null) {
                     _lastExportResult.value = ExportService.ExportResult.Error("Failed to decode image")
                     return@launch
@@ -488,17 +460,8 @@ class ExportViewModel : ViewModel() {
                         TaskNotificationHelper.notifyExportProgress(
                             context, index + 1, totalItems, image.imageName
                         )
-                        val options = BitmapFactory.Options().apply {
-                            inJustDecodeBounds = true
-                            BitmapFactory.decodeFile(image.imagePath, this)
-                            inSampleSize = calculateInSampleSize(
-                                outWidth, outHeight,
-                                _settings.value.maxWidth ?: 4096,
-                                _settings.value.maxHeight ?: 4096
-                            )
-                            inJustDecodeBounds = false
-                        }
-                        val bitmap = BitmapFactory.decodeFile(image.imagePath, options)
+                        val settings = _settings.value
+                        val bitmap = BitmapDecoder.decodeSampledBitmap(AppModule.context, image.imagePath, settings.maxWidth ?: 4096, settings.maxHeight ?: 4096)
                         if (bitmap != null) {
                             val processed = pipelineService.applyPipeline(bitmap, item.params)
                             exportItems.add(

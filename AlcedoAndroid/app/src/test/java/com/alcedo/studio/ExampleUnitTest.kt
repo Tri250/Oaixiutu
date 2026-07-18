@@ -3,7 +3,6 @@ package com.alcedo.studio
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.utils.IdGenerator
 import com.alcedo.studio.utils.LruCache
-import com.alcedo.studio.utils.TimeProvider
 import org.junit.Test
 import org.junit.Assert.*
 import kotlin.math.abs
@@ -210,16 +209,16 @@ class ExampleUnitTest {
 
     @Test
     fun timeProvider_currentTimeMillis() {
-        val t1 = TimeProvider.currentTimeMillis()
+        val t1 = System.currentTimeMillis()
         Thread.sleep(1)
-        val t2 = TimeProvider.currentTimeMillis()
+        val t2 = System.currentTimeMillis()
         assertTrue(t2 >= t1)
     }
 
     @Test
     fun timeProvider_nanoTime() {
-        val t1 = TimeProvider.nanoTime()
-        val t2 = TimeProvider.nanoTime()
+        val t1 = System.nanoTime()
+        val t2 = System.nanoTime()
         assertTrue(t2 >= t1)
     }
 

@@ -92,7 +92,8 @@ class ImageAnalysisInFlightGate {
  */
 class ImageAnalysisService(
     private val aiService: AiService,
-    private val thumbnailService: ThumbnailService
+    private val thumbnailService: ThumbnailService,
+    private val imageAnalysisEncoder: ImageAnalysisEncoder? = null
 ) {
     companion object {
         private const val TAG = "ImageAnalysisService"
@@ -160,6 +161,13 @@ class ImageAnalysisService(
                     status = ImageAnalysisStatus.ERROR,
                     error = "Could not load bitmap for image ${item.imageId}"
                 )
+            }
+
+            // 使用 ImageAnalysisEncoder 进行图像编码预分析（如果可用）
+            val embeddingResult = imageAnalysisEncoder?.let { encoder ->
+                item.imagePath?.let { path ->
+                    runCatching { encoder.encodeImage(path) }.getOrNull()
+                }
             }
 
             var description = ""

@@ -8,8 +8,6 @@ import com.alcedo.studio.data.local.*
 import com.alcedo.studio.domain.repository.*
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.service.RenderService
-import com.alcedo.studio.service.SleeveFilterService as AppSleeveFilterService
-import com.alcedo.studio.service.ExportService as AppExportService
 import kotlinx.coroutines.CoroutineScope
 // Old AiService in service package has been removed; domain.service.AiService is used everywhere
 
@@ -25,6 +23,7 @@ object AppModule {
     fun initialize(context: Context) {
         _appContext = context.applicationContext
         initialized = true
+        com.alcedo.studio.util.ContextProvider.initialize(context)
     }
 
     fun getContextSafely(): Context? = _appContext
@@ -154,6 +153,10 @@ object AppModule {
         AiCredentialService(this.context)
     }
 
+    val aiCredentialStore: AiCredentialStore by lazy {
+        AiCredentialStore(this.context)
+    }
+
     val modelDownloadService: ModelDownloadService by lazy {
         ModelDownloadService(this.context)
     }
@@ -170,28 +173,65 @@ object AppModule {
         SemanticGenerationService(this.context, aiService, metadataDao, modelDownloadService)
     }
 
+    val albumBrowseService: AlbumBrowseService by lazy {
+        AlbumBrowseService(
+            sleeveRepository = sleeveRepository,
+            imageRepository = imageRepository,
+            thumbnailService = thumbnailService
+        )
+    }
+
+    val historyMgmtService: HistoryMgmtService by lazy {
+        HistoryMgmtService(editHistoryRepository)
+    }
+
+    val imageAnalysisEncoder: ImageAnalysisEncoder by lazy {
+        ImageAnalysisEncoder(clipInferenceEngine)
+    }
+
+    val imageAnalysisService: ImageAnalysisService by lazy {
+        ImageAnalysisService(
+            aiService = aiService,
+            thumbnailService = thumbnailService,
+            imageAnalysisEncoder = imageAnalysisEncoder
+        )
+    }
+
+    val colorScienceBridge: ColorScienceBridge by lazy {
+        ColorScienceBridge()
+    }
+
+    val aiSidecarRuntimeService: AiSidecarRuntimeService by lazy {
+        AiSidecarRuntimeService(
+            credentialStore = aiCredentialStore,
+            clipEngine = clipInferenceEngine
+        )
+    }
+
+    val projectPackageService: ProjectPackageService by lazy {
+        ProjectPackageService()
+    }
+
+    val projectService: ProjectService by lazy {
+        ProjectService(
+            context = this.context,
+            projectRepository = projectRepository,
+            imageRepository = imageRepository,
+            sleeveRepository = sleeveRepository,
+            editHistoryRepository = editHistoryRepository,
+            projectPackageService = projectPackageService
+        )
+    }
+
+    private val clipInferenceEngine: ClipInferenceEngine by lazy {
+        ClipInferenceEngine(this.context)
+    }
+
     // ── App Services (com.alcedo.studio.service) ──
 
     val renderService: RenderService by lazy {
         RenderService()
     }
-
-    val appSleeveFilterService: AppSleeveFilterService by lazy {
-        AppSleeveFilterService(
-            metadataDao = metadataDao,
-            ratingDao = ratingDao,
-            labelDao = labelDao,
-            collectionDao = collectionDao,
-            filterDao = filterDao,
-            elementDao = elementDao
-        )
-    }
-
-    val appExportService: AppExportService by lazy {
-        AppExportService(this.context)
-    }
-
-    // appAiService removed — domain.service.AiService (aiService) is the sole implementation
 
     // DAOs from data.dao package
     val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }

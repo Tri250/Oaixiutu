@@ -3,6 +3,7 @@ package com.alcedo.studio.domain.service
 import android.graphics.*
 import android.media.ThumbnailUtils
 import com.alcedo.studio.data.local.ThumbnailDiskCache
+import com.alcedo.studio.util.BitmapDecoder
 import com.alcedo.studio.data.model.ImageMetadataEntity
 import com.alcedo.studio.data.model.ThumbState
 import kotlinx.coroutines.*
@@ -229,17 +230,16 @@ class ThumbnailService(
 
     private fun generateThumbnailFromPath(imagePath: String, maxSize: Int): Bitmap? {
         return try {
-            val file = File(imagePath)
-            if (!file.exists()) return null
-
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
+            val isContentUri = imagePath.startsWith("content://")
+            if (!isContentUri) {
+                val file = File(imagePath)
+                if (!file.exists()) return null
             }
-            BitmapFactory.decodeFile(imagePath, options)
 
-            if (options.outWidth <= 0 || options.outHeight <= 0) return null
+            val (outWidth, outHeight) = BitmapDecoder.decodeJustBounds(imagePath)
+            if (outWidth <= 0 || outHeight <= 0) return null
 
-            val scale = calculateScale(options.outWidth, options.outHeight, maxSize)
+            val scale = calculateScale(outWidth, outHeight, maxSize)
 
             val decodeOptions = BitmapFactory.Options().apply {
                 inSampleSize = scale
@@ -247,7 +247,7 @@ class ThumbnailService(
                 inMutable = false
             }
 
-            val rawBitmap = BitmapFactory.decodeFile(imagePath, decodeOptions) ?: return null
+            val rawBitmap = BitmapDecoder.decodeBitmap(imagePath, decodeOptions) ?: return null
 
             // Resize to exact dimensions if needed
             val result = if (rawBitmap.width > maxSize || rawBitmap.height > maxSize) {

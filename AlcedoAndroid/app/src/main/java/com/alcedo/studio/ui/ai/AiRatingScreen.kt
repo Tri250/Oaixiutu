@@ -1,7 +1,7 @@
 package com.alcedo.studio.ui.ai
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import com.alcedo.studio.util.BitmapDecoder
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -486,13 +486,7 @@ suspend fun predictRatingSafely(
 ): RatingPrediction = withContext(Dispatchers.Default) {
     // 加载图片（采样到合理尺寸）
     val bitmap = try {
-        val options = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-            BitmapFactory.decodeFile(imagePath, this)
-            inSampleSize = calculateInSampleSize(outWidth, outHeight, 512, 512)
-            inJustDecodeBounds = false
-        }
-        BitmapFactory.decodeFile(imagePath, options)
+        BitmapDecoder.decodeSampledBitmap(context, imagePath, 512, 512)
     } catch (e: Exception) {
         null
     }
@@ -622,16 +616,4 @@ private fun analyzeImageDimensions(bitmap: Bitmap): List<Int> {
     val colorScore = (saturation * 3).coerceIn(0, 100)
 
     return listOf(compositionScore.toInt(), exposureScore.toInt(), colorScore.toInt(), sharpnessScore.toInt())
-}
-
-private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {
-    var inSampleSize = 1
-    if (outHeight > reqHeight || outWidth > reqWidth) {
-        val halfHeight = outHeight / 2
-        val halfWidth = outWidth / 2
-        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-            inSampleSize *= 2
-        }
-    }
-    return inSampleSize
 }
