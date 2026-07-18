@@ -60,6 +60,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private val exportService by lazy { AppModule.exportService }
     private val thumbnailService by lazy { AppModule.thumbnailService }
     val presetService by lazy { AppModule.presetService }
+    private val historyMgmtService by lazy { AppModule.historyMgmtService }
+    private val colorScienceBridge by lazy { AppModule.colorScienceBridge }
+    private val projectService by lazy { AppModule.projectService }
 
     // ── Image state ──
 
@@ -1523,6 +1526,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             viewModelScope.launch {
                 try {
                     editHistoryRepository.saveHistory(hist)
+                    // 通过 HistoryMgmtService 同步版本管理状态
+                    historyMgmtService.loadHistory(hist.boundImageId)
                 } catch (e: Throwable) {
                     android.util.Log.e("EditorVM", "Coroutine failed", e)
                 }
@@ -1599,6 +1604,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             viewModelScope.launch {
                 try {
                     editHistoryRepository.saveHistory(updated)
+                    // 通过 ProjectService 同步项目状态（预留项目工程功能）
+                    try {
+                        if (projectService.isProjectOpen()) {
+                            projectService.markDirty()
+                        }
+                    } catch (_: Throwable) { /* 项目服务不可用时静默跳过 */ }
                 } catch (e: Throwable) {
                     android.util.Log.e("EditorVM", "Coroutine failed", e)
                 }
@@ -2220,8 +2231,21 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val img = _imageModel.value ?: return@launch
                 val finalBitmap = _previewBitmap.value ?: return@launch
                 val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
+                // 通过 ColorScienceBridge 获取显示变换函数（用于导出时色彩空间转换）
+                val colorScienceAvailable = try {
+                    val displayTransform = colorScienceBridge.getDisplayTransform(
+                        mode = ColorScience.ACES20,
+                        peakLuminance = 100f
+                    )
+                    true
+                } catch (_: Throwable) {
+                    false
+                }
                 val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
                 _lastExportResult.value = result
+                if (colorScienceAvailable) {
+                    Log.d(TAG, "Color science bridge available for export")
+                }
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
             }

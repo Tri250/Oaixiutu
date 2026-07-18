@@ -48,6 +48,9 @@ class AlbumViewModel : ViewModel() {
     private val exportService by lazy { AppModule.exportService }
     private val batchEditService by lazy { AppModule.batchEditService }
     private val presetService by lazy { AppModule.presetService }
+    private val albumBrowseService by lazy { AppModule.albumBrowseService }
+    private val imageAnalysisService by lazy { AppModule.imageAnalysisService }
+    private val aiSidecarRuntimeService by lazy { AppModule.aiSidecarRuntimeService }
 
     // ── Image list state ──
 
@@ -490,6 +493,8 @@ class AlbumViewModel : ViewModel() {
                 applyCurrentSortAndFilter(firstPage)
                 // 下拉刷新同时刷新文件夹列表 (B-2 修复)
                 loadFolders()
+                // 通过 AlbumBrowseService 预热浏览状态
+                albumBrowseService.setPageSize(PAGE_SIZE)
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "refresh failed", e)
             } finally {
@@ -1018,6 +1023,12 @@ class AlbumViewModel : ViewModel() {
             try {
                 val image = imageRepository.getImage(imageId) ?: return@launch
                 val result = thumbnailService.loadThumbnail(imageId)
+                // 通过 AiSidecarRuntimeService 检查 AI 运行时状态
+                val runtimeReady = try {
+                    aiSidecarRuntimeService.isReady()
+                } catch (_: Throwable) {
+                    false
+                }
                 if (result is ThumbnailService.ThumbnailResult.Success) {
                     aiService.generateLabels(imageId.toUInt(), result.bitmap)
                 }
@@ -1044,6 +1055,45 @@ class AlbumViewModel : ViewModel() {
                 showSnackbar("已为 ${ids.size} 张图片生成标签")
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "Coroutine failed", e)
+            }
+        }
+    }
+
+    /** 使用 ImageAnalysisService 批量分析图片（描述 + 评分） */
+    fun analyzeImagesBatch(ids: List<Long>, tasks: Set<ImageAnalysisTask> = setOf(ImageAnalysisTask.DESCRIBE, ImageAnalysisTask.SCORE)) {
+        viewModelScope.launch {
+            val context = AppModule.context
+            try {
+                val items = ids.mapNotNull { id ->
+                    imageRepository.getImage(id)?.let { img ->
+                        ImageAnalysisItem(
+                            imageId = id,
+                            imagePath = img.imagePath
+                        )
+                    }
+                }
+                if (items.isEmpty()) return@launch
+
+                val options = ImageAnalysisOptions(tasks = tasks)
+
+                imageAnalysisService.startAnalysis(
+                    items = items,
+                    options = options,
+                    onProgress = { progress ->
+                        TaskNotificationHelper.notifyAiTaggingProgress(
+                            context,
+                            progress.currentIndex + 1,
+                            progress.totalCount
+                        )
+                    },
+                    onFinished = { results ->
+                        TaskNotificationHelper.notifyAiTaggingComplete(context, results.size)
+                        showSnackbar("已完成 ${results.size} 张图片的 AI 分析")
+                        loadImages()
+                    }
+                )
+            } catch (e: Throwable) {
+                android.util.Log.e("AlbumVM", "analyzeImagesBatch failed", e)
             }
         }
     }

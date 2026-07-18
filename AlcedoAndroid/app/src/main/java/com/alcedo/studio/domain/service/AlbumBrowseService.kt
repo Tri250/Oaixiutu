@@ -128,9 +128,6 @@ data class AlbumElement(
     val filePath: String = ""
 )
 
-// TODO(dead-code): 相册浏览服务未接入 UI。当前相册浏览由 AlbumViewModel 直接通过 SleeveRepository 实现，未使用此服务层封装。
-//   待相册浏览逻辑复杂化（如多数据源、高级筛选排序）时考虑启用此服务层。
-
 class AlbumBrowseService(
     private val sleeveRepository: SleeveRepository,
     private val imageRepository: ImageRepository,

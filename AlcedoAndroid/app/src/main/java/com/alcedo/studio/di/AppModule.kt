@@ -153,6 +153,10 @@ object AppModule {
         AiCredentialService(this.context)
     }
 
+    val aiCredentialStore: AiCredentialStore by lazy {
+        AiCredentialStore(this.context)
+    }
+
     val modelDownloadService: ModelDownloadService by lazy {
         ModelDownloadService(this.context)
     }
@@ -167,6 +171,60 @@ object AppModule {
 
     val semanticGenerationService: SemanticGenerationService by lazy {
         SemanticGenerationService(this.context, aiService, metadataDao, modelDownloadService)
+    }
+
+    val albumBrowseService: AlbumBrowseService by lazy {
+        AlbumBrowseService(
+            sleeveRepository = sleeveRepository,
+            imageRepository = imageRepository,
+            thumbnailService = thumbnailService
+        )
+    }
+
+    val historyMgmtService: HistoryMgmtService by lazy {
+        HistoryMgmtService(editHistoryRepository)
+    }
+
+    val imageAnalysisEncoder: ImageAnalysisEncoder by lazy {
+        ImageAnalysisEncoder(clipInferenceEngine)
+    }
+
+    val imageAnalysisService: ImageAnalysisService by lazy {
+        ImageAnalysisService(
+            aiService = aiService,
+            thumbnailService = thumbnailService,
+            imageAnalysisEncoder = imageAnalysisEncoder
+        )
+    }
+
+    val colorScienceBridge: ColorScienceBridge by lazy {
+        ColorScienceBridge()
+    }
+
+    val aiSidecarRuntimeService: AiSidecarRuntimeService by lazy {
+        AiSidecarRuntimeService(
+            credentialStore = aiCredentialStore,
+            clipEngine = clipInferenceEngine
+        )
+    }
+
+    val projectPackageService: ProjectPackageService by lazy {
+        ProjectPackageService()
+    }
+
+    val projectService: ProjectService by lazy {
+        ProjectService(
+            context = this.context,
+            projectRepository = projectRepository,
+            imageRepository = imageRepository,
+            sleeveRepository = sleeveRepository,
+            editHistoryRepository = editHistoryRepository,
+            projectPackageService = projectPackageService
+        )
+    }
+
+    private val clipInferenceEngine: ClipInferenceEngine by lazy {
+        ClipInferenceEngine(this.context)
     }
 
     // ── App Services (com.alcedo.studio.service) ──
