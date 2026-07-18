@@ -3,6 +3,7 @@ package com.alcedo.studio.domain.service
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.alcedo.studio.ndk.AlcedoNativeBridge
+import com.alcedo.studio.util.BitmapDecoder
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -543,14 +544,7 @@ class DecodeService(
 
     private fun generateFallbackThumbnail(path: String, maxDimension: Int): Bitmap? {
         return try {
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeFile(path, options)
-            val scale = maxOf(1, maxOf(options.outWidth / maxDimension, options.outHeight / maxDimension))
-            BitmapFactory.Options().apply {
-                inSampleSize = scale
-            }.let { BitmapFactory.decodeFile(path, it) }
+            BitmapDecoder.decodeSampledBitmap(path, maxDimension, maxDimension)
         } catch (e: Exception) {
             null
         }

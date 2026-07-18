@@ -456,11 +456,37 @@ class ExportService(private val context: Context) {
     private fun decodeSampledBitmap(path: String, settings: ExportSettings): Bitmap? {
         val reqWidth = settings.maxWidth ?: settings.maxDimension ?: 0
         val reqHeight = settings.maxHeight ?: settings.maxDimension ?: 0
+        return decodeSampledBitmap(context, path, reqWidth, reqHeight)
+    }
+
+    private fun decodeSampledBitmap(context: Context, path: String, reqWidth: Int, reqHeight: Int): Bitmap? {
+        val uri = Uri.parse(path)
+        val isContentUri = path.startsWith("content://")
+
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, opts)
+
+        if (isContentUri) {
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, opts)
+            }
+        } else {
+            BitmapFactory.decodeFile(path, opts)
+        }
+
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+            return null
+        }
+
         opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, reqWidth, reqHeight)
         opts.inJustDecodeBounds = false
-        return BitmapFactory.decodeFile(path, opts)
+
+        return if (isContentUri) {
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, opts)
+            }
+        } else {
+            BitmapFactory.decodeFile(path, opts)
+        }
     }
 
     private fun calculateInSampleSize(outWidth: Int, outHeight: Int, reqWidth: Int, reqHeight: Int): Int {

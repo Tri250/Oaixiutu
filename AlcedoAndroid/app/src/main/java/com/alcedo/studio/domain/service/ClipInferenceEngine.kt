@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import com.alcedo.studio.util.BitmapDecoder
 import java.io.File
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
@@ -305,13 +306,7 @@ class ClipInferenceEngine(private val context: Context) {
                 Log.w(TAG, "Image file not found: $imagePath")
                 return@withContext FloatArray(embeddingDim)
             }
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-                BitmapFactory.decodeFile(imagePath, this)
-                inSampleSize = calculateInSampleSize(outWidth, outHeight, 224, 224)
-                inJustDecodeBounds = false
-            }
-            val bitmap = BitmapFactory.decodeFile(imagePath, options)
+            val bitmap = BitmapDecoder.decodeSampledBitmap(context, imagePath, 224, 224)
             if (bitmap == null) {
                 Log.w(TAG, "Failed to decode image: $imagePath")
                 return@withContext FloatArray(embeddingDim)

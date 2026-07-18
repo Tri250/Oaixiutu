@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import com.alcedo.studio.data.local.ImageMetadataDao
+import com.alcedo.studio.util.BitmapDecoder
 import com.alcedo.studio.data.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -244,15 +245,7 @@ class SemanticGenerationService(
 
     private fun loadBitmap(imagePath: String): Bitmap? {
         return try {
-            val file = File(imagePath)
-            if (!file.exists()) return null
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-                BitmapFactory.decodeFile(imagePath, this)
-                inSampleSize = calculateInSampleSize(outWidth, outHeight, 256, 256)
-                inJustDecodeBounds = false
-            }
-            BitmapFactory.decodeFile(imagePath, options)
+            BitmapDecoder.decodeSampledBitmap(context, imagePath, 256, 256)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load bitmap: ${e.message}")
             null

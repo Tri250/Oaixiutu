@@ -1,9 +1,9 @@
 package com.alcedo.studio.viewmodel
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import com.alcedo.studio.util.BitmapDecoder
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -394,33 +394,28 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 try {
                     // 在 IO 线程解码，避免主线程 ANR；采样避免大图 OOM
                     val bitmap = withContext(Dispatchers.IO) {
-                        // First decode bounds only
-                        val options = BitmapFactory.Options().apply {
-                            inJustDecodeBounds = true
-                        }
-                        BitmapFactory.decodeFile(it.imagePath, options)
-
-                        // Calculate sample size with MemoryGuard protection
-                        val rawSampleSize = calculateSampleSize(options.outWidth, options.outHeight)
-                        val estimatedBytes = MemoryGuard.estimateBitmapBytes(
-                            options.outWidth / rawSampleSize, options.outHeight / rawSampleSize
-                        )
-                        val finalSampleSize = if (!MemoryGuard.canAllocateBitmap(estimatedBytes)) {
-                            // Increase sampling to fit available memory
-                            MemoryGuard.calculateSafeSampleSize(
-                                options.outWidth, options.outHeight,
-                                MemoryGuard.availableHeapBytes() - 32L * 1024 * 1024 // 32MB overhead
-                            )
+                        val (outWidth, outHeight) = BitmapDecoder.decodeJustBounds(AppModule.context, it.imagePath)
+                        if (outWidth <= 0 || outHeight <= 0) {
+                            null
                         } else {
-                            rawSampleSize
+                            val rawSampleSize = calculateSampleSize(outWidth, outHeight)
+                            val estimatedBytes = MemoryGuard.estimateBitmapBytes(
+                                outWidth / rawSampleSize, outHeight / rawSampleSize
+                            )
+                            val finalSampleSize = if (!MemoryGuard.canAllocateBitmap(estimatedBytes)) {
+                                MemoryGuard.calculateSafeSampleSize(
+                                    outWidth, outHeight,
+                                    MemoryGuard.availableHeapBytes() - 32L * 1024 * 1024
+                                )
+                            } else {
+                                rawSampleSize
+                            }
+                            val decodeOptions = BitmapFactory.Options().apply {
+                                inSampleSize = finalSampleSize
+                                inPreferredConfig = Bitmap.Config.ARGB_8888
+                            }
+                            BitmapDecoder.decodeBitmap(AppModule.context, it.imagePath, decodeOptions)
                         }
-
-                        // Load with sampling
-                        val decodeOptions = BitmapFactory.Options().apply {
-                            inSampleSize = finalSampleSize
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                        }
-                        BitmapFactory.decodeFile(it.imagePath, decodeOptions)
                     }
                     _originalBitmap.value = bitmap
                     // C8 修复: 为预览生成降采样位图,避免实时处理大图 OOM
@@ -2259,7 +2254,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val image = imageRepository.getImage(id) ?: return@forEach
                 val params = _batchParamsCache.value[id] ?: _params.value
                 withContext(Dispatchers.IO) {
-                    val bitmap = BitmapFactory.decodeFile(image.imagePath)
+                    val bitmap = BitmapDecoder.decodeBitmap(AppModule.context, image.imagePath)
                     val processed = if (bitmap != null) {
                         val out = pipelineService.applyPipeline(bitmap, params)
                         bitmap.recycle()

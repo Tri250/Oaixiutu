@@ -25,6 +25,7 @@ object AppModule {
     fun initialize(context: Context) {
         _appContext = context.applicationContext
         initialized = true
+        com.alcedo.studio.util.ContextProvider.initialize(context)
     }
 
     fun getContextSafely(): Context? = _appContext
