@@ -8,8 +8,6 @@ import com.alcedo.studio.data.local.*
 import com.alcedo.studio.domain.repository.*
 import com.alcedo.studio.domain.service.*
 import com.alcedo.studio.service.RenderService
-import com.alcedo.studio.service.SleeveFilterService as AppSleeveFilterService
-import com.alcedo.studio.service.ExportService as AppExportService
 import kotlinx.coroutines.CoroutineScope
 // Old AiService in service package has been removed; domain.service.AiService is used everywhere
 
@@ -176,23 +174,6 @@ object AppModule {
     val renderService: RenderService by lazy {
         RenderService()
     }
-
-    val appSleeveFilterService: AppSleeveFilterService by lazy {
-        AppSleeveFilterService(
-            metadataDao = metadataDao,
-            ratingDao = ratingDao,
-            labelDao = labelDao,
-            collectionDao = collectionDao,
-            filterDao = filterDao,
-            elementDao = elementDao
-        )
-    }
-
-    val appExportService: AppExportService by lazy {
-        AppExportService(this.context)
-    }
-
-    // appAiService removed — domain.service.AiService (aiService) is the sole implementation
 
     // DAOs from data.dao package
     val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }

@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
+// TODO(dead-code): AI Sidecar 运行时服务未接入 UI。当前 AI 推理由 AiService + ClipInferenceEngine 直接实现，未使用此服务编排。
+//   待支持远程 AI Sidecar (gRPC) 或多推理后端切换时启用。
+
 /**
  * AI Sidecar runtime service.
  * Ported from desktop ai_sidecar_runtime_service.cpp

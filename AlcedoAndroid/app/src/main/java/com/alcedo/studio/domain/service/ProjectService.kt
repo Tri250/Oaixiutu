@@ -20,6 +20,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+// TODO(dead-code): 项目工程服务未接入 UI。当前编辑流程基于单图 (EditorViewModel)，未使用工程模式。
+//   待多图工程/批量编辑功能上线时启用。
+
 class ProjectService(
     private val context: Context,
     private val projectRepository: ProjectRepository,

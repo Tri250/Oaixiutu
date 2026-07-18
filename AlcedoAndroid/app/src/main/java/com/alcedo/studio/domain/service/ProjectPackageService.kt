@@ -22,6 +22,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+// TODO(dead-code): 项目打包服务未接入 UI。仅被 ProjectService 依赖，而 ProjectService 尚未接入 UI。
+//   待多图工程/批量编辑功能上线时随 ProjectService 一起启用。
+
 class ProjectPackageService {
     companion object {
         private const val TAG = "ProjectPackageService"

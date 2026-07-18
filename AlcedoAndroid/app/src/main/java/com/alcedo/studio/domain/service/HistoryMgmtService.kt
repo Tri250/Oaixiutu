@@ -14,6 +14,9 @@ import java.util.Collections
 import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 
+// TODO(dead-code): 历史管理服务未接入 UI。当前编辑历史由 EditorViewModel 直接通过 EditHistoryRepository 管理，未使用此服务层。
+//   待多图工程/批量编辑的统一历史管理功能上线时启用。
+
 class HistoryMgmtService(
     private val editHistoryRepository: EditHistoryRepository
 ) {

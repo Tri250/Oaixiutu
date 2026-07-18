@@ -3,6 +3,9 @@ package com.alcedo.studio.domain.service
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.ndk.AlcedoNativeBridge
 
+// TODO(dead-code): 色彩科学桥接未接入 UI。当前 GPU 渲染管线 (GpuPipelineService) 处理色彩变换，未使用此 JNI 桥接。
+//   待离线色彩空间转换或 ACES/OpenDRT 工作流集成时启用。
+
 /**
  * JNI bridge for color science operations.
  * Provides access to native ACES 2.0, OpenDRT, and color space transforms.
