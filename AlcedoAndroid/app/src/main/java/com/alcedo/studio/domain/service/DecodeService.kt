@@ -249,8 +249,9 @@ class DecodeService(
                     raf.skipBytes(10)
                 }
             }
-        } catch (_: Exception) {
-            // Ignore; fall through to RAW
+        } catch (e: Exception) {
+            // TIFF IFD parse failure — log and fall through to RAW
+            android.util.Log.w("DecodeService", "Failed to parse TIFF IFD for ${file.name}: ${e.message}")
         }
         return "RAW"
     }
@@ -343,6 +344,12 @@ class DecodeService(
             )
 
             if (result != null) {
+                // Validate decoded result before returning
+                if (result.rgbFloatData.isEmpty() || result.width <= 0 || result.height <= 0) {
+                    _decodeProgress.value = DecodeProgress.Failed(jobId, "Decode returned invalid result: empty data or zero dimensions")
+                    decodeBridge.nativeCancelDecode(jobId)
+                    return@withContext null
+                }
                 _decodeProgress.value = DecodeProgress.Completed(jobId, result)
                 val metadata = extractMetadata(filePath)
                 DecodedRaw(
@@ -558,7 +565,14 @@ class DecodeService(
         withContext(Dispatchers.IO) {
             paths.map { path ->
                 async {
-                    path to extractMetadata(path)
+                    try {
+                        path to extractMetadata(path)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.util.Log.e("DecodeService", "batchExtractMetadata failed for $path: ${e.message}")
+                        path to null
+                    }
                 }
             }.mapNotNull { it.await() }
                 .filter { it.second != null }
@@ -572,16 +586,28 @@ class DecodeService(
     ): Map<String, Bitmap?> = withContext(Dispatchers.IO) {
         val results = mutableMapOf<String, Bitmap?>()
         var completed = 0
-        paths.map { path ->
+        val jobs = paths.map { path ->
             async {
-                val bitmap = generateThumbnail(path, maxDimension)
-                synchronized(results) {
-                    results[path] = bitmap
-                    completed++
-                    onProgress(completed, paths.size)
+                try {
+                    val bitmap = generateThumbnail(path, maxDimension)
+                    synchronized(results) {
+                        results[path] = bitmap
+                        completed++
+                        onProgress(completed, paths.size)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.e("DecodeService", "batchGenerateThumbnails failed for $path: ${e.message}")
+                    synchronized(results) {
+                        results[path] = null
+                        completed++
+                        onProgress(completed, paths.size)
+                    }
                 }
             }
-        }.awaitAll()
+        }
+        jobs.awaitAll()
         results
     }
 

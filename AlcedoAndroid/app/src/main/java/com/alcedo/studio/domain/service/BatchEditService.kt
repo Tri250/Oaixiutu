@@ -85,8 +85,8 @@ class BatchEditService(
      */
     suspend fun copyAdjustments(sourceImageId: String): PipelineParams = withContext(Dispatchers.IO) {
         val imageId = sourceImageId.toLongOrNull()?.toUInt() ?: return@withContext PipelineParams()
-        val history = editHistoryRepository.getHistory(imageId)
-        val version = history?.getActiveVersion() ?: history?.getDefaultVersion()
+        val history = editHistoryRepository.getHistory(imageId) ?: return@withContext PipelineParams()
+        val version = history.getActiveVersion() ?: history.getDefaultVersion()
         val materialized = version?.materializedParams
         if (materialized != null) {
             deserializeParams(materialized.toString())
@@ -154,8 +154,12 @@ class BatchEditService(
         if (imageIds.isEmpty()) {
             return@withContext BatchEditOutcome.Failure("No images selected")
         }
+        val validIds = imageIds.filter { it.toLongOrNull() != null }
+        if (validIds.isEmpty()) {
+            return@withContext BatchEditOutcome.Failure("No valid image IDs provided")
+        }
         val defaults = PipelineParams()
-        runBatch(imageIds, "Reset") { imageId ->
+        runBatch(validIds, "Reset") { imageId ->
             writeParamsToActiveVersion(imageId, defaults)
         }
     }

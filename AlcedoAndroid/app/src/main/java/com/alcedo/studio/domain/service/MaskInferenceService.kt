@@ -455,7 +455,7 @@ class MaskInferenceService {
             val r = ((pix shr 16) and 0xFF) / 255f
             val g = ((pix shr 8) and 0xFF) / 255f
             val b = (pix and 0xFF) / 255f
-            val l = 0.299f * r + 0.587f * g + 0.114f * b
+            val l = (0.299f * r + 0.587f * g + 0.114f * b).coerceIn(0f, 1f)
             weights[i] = when {
                 l in lo..hi -> 1f
                 l < lo -> ((lo - l) / f).let { (1f - it).coerceIn(0f, 1f) }
@@ -513,6 +513,8 @@ class MaskInferenceService {
      * enclose the subject.
      */
     private fun borderFloodFill(edges: FloatArray, w: Int, h: Int, threshold: Float): BooleanArray {
+        if (w <= 0 || h <= 0) return BooleanArray(0)
+        if (edges.size != w * h) return BooleanArray(w * h)
         val visited = BooleanArray(w * h)
         val stack = IntArray(w * h * 4)
         var sp = 0
@@ -550,6 +552,7 @@ class MaskInferenceService {
         edges: FloatArray, visited: BooleanArray, stack: IntArray,
         sp: Int, ni: Int, threshold: Float
     ): Int {
+        if (ni < 0 || ni >= visited.size) return sp
         if (visited[ni]) return sp
         // Strong-edge pixels are walls — flood fill cannot enter them.
         if (edges[ni] > threshold) return sp
@@ -561,6 +564,7 @@ class MaskInferenceService {
     /** Returns the value at the given [quantile] (0..1) of [data]. */
     private fun percentile(data: FloatArray, quantile: Float): Float {
         if (data.isEmpty()) return 0f
+        if (data.size == 1) return data[0]
         val q = quantile.coerceIn(0f, 1f)
         val sorted = data.copyOf()
         sorted.sort()
@@ -574,6 +578,8 @@ class MaskInferenceService {
     /** Separable 3x3-ish box blur, [radius] passes for feathering. */
     private fun boxBlur(src: FloatArray, w: Int, h: Int, radius: Int): FloatArray {
         if (radius <= 0) return src.copyOf()
+        if (w <= 0 || h <= 0) return src.copyOf()
+        if (src.size != w * h) return src.copyOf()
         var current = src
         val tmp = FloatArray(w * h)
         repeat(radius) {
@@ -586,7 +592,7 @@ class MaskInferenceService {
                         val xx = x + dx
                         if (xx in 0 until w) { sum += current[y * w + xx]; n++ }
                     }
-                    tmp[y * w + x] = sum / n
+                    tmp[y * w + x] = if (n > 0) sum / n else 0f
                 }
             }
             // Vertical pass.
@@ -598,7 +604,7 @@ class MaskInferenceService {
                         val yy = y + dy
                         if (yy in 0 until h) { sum += tmp[yy * w + x]; n++ }
                     }
-                    current[x + y * w] = sum / n
+                    current[x + y * w] = if (n > 0) sum / n else 0f
                 }
             }
             // current now holds result of this pass; tmp will be reused next pass.
@@ -611,6 +617,8 @@ class MaskInferenceService {
     private fun bilinearUpscale(
         src: FloatArray, sw: Int, sh: Int, dw: Int, dh: Int
     ): FloatArray {
+        if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return FloatArray(0)
+        if (src.size != sw * sh) return FloatArray(dw * dh)
         if (sw == dw && sh == dh) return src.copyOf()
         val out = FloatArray(dw * dh)
         val xRatio = (sw - 1).toFloat() / (dw - 1).coerceAtLeast(1)

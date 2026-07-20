@@ -115,23 +115,26 @@ class DentryCacheManager(
      * Invalidate cache for a specific parent and all its ancestors
      */
     suspend fun invalidateChain(parentId: Long, elementDao: SleeveElementDao) {
-        synchronized(lock) {
-            cache.remove(parentId)
-            invalidations.incrementAndGet()
-        }
+        // Collect all ancestor IDs first (outside the lock) to minimize lock scope
+        val idsToInvalidate = mutableListOf<Long>()
+        idsToInvalidate.add(parentId)
 
-        // Walk up the tree and invalidate ancestors
         var currentId: Long? = parentId
         while (currentId != null) {
             val element = elementDao.getElementById(currentId)
             if (element?.parentId != null) {
-                synchronized(lock) {
-                    cache.remove(element.parentId!!)
-                    invalidations.incrementAndGet()
-                }
+                idsToInvalidate.add(element.parentId!!)
                 currentId = element.parentId
             } else {
                 currentId = null
+            }
+        }
+
+        // Remove all collected IDs in a single synchronized block to avoid race conditions
+        synchronized(lock) {
+            for (id in idsToInvalidate) {
+                cache.remove(id)
+                invalidations.incrementAndGet()
             }
         }
     }

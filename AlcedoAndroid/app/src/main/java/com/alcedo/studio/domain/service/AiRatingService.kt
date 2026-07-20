@@ -183,9 +183,26 @@ class AiRatingService(
 
     // ── Bitmap to Base64 ──
 
+    /**
+     * 修复: 原实现未检查 bitmap 是否为 null 或已回收，
+     * 调用 bitmap.compress 在已回收的 bitmap 上会抛 IllegalStateException。
+     */
     private fun bitmapToBase64(bitmap: Bitmap): String {
+        if (bitmap.isRecycled) {
+            Log.e(TAG, "Cannot encode recycled bitmap to Base64")
+            return ""
+        }
+        if (bitmap.width <= 0 || bitmap.height <= 0) {
+            Log.e(TAG, "Cannot encode bitmap with invalid dimensions: ${bitmap.width}x${bitmap.height}")
+            return ""
+        }
         val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+        try {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to compress bitmap to JPEG", e)
+            return ""
+        }
         val bytes = stream.toByteArray()
         return Base64.encodeToString(bytes, Base64.NO_WRAP)
     }

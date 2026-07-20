@@ -28,11 +28,21 @@ object PrivacyManager {
     private const val KEY_FIRST_LAUNCH = "first_launch"
     private const val CURRENT_CONSENT_VERSION = 2
 
-    private lateinit var prefs: SharedPreferences
+    /**
+     * 修复: 原使用 lateinit var，未初始化时访问会抛 UninitializedPropertyAccessException。
+     * 现改为可空类型 + 安全检查，确保所有访问路径都安全。
+     */
+    private var _prefs: SharedPreferences? = null
+    private val prefs: SharedPreferences
+        get() = _prefs ?: throw IllegalStateException(
+            "PrivacyManager not initialized. Call PrivacyManager.initialize(context) first."
+        )
 
     fun initialize(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
+
+    fun isInitialized(): Boolean = _prefs != null
 
     // ── Consent Management ──
 
@@ -167,11 +177,15 @@ object PrivacyManager {
             val db = SleeveDatabase.getInstance(context)
             db.clearAllTables()
 
-            // Clear shared preferences (except consent state)
-            val prefsDir = File(context.filesDir.parentFile, "shared_prefs")
-            prefsDir.listFiles()?.forEach { file ->
-                if (file.name.startsWith("alcedo_") && file.name != "$PREFS_NAME.xml") {
-                    file.delete()
+            // 修复: context.filesDir.parentFile 可能为 null (例如在某些受限环境中)
+            // 安全处理: 如果 parentFile 为 null，跳过 shared_prefs 清理步骤
+            val parentDir = context.filesDir.parentFile
+            if (parentDir != null) {
+                val prefsDir = File(parentDir, "shared_prefs")
+                prefsDir.listFiles()?.forEach { file ->
+                    if (file.name.startsWith("alcedo_") && file.name != "$PREFS_NAME.xml") {
+                        file.delete()
+                    }
                 }
             }
 

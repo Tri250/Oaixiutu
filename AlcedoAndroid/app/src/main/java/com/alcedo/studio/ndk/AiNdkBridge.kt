@@ -17,6 +17,7 @@ object AiNdkBridge {
     private var clipEngine: ClipInferenceEngine? = null
 
     // 简单的内存向量索引（HNSW 替代实现，按相似度暴力检索）
+    private val indexLock = Any()
     private val indexEntries = mutableListOf<IndexEntry>()
 
     private class IndexEntry(val id: Long, val embedding: FloatArray)
@@ -30,13 +31,21 @@ object AiNdkBridge {
     // ── 编码（委托给 ClipInferenceEngine）──
 
     suspend fun encodeImage(context: Context, bitmap: Bitmap): FloatArray? {
-        return try {
-            initialize(context)
-            clipEngine?.encodeImage(bitmap)
-        } catch (e: Exception) {
-            Log.e(TAG, "图像编码失败", e)
-            null
+        val maxRetries = 3
+        var delayMs = 100L
+        repeat(maxRetries) { attempt ->
+            try {
+                initialize(context)
+                return clipEngine?.encodeImage(bitmap)
+            } catch (e: Exception) {
+                Log.e(TAG, "图像编码失败 (attempt ${attempt + 1}/$maxRetries)", e)
+                if (attempt < maxRetries - 1) {
+                    kotlinx.coroutines.delay(delayMs)
+                    delayMs *= 2
+                }
+            }
         }
+        return null
     }
 
     suspend fun encodeText(context: Context, text: String): FloatArray? {
@@ -107,10 +116,20 @@ object AiNdkBridge {
         dimensions: Int = 512,
         maxElements: Int = 10000
     ): Boolean {
+        if (embeddings.isEmpty()) {
+            Log.w(TAG, "buildHnswIndex: embeddings is empty, skipping")
+            return false
+        }
         return try {
-            indexEntries.clear()
-            embeddings.forEach { (id, emb) ->
-                indexEntries.add(IndexEntry(id, emb.copyOf()))
+            synchronized(indexLock) {
+                indexEntries.clear()
+                embeddings.forEach { (id, emb) ->
+                    if (emb.isEmpty()) {
+                        Log.w(TAG, "buildHnswIndex: skipping empty embedding for id=$id")
+                        return@forEach
+                    }
+                    indexEntries.add(IndexEntry(id, emb.copyOf()))
+                }
             }
             true
         } catch (e: Exception) {
@@ -120,16 +139,29 @@ object AiNdkBridge {
     }
 
     fun hnswSearch(query: FloatArray, k: Int = 10): List<Pair<Long, Float>>? {
-        if (indexEntries.isEmpty()) return null
-        return indexEntries
-            .map { it.id to cosineSimilarity(query, it.embedding) }
-            .sortedByDescending { it.second }
-            .take(k)
+        if (query.isEmpty()) {
+            Log.w(TAG, "hnswSearch: query vector is empty")
+            return null
+        }
+        synchronized(indexLock) {
+            if (indexEntries.isEmpty()) return null
+            val expectedDim = indexEntries.first().embedding.size
+            if (query.size != expectedDim) {
+                Log.w(TAG, "hnswSearch: query dimension ${query.size} does not match index dimension $expectedDim")
+                return null
+            }
+            return indexEntries
+                .map { it.id to cosineSimilarity(query, it.embedding) }
+                .sortedByDescending { it.second }
+                .take(k)
+        }
     }
 
     fun hnswCreateIndex(dimensions: Int, maxElements: Int): Long {
         return try {
-            indexEntries.clear()
+            synchronized(indexLock) {
+                indexEntries.clear()
+            }
             1L
         } catch (e: Exception) {
             Log.e(TAG, "创建 HNSW 索引失败", e)
@@ -137,15 +169,19 @@ object AiNdkBridge {
         }
     }
 
-    fun hnswSize(): Int = indexEntries.size
+    fun hnswSize(): Int = synchronized(indexLock) { indexEntries.size }
 
     fun hnswInsert(id: Long, embedding: FloatArray) {
-        indexEntries.removeAll { it.id == id }
-        indexEntries.add(IndexEntry(id, embedding.copyOf()))
+        synchronized(indexLock) {
+            indexEntries.removeAll { it.id == id }
+            indexEntries.add(IndexEntry(id, embedding.copyOf()))
+        }
     }
 
     fun hnswRemove(id: Long) {
-        indexEntries.removeAll { it.id == id }
+        synchronized(indexLock) {
+            indexEntries.removeAll { it.id == id }
+        }
     }
 
     // ── CLIP 会话管理（委托给 ClipInferenceEngine）──

@@ -55,8 +55,12 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             // structured JSON report but makes the crash immediately visible.
             writeLegacyTrace(thread, throwable)
 
-            // Notify callback
-            crashCallback?.invoke(throwable)
+            // Notify callback — must not throw, or it will mask the real crash
+            try {
+                crashCallback?.invoke(throwable)
+            } catch (cbEx: Exception) {
+                Log.e(TAG, "Crash callback threw exception, masking real crash is prevented", cbEx)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error in crash handler", e)
         } finally {

@@ -19,13 +19,18 @@ object TempFileManager {
         try {
             if (file.exists()) {
                 // Overwrite with zeros before deletion for secure wipe
-                if (file.length() > 0 && file.length() < 10 * 1024 * 1024) { // Only for files < 10MB
+                val fileLength = file.length()
+                if (fileLength > 0 && fileLength < 10 * 1024 * 1024) { // Only for files < 10MB
                     file.outputStream().use { os ->
-                        val zeros = ByteArray(minOf(file.length().toInt(), 4096))
-                        var remaining = file.length()
+                        // 修复: 原使用 file.length().toInt() 会导致大文件溢出 (>2GB)
+                        // 改用 Long 类型的 remaining 和安全的 chunk 大小计算
+                        val chunkSize = minOf(fileLength, 4096L).toInt()
+                        val zeros = ByteArray(chunkSize)
+                        var remaining = fileLength
                         while (remaining > 0) {
-                            os.write(zeros, 0, minOf(remaining.toInt(), zeros.size))
-                            remaining -= zeros.size
+                            val writeSize = minOf(remaining.toInt(), chunkSize)
+                            os.write(zeros, 0, writeSize)
+                            remaining -= writeSize
                         }
                     }
                 }

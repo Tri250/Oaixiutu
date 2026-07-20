@@ -126,12 +126,29 @@ object SecurityChecker {
                 return true
             }
 
-            // 证书固定当前未启用：仅记录签名指纹用于审计。
-            // 如需启用固定，将已知签名指纹加入 knownSignatures 并校验 hexHash in knownSignatures。
-            val knownSignatures: Set<String>? = null
+            // 修复: 原代码 knownSignatures 为 null 且直接返回 true，实际未执行签名校验。
+            // 现在将当前签名指纹记录到日志，并通过 BuildConfig 字段配置已知签名。
+            // 如果已知签名列表为空 (尚未配置)，记录警告但不阻断。
+            val knownSignatures: Set<String>? = try {
+                // 从 BuildConfig 动态读取已知签名，如果未配置则为 null
+                val field = BuildConfig::class.java.getDeclaredField("KNOWN_SIGNATURES")
+                field.get(null) as? Set<String>
+            } catch (_: Exception) {
+                null
+            }
 
-            Log.w(TAG, "签名校验：当前签名指纹 $hexHash")
-            return true
+            if (knownSignatures != null && knownSignatures.isNotEmpty()) {
+                val valid = hexHash in knownSignatures
+                if (!valid) {
+                    Log.e(TAG, "签名校验失败: 指纹 $hexHash 不在已知签名列表中")
+                } else {
+                    Log.i(TAG, "签名校验通过: 指纹 $hexHash")
+                }
+                return valid
+            } else {
+                Log.w(TAG, "签名校验：未配置已知签名列表，当前指纹 $hexHash，跳过校验")
+                return true
+            }
         } catch (e: Exception) {
             Log.e(TAG, "签名校验失败", e)
             return false

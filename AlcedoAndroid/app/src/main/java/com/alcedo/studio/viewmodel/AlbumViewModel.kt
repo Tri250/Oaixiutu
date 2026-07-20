@@ -150,8 +150,15 @@ class AlbumViewModel : ViewModel() {
     private val _thumbnailCacheVersion = MutableStateFlow(0)
     val thumbnailCacheVersion: StateFlow<Int> = _thumbnailCacheVersion.asStateFlow()
 
-    /** Returns the cached thumbnail for [imageId], or null if not yet loaded. */
-    fun getThumbnail(imageId: Long): Bitmap? = thumbnailLruCache.get(imageId)
+    /** Returns the cached thumbnail for [imageId], or null if not yet loaded or recycled. */
+    fun getThumbnail(imageId: Long): Bitmap? {
+        val bitmap = thumbnailLruCache.get(imageId)
+        if (bitmap != null && bitmap.isRecycled) {
+            thumbnailLruCache.remove(imageId)
+            return null
+        }
+        return bitmap
+    }
 
     private val _thumbnailsLoading = mutableStateListOf<Long>()
     val thumbnailsLoading: List<Long> get() = _thumbnailsLoading
@@ -1183,9 +1190,15 @@ class AlbumViewModel : ViewModel() {
     init {
         // Mirror BatchEditService progress into the ViewModel-exposed flow so
         // the UI can observe a single source of truth.
+        // If batchEditService is not ready or its progress flow throws, the
+        // app must not crash — fall back to an empty progress state.
         viewModelScope.launch {
-            batchEditService.progress.collect { p ->
-                _batchEditProgress.value = p
+            try {
+                batchEditService.progress.collect { p ->
+                    _batchEditProgress.value = p
+                }
+            } catch (e: Throwable) {
+                Log.e("AlbumVM", "Failed to collect batchEditService.progress", e)
             }
         }
     }

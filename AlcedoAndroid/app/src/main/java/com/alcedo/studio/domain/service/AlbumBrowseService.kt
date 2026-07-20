@@ -40,8 +40,7 @@ data class FileTypeFilter(
 ) {
     fun matches(imageType: ImageType?): Boolean {
         if (categories.isEmpty()) return true
-        if (imageType == null) return false
-        val category = imageTypeToFileCategory(imageType)
+        val category = if (imageType != null) imageTypeToFileCategory(imageType) else FileCategory.OTHER
         return category in categories
     }
 
@@ -153,6 +152,10 @@ class AlbumBrowseService(
 
         try {
             val folder = sleeveRepository.getElement(folderId)
+            if (folder == null) {
+                _albumState.value = _albumState.value.copy(isLoading = false)
+                return@withContext
+            }
             val folderPath = buildFolderPath(folderId)
             val children = sleeveRepository.getChildren(folderId)
             val elements = children.map { element ->
@@ -207,10 +210,8 @@ class AlbumBrowseService(
             val elements = mutableListOf<AlbumElement>()
 
             for (imageId in result.items) {
-                val metadata = imageRepository.getImageMetadata(imageId)
-                if (metadata != null) {
-                    elements.add(metadataToAlbumElement(metadata))
-                }
+                val metadata = imageRepository.getImageMetadata(imageId) ?: continue
+                elements.add(metadataToAlbumElement(metadata))
             }
 
             val filtered = applyFilters(elements)

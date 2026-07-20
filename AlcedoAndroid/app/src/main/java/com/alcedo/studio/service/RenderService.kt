@@ -59,9 +59,11 @@ class RenderService {
                 )
                 val result = resultPixels != null
 
+                // 修复: 回调应传递处理后的 resultPixels 而非原始 request.pixels
+                val callbackPixels = if (result && resultPixels != null) resultPixels else request.pixels
                 if (!cancelFlag.get() && request.callback != null) {
                     mainHandler.post {
-                        request.callback?.invoke(result, request.pixels)
+                        request.callback?.invoke(result, callbackPixels)
                     }
                 }
             } catch (e: Exception) {

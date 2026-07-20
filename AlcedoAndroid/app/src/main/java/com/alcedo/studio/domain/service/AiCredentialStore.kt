@@ -10,17 +10,28 @@ import androidx.security.crypto.MasterKey
  * Uses EncryptedSharedPreferences for secure storage.
  */
 class AiCredentialStore(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val TAG = "AiCredentialStore"
 
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "alcedo_ai_credentials",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            EncryptedSharedPreferences.create(
+                context,
+                "alcedo_ai_credentials",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // 修复: EncryptedSharedPreferences 创建可能失败（例如密钥被篡改或设备加密不可用）
+            // 回退到普通 SharedPreferences 并记录警告
+            android.util.Log.e(TAG, "Failed to create EncryptedSharedPreferences, falling back to plain prefs", e)
+            context.getSharedPreferences("alcedo_ai_credentials_fallback", Context.MODE_PRIVATE)
+        }
+    }
 
     fun storeApiKey(provider: String, apiKey: String) {
         prefs.edit().putString("key_$provider", apiKey).apply()

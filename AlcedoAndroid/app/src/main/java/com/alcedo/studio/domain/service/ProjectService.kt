@@ -310,6 +310,14 @@ class ProjectService(
                 errors = errors,
                 warnings = warnings
             )
+        } catch (e: kotlinx.serialization.SerializationException) {
+            errors.add(ProjectValidationError.CORRUPTED_DATA)
+            warnings.add("Failed to deserialize project data: ${e.message}")
+            return@withContext ProjectValidation(false, errors, warnings)
+        } catch (e: IllegalArgumentException) {
+            errors.add(ProjectValidationError.CORRUPTED_DATA)
+            warnings.add("Invalid project data format: ${e.message}")
+            return@withContext ProjectValidation(false, errors, warnings)
         } catch (e: Exception) {
             errors.add(ProjectValidationError.CORRUPTED_DATA)
             warnings.add("Failed to parse project: ${e.message}")

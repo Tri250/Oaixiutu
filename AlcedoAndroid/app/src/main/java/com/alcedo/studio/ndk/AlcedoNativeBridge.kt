@@ -44,10 +44,18 @@ object AlcedoNativeBridge {
     external fun nativeGetTimestampMicros(): Long
     external fun nativeSetLogLevel(level: Int)
 
-    fun initialize() {
-        if (!isAvailable) return
-        NdkSafeCall.execute("initialize") {
+    fun initialize(): Boolean {
+        if (!isAvailable) {
+            Log.e(TAG, "initialize() failed: native library not available")
+            return false
+        }
+        return try {
             nativeInitialize()
+            Log.i(TAG, "initialize() succeeded")
+            true
+        } catch (e: Throwable) {
+            Log.e(TAG, "initialize() failed", e)
+            false
         }
     }
 
@@ -319,6 +327,15 @@ object AlcedoNativeBridge {
 
     fun applyWhiteBalance(rgbData: FloatArray, width: Int, height: Int, rMultiplier: Float, gMultiplier: Float, bMultiplier: Float) {
         if (!isAvailable) return
+        if (rgbData.isEmpty()) {
+            Log.w(TAG, "applyWhiteBalance: rgbData is empty, skipping")
+            return
+        }
+        val expectedSize = width * height * 3
+        if (rgbData.size < expectedSize) {
+            Log.w(TAG, "applyWhiteBalance: rgbData size=${rgbData.size} is smaller than expected=$expectedSize (w=$width h=$height), skipping")
+            return
+        }
         NdkSafeCall.execute("applyWhiteBalance") {
             nativeApplyWhiteBalance(rgbData, width, height, rMultiplier, gMultiplier, bMultiplier)
         }
@@ -357,6 +374,10 @@ object AlcedoNativeBridge {
 
     fun cancelDecode(jobId: Long) {
         if (!isAvailable) return
+        if (jobId < 0) {
+            Log.w(TAG, "cancelDecode: invalid jobId=$jobId, must be >= 0")
+            return
+        }
         NdkSafeCall.execute("cancelDecode") {
             nativeCancelDecode(jobId)
         }

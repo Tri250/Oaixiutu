@@ -245,6 +245,13 @@ class ImportService(
                             continue
                         }
 
+                        // Check cancellation after dedup/DB check before adding to list
+                        if (cancellationToken?.isCancelled() == true) {
+                            _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                            addLogEntry("[Phase A]", ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING, "Cancelled during scan")
+                            return@withContext buildCancelledResult(scannedFiles.size, successCount, duplicateCount, errorCount, results)
+                        }
+
                         scannedFiles.add(info)
                     }
                 } catch (e: Exception) {
@@ -320,7 +327,18 @@ class ImportService(
                         filePath = info.filePath
                     )
 
-                    importedChecksums[info.checksum] = info.fileName
+                    // Use putIfAbsent for atomic check-and-set to avoid race condition
+                    val existingName = importedChecksums.putIfAbsent(info.checksum, info.fileName)
+                    if (existingName != null) {
+                        // Another concurrent import already claimed this checksum
+                        addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
+                            ImportPhase.PHASE_A_CREATING,
+                            "Duplicate of $existingName (concurrent)")
+                        duplicateCount++
+                        results.add(ImportResult.Duplicate(-1, existingName))
+                        continue
+                    }
+
                     phaseAResults.add(info to imageId)
                     successCount++
 
@@ -516,6 +534,11 @@ class ImportService(
         // 兼顾速度(避免全文件读取)与去重准确性 (F1 修复)
         val checksum = computePartialChecksum(uri)
 
+        // Validate fileName and filePath before returning
+        if (fileName.isBlank() || filePath.isBlank()) {
+            return null
+        }
+
         return ScannedFileInfo(
             uri = uri,
             fileName = fileName,
@@ -565,7 +588,7 @@ class ImportService(
     ): ImportResult = withContext(Dispatchers.IO) {
         try {
             if (cancellationToken?.isCancelled() == true) {
-                return@withContext ImportResult.Error("Cancelled")
+                throw CancellationException("Import cancelled by token")
             }
 
             val path = getRealPathFromUri(uri)

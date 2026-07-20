@@ -33,18 +33,27 @@ class PathResolver(
     // ================================================================
 
     suspend fun resolvePath(elementId: Long): String {
-        val element = elementDao.getElementById(elementId) ?: return "$rootPath/unknown"
+        val element = elementDao.getElementById(elementId)
+            ?: throw IllegalArgumentException("Element not found for id: $elementId")
         val segments = mutableListOf<String>()
         var currentId: Long? = elementId
 
         // Walk up the tree
         while (currentId != null) {
-            val current = elementDao.getElementById(currentId) ?: break
+            val current = elementDao.getElementById(currentId)
+                ?: throw IllegalArgumentException("Broken tree: parent element not found for id: $currentId")
+            if (current.elementName.isEmpty() || current.elementName.any { it in INVALID_CHARS }) {
+                throw IllegalArgumentException("Invalid element name '${current.elementName}' for id: $currentId")
+            }
             segments.add(0, current.elementName)
             currentId = current.parentId
         }
 
-        return "$rootPath/${segments.joinToString(SEPARATOR)}"
+        val result = "$rootPath/${segments.joinToString(SEPARATOR)}"
+        if (!isValidPath(result)) {
+            throw IllegalArgumentException("Resolved path is invalid: $result")
+        }
+        return result
     }
 
     suspend fun resolvePathWithNames(elementId: Long): String {

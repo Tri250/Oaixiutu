@@ -332,6 +332,11 @@ class BackgroundTaskService(private val context: Context) {
         if (task.retryCount < task.maxRetries) {
             task.retryCount++
             task.status = TaskStatus.RETRYING
+            // 修复: 重试前释放已获取的交互锁，避免死锁。
+            // 锁将在 executeTask 重新获取时再次尝试 acquire。
+            for (lockKey in acquiredLocks) {
+                releaseInteractionLock(task.taskId, lockKey)
+            }
             // Re-enqueue with exponential backoff
             val delayMs = 1000L * (1 shl (task.retryCount - 1))
             scope.launch {
@@ -344,6 +349,7 @@ class BackgroundTaskService(private val context: Context) {
             task.status = TaskStatus.FAILED
             task.completedAt = Instant.now()
             failNotification(task)
+            // 修复: 最终失败时释放交互锁，防止锁永久占用
             releaseInteractionLocks(task.taskId)
         }
     }

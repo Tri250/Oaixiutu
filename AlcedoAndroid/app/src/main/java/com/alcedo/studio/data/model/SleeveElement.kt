@@ -581,8 +581,23 @@ data class RangeFilter(
     override fun fromJson(json: String) {
         val obj = JSONObject(json)
         field = obj.optString("field", "")
-        minValue = obj.optDouble("min", 0.0)
-        maxValue = obj.optDouble("max", Double.MAX_VALUE)
+        val parsedMin = obj.optDouble("min", 0.0)
+        val parsedMax = obj.optDouble("max", Double.MAX_VALUE)
+        if (parsedMin > parsedMax) {
+            minValue = parsedMax
+            maxValue = parsedMin
+        } else {
+            minValue = parsedMin
+            maxValue = parsedMax
+        }
+    }
+
+    fun validate() {
+        if (minValue > maxValue) {
+            val temp = minValue
+            minValue = maxValue
+            maxValue = temp
+        }
     }
 }
 
@@ -945,7 +960,12 @@ data class FilterPreset(
 
     companion object {
         fun fromEntity(entity: FilterPresetEntity): FilterPreset {
-            val combo = FilterCombo.fromJson(entity.filterJson)
+            val combo = try {
+                FilterCombo.fromJson(entity.filterJson)
+            } catch (e: Exception) {
+                android.util.Log.e("FilterPreset", "Failed to parse filterJson for preset '${entity.name}' (id=${entity.presetId})", e)
+                FilterCombo()
+            }
             return FilterPreset(
                 presetId = entity.presetId,
                 name = entity.name,
@@ -1023,7 +1043,10 @@ fun SleeveElementEntity.toDomain(
     folderEntity: SleeveFolderEntity? = null
 ): SleeveElement {
     return if (elementType == 0) {
-        // FILE
+        // FILE — if fileEntity is null, this indicates a data inconsistency; log and use defaults
+        if (fileEntity == null) {
+            android.util.Log.w("SleeveElement", "toDomain: fileEntity is null for FILE element id=$elementId, using defaults")
+        }
         SleeveFile(
             elementId = elementId,
             elementName = elementName,
@@ -1046,7 +1069,10 @@ fun SleeveElementEntity.toDomain(
             syncFlag = SyncFlag.entries.getOrElse(syncFlag) { SyncFlag.UNSYNC }
         )
     } else {
-        // FOLDER
+        // FOLDER — if folderEntity is null, this indicates a data inconsistency; log and use defaults
+        if (folderEntity == null) {
+            android.util.Log.w("SleeveElement", "toDomain: folderEntity is null for FOLDER element id=$elementId, using defaults")
+        }
         SleeveFolder(
             elementId = elementId,
             elementName = elementName,

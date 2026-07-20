@@ -244,7 +244,14 @@ class SemanticGenerationService(
 
     private fun loadBitmap(imagePath: String): Bitmap? {
         return try {
-            BitmapDecoder.decodeSampledBitmap(context, imagePath, 256, 256)
+            val bitmap = BitmapDecoder.decodeSampledBitmap(context, imagePath, 256, 256)
+            if (bitmap == null) {
+                Log.w(TAG, "BitmapDecoder returned null for: $imagePath")
+            }
+            bitmap
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemoryError loading bitmap: $imagePath")
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load bitmap: ${e.message}")
             null

@@ -341,10 +341,16 @@ class HistoryMgmtService(
         val history = loadHistory(imageId)
         val version = history.getActiveVersion() ?: return@withContext ""
 
+        // Snapshot the applied transactions to ensure a consistent hash even if
+        // the transaction list is modified concurrently during computation.
+        val txSnapshot = synchronized(version) {
+            version.appliedTransactions().toList()
+        }
+
         val md = MessageDigest.getInstance("SHA-256")
 
         // Hash each transaction
-        for (tx in version.appliedTransactions()) {
+        for (tx in txSnapshot) {
             md.update(tx.transactionId.toString().toByteArray())
             md.update(tx.operatorType.name.toByteArray())
             md.update(tx.paramsAfter.toString().toByteArray())

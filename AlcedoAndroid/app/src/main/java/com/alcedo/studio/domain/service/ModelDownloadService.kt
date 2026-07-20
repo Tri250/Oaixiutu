@@ -203,10 +203,21 @@ class ModelDownloadService(private val context: Context) {
                 val contentLength = body.contentLength()
                 val totalBytes = if (serverSupportsRange && existingSize > 0) {
                     // For partial content, total = existing + remaining
-                    existingSize + (if (contentLength > 0) contentLength else (model.fileSizeBytes - existingSize))
+                    if (contentLength > 0) {
+                        existingSize + contentLength
+                    } else {
+                        // Content-Length unknown; estimate from model metadata but cap
+                        // at a reasonable limit to avoid wildly wrong progress.
+                        Log.w(TAG, "Content-Length unknown for partial download of $modelId, using model metadata estimate")
+                        model.fileSizeBytes.coerceAtLeast(existingSize)
+                    }
                 } else if (contentLength > 0) {
                     contentLength
                 } else {
+                    // Content-Length completely unknown; use model metadata as a best
+                    // estimate but log a warning so the operator knows progress may be
+                    // inaccurate.
+                    Log.w(TAG, "Content-Length unknown for download of $modelId, progress estimation may be inaccurate")
                     model.fileSizeBytes
                 }
 

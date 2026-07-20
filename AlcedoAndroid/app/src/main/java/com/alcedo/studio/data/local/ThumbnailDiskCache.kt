@@ -215,8 +215,16 @@ class ThumbnailDiskCache(
         tier: ResolutionTier = ResolutionTier.MEDIUM,
         format: CacheFormat? = null
     ): Bitmap? {
-        return withContext(ioDispatcher) {
-            get(imageId, tier, format)
+        val handler = CoroutineExceptionHandler { _, throwable ->
+            android.util.Log.e("ThumbnailDiskCache", "getAsync failed for $imageId", throwable)
+        }
+        return withContext(ioDispatcher + handler) {
+            try {
+                get(imageId, tier, format)
+            } catch (e: Exception) {
+                android.util.Log.e("ThumbnailDiskCache", "getAsync exception for $imageId", e)
+                null
+            }
         }
     }
 
@@ -285,10 +293,7 @@ class ThumbnailDiskCache(
 
         val key = makeKey(imageId, tier, effectiveFormat, effectiveNamespace)
 
-        // Put in memory cache
-        memoryCache.put(key, bitmap)
-
-        // Write to disk
+        // Write to disk first, then update memory cache on success
         val file = getCacheFile(imageId, tier, effectiveFormat, effectiveNamespace)
         try {
             file.parentFile?.mkdirs()
@@ -296,9 +301,17 @@ class ThumbnailDiskCache(
                 bitmap.compress(effectiveFormat.toBitmapCompressFormat(), effectiveQuality, out)
             }
             val fileSize = file.length()
+            if (fileSize == 0L) {
+                // Compress produced empty output — treat as failure
+                file.delete()
+                return
+            }
             totalWrites.incrementAndGet()
             currentCacheSize.addAndGet(fileSize)
             currentEntryCount.incrementAndGet()
+
+            // Update memory cache only after successful disk write
+            memoryCache.put(key, bitmap)
 
             // Update journal
             val entry = JournalEntry(
@@ -316,7 +329,11 @@ class ThumbnailDiskCache(
             // Evict if needed
             maybeEvict()
         } catch (e: Exception) {
+            // Rollback: remove partial file and any stale memory cache entry
             file.delete()
+            memoryCache.remove(key)
+            journal.remove(key)
+            android.util.Log.e("ThumbnailDiskCache", "put failed for $imageId, rolled back", e)
         }
     }
 

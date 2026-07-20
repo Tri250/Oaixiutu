@@ -215,7 +215,7 @@ class MaskRenderService(
             Log.e(TAG, "computeSubMask failed for ${sub.type}", e)
             // Fall back to a full mask so the container still renders.
             MaskInferenceService.MaskResult(w, h, FloatArray(w * h) { 1f })
-        }
+        } ?: MaskInferenceService.MaskResult(w, h, FloatArray(w * h) { 1f })
         // Normalize the result to the current w/h (AI masks already match).
         val normalized = if (result.width == w && result.height == h) {
             result

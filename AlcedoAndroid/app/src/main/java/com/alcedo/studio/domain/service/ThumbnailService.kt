@@ -98,7 +98,7 @@ class ThumbnailService(
         // 2. Check disk cache
         try {
             val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
-            if (diskBitmap != null) {
+            if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
                 synchronized(memoryCacheLock) {
                     memoryCache[cacheKey] = diskBitmap
@@ -132,7 +132,7 @@ class ThumbnailService(
         // Check disk cache
         try {
             val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
-            if (diskBitmap != null) {
+            if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
                 synchronized(memoryCacheLock) { memoryCache[cacheKey] = diskBitmap }
                 loadingStates[cacheKey] = LoadingState.LOADED
@@ -255,8 +255,12 @@ class ThumbnailService(
                 val newWidth = (rawBitmap.width * ratio).toInt()
                 val newHeight = (rawBitmap.height * ratio).toInt()
                 val scaled = Bitmap.createScaledBitmap(rawBitmap, newWidth, newHeight, true)
-                rawBitmap.recycle()
-                scaled
+                if (scaled != null) {
+                    rawBitmap.recycle()
+                    scaled
+                } else {
+                    rawBitmap
+                }
             } else {
                 rawBitmap
             }

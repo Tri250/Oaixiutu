@@ -80,7 +80,8 @@ object AppModule {
             ratingDao = ratingDao,
             labelDao = labelDao,
             pathResolver = pathResolver,
-            cacheManager = dentryCacheManager
+            cacheManager = dentryCacheManager,
+            database = database
         )
     }
 

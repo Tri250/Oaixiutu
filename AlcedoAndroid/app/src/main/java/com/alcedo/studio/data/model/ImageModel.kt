@@ -283,9 +283,12 @@ data class ImageBuffer(
         bufferValid = false
     }
 
-    fun clone(): ImageBuffer = copy(
-        cpuData = cpuData?.config?.let { cpuData!!.copy(it, false) }
-    )
+    fun clone(): ImageBuffer {
+        val clonedCpu = cpuData?.let {
+            if (!it.isRecycled) it.copy(it.config, false) else null
+        }
+        return copy(cpuData = clonedCpu)
+    }
 }
 
 data class ImageModel(
@@ -353,6 +356,10 @@ data class ImageModel(
     )
 
     companion object {
+        private val captureDateSdf by lazy {
+            java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US)
+        }
+
         private fun parseShutterSpeed(s: String): Float {
             if (s.isEmpty()) return 0f
             return try {
@@ -370,14 +377,27 @@ data class ImageModel(
         private fun parseCaptureDate(s: String): Long {
             if (s.isEmpty()) return 0L
             return try {
-                val sdf = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US)
-                sdf.parse(s)?.time ?: 0L
+                synchronized(captureDateSdf) {
+                    captureDateSdf.parse(s)?.time ?: 0L
+                }
             } catch (_: Exception) {
                 0L
             }
         }
 
         fun fromMetadataEntity(entity: ImageMetadataEntity): ImageModel {
+            val safeImageType = try {
+                if (entity.imageType in ImageType.entries.indices) ImageType.entries[entity.imageType] else ImageType.DEFAULT
+            } catch (_: Exception) { ImageType.DEFAULT }
+
+            val safeThumbState = try {
+                if (entity.thumbState in ThumbState.entries.indices) ThumbState.entries[entity.thumbState] else ThumbState.NOT_PRESENT
+            } catch (_: Exception) { ThumbState.NOT_PRESENT }
+
+            val safeSyncState = try {
+                if (entity.syncState in ImageSyncState.entries.indices) ImageSyncState.entries[entity.syncState] else ImageSyncState.SYNCED
+            } catch (_: Exception) { ImageSyncState.SYNCED }
+
             return ImageModel(
                 imageId = entity.imageId,
                 imagePath = entity.imagePath,
@@ -391,15 +411,16 @@ data class ImageModel(
                     shutterSpeed = entity.shutterSpeed.toString(),
                     iso = entity.iso.toString(),
                     captureDate = if (entity.captureDate > 0) {
-                        val sdf = java.text.SimpleDateFormat("yyyy:MM:dd HH:mm:ss", java.util.Locale.US)
-                        sdf.format(java.util.Date(entity.captureDate))
+                        synchronized(captureDateSdf) {
+                            captureDateSdf.format(java.util.Date(entity.captureDate))
+                        }
                     } else "",
                     imageSize = entity.imageSizeDisplay,
                     fileSize = entity.fileSizeDisplay
                 ),
-                imageType = ImageType.entries.getOrElse(entity.imageType) { ImageType.DEFAULT },
-                thumbState = ThumbState.entries.getOrElse(entity.thumbState) { ThumbState.NOT_PRESENT },
-                syncState = ImageSyncState.entries.getOrElse(entity.syncState) { ImageSyncState.SYNCED },
+                imageType = safeImageType,
+                thumbState = safeThumbState,
+                syncState = safeSyncState,
                 checksum = entity.checksum,
                 fileSize = entity.fileSize,
                 width = entity.width,

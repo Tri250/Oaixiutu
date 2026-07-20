@@ -138,13 +138,13 @@ class UltraHdrWriter private constructor(private val context: Context) {
         val gainmapPixels = IntArray(width * height)
 
         for (i in sdrPixels.indices) {
-            val sdrLum = (0.299f * ((sdrPixels[i] shr 16) and 0xFF) +
+            val sdrLum = ((0.299f * ((sdrPixels[i] shr 16) and 0xFF) +
                 0.587f * ((sdrPixels[i] shr 8) and 0xFF) +
-                0.114f * (sdrPixels[i] and 0xFF)) / 255f
+                0.114f * (sdrPixels[i] and 0xFF)) / 255f).coerceIn(0f, 1f)
 
-            val hdrLum = (0.299f * ((hdrPixels[i] shr 16) and 0xFF) +
+            val hdrLum = ((0.299f * ((hdrPixels[i] shr 16) and 0xFF) +
                 0.587f * ((hdrPixels[i] shr 8) and 0xFF) +
-                0.114f * (hdrPixels[i] and 0xFF)) / 255f
+                0.114f * (hdrPixels[i] and 0xFF)) / 255f).coerceIn(0f, 1f)
 
             val gain = if (sdrLum > 0.001f) {
                 (hdrLum / sdrLum).coerceIn(RATIO_MIN, RATIO_MAX)
@@ -153,7 +153,9 @@ class UltraHdrWriter private constructor(private val context: Context) {
             }
 
             // Map gain [RATIO_MIN, RATIO_MAX] to alpha [0, 255].
-            val alpha = ((gain - RATIO_MIN) / (RATIO_MAX - RATIO_MIN) * 255f)
+            // Clamp alpha to [0, 255] to handle boundary precision errors.
+            val alpha = (((gain - RATIO_MIN) / (RATIO_MAX - RATIO_MIN) * 255f)
+                + 0.5f)
                 .toInt()
                 .coerceIn(0, 255)
             gainmapPixels[i] = alpha shl 24

@@ -69,17 +69,29 @@ class PipelineService {
 
         // ── 回退到 CPU 原生管线 ──
         if (result == null) {
-            val paramsArray = buildParamsArray(params)
-            result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+            try {
+                val paramsArray = buildParamsArray(params)
+                result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+            } catch (e: Exception) {
+                android.util.Log.e("PipelineService", "CPU pipeline failed", e)
+            }
+        }
+
+        // 修复: 原生管线可能返回 null (例如 NDK 不可用)，需要安全回退
+        if (result == null) {
+            // 回退到原始像素 (无处理)
+            result = floatPixels
         }
 
         // Convert back to Bitmap
         val resultPixels = IntArray(pixelCount)
         for (i in 0 until pixelCount) {
-            val a = (result[i * 4 + 3].coerceIn(0f, 1f) * 255f).toInt()
-            val r = (result[i * 4].coerceIn(0f, 1f) * 255f).toInt()
-            val g = (result[i * 4 + 1].coerceIn(0f, 1f) * 255f).toInt()
-            val b = (result[i * 4 + 2].coerceIn(0f, 1f) * 255f).toInt()
+            val idx = i * 4
+            if (idx + 3 >= result.size) break
+            val a = (result[idx + 3].coerceIn(0f, 1f) * 255f).toInt()
+            val r = (result[idx].coerceIn(0f, 1f) * 255f).toInt()
+            val g = (result[idx + 1].coerceIn(0f, 1f) * 255f).toInt()
+            val b = (result[idx + 2].coerceIn(0f, 1f) * 255f).toInt()
             resultPixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
         }
 

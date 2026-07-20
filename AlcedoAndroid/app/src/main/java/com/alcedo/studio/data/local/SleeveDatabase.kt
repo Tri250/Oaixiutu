@@ -186,9 +186,17 @@ abstract class SleeveDatabase : RoomDatabase() {
         }
 
         private fun deleteDatabaseFiles(context: Context) {
-            val dbFile = context.getDatabasePath("alcedo_sleeve.db")
-            listOf(dbFile, File(dbFile.path + "-wal"), File(dbFile.path + "-shm")).forEach {
-                if (it.exists()) it.delete()
+            try {
+                val dbFile = context.getDatabasePath("alcedo_sleeve.db")
+                listOf(dbFile, File(dbFile.path + "-wal"), File(dbFile.path + "-shm")).forEach {
+                    if (it.exists()) {
+                        if (!it.delete()) {
+                            Log.w(TAG, "Failed to delete database file: ${it.absolutePath}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during database file deletion", e)
             }
         }
 

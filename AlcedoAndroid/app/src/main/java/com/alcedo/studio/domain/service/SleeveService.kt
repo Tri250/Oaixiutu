@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Instant
+import androidx.room.withTransaction
 
 /**
  * Core Sleeve file system service.
@@ -24,7 +25,8 @@ class SleeveService(
     private val ratingDao: RatingDao,
     private val labelDao: SemanticLabelDao,
     private val pathResolver: PathResolver,
-    private val cacheManager: DentryCacheManager
+    private val cacheManager: DentryCacheManager,
+    private val database: SleeveDatabase
 ) {
     // ================================================================
     // Element CRUD
@@ -370,46 +372,50 @@ class SleeveService(
     // ================================================================
 
     suspend fun batchDelete(elementIds: List<Long>): Int = withContext(Dispatchers.IO) {
-        var count = 0
-        val affectedParents = mutableSetOf<Long>()
+        database.withTransaction {
+            var count = 0
+            val affectedParents = mutableSetOf<Long>()
 
-        for (id in elementIds) {
-            val element = elementDao.getElementById(id) ?: continue
-            element.parentId?.let { affectedParents.add(it) }
+            for (id in elementIds) {
+                val element = elementDao.getElementById(id) ?: continue
+                element.parentId?.let { affectedParents.add(it) }
 
-            if (deleteElement(id)) count++
+                if (deleteElement(id)) count++
+            }
+
+            // Recalculate counts for affected parents
+            for (parentId in affectedParents) {
+                folderDao.recalculateCounts(parentId)
+            }
+
+            // Batch invalidate caches
+            cacheManager.invalidateBatch(affectedParents.toList())
+
+            count
         }
-
-        // Recalculate counts for affected parents
-        for (parentId in affectedParents) {
-            folderDao.recalculateCounts(parentId)
-        }
-
-        // Batch invalidate caches
-        cacheManager.invalidateBatch(affectedParents.toList())
-
-        count
     }
 
     suspend fun batchMove(elementIds: List<Long>, newParentId: Long?): Int = withContext(Dispatchers.IO) {
-        var count = 0
-        val affectedParents = mutableSetOf<Long>()
+        database.withTransaction {
+            var count = 0
+            val affectedParents = mutableSetOf<Long>()
 
-        for (id in elementIds) {
-            val element = elementDao.getElementById(id) ?: continue
-            element.parentId?.let { affectedParents.add(it) }
-            if (moveElement(id, newParentId)) count++
+            for (id in elementIds) {
+                val element = elementDao.getElementById(id) ?: continue
+                element.parentId?.let { affectedParents.add(it) }
+                if (moveElement(id, newParentId)) count++
+            }
+
+            newParentId?.let { affectedParents.add(it) }
+
+            for (parentId in affectedParents) {
+                folderDao.recalculateCounts(parentId)
+            }
+
+            cacheManager.invalidateBatch(affectedParents.toList())
+
+            count
         }
-
-        newParentId?.let { affectedParents.add(it) }
-
-        for (parentId in affectedParents) {
-            folderDao.recalculateCounts(parentId)
-        }
-
-        cacheManager.invalidateBatch(affectedParents.toList())
-
-        count
     }
 
     // ================================================================

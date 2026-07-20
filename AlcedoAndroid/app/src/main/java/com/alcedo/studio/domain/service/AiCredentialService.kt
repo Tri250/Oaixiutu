@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.security.MessageDigest
+import android.util.Log
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -82,13 +82,19 @@ class AiCredentialService(context: Context) {
         try {
             json.decodeFromString<AiCredential>(jsonStr)
         } catch (e: Exception) {
+            Log.w("AiCredentialService", "Failed to deserialize credential for provider: $providerId", e)
             null
         }
     }
 
     suspend fun getAllCredentials(): List<AiCredential> = withContext(Dispatchers.IO) {
         defaultProfiles.mapNotNull { profile ->
-            getCredential(profile.providerId)
+            try {
+                getCredential(profile.providerId)
+            } catch (e: Exception) {
+                Log.w("AiCredentialService", "Failed to load credential for provider: ${profile.providerId}", e)
+                null
+            }
         }
     }
 

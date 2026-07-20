@@ -192,11 +192,15 @@ class ClipInferenceEngine(private val context: Context) {
     suspend fun encodeImage(bitmap: Bitmap): FloatArray = withContext(Dispatchers.Default) {
         inferenceMutex.withLock {
             if (!isLoaded || visionSession == null) {
+                Log.e(TAG, "encodeImage failed: model not loaded (status=$status, visionSession=${visionSession != null})")
                 return@withContext FloatArray(embeddingDim)
             }
 
             try {
-                val config = activeModelConfig ?: return@withContext FloatArray(embeddingDim)
+                val config = activeModelConfig ?: run {
+                    Log.e(TAG, "encodeImage failed: activeModelConfig is null")
+                    return@withContext FloatArray(embeddingDim)
+                }
                 val env = ortEnv ?: return@withContext FloatArray(embeddingDim)
                 val inputTensor = preprocessImage(bitmap, config.imageSize, env)
 
@@ -226,6 +230,7 @@ class ClipInferenceEngine(private val context: Context) {
     suspend fun encodeText(text: String): FloatArray = withContext(Dispatchers.Default) {
         inferenceMutex.withLock {
             if (!isLoaded || textSession == null) {
+                Log.e(TAG, "encodeText failed: model not loaded (status=$status, textSession=${textSession != null})")
                 return@withContext FloatArray(embeddingDim)
             }
 

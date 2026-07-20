@@ -79,7 +79,7 @@ class GpuPipelineRenderer {
                     .getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
                     ?: return false
                 val config = activityManager.deviceConfigurationInfo
-                config.reqGlEsVersion >= 0x00030001
+                config?.reqGlEsVersion?.let { it >= 0x00030001 } ?: false
             } catch (e: Throwable) {
                 Log.w(TAG, "checkComputeSupport failed: ${e.message}")
                 false
@@ -194,6 +194,18 @@ class GpuPipelineRenderer {
         }
         if (params.size < 14) {
             Log.e(TAG, "params too short: ${params.size}")
+            return null
+        }
+        // Validate parameter values are finite (not NaN or Infinity)
+        for (i in params.indices) {
+            if (params[i].isNaN() || params[i].isInfinite()) {
+                Log.e(TAG, "params[$i] is not finite: ${params[i]}")
+                return null
+            }
+        }
+        // Validate dimensions are positive
+        if (width <= 0 || height <= 0) {
+            Log.e(TAG, "Invalid dimensions: ${width}x${height}")
             return null
         }
 
@@ -406,6 +418,19 @@ class GpuPipelineRenderer {
      * 使用 PBO 以减少管线阻塞（glReadPixels → PBO → map）。
      */
     private fun readbackTexture(textureId: Int): FloatArray? {
+        if (pixelBufferId == 0) {
+            Log.e(TAG, "readbackTexture: PBO not initialized (pixelBufferId=0)")
+            return null
+        }
+        if (textureId == 0) {
+            Log.e(TAG, "readbackTexture: invalid textureId=0")
+            return null
+        }
+        if (width <= 0 || height <= 0) {
+            Log.e(TAG, "readbackTexture: invalid dimensions ${width}x${height}")
+            return null
+        }
+
         val byteCount = width * height * 4 * 4
         val out = FloatArray(width * height * 4)
 
@@ -439,7 +464,15 @@ class GpuPipelineRenderer {
             ) as? java.nio.ByteBuffer
             if (mapped != null) {
                 mapped.order(ByteOrder.nativeOrder())
-                mapped.asFloatBuffer().get(out, 0, out.size)
+                // Validate mapped buffer has sufficient capacity before reading
+                val floatBuffer = mapped.asFloatBuffer()
+                if (floatBuffer.remaining() < out.size) {
+                    Log.e(TAG, "Mapped buffer too small: ${floatBuffer.remaining()} < ${out.size}")
+                    GLES31.glUnmapBuffer(GLES31.GL_PIXEL_PACK_BUFFER)
+                    GLES31.glBindBuffer(GLES31.GL_PIXEL_PACK_BUFFER, 0)
+                    return null
+                }
+                floatBuffer.get(out, 0, out.size)
                 GLES31.glUnmapBuffer(GLES31.GL_PIXEL_PACK_BUFFER)
             } else {
                 Log.e(TAG, "glMapBufferRange returned null")

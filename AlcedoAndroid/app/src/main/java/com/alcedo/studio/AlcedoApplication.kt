@@ -14,6 +14,8 @@ import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.utils.MemoryGuard
 
 class AlcedoApplication : Application() {
+    private val trimMemoryLock = Any()
+
     override fun onCreate() {
         super.onCreate()
 
@@ -30,7 +32,11 @@ class AlcedoApplication : Application() {
         runSafe("PrivacyManager.initialize") { PrivacyManager.initialize(this) }
         runSafe("PrivacyManager.applyRetentionPolicy") { PrivacyManager.applyRetentionPolicy(this) }
         runSafe("TempFileManager.cleanupOldFiles") { TempFileManager.cleanupOldFiles(this) }
-        runSafe("HapticFeedback.initialize") { HapticFeedback.initialize(this) }
+        try {
+            HapticFeedback.initialize(this)
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "HapticFeedback.initialize failed, haptic feedback disabled", e)
+        }
 
         // Wire crash-report upload consent into the reporting service and
         // attempt a best-effort flush of any reports left from a prior run.
@@ -56,24 +62,28 @@ class AlcedoApplication : Application() {
         // Register memory pressure callback
         registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
-                when {
-                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
-                        // Release UI caches
-                    }
-                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
-                        // Release non-essential caches
-                        Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
-                    }
-                    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
-                        // Running low on memory — aggressive cache cleanup
-                        Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
+                synchronized(trimMemoryLock) {
+                    when {
+                        level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+                            // Release UI caches
+                        }
+                        level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
+                            // Release non-essential caches
+                            Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
+                        }
+                        level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+                            // Running low on memory — aggressive cache cleanup
+                            Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
+                        }
                     }
                 }
             }
             override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
             override fun onLowMemory() {
-                Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
-                MemoryGuard.emergencyGC()
+                synchronized(trimMemoryLock) {
+                    Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
+                    MemoryGuard.emergencyGC()
+                }
             }
         })
 
@@ -82,23 +92,29 @@ class AlcedoApplication : Application() {
         // GpuPipelineService 注入到 PipelineService 中。真正的 GPU 程序与纹理
         // 创建会在首次 applyPipeline 时按需在 GL 线程上完成，此处仅做能力探测
         // 与服务装配，不创建 GL 上下文。
-        runSafe("GpuService.initialize") {
+        var gpuAvailable = false
+        try {
             val gpuService = GpuService.getInstance(this)
             gpuService.initialize()
             Log.i("AlcedoApp", "GPU backend: ${gpuService.currentBackend.value.displayName}")
+            gpuAvailable = true
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "GpuService.initialize failed, falling back to CPU-only mode", e)
         }
 
-        runSafe("GpuPipelineService.setup") {
-            val gpuPipelineService = GpuPipelineService(this)
-            val supported = gpuPipelineService.checkGpuSupport()
-            Log.i("AlcedoApp", "GPU Compute (GLES 3.1) supported: $supported")
-            if (supported) {
-                // 注入到 PipelineService，使其在 applyPipeline 中优先尝试 GPU 路径。
-                // 注意：GPU 渲染器的真正 initialize() 需在 GL 线程上调用，
-                // 此处仅完成服务装配；GPU 不可用或不支持时 PipelineService 会自动
-                // 回退到 CPU 原生管线。
-                AppModule.pipelineService.gpuPipelineService = gpuPipelineService
+        if (gpuAvailable) {
+            try {
+                val gpuPipelineService = GpuPipelineService(this)
+                val supported = gpuPipelineService.checkGpuSupport()
+                Log.i("AlcedoApp", "GPU Compute (GLES 3.1) supported: $supported")
+                if (supported) {
+                    AppModule.pipelineService.gpuPipelineService = gpuPipelineService
+                }
+            } catch (e: Throwable) {
+                Log.e("AlcedoApp", "GpuPipelineService.setup failed, falling back to CPU-only pipeline", e)
             }
+        } else {
+            Log.i("AlcedoApp", "GPU unavailable — running in CPU-only pipeline mode")
         }
     }
 

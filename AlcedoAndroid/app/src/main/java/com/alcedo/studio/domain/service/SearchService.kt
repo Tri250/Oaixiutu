@@ -391,12 +391,62 @@ class SearchService(
 
     // ── Private Helpers ──
 
+    /**
+     * 修复: 原实现为空 (总是返回未过滤结果)。
+     * 现在实现完整的 FilterCombo 逻辑，遍历 filters 列表中的各 SleeveFilter
+     * 子类型 (RatingFilterNode, FileTypeFilterNode, DateRangeFilterNode, DateTimeFilter 等)
+     * 对搜索结果进行过滤。
+     */
     private fun applyFilters(
         results: List<RankedSearchResult>,
         filterCombo: FilterCombo?
     ): List<RankedSearchResult> {
         if (filterCombo == null) return results
-        return results
+        val filters = filterCombo.filters
+        if (filters.isEmpty()) return results
+
+        val isAndLogic = filterCombo.logic == FilterLogic.AND
+
+        return results.filter { result ->
+            val image = result.image ?: return@filter true
+
+            val filterResults = filters.map { filter ->
+                evaluateFilter(image, filter)
+            }
+
+            if (isAndLogic) {
+                // AND: 所有过滤器都必须通过
+                filterResults.all { it }
+            } else {
+                // OR: 至少一个过滤器通过
+                filterResults.any { it }
+            }
+        }
+    }
+
+    private fun evaluateFilter(image: ImageModel, filter: SleeveFilter): Boolean {
+        return when (filter) {
+            is RatingFilterNode -> {
+                image.rating in filter.minRating..filter.maxRating
+            }
+            is FileTypeFilterNode -> {
+                if (filter.imageTypes.isEmpty()) true
+                else filter.imageTypes.any { image.imageType.name.equals(it, ignoreCase = true) }
+            }
+            is DateRangeFilterNode -> {
+                val captureMs = image.captureTimestamp
+                if (captureMs <= 0L) true
+                else captureMs in filter.from..filter.to
+            }
+            is DateTimeFilter -> {
+                val addedMs = image.addedTimestamp
+                addedMs in filter.startDate..filter.endDate
+            }
+            else -> {
+                // 对于其他未知过滤器类型，不阻断结果
+                true
+            }
+        }
     }
 
     private fun fuzzyMatch(text: String, query: String): Float {

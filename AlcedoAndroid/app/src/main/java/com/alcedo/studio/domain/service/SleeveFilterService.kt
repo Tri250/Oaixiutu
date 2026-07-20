@@ -20,6 +20,9 @@ class SleeveFilterService(
     private val filterV2Dao: FilterV2Dao,
     private val elementDao: SleeveElementDao
 ) {
+    companion object {
+        private const val DEFAULT_MAX_RESULT_COUNT = 10000
+    }
     // ================================================================
     // EXIF-based filters
     // ================================================================
@@ -255,7 +258,8 @@ class SleeveFilterService(
         val includeLabels: List<String>? = null,
         val excludeLabels: List<String>? = null,
         val collectionId: Long? = null,
-        val logic: FilterLogic = FilterLogic.AND
+        val logic: FilterLogic = FilterLogic.AND,
+        val maxResultCount: Int = DEFAULT_MAX_RESULT_COUNT
     )
 
     suspend fun filterWithAllOptions(
@@ -300,13 +304,21 @@ class SleeveFilterService(
 
         val combined = when (options.logic) {
             FilterLogic.AND -> resultSets.reduce { acc, set -> acc.intersect(set) }
-            FilterLogic.OR -> resultSets.reduce { acc, set -> acc.union(set) }
+            FilterLogic.OR -> {
+                val result = mutableSetOf<Long>()
+                for (set in resultSets) {
+                    result.addAll(set)
+                    if (result.size >= options.maxResultCount) break
+                }
+                result
+            }
         }
 
         val sorted = combined.toList().sorted()
-        val totalCount = sorted.size
+        val totalCount = minOf(sorted.size, options.maxResultCount)
+        val capped = sorted.take(options.maxResultCount)
         val offset = page * pageSize
-        val paged = sorted.drop(offset).take(pageSize)
+        val paged = capped.drop(offset).take(pageSize)
 
         FilterResult(
             imageIds = paged,

@@ -956,7 +956,14 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 // C8 修复: 使用降采样位图进行预览,避免大图 OOM
                 val source = previewSourceBitmap ?: _originalBitmap.value
                 if (source != null) {
+                    val oldPreview = _previewBitmap.value
                     _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
+                    // Recycle the previous preview bitmap to free memory,
+                    // but only after the new one is assigned to avoid the UI
+                    // referencing a recycled bitmap.
+                    if (oldPreview != null && !oldPreview.isRecycled) {
+                        oldPreview.recycle()
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e("EditorVM", "regeneratePreview failed", e)
@@ -2229,7 +2236,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 val img = _imageModel.value ?: return@launch
-                val finalBitmap = _previewBitmap.value ?: return@launch
+                // Use _originalBitmap for full-quality export, not the downscaled preview.
+                // Apply the pipeline to the original to get the full-resolution result.
+                val originalBitmap = _originalBitmap.value ?: return@launch
+                val finalBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
                 val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
                 // 通过 ColorScienceBridge 获取显示变换函数（用于导出时色彩空间转换）
                 val colorScienceAvailable = try {

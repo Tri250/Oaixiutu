@@ -200,8 +200,13 @@ class AiService(private val context: Context) {
     suspend fun loadModel(modelId: String): Boolean {
         val result = clipEngine.loadModel(modelId)
         _modelLoadStatus.value = clipEngine.modelStatus
+        if (!result) {
+            Log.w(TAG, "Model load failed for $modelId — status: ${clipEngine.modelStatus}")
+            _embeddingDimension.value = DEFAULT_EMBEDDING_DIM
+            return false
+        }
         _embeddingDimension.value = clipEngine.embeddingDim
-        return result
+        return true
     }
 
     /**
@@ -224,7 +229,7 @@ class AiService(private val context: Context) {
         bitmap: Bitmap?,
         modelId: String? = null
     ): List<SemanticLabel> = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext emptyList()
+        if (bitmap == null || bitmap.isRecycled) return@withContext emptyList()
 
         val taskId = "label-gen-$imageId"
         setTaskProgress(taskId, 0f)
@@ -409,6 +414,8 @@ class AiService(private val context: Context) {
 
         if (hnswIndexHandle != 0L) {
             AiNdkBridge.hnswInsert(hnswIndexHandle, imageId.toLong(), embedding)
+        } else {
+            Log.w(TAG, "HNSW index not available, skipping insert for $imageId (in-memory index only)")
         }
     }
 
@@ -416,6 +423,8 @@ class AiService(private val context: Context) {
         vectorIndex.removeAll { it.imageId == imageId }
         if (hnswIndexHandle != 0L) {
             AiNdkBridge.hnswRemove(hnswIndexHandle, imageId.toLong())
+        } else {
+            Log.w(TAG, "HNSW index not available, skipping remove for $imageId (in-memory index only)")
         }
     }
 

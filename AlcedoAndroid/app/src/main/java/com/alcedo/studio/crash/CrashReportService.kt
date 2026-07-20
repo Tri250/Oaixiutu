@@ -105,6 +105,11 @@ object CrashReportService {
      * [CrashHandler] on the crashing thread. Must not throw.
      */
     fun reportCrash(thread: Thread, throwable: Throwable) {
+        // 修复: 如果 CrashReportService 尚未初始化，直接返回而非崩溃
+        if (!::appContext.isInitialized) {
+            Log.e(TAG, "CrashReportService not initialized, cannot report crash")
+            return
+        }
         try {
             val report = buildReport(thread, throwable)
             persistReport(report)
@@ -215,24 +220,24 @@ object CrashReportService {
 
         return JSONObject().apply {
             put("schema", "alcedo.crash.v1")
-            put("app_version", BuildConfig.VERSION_NAME)
+            put("app_version", BuildConfig.VERSION_NAME ?: "unknown")
             put("app_version_code", BuildConfig.VERSION_CODE)
-            put("build_type", BuildConfig.BUILD_TYPE)
-            put("package_name", appContext.packageName)
+            put("build_type", BuildConfig.BUILD_TYPE ?: "unknown")
+            put("package_name", appContext.packageName ?: "unknown")
             put("timestamp", nowIso())
             put("timestamp_ms", System.currentTimeMillis())
-            put("device_manufacturer", Build.MANUFACTURER)
-            put("device_model", Build.MODEL)
+            put("device_manufacturer", Build.MANUFACTURER ?: "")
+            put("device_model", Build.MODEL ?: "")
             put("device_product", Build.PRODUCT ?: "")
-            put("android_version", Build.VERSION.RELEASE)
+            put("android_version", Build.VERSION.RELEASE ?: "")
             put("android_sdk", Build.VERSION.SDK_INT)
-            put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "")
-            put("thread_name", thread.name)
+            put("abi", Build.SUPPORTED_ABIS?.firstOrNull() ?: "")
+            put("thread_name", thread.name ?: "")
             put("thread_id", thread.id)
             put("process_id", Process.myPid())
             put("is_debug", BuildConfig.DEBUG)
             put("stack_trace", sanitizedTrace)
-            put("exception_class", throwable.javaClass.name)
+            put("exception_class", throwable.javaClass?.name ?: "Unknown")
             put("exception_message", throwable.message ?: "")
             put("memory", buildMemoryState())
             put("breadcrumbs", buildBreadcrumbsJson())

@@ -199,9 +199,31 @@ class ProjectPackageService {
         }
 
         val result = pkg ?: throw IllegalStateException("Manifest not found in project package")
+
+        // Validate deserialized edit histories
+        val validatedHistories = editHistories.mapValues { (imageId, history) ->
+            if (history.boundImageId == 0u || imageId == 0u) {
+                Log.w(TAG, "Edit history with invalid boundImageId=$imageId, skipping")
+                history.copy(boundImageId = imageId)
+            } else {
+                history
+            }
+        }.filterKeys { it != 0u }
+
+        // Validate deserialized image metadata
+        val validatedImageMeta = result.imageMetadata.filter { meta ->
+            if (meta.imageId == 0u || meta.imageName.isBlank()) {
+                Log.w(TAG, "Image metadata with invalid imageId=${meta.imageId}, skipping")
+                false
+            } else {
+                true
+            }
+        }
+
         result.copy(
-            editHistories = editHistories,
-            embeddedAssets = embeddedAssets
+            editHistories = validatedHistories,
+            embeddedAssets = embeddedAssets,
+            imageMetadata = validatedImageMeta
         )
     }
 
@@ -458,13 +480,20 @@ class ProjectPackageService {
             emptyList()
         }
 
+        // Fallback for version structure changes: creationNonce may have been
+        // stored as an Int in older package versions, so try both ULong and
+        // Int parsing before falling back to 0.
+        val creationNonce = map["creationNonce"]?.toULongOrNull()
+            ?: map["creationNonce"]?.toIntOrNull()?.toULong()
+            ?: 0u
+
         return Version(
             versionId = map["versionId"] ?: generateHash128(),
             displayName = map["displayName"] ?: "",
             boundImageId = (map["boundImageId"]?.toUIntOrNull() ?: 0u),
             addedTime = map["addedTime"]?.toLongOrNull()?.let { Instant.ofEpochMilli(it) } ?: Instant.now(),
             lastModifiedTime = map["lastModifiedTime"]?.toLongOrNull()?.let { Instant.ofEpochMilli(it) } ?: Instant.now(),
-            creationNonce = map["creationNonce"]?.toULongOrNull() ?: 0u,
+            creationNonce = creationNonce,
             materializedParams = map["materializedParams"]?.takeIf { it.isNotEmpty() }?.let { JsonObject(emptyMap()) },
             transactions = transactions.toMutableList(),
             cursor = map["cursor"]?.toIntOrNull() ?: 0,

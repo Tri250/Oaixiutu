@@ -34,6 +34,10 @@ class AiSidecarRuntimeService(
             // Initialize CLIP engine if local
             if (providerId == "local") {
                 clipEngine.loadModel("mobileclip-s2")
+                // Verify CLIP engine is ready after loading
+                if (!clipEngine.isModelLoaded()) {
+                    throw IllegalStateException("CLIP engine failed to load model for local provider")
+                }
             }
             _activeProvider.value = providerId
             _state.value = RuntimeState.READY

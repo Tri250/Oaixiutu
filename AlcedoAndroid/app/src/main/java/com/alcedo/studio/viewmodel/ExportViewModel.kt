@@ -448,6 +448,9 @@ class ExportViewModel : ViewModel() {
                 currentItem = 0
             )
             val context = AppModule.context
+            // Track all bitmaps created during the loop so they can be
+            // recycled in the finally block, avoiding memory leaks.
+            val bitmapsToRecycle = mutableListOf<Bitmap>()
             try {
                 val items = _batchItems.value
                 val totalItems = items.size
@@ -463,7 +466,9 @@ class ExportViewModel : ViewModel() {
                         val settings = _settings.value
                         val bitmap = BitmapDecoder.decodeSampledBitmap(AppModule.context, image.imagePath, settings.maxWidth ?: 4096, settings.maxHeight ?: 4096)
                         if (bitmap != null) {
+                            bitmapsToRecycle.add(bitmap)
                             val processed = pipelineService.applyPipeline(bitmap, item.params)
+                            bitmapsToRecycle.add(processed)
                             exportItems.add(
                                 ExportService.ExportBatchItem(
                                     sourcePath = image.imagePath,
@@ -496,6 +501,13 @@ class ExportViewModel : ViewModel() {
                 // Notify failure in notification bar
                 TaskNotificationHelper.notifyExportFailed(context, e.message ?: "导出失败")
             } finally {
+                // Recycle all bitmaps created during the batch export to free memory.
+                for (bmp in bitmapsToRecycle) {
+                    if (!bmp.isRecycled) {
+                        bmp.recycle()
+                    }
+                }
+                bitmapsToRecycle.clear()
                 _isExporting.value = false
             }
         }

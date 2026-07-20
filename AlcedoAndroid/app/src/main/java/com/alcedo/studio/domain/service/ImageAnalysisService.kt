@@ -164,6 +164,9 @@ class ImageAnalysisService(
             }
 
             // 使用 ImageAnalysisEncoder 进行图像编码预分析（如果可用）
+            if (imageAnalysisEncoder == null) {
+                Log.w(TAG, "ImageAnalysisEncoder is null, skipping embedding pre-analysis for image ${item.imageId}")
+            }
             val embeddingResult = imageAnalysisEncoder?.let { encoder ->
                 item.imagePath?.let { path ->
                     runCatching { encoder.encodeImage(path) }.getOrNull()
@@ -181,7 +184,7 @@ class ImageAnalysisService(
                     bitmap = bitmap,
                     modelId = options.modelId
                 )
-                description = labels.joinToString(", ") { it.label }
+                description = if (labels.isEmpty()) "No labels detected" else labels.joinToString(", ") { it.label }
                 tags.addAll(labels.map { it.label })
             }
 
@@ -205,7 +208,7 @@ class ImageAnalysisService(
                         bitmap = bitmap,
                         modelId = options.modelId
                     )
-                    description = labels.joinToString(", ") { it.label }
+                    description = if (labels.isEmpty()) "No labels detected" else labels.joinToString(", ") { it.label }
                     tags.addAll(labels.map { it.label })
                 }
                 if (rating == 0) {

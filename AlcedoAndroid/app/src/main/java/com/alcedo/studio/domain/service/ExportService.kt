@@ -114,9 +114,14 @@ class ExportService(private val context: Context) {
                 if (dngResult is ExportResult.Success) {
                     // Scan both the DNG and its XMP sidecar for media visibility.
                     val xmpPath = outputFile.absolutePath.substringBeforeLast('.') + ".xmp"
+                    val scanPaths = mutableListOf(outputFile.absolutePath)
+                    // Only scan XMP if it was actually written (params exist)
+                    if (settings.params != null && File(xmpPath).exists()) {
+                        scanPaths.add(xmpPath)
+                    }
                     MediaScannerConnection.scanFile(
                         context,
-                        arrayOf(outputFile.absolutePath, xmpPath),
+                        scanPaths.toTypedArray(),
                         null, null
                     )
                     _exportProgress.value = _exportProgress.value.copy(
@@ -136,8 +141,15 @@ class ExportService(private val context: Context) {
                 return@withContext dngResult
             }
 
-            val bitmap = processedBitmap ?: decodeSampledBitmap(sourcePath, settings)
-                ?: return@withContext ExportResult.Error("Failed to decode source image: $sourcePath")
+            val bitmap = if (processedBitmap != null && !processedBitmap.isRecycled) {
+                processedBitmap
+            } else if (processedBitmap != null && processedBitmap.isRecycled) {
+                decodeSampledBitmap(sourcePath, settings)
+                    ?: return@withContext ExportResult.Error("Failed to decode source image: $sourcePath (processedBitmap was recycled)")
+            } else {
+                decodeSampledBitmap(sourcePath, settings)
+                    ?: return@withContext ExportResult.Error("Failed to decode source image: $sourcePath")
+            }
 
             // Android 10+ : use MediaStore to write to public Pictures directory
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && settings.outputPath.isEmpty()) {
@@ -254,7 +266,9 @@ class ExportService(private val context: Context) {
 
             // 6. Write back metadata
             if (settings.includeMetadata) {
-                val exifSource = settings.sourceExifPath ?: sourcePath
+                val exifSource = settings.sourceExifPath?.takeIf {
+                    it.isNotBlank() && File(it).exists()
+                } ?: sourcePath
                 writeMetadata(outputFile, exifSource, settings)
             }
             updateItemProgress(0.9f)
@@ -439,9 +453,12 @@ class ExportService(private val context: Context) {
             val projection = arrayOf(android.provider.MediaStore.Images.Media.DATA)
             context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
-                    val filePath = cursor.getString(0)
-                    if (filePath != null) {
-                        writeMetadata(File(filePath), sourcePath, settings)
+                    val dataIndex = cursor.getColumnIndex(android.provider.MediaStore.Images.Media.DATA)
+                    if (dataIndex >= 0) {
+                        val filePath = cursor.getString(dataIndex)
+                        if (!filePath.isNullOrBlank()) {
+                            writeMetadata(File(filePath), sourcePath, settings)
+                        }
                     }
                 }
             }

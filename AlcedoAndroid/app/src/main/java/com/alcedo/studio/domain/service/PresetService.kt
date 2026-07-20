@@ -250,8 +250,25 @@ class PresetService(
      */
     suspend fun importPreset(inputFile: File): Long = withContext(Dispatchers.IO) {
         try {
+            if (!inputFile.exists()) {
+                Log.e(TAG, "Import preset failed: file not found - ${inputFile.absolutePath}")
+                return@withContext -1L
+            }
+            if (!inputFile.canRead()) {
+                Log.e(TAG, "Import preset failed: file not readable - ${inputFile.absolutePath}")
+                return@withContext -1L
+            }
             val text = inputFile.readText()
-            val obj = Json.parseToJsonElement(text).jsonObject
+            if (text.isBlank()) {
+                Log.e(TAG, "Import preset failed: file is empty - ${inputFile.absolutePath}")
+                return@withContext -1L
+            }
+            val obj = try {
+                Json.parseToJsonElement(text).jsonObject
+            } catch (e: Throwable) {
+                Log.e(TAG, "Import preset failed: invalid JSON format", e)
+                return@withContext -1L
+            }
             val name = obj["name"]?.jsonPrimitive?.content ?: "Imported Preset"
             val category = obj["category"]?.jsonPrimitive?.content?.ifBlank { CATEGORY_IMPORTED }
                 ?: CATEGORY_IMPORTED
@@ -266,6 +283,9 @@ class PresetService(
                 isBuiltIn = false
             )
             presetDao.insert(entity)
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "Import preset failed: I/O error reading file", e)
+            -1L
         } catch (e: Throwable) {
             Log.e(TAG, "Import preset failed", e)
             -1L
@@ -307,6 +327,14 @@ class PresetService(
             // Persist the .cube file into the app's LUT storage directory so the
             // pipeline can reload it when the preset is applied.
             val destDir = lutStorageDir.apply { mkdirs() }
+            if (!destDir.exists() || !destDir.isDirectory) {
+                Log.e(TAG, "Import CUBE failed: output directory does not exist or is not a directory - ${destDir.absolutePath}")
+                return@withContext -1L
+            }
+            if (!destDir.canWrite()) {
+                Log.e(TAG, "Import CUBE failed: output directory is not writable - ${destDir.absolutePath}")
+                return@withContext -1L
+            }
             val destFile = File(destDir, "${System.currentTimeMillis()}_${cubeFile.name}")
             cubeFile.inputStream().use { input ->
                 destFile.outputStream().use { output -> input.copyTo(output) }
