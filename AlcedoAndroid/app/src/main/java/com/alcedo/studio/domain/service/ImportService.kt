@@ -488,10 +488,10 @@ class ImportService(
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             ImportDirectoryResult(
                 totalFiles = uris.size,
-                successCount = successCount,
-                duplicateCount = duplicateCount,
-                errorCount = errorCount + 1,
-                results = results + ImportResult.Error(e.message ?: "Import failed")
+                successCount = 0,
+                duplicateCount = 0,
+                errorCount = 1,
+                results = listOf(ImportResult.Error(e.message ?: "Import failed"))
             )
         }
     }
