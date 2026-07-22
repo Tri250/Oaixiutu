@@ -58,6 +58,7 @@ import com.alcedo.studio.ui.common.*
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.permission.rememberPermissionState
+import com.alcedo.studio.storage.PhotoPickerHelper
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -181,6 +182,15 @@ fun AlbumScreen(
     // ── Photo Picker 启动器 ──────────────────────────────────────
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(500)
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.importFromPhotoPicker(uris)
+        }
+    }
+
+    // ── 传统文件选择器回退启动器 (当 Photo Picker 不可用时使用) ──
+    val fallbackFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             viewModel.importFromPhotoPicker(uris)
@@ -433,9 +443,19 @@ fun AlbumScreen(
             onDismiss = { showImport = false },
             onSelectFiles = {
                 showImport = false
-                photoPickerLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
+                // P-1 修复: 检测 Photo Picker 可用性，不可用时回退到 ACTION_GET_CONTENT
+                if (PhotoPickerHelper.isAvailable(context)) {
+                    try {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    } catch (e: Exception) {
+                        // 即使检测通过，启动仍可能失败（如 GMS 被禁用），回退到传统选择器
+                        fallbackFileLauncher.launch("image/*")
+                    }
+                } else {
+                    fallbackFileLauncher.launch("image/*")
+                }
             },
             onSelectDirectory = {
                 showImport = false

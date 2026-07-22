@@ -749,23 +749,36 @@ class ImportService(
         val files = mutableListOf<Uri>()
 
         try {
-            val children = context.contentResolver.query(
-                dirUri, null, null, null, null
+            // 使用 DocumentsContract 构建正确的子文档 URI (S7 修复)
+            val parentDocId = android.provider.DocumentsContract.getTreeDocumentId(dirUri)
+            val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
+                dirUri, parentDocId
+            )
+
+            context.contentResolver.query(
+                childrenUri, null, null, null, null
             )?.use { cursor ->
                 val displayNameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val documentIdIdx = cursor.getColumnIndex("document_id")
+                val documentIdIdx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val mimeTypeIdx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
 
                 while (cursor.moveToNext()) {
                     val name = if (displayNameIdx >= 0) cursor.getString(displayNameIdx) else null
                     val docId = if (documentIdIdx >= 0) cursor.getString(documentIdIdx) else null
+                    val mimeType = if (mimeTypeIdx >= 0) cursor.getString(mimeTypeIdx) else null
 
                     if (name != null && docId != null) {
-                        val childUri = Uri.parse("${dirUri}/$docId")
+                        val childUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                            dirUri, docId
+                        )
                         val ext = name.substringAfterLast('.', "").lowercase()
+
+                        // 通过 MIME 类型判断是否为目录，更可靠 (S7 修复)
+                        val isDirectory = mimeType == android.provider.DocumentsContract.Document.MIME_TYPE_DIR
 
                         if (ext in supportedExtensions) {
                             files.add(childUri)
-                        } else if (recursive && ext.isEmpty()) {
+                        } else if (recursive && isDirectory) {
                             try {
                                 files.addAll(scanDirectory(childUri, recursive))
                             } catch (_: Exception) {}
@@ -774,21 +787,28 @@ class ImportService(
                 }
             }
         } catch (e: Exception) {
+            // 当 SAF 查询失败时，回退到文件系统直接扫描（仅限 file:// URI）
             val path = getRealPathFromUri(dirUri)
-            val dir = File(path)
-            if (dir.exists() && dir.isDirectory) {
-                dir.listFiles()?.forEach { file ->
-                    if (file.isFile) {
-                        val ext = file.extension.lowercase()
-                        if (ext in supportedExtensions) {
-                            files.add(Uri.fromFile(file))
+            if (path.startsWith("file://")) {
+                val filePath = path.removePrefix("file://")
+                val dir = File(filePath)
+                if (dir.exists() && dir.isDirectory) {
+                    dir.listFiles()?.forEach { file ->
+                        if (file.isFile) {
+                            val ext = file.extension.lowercase()
+                            if (ext in supportedExtensions) {
+                                files.add(Uri.fromFile(file))
+                            }
+                        } else if (recursive && file.isDirectory) {
+                            try {
+                                files.addAll(scanDirectory(Uri.fromFile(file), recursive))
+                            } catch (_: Exception) {}
                         }
-                    } else if (recursive && file.isDirectory) {
-                        try {
-                            files.addAll(scanDirectory(Uri.fromFile(file), recursive))
-                        } catch (_: Exception) {}
                     }
                 }
+            } else {
+                addLogEntry(dirUri.toString(), ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING,
+                    "SAF scan failed and no file fallback available: ${e.message}")
             }
         }
 
