@@ -164,7 +164,13 @@ object PrivacyManager {
 
         // Export settings summary
         val settingsFile = File(exportDir, "settings.json")
-        settingsFile.writeText("{}")
+        val settingsObj = JSONObject().apply {
+            val appInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            put("versionName", appInfo.versionName ?: "unknown")
+            put("versionCode", appInfo.versionCode)
+            put("firstLaunch", isFirstLaunch())
+        }
+        settingsFile.writeText(settingsObj.toString(2))
 
         exportDir
     }

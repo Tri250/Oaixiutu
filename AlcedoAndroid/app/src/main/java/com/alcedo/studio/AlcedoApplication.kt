@@ -77,14 +77,18 @@ class AlcedoApplication : Application() {
                     when {
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
                             // Release UI caches
+                            AppModule.thumbnailService.clearMemoryCache()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
                             // Release non-essential caches
                             Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
+                            AppModule.thumbnailService.clearMemoryCache()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
                             // Running low on memory — aggressive cache cleanup
                             Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
+                            AppModule.thumbnailService.clearMemoryCache()
+                            MemoryGuard.emergencyGC()
                         }
                     }
                 }
@@ -93,6 +97,7 @@ class AlcedoApplication : Application() {
             override fun onLowMemory() {
                 synchronized(trimMemoryLock) {
                     Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
+                    AppModule.thumbnailService.clearMemoryCache()
                     MemoryGuard.emergencyGC()
                 }
             }

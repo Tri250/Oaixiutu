@@ -1,5 +1,10 @@
 package com.alcedo.studio.ui.onboarding
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -11,20 +16,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.alcedo.studio.permission.PermissionHelper
 
 /**
  * First-launch onboarding screen with 4 pages:
  * 1. Welcome / RAW editing
  * 2. AI semantic search
  * 3. Smart rating
- * 4. Get started
+ * 4. Get started (with permission request)
  */
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     var currentPage by remember { mutableIntStateOf(0) }
+    val hasMediaPermission = remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasMediaPermission.value = results.all { it.value }
+        if (hasMediaPermission.value || results.any { it.value }) {
+            onFinish()
+        }
+    }
+
     val pages = remember {
         listOf(
             OnboardingPage(
@@ -63,7 +83,9 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.End
         ) {
-            TextButton(onClick = onFinish) {
+            TextButton(onClick = {
+                requestMediaPermission(context, mediaPermissionLauncher, onFinish)
+            }) {
                 Text("跳过")
             }
         }
@@ -137,7 +159,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     if (currentPage < pages.size - 1) {
                         currentPage++
                     } else {
-                        onFinish()
+                        requestMediaPermission(context, mediaPermissionLauncher, onFinish)
                     }
                 },
                 shape = RoundedCornerShape(12.dp)
@@ -150,6 +172,18 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
         }
     }
+}
+
+private fun requestMediaPermission(
+    context: Context,
+    launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+    onFinish: () -> Unit
+) {
+    if (PermissionHelper.hasReadMediaAccess(context)) {
+        onFinish()
+        return
+    }
+    launcher.launch(PermissionHelper.getReadMediaPermissions().toTypedArray())
 }
 
 @Composable
