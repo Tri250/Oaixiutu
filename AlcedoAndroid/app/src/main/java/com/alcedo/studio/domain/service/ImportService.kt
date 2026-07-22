@@ -121,22 +121,8 @@ class ImportService(
         byteArrayOf(0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x10, 0x43, 0x52) to ImageType.CR2,
         // 10 字节 – ARW (含 TIFF 前缀 + Sony 标记)
         byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x2F, 0x00) to ImageType.ARW,
-        // 10 字节 – NEF (Nikon RAW, TIFF little-endian + Nikon offset)
-        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00) to ImageType.NEF,
-        // 10 字节 – ORF (Olympus RAW, TIFF little-endian + Olympus offset)
-        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x4F, 0x4C) to ImageType.ORF,
-        // 10 字节 – PEF (Pentax RAW, TIFF little-endian + Pentax offset)
-        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x50, 0x45) to ImageType.PEF,
-        // 10 字节 – SRW (Samsung RAW, TIFF little-endian + Samsung offset)
-        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x53, 0x52) to ImageType.SRW,
-        // 8 字节 – X3F (Sigma RAW)
-        byteArrayOf(0x58, 0x33, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00) to ImageType.X3F,
-        // 8 字节 – RAF (Fujifilm RAW)
+        // 8 字节 – RAF (Fujifilm RAW, "FUJIFILM")
         byteArrayOf(0x46, 0x55, 0x4A, 0x49, 0x46, 0x49, 0x4C, 0x4D) to ImageType.RAF,
-        // 8 字节 – RW2 (Panasonic RAW)
-        byteArrayOf(0x50, 0x41, 0x4E, 0x41, 0x53, 0x4F, 0x4E, 0x49) to ImageType.RW2,
-        // 8 字节 – MOS (Leica RAW)
-        byteArrayOf(0x4D, 0x4F, 0x53, 0x20, 0x4D, 0x41, 0x47, 0x49) to ImageType.MOS,
         // 8 字节 – JPEG2000 (映射为 DEFAULT 避免误用 JPEG 解码器)
         byteArrayOf(0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20) to ImageType.DEFAULT,
         // 4 字节 – CR3 (cimg)
@@ -147,7 +133,13 @@ class ImportService(
         byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) to ImageType.PNG,
         // 4 字节 – GIF
         byteArrayOf(0x47, 0x49, 0x46, 0x38) to ImageType.GIF,
-        // 4 字节 – TIFF little-endian (II*) - 放在RAW格式之后,避免误判
+        // 4 字节 – ORF (Olympus RAW, II + 0x52 — 与 TIFF 的 0x2A 不同)
+        byteArrayOf(0x49, 0x49, 0x52, 0x00) to ImageType.ORF,
+        // 4 字节 – RW2 (Panasonic RAW, II + 0x55 — 与 TIFF 的 0x2A 不同)
+        byteArrayOf(0x49, 0x49, 0x55, 0x00) to ImageType.RW2,
+        // 4 字节 – X3F (Sigma RAW, "FOVb")
+        byteArrayOf(0x46, 0x4F, 0x56, 0x62) to ImageType.X3F,
+        // 4 字节 – TIFF little-endian (II*) - 放在ORF/RW2之后,避免误判
         byteArrayOf(0x49, 0x49, 0x2A, 0x00) to ImageType.TIFF,
         // 4 字节 – TIFF big-endian (MM*) - 放在RAW格式之后,避免误判
         byteArrayOf(0x4D, 0x4D, 0x00, 0x2A) to ImageType.TIFF,
@@ -157,6 +149,8 @@ class ImportService(
         byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) to ImageType.JPEG,
         // 2 字节 – BMP
         byteArrayOf(0x42, 0x4D) to ImageType.BMP
+        // 注意: NEF/PEF/SRW/MOS/DNG 使用标准 TIFF 头 (49 49 2A 00),
+        // 无法通过固定 magic bytes 与 TIFF 区分,仅依赖扩展名检测
     )
 
     private val supportedExtensions = setOf(
@@ -382,10 +376,12 @@ class ImportService(
                     addLogEntry(info.filePath, ImportLogStatus.SUCCESS, ImportPhase.PHASE_A_CREATING,
                         "Entry created (imageId=$imageId)")
                 } catch (e: Exception) {
+                    android.util.Log.e("ImportService",
+                        "Phase A create failed for ${info.fileName}", e)
                     addLogEntry(info.filePath, ImportLogStatus.ERROR, ImportPhase.PHASE_A_CREATING,
                         e.message ?: "Create error")
                     errorCount++
-                    results.add(ImportResult.Error(e.message ?: "Phase A create failed"))
+                    results.add(ImportResult.Error(e.message ?: "Phase A create failed: ${info.fileName}"))
                 }
 
                 _importProgress.value = _importProgress.value.copy(
@@ -560,7 +556,9 @@ class ImportService(
                     if (sizeIdx >= 0) fileSize = cursor.getLong(sizeIdx)
                 }
             }
-        } catch (_: Throwable) { /* fallback below */ }
+        } catch (e: Throwable) {
+            android.util.Log.w("ImportService", "query displayName failed for $uri", e)
+        }
         if (fileName == "unknown") fileName = uri.lastPathSegment ?: "unknown"
 
         val filePath = uri.toString()  // 存储完整 URI 而非 path 段 (S6 修复)
@@ -571,10 +569,17 @@ class ImportService(
             if (extType != ImageType.DEFAULT) {
                 extType
             } else {
-                context.contentResolver.openInputStream(uri)?.use { detectImageType(it) }
-                    ?: ImageType.DEFAULT
+                // 扩展名未知,尝试 magic bytes 检测
+                val stream = context.contentResolver.openInputStream(uri)
+                if (stream != null) {
+                    stream.use { detectImageType(it) }
+                } else {
+                    android.util.Log.w("ImportService", "openInputStream returned null for $uri")
+                    ImageType.DEFAULT
+                }
             }
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            android.util.Log.w("ImportService", "format detection failed for $fileName", e)
             detectImageTypeByExtension(fileName)
         }
 
@@ -584,8 +589,12 @@ class ImportService(
 
         // Validate fileName and filePath before returning
         if (fileName.isBlank() || filePath.isBlank()) {
+            android.util.Log.w("ImportService", "quickScanFile: blank name/path for $uri")
             return null
         }
+
+        android.util.Log.d("ImportService",
+            "quickScanFile: $fileName, type=$imageType, size=$fileSize, checksum=$checksum")
 
         return ScannedFileInfo(
             uri = uri,
@@ -1124,27 +1133,43 @@ class ImportService(
     }
 
     private fun generateThumbnail(uri: Uri, maxSize: Int): Bitmap? {
-        return try {
+        // 方案1: BitmapFactory 直接解码 (适用于 JPEG/PNG/WEBP/BMP/GIF)
+        val bitmap = try {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
 
-            // 校验尺寸有效性,避免 outWidth/outHeight 为 -1 导致 scale 异常 (S9 修复)
-            if (options.outWidth <= 0 || options.outHeight <= 0) return null
+            // 校验尺寸有效性,避免 outWidth/outHeight 为 -1 导致 scale 异常
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                null
+            } else {
+                val scale = maxOf(
+                    1,
+                    minOf(options.outWidth / maxSize, options.outHeight / maxSize, 8)
+                )
 
-            val scale = maxOf(
-                1,
-                minOf(options.outWidth / maxSize, options.outHeight / maxSize, 8)
-            )
-
-            BitmapFactory.Options().apply {
-                inSampleSize = scale
-                inPreferredConfig = Bitmap.Config.RGB_565
-            }.let { opts ->
-                context.contentResolver.openInputStream(uri)?.use {
-                    BitmapFactory.decodeStream(it, null, opts)
+                BitmapFactory.Options().apply {
+                    inSampleSize = scale
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }.let { opts ->
+                    context.contentResolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, opts)
+                    }
                 }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+
+        if (bitmap != null) return bitmap
+
+        // 方案2: ExifInterface 提取嵌入缩略图 (适用于 RAW 格式: ARW/CR2/NEF/DNG 等)
+        // BitmapFactory 无法解码 RAW 文件,但 ExifInterface 可以读取嵌入的缩略图
+        return try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                val exif = ExifInterface(pfd.fileDescriptor)
+                exif.thumbnailBitmap
             }
         } catch (_: Throwable) {
             null
@@ -1152,18 +1177,29 @@ class ImportService(
     }
 
     private fun getImageDimensions(uri: Uri): Pair<Int, Int> {
-        return try {
+        // 方案1: BitmapFactory 解码边界 (适用于 JPEG/PNG/WEBP/BMP/GIF)
+        try {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
-            // 校验尺寸有效性 (S9 修复)
             val w = options.outWidth
             val h = options.outHeight
-            if (w > 0 && h > 0) w to h else 0 to 0
-        } catch (_: Throwable) {
-            0 to 0
-        }
+            if (w > 0 && h > 0) return w to h
+        } catch (_: Throwable) {}
+
+        // 方案2: ExifInterface 读取尺寸 (适用于 RAW 格式)
+        // BitmapFactory 无法解码 RAW 文件,outWidth/outHeight 为 -1
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                val exif = ExifInterface(pfd.fileDescriptor)
+                val w = exif.getAttribute(ExifInterface.TAG_IMAGE_WIDTH)?.toIntOrNull() ?: 0
+                val h = exif.getAttribute(ExifInterface.TAG_IMAGE_LENGTH)?.toIntOrNull() ?: 0
+                if (w > 0 && h > 0) return w to h
+            }
+        } catch (_: Throwable) {}
+
+        return 0 to 0
     }
 
     // ================================================================

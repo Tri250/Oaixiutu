@@ -313,10 +313,23 @@ class AlbumViewModel : ViewModel() {
                     if (result.duplicateCount > 0 && result.errorCount == 0) {
                         _permissionRationale.value = "所选图片已存在于图库中"
                     } else {
-                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                        val firstError = result.results.firstOrNull {
+                            it is com.alcedo.studio.domain.service.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                        val detail = firstError?.message ?: ""
+                        _permissionRationale.value = if (detail.isNotBlank()) {
+                            "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
+                        } else {
+                            "导入失败：${result.errorCount} 个文件无法导入"
+                        }
                     }
                 } else {
-                    showSnackbar("已导入 ${result.successCount} 张图片")
+                    val msg = if (result.errorCount > 0) {
+                        "已导入 ${result.successCount} 张图片，${result.errorCount} 个失败"
+                    } else {
+                        "已导入 ${result.successCount} 张图片"
+                    }
+                    showSnackbar(msg)
                 }
                 _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
                 TaskNotificationHelper.notifyImportComplete(context, result.successCount)
@@ -369,16 +382,29 @@ class AlbumViewModel : ViewModel() {
                     if (result.duplicateCount > 0 && result.errorCount == 0) {
                         _permissionRationale.value = "所选图片已存在于图库中"
                     } else {
-                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                        // 提取首个错误详情,帮助用户了解具体原因
+                        val firstError = result.results.firstOrNull {
+                            it is com.alcedo.studio.domain.service.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                        val detail = firstError?.message ?: ""
+                        _permissionRationale.value = if (detail.isNotBlank()) {
+                            "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
+                        } else {
+                            "导入失败：${result.errorCount} 个文件无法导入"
+                        }
                     }
                 } else {
-                    showSnackbar("已导入 ${result.successCount} 张图片")
+                    val msg = if (result.errorCount > 0) {
+                        "已导入 ${result.successCount} 张图片，${result.errorCount} 个失败"
+                    } else {
+                        "已导入 ${result.successCount} 张图片"
+                    }
+                    showSnackbar(msg)
                 }
                 _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
                 TaskNotificationHelper.notifyImportComplete(context, result.successCount)
                 loadImagesInternal()
                 loadFoldersInternal()
-                // 完成后延迟清理进度状态,避免进度条永久残留
                 kotlinx.coroutines.delay(1500)
                 _importProgress.value = null
             } catch (e: CancellationException) {
@@ -674,10 +700,23 @@ class AlbumViewModel : ViewModel() {
                     if (result.duplicateCount > 0 && result.errorCount == 0) {
                         _permissionRationale.value = "所选图片已存在于图库中"
                     } else {
-                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                        val firstError = result.results.firstOrNull {
+                            it is com.alcedo.studio.domain.service.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                        val detail = firstError?.message ?: ""
+                        _permissionRationale.value = if (detail.isNotBlank()) {
+                            "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
+                        } else {
+                            "导入失败：${result.errorCount} 个文件无法导入"
+                        }
                     }
                 } else {
-                    showSnackbar("已导入 ${result.successCount} 张图片")
+                    val msg = if (result.errorCount > 0) {
+                        "已导入 ${result.successCount} 张图片，${result.errorCount} 个失败"
+                    } else {
+                        "已导入 ${result.successCount} 张图片"
+                    }
+                    showSnackbar(msg)
                 }
                 _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
                 TaskNotificationHelper.notifyImportComplete(context, result.successCount)
