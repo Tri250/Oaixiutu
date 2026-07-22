@@ -563,12 +563,7 @@ class ExportViewModel : ViewModel() {
             try {
                 val image = imageRepository.getImage(imageId.toLongOrNull() ?: 0L)
                 val sourcePath = image?.imagePath ?: imageId
-                val settings = _settings.value.copy(
-                    maxDimension = _settings.value.maxDimension ?: 0,
-                    maxWidth = _settings.value.maxWidth ?: 0,
-                    maxHeight = _settings.value.maxHeight ?: 0
-                )
-                val result = exportService.exportImage(sourcePath, settings)
+                val result = exportService.exportImage(sourcePath, _settings.value)
                 _lastExportResult.value = result
             } catch (e: Exception) {
                 _lastExportResult.value = ExportService.ExportResult.Error(e.message ?: "导出失败")
@@ -582,8 +577,10 @@ class ExportViewModel : ViewModel() {
         viewModelScope.launch {
             _isExporting.value = true
             val items = imageIds.mapNotNull { id ->
+                // Try as library image ID first; fall back to treating the string as a file path/URI
                 val image = imageRepository.getImage(id.toLongOrNull() ?: 0L)
                 image?.let { ExportService.ExportBatchItem(sourcePath = it.imagePath) }
+                    ?: ExportService.ExportBatchItem(sourcePath = id)
             }
             if (items.isNotEmpty()) {
                 val result = exportService.exportBatch(items, _settings.value)

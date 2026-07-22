@@ -552,7 +552,7 @@ private fun NavGraphBuilder.alcedoNavGraph(
         AlbumScreen(navController = navController, viewModel = albumViewModel)
     }
     composable(MainDestination.CREATE.route) {
-        AiSearchScreen(navController = navController)
+        AiSearchScreen(navController = navController, albumViewModel = albumViewModel)
     }
     composable(MainDestination.MINE.route) {
         SettingsScreen(navController = navController)
@@ -569,7 +569,7 @@ private fun NavGraphBuilder.alcedoNavGraph(
         AiModelManagerScreen(navController = navController)
     }
     composable("ai_rating") {
-        AiRatingScreen(navController = navController)
+        AiRatingScreen(navController = navController, albumViewModel = albumViewModel)
     }
     composable("about") {
         AboutPage(navController = navController)

@@ -491,49 +491,54 @@ suspend fun predictRatingSafely(
         null
     }
 
-    // 调用真实 AI 评分服务
-    val (score, description) = if (bitmap != null) {
-        try {
-            aiService.rateImage(imageId.toUInt(), bitmap)
-        } catch (e: Exception) {
-            3 to "评分失败：${e.message}"
+    try {
+        // 调用真实 AI 评分服务
+        val (score, description) = if (bitmap != null) {
+            try {
+                aiService.rateImage(imageId.toUInt(), bitmap)
+            } catch (e: Exception) {
+                3 to "评分失败：${e.message}"
+            }
+        } else {
+            3 to "无法加载图片"
         }
-    } else {
-        3 to "无法加载图片"
-    }
 
-    // 基于评分结果生成多维度分数
-    val overallScore = (score * 20).coerceIn(0, 100)
+        // 基于评分结果生成多维度分数
+        val overallScore = (score * 20).coerceIn(0, 100)
 
-    // 从位图计算真实的子维度分数
-    val analysisBitmap = bitmap?.let { bmp ->
-        // 降采样到 64x64 用于分析
-        try {
-            Bitmap.createScaledBitmap(bmp, 64, 64, false)
-        } catch (e: Exception) {
-            null
+        // 从位图计算真实的子维度分数
+        val analysisBitmap = bitmap?.let { bmp ->
+            // 降采样到 64x64 用于分析
+            try {
+                Bitmap.createScaledBitmap(bmp, 64, 64, false)
+            } catch (e: Exception) {
+                null
+            }
         }
-    }
 
-    val (composition, exposure, color, sharpness) = if (analysisBitmap != null) {
-        analyzeImageDimensions(analysisBitmap)
-    } else {
-        listOf(overallScore, overallScore, overallScore, overallScore)
-    }
+        val (composition, exposure, color, sharpness) = if (analysisBitmap != null) {
+            analyzeImageDimensions(analysisBitmap)
+        } else {
+            listOf(overallScore, overallScore, overallScore, overallScore)
+        }
 
-    // 释放缩放位图（如果与原图不同）
-    if (analysisBitmap != null && analysisBitmap !== bitmap) {
-        analysisBitmap.recycle()
-    }
+        // 释放缩放位图（如果与原图不同）
+        if (analysisBitmap != null && analysisBitmap !== bitmap) {
+            analysisBitmap.recycle()
+        }
 
-    RatingPrediction(
-        overall = overallScore,
-        composition = composition,
-        exposure = exposure,
-        color = color,
-        sharpness = sharpness,
-        suggestion = description
-    )
+        RatingPrediction(
+            overall = overallScore,
+            composition = composition,
+            exposure = exposure,
+            color = color,
+            sharpness = sharpness,
+            suggestion = description
+        )
+    } finally {
+        // 释放原图位图，避免内存泄漏
+        bitmap?.recycle()
+    }
 }
 
 /**
