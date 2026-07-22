@@ -184,14 +184,15 @@ class ImportService(
         checkDuplicates: Boolean = true,
         cancellationToken: CancellationToken? = null
     ): ImportDirectoryResult = withContext(Dispatchers.IO) {
+        // 声明在 try 之前,使 catch 块也能访问已完成的计数 (S12 修复)
+        val results = mutableListOf<ImportResult>()
+        var successCount = 0
+        var duplicateCount = 0
+        var errorCount = 0
+
         try {
             // 每次导入入口清理去重缓存,避免跨导入会话误判 (S2 修复)
             importedChecksums.clear()
-
-            val results = mutableListOf<ImportResult>()
-            var successCount = 0
-            var duplicateCount = 0
-            var errorCount = 0
 
             // ── Phase A: Quick scan ──
             _importProgress.value = ImportProgress(
@@ -514,7 +515,7 @@ class ImportService(
                 successCount = successCount,
                 duplicateCount = duplicateCount,
                 errorCount = errorCount + 1,
-                results = results + ImportResult.Error(errorMsg)
+                results = results.apply { add(ImportResult.Error(errorMsg)) }
             )
         }
     }
