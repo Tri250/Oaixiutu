@@ -238,7 +238,8 @@ object MediaStoreHelper {
         "nef", "nrw", "cr2", "cr3", "arw", "srf", "sr2",
         "dng", "raf", "orf", "pef", "rw2", "rwl", "raw",
         "3fr", "fff", "iiq", "kdc", "mef", "mos", "mrw",
-        "ptx", "pxn", "r3d", "ref", "rwz", "x3f", "erf"
+        "ptx", "pxn", "r3d", "ref", "rwz", "x3f", "erf",
+        "srw"
     )
 
     fun isRawFile(fileName: String, mimeType: String): Boolean {

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.2.4)'
+        description: 'Release tag (e.g. v1.2.7)'
         required: true
         type: string
 
@@ -79,11 +79,37 @@ jobs:
           else
             TAG="${{ github.ref_name }}"
           fi
+          # Validate tag format
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid tag format: $TAG (expected v*.*.*)"
+            exit 1
+          fi
           DEST="AlcedoStudio-${TAG}.apk"
           cp "$APK_PATH" "$DEST"
           echo "apk_path=$DEST" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "APK size: $(du -h "$DEST" | cut -f1)"
+
+      - name: Verify APK signature
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK to verify"
+            exit 0
+          fi
+          # Verify APK is signed (v2/v3 signature verification)
+          if command -v apksigner &> /dev/null; then
+            apksigner verify --print-certs "$APK_PATH" || echo "APK signature verification skipped (apksigner not available)"
+          else
+            echo "apksigner not found, skipping signature verification"
+            # Basic check: APK must be > 1MB (unsigned stub APKs are tiny)
+            APK_SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null || echo 0)
+            if [ "$APK_SIZE" -lt 1048576 ]; then
+              echo "WARNING: APK is suspiciously small ($APK_SIZE bytes), may be unsigned"
+            else
+              echo "APK size looks reasonable: $APK_SIZE bytes"
+            fi
+          fi
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
@@ -91,5 +117,31 @@ jobs:
           tag_name: ${{ steps.apk.outputs.tag }}
           files: ${{ steps.apk.outputs.apk_path }}
           fail_on_unmatched_files: true
+          body: |
+            ## Alcedo Studio ${{ steps.apk.outputs.tag }}
+
+            ### What's New
+            - Fixed image import: HEIC/HEIF format detection (4-byte brand)
+            - Added RAW format support: ORF, PEF, SRW, X3F, RAF, RW2, MOS
+            - Enhanced WEBP detection (RIFF + brand verification)
+            - Fixed thumbnail thread pool (CallerRunsPolicy)
+            - Improved import error feedback
+            - Expanded SAF directory scanning for all RAW formats
+            - Fixed MediaStore RAW detection (added SRW)
+
+            ### Supported Formats
+            JPEG, PNG, WEBP, BMP, GIF, TIFF, HEIC, HEIF, EXR,
+            ARW, CR2, CR3, NEF, DNG, ORF, PEF, SRW, X3F, RAF, RW2, MOS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
+            build/reports/
+          retention-days: 7

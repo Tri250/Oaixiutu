@@ -897,15 +897,18 @@ class ImportService(
                 }
             }
 
-            // DNG 检测:DNG 文件头与 TIFF 相同 (49 49 2A 00 或 4D 4D 00 2A),
-            // 但 DNG 不在 magicBytes 中(避免与 TIFF 冲突)。此处通过扩展名优先判定,
-            // magic bytes 仅作兜底:TIFF 前缀 + 文件名 .dng → DNG
-            // (真正的 DNG 识别需解析 IFD 中的 DNGVersion tag,此处简化处理)
-            val isTiffHeader = (header[0] == 0x49.toByte() && header[1] == 0x49.toByte() &&
-                header[2] == 0x2A.toByte() && header[3] == 0x00.toByte()) ||
-                (header[0] == 0x4D.toByte() && header[1] == 0x4D.toByte() &&
-                    header[2] == 0x00.toByte() && header[3] == 0x2A.toByte())
-            if (isTiffHeader) {
+            // DNG/TIFF 兜底检测:
+            // DNG 文件头与 TIFF 相同,但 DNG 不在 magicBytes 中(避免与 TIFF 冲突)。
+            // 此处通过扩展名优先判定(在 quickScanFile 中处理),
+            // magic bytes 仅作兜底:未匹配任何 RAW 格式时,若为 TIFF 前缀则归为 TIFF
+            val isTiffLe = header[0] == 0x49.toByte() && header[1] == 0x49.toByte() &&
+                header[2] == 0x2A.toByte() && header[3] == 0x00.toByte()
+            val isTiffBe = header[0] == 0x4D.toByte() && header[1] == 0x4D.toByte() &&
+                header[2] == 0x00.toByte() && header[3] == 0x2A.toByte()
+            if (isTiffLe || isTiffBe) {
+                // Big-endian TIFF variant 也可能是 NEF/RW2 等RAW格式,
+                // 但此处已穷尽所有已知 RAW 的 magic bytes 匹配,
+                // 未命中则说明不是已知 RAW, 归为 TIFF
                 return ImageType.TIFF
             }
 

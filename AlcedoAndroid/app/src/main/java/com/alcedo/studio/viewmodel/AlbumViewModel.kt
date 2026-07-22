@@ -690,6 +690,7 @@ class AlbumViewModel : ViewModel() {
                 throw e
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromStorage failed", e)
+                _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
                 _importProgress.value = null
             } finally {
                 _isLoading.value = false

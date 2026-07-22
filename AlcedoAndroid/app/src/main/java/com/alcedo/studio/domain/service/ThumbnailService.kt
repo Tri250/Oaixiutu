@@ -65,7 +65,7 @@ class ThumbnailService(
         private val thumbnailExecutor = ThreadPoolExecutor(
             2, 4, 30, TimeUnit.SECONDS,
             LinkedBlockingQueue(100),
-            ThreadPoolExecutor.DiscardOldestPolicy()
+            ThreadPoolExecutor.CallerRunsPolicy()
         )
     }
 

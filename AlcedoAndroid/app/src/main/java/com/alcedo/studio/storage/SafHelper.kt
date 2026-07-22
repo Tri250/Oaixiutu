@@ -27,7 +27,9 @@ object SafHelper {
     fun isImageFile(fileName: String, mimeType: String): Boolean {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return ext in IMAGE_EXTENSIONS ||
-            mimeType.startsWith("image/")
+            mimeType.startsWith("image/") ||
+            mimeType.startsWith("image/x-") ||
+            mimeType == "image/dng"
     }
 
     // List files in a SAF directory (non-recursive)
