@@ -37,7 +37,8 @@ class SleeveService(
         type: ElementType,
         parentId: Long? = null,
         imageId: Long? = null,
-        filePath: String? = null
+        filePath: String? = null,
+        fileExtension: String? = null
     ): Long = withContext(Dispatchers.IO) {
         val elementId = generateElementId()
         val now = System.currentTimeMillis()
@@ -62,7 +63,7 @@ class SleeveService(
                     elementId = elementId,
                     imageId = imageId ?: elementId,
                     filePath = filePath ?: "",
-                    fileExtension = filePath?.substringAfterLast('.', "") ?: ""
+                    fileExtension = fileExtension ?: filePath?.substringAfterLast('.', "") ?: name.substringAfterLast('.', "")
                 )
             )
         } else {

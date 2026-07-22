@@ -324,7 +324,8 @@ class ImportService(
                         type = ElementType.FILE,
                         parentId = parentFolderId,
                         imageId = imageId,
-                        filePath = info.filePath
+                        filePath = info.filePath,
+                        fileExtension = info.fileName.substringAfterLast('.', "").lowercase()
                     )
 
                     // Use putIfAbsent for atomic check-and-set to avoid race condition
@@ -483,10 +484,14 @@ class ImportService(
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
             throw e
         } catch (e: Throwable) {
+            android.util.Log.e("ImportService", "importTwoPhase failed", e)
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             ImportDirectoryResult(
-                totalFiles = 0, successCount = 0, duplicateCount = 0, errorCount = 0,
-                results = listOf(ImportResult.Error(e.message ?: "Import failed"))
+                totalFiles = uris.size,
+                successCount = successCount,
+                duplicateCount = duplicateCount,
+                errorCount = errorCount + 1,
+                results = results + ImportResult.Error(e.message ?: "Import failed")
             )
         }
     }

@@ -421,7 +421,8 @@ data class ImageModel(
                         }
                     } else "",
                     imageSize = entity.imageSizeDisplay,
-                    fileSize = entity.fileSizeDisplay
+                    fileSize = entity.fileSizeDisplay,
+                    rating = entity.rating
                 ),
                 imageType = safeImageType,
                 thumbState = safeThumbState,
@@ -437,7 +438,10 @@ data class ImageModel(
                 hasExifDisplay = entity.hasExifDisplay,
                 hasRawColorContext = entity.hasRawColorContext,
                 thumbPinned = entity.thumbPinned,
-                fullPinned = entity.fullPinned
+                fullPinned = entity.fullPinned,
+                rating = entity.rating,
+                captureTimestamp = entity.captureDate,
+                addedTimestamp = entity.importedAt
             )
         }
     }

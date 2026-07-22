@@ -303,11 +303,16 @@ class AlbumViewModel : ViewModel() {
                 val uris = imageFiles.map { it.uri }
                 _importProgress.value = ImportProgress(0, uris.size, "importing")
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
-                importService.importTwoPhase(uris)
-                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
-                TaskNotificationHelper.notifyImportComplete(context, uris.size)
-                loadImages()
-                loadFolders()
+                val result = importService.importTwoPhase(uris)
+                if (result.successCount == 0) {
+                    _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                } else {
+                    showSnackbar("已导入 ${result.successCount} 张图片")
+                }
+                _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, result.successCount)
+                loadImagesInternal()
+                loadFoldersInternal()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromSafDirectory failed", e)
                 _permissionRationale.value = "目录导入失败: ${e.message ?: "未知错误"}"
@@ -327,14 +332,33 @@ class AlbumViewModel : ViewModel() {
             _isLoading.value = true
             val context = AppModule.context
             try {
+                // Take persistable URI permissions so URIs remain accessible
+                // even if the Activity is recreated during import
+                val resolver = context.contentResolver
+                for (uri in uris) {
+                    try {
+                        resolver.takePersistableUriPermission(
+                            uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) {
+                        // Some providers don't support persistable permission
+                    }
+                }
+
                 // Use two-phase import for better UX (fast scan + background metadata)
                 _importProgress.value = ImportProgress(0, uris.size, "importing")
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
-                importService.importTwoPhase(uris)
-                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
-                TaskNotificationHelper.notifyImportComplete(context, uris.size)
-                loadImages()
-                loadFolders()
+                val result = importService.importTwoPhase(uris)
+                if (result.successCount == 0) {
+                    _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                } else {
+                    showSnackbar("已导入 ${result.successCount} 张图片")
+                }
+                _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, result.successCount)
+                loadImagesInternal()
+                loadFoldersInternal()
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
                 _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
@@ -433,26 +457,28 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun loadImages() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                // 重置分页状态：每次 loadImages 都从第一页开始
-                _currentPage.value = 0
-                val allImages = imageRepository.getAllImages()
-                _imageCount.value = allImages.size
-                _totalSize.value = allImages.sumOf { it.fileSize }
-                val firstPage = allImages.take(PAGE_SIZE)
-                _images.value = firstPage
-                _hasMorePages.value = allImages.size > PAGE_SIZE
-                applyCurrentSortAndFilter(firstPage)
-            } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "loadImages failed", e)
-                _images.value = emptyList()
-                _filteredImages.value = emptyList()
-                _hasMorePages.value = false
-            } finally {
-                _isLoading.value = false
-            }
+        viewModelScope.launch { loadImagesInternal() }
+    }
+
+    private suspend fun loadImagesInternal() {
+        _isLoading.value = true
+        try {
+            // 重置分页状态：每次 loadImages 都从第一页开始
+            _currentPage.value = 0
+            val allImages = imageRepository.getAllImages()
+            _imageCount.value = allImages.size
+            _totalSize.value = allImages.sumOf { it.fileSize }
+            val firstPage = allImages.take(PAGE_SIZE)
+            _images.value = firstPage
+            _hasMorePages.value = allImages.size > PAGE_SIZE
+            applyCurrentSortAndFilter(firstPage)
+        } catch (e: Throwable) {
+            android.util.Log.e("AlbumVM", "loadImages failed", e)
+            _images.value = emptyList()
+            _filteredImages.value = emptyList()
+            _hasMorePages.value = false
+        } finally {
+            _isLoading.value = false
         }
     }
 
@@ -515,13 +541,15 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun loadFolders() {
-        viewModelScope.launch {
-            try {
-                _folders.value = sleeveRepository.getRootElements()
-                    .filterIsInstance<SleeveFolder>()
-            } catch (e: Throwable) {
-                android.util.Log.e("AlbumVM", "Coroutine failed", e)
-            }
+        viewModelScope.launch { loadFoldersInternal() }
+    }
+
+    private suspend fun loadFoldersInternal() {
+        try {
+            _folders.value = sleeveRepository.getRootElements()
+                .filterIsInstance<SleeveFolder>()
+        } catch (e: Throwable) {
+            android.util.Log.e("AlbumVM", "Coroutine failed", e)
         }
     }
 

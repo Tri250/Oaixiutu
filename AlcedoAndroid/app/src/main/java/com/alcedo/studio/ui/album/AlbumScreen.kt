@@ -148,6 +148,14 @@ fun AlbumScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // ── Snackbar 状态 ──
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        viewModel.snackbarEvent.collect { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
+
     // ── 权限管理 ────────────────────────────────────
     val permissionState = rememberPermissionState(
         onResult = { results ->
@@ -195,6 +203,13 @@ fun AlbumScreen(
         if (uris.isNotEmpty()) {
             viewModel.importFromPhotoPicker(uris)
         }
+    }
+
+    // ── 单文件选择回退启动器 (当 GetMultipleContents 也不可用时使用) ──
+    val singleFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.importFromPhotoPicker(listOf(it)) }
     }
 
     // ── SAF 目录选择器启动器 ──────────────────────────────
@@ -264,6 +279,7 @@ fun AlbumScreen(
                 collapsedDateGroups = collapsedDateGroups,
                 folders = folders,
                 importProgress = importProgress,
+                snackbarHostState = snackbarHostState,
                 onGetThumbnail = viewModel::getThumbnail,
                 onLoadMore = viewModel::loadMoreImages,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -327,6 +343,7 @@ fun AlbumScreen(
                 collapsedDateGroups = collapsedDateGroups,
                 folders = folders,
                 importProgress = importProgress,
+                snackbarHostState = snackbarHostState,
                 onGetThumbnail = viewModel::getThumbnail,
                 onLoadMore = viewModel::loadMoreImages,
                 onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -384,6 +401,7 @@ fun AlbumScreen(
             collapsedDateGroups = collapsedDateGroups,
             folders = folders,
             importProgress = importProgress,
+            snackbarHostState = snackbarHostState,
             onGetThumbnail = viewModel::getThumbnail,
             onLoadMore = viewModel::loadMoreImages,
             onSearchQueryChange = viewModel::onSearchQueryChange,
@@ -451,10 +469,18 @@ fun AlbumScreen(
                         )
                     } catch (e: Exception) {
                         // 即使检测通过，启动仍可能失败（如 GMS 被禁用），回退到传统选择器
-                        fallbackFileLauncher.launch("image/*")
+                        try {
+                            fallbackFileLauncher.launch("image/*")
+                        } catch (e2: Exception) {
+                            singleFileLauncher.launch("image/*")
+                        }
                     }
                 } else {
-                    fallbackFileLauncher.launch("image/*")
+                    try {
+                        fallbackFileLauncher.launch("image/*")
+                    } catch (e: Exception) {
+                        singleFileLauncher.launch("image/*")
+                    }
                 }
             },
             onSelectDirectory = {
@@ -723,6 +749,7 @@ private fun AlbumContent(
     collapsedDateGroups: State<Set<String>>,
     folders: List<SleeveFolder>,
     importProgress: com.alcedo.studio.viewmodel.ImportProgress?,
+    snackbarHostState: SnackbarHostState,
     onGetThumbnail: (Long) -> android.graphics.Bitmap?,
     onLoadMore: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -752,6 +779,7 @@ private fun AlbumContent(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Box {
                 // 普通模式顶栏
