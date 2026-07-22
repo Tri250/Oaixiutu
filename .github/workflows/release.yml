@@ -39,7 +39,7 @@ jobs:
 
       - name: Build Release APK
         env:
-          ALCEDO_KEYSTORE_PATH: app/release.keystore
+          ALCEDO_KEYSTORE_PATH: release.keystore
           ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
           ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
           ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
