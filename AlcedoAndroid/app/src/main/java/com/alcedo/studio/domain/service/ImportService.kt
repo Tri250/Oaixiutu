@@ -288,6 +288,20 @@ class ImportService(
                 }
 
                 try {
+                    // 1. 先检查内存去重缓存,拦截同一批次内的重复文件,
+                    //    避免创建孤儿 metadata+SleeveFile 记录 (S8 修复)
+                    if (info.checksum != 0L) {
+                        val existingName = importedChecksums.putIfAbsent(info.checksum, info.fileName)
+                        if (existingName != null) {
+                            addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
+                                ImportPhase.PHASE_A_CREATING,
+                                "Duplicate of $existingName (same batch)")
+                            duplicateCount++
+                            results.add(ImportResult.Duplicate(-1, existingName))
+                            continue
+                        }
+                    }
+
                     val imageId = generateImageId()
                     val mimeType = getMimeType(info.imageType)
 
@@ -332,19 +346,8 @@ class ImportService(
                     } catch (ce: Exception) {
                         // Rollback: 删除已插入的 metadata, 避免孤儿记录堵塞后续导入
                         metadataDao.deleteMetadataByImageId(imageId)
+                        importedChecksums.remove(info.checksum) // 回滚时清理缓存 (S8 修复)
                         throw ce
-                    }
-
-                    // Use putIfAbsent for atomic check-and-set to avoid race condition
-                    val existingName = importedChecksums.putIfAbsent(info.checksum, info.fileName)
-                    if (existingName != null) {
-                        // Another concurrent import already claimed this checksum
-                        addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
-                            ImportPhase.PHASE_A_CREATING,
-                            "Duplicate of $existingName (concurrent)")
-                        duplicateCount++
-                        results.add(ImportResult.Duplicate(-1, existingName))
-                        continue
                     }
 
                     phaseAResults.add(info to imageId)
@@ -632,9 +635,9 @@ class ImportService(
                 return@withContext ImportResult.Error("Unsupported file format: $fileName")
             }
 
-            // Compute checksum for duplicate detection
+            // Compute checksum for duplicate detection (使用 partial checksum 与 importTwoPhase 保持一致, S10 修复)
             val checksum = if (checkDuplicates) {
-                computeChecksum(uri)
+                computePartialChecksum(uri)
             } else 0L
 
             if (checkDuplicates && checksum != 0L) {
@@ -786,7 +789,7 @@ class ImportService(
             context.contentResolver.query(
                 childrenUri, null, null, null, null
             )?.use { cursor ->
-                val displayNameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val displayNameIdx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val documentIdIdx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val mimeTypeIdx = cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE)
 
@@ -945,31 +948,6 @@ class ImportService(
     }
 
     // ================================================================
-    // Checksum computation
-    // ================================================================
-
-    private fun computeChecksum(uri: Uri): Long {
-        try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    digest.update(buffer, 0, bytesRead)
-                }
-            }
-            val hash = digest.digest()
-            var result = 0L
-            for (i in 0 until min(8, hash.size)) {
-                result = (result shl 8) or (hash[i].toLong() and 0xFF)
-            }
-            return result
-        } catch (_: Throwable) {
-            return 0L
-        }
-    }
-
-    // ================================================================
     // EXIF parsing
     // ================================================================
 
@@ -1114,6 +1092,9 @@ class ImportService(
                 BitmapFactory.decodeStream(it, null, options)
             }
 
+            // 校验尺寸有效性,避免 outWidth/outHeight 为 -1 导致 scale 异常 (S9 修复)
+            if (options.outWidth <= 0 || options.outHeight <= 0) return null
+
             val scale = maxOf(
                 1,
                 minOf(options.outWidth / maxSize, options.outHeight / maxSize, 8)
@@ -1138,7 +1119,10 @@ class ImportService(
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
-            options.outWidth to options.outHeight
+            // 校验尺寸有效性 (S9 修复)
+            val w = options.outWidth
+            val h = options.outHeight
+            if (w > 0 && h > 0) w to h else 0 to 0
         } catch (_: Throwable) {
             0 to 0
         }

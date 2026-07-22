@@ -310,7 +310,11 @@ class AlbumViewModel : ViewModel() {
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
                 val result = importService.importTwoPhase(uris)
                 if (result.successCount == 0) {
-                    _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                    if (result.duplicateCount > 0 && result.errorCount == 0) {
+                        _permissionRationale.value = "所选图片已存在于图库中"
+                    } else {
+                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                    }
                 } else {
                     showSnackbar("已导入 ${result.successCount} 张图片")
                 }
@@ -362,7 +366,11 @@ class AlbumViewModel : ViewModel() {
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
                 val result = importService.importTwoPhase(uris)
                 if (result.successCount == 0) {
-                    _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                    if (result.duplicateCount > 0 && result.errorCount == 0) {
+                        _permissionRationale.value = "所选图片已存在于图库中"
+                    } else {
+                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                    }
                 } else {
                     showSnackbar("已导入 ${result.successCount} 张图片")
                 }
@@ -658,17 +666,28 @@ class AlbumViewModel : ViewModel() {
             _isLoading.value = true
             val context = AppModule.context
             try {
+                // 使用两阶段导入替代逐个 importImage,提升批量导入性能和 UI 响应 (S11 修复)
                 _importProgress.value = ImportProgress(0, uris.size, "importing")
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
-                for ((index, uri) in uris.withIndex()) {
-                    importService.importImage(uri)
-                    _importProgress.value = ImportProgress(index + 1, uris.size, "importing")
-                    TaskNotificationHelper.notifyImportProgress(context, index + 1, uris.size)
+                val result = importService.importTwoPhase(uris)
+                if (result.successCount == 0) {
+                    if (result.duplicateCount > 0 && result.errorCount == 0) {
+                        _permissionRationale.value = "所选图片已存在于图库中"
+                    } else {
+                        _permissionRationale.value = "导入失败：${result.errorCount} 个文件无法导入"
+                    }
+                } else {
+                    showSnackbar("已导入 ${result.successCount} 张图片")
                 }
-                _importProgress.value = ImportProgress(uris.size, uris.size, "completed")
-                TaskNotificationHelper.notifyImportComplete(context, uris.size)
+                _importProgress.value = ImportProgress(result.successCount, uris.size, "completed")
+                TaskNotificationHelper.notifyImportComplete(context, result.successCount)
                 loadImages()
                 loadFolders()
+                kotlinx.coroutines.delay(1500)
+                _importProgress.value = null
+            } catch (e: CancellationException) {
+                _importProgress.value = null
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromStorage failed", e)
                 _importProgress.value = null
