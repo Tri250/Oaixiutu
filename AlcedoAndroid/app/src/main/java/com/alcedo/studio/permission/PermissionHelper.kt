@@ -205,3 +205,32 @@ object PermissionHelper {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     }
 }
+
+// ================================================================
+// Compose Permission State
+// ================================================================
+
+interface PermissionStateHandle {
+    fun requestMediaAccess()
+}
+
+@Composable
+fun rememberPermissionState(
+    onResult: (Map<String, Boolean>) -> Unit
+): PermissionStateHandle {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        onResult(results)
+    }
+
+    return remember {
+        object : PermissionStateHandle {
+            override fun requestMediaAccess() {
+                val permissions = PermissionHelper.getReadMediaPermissions()
+                launcher.launch(permissions.toTypedArray())
+            }
+        }
+    }
+}

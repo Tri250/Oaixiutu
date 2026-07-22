@@ -40,7 +40,7 @@ object PhotoPickerHelper {
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
                 // Android 11-12：检查 GMS backport 是否可用
-                val gmsIntent = Intent(ActivityResultContracts.PickMultipleVisualMedia.ACTION_PICK_IMAGES)
+                val gmsIntent = Intent("android.provider.action.PICK_IMAGES")
                 val resolveInfo = context.packageManager.queryIntentActivities(gmsIntent, 0)
                 if (resolveInfo.isNotEmpty()) {
                     PhotoPickerAvailability.GmsBackport

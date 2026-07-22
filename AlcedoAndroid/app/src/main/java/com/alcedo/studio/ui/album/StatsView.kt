@@ -83,9 +83,9 @@ fun StatsView(
                 loadedLensDistribution = filterService.getLensFacets()
                 loadedTagCloud = filterService.getLabelFrequency(20)
 
-                val allMetadata = imageRepository.getAllImageMetadata()
-                loadedTotalImages = allMetadata.size
-                this@StatsView.allMetadata = allMetadata
+                val metadataList = imageRepository.getAllImageMetadata()
+                loadedTotalImages = metadataList.size
+                allMetadata = metadataList
                 loadedRatingDistribution = (0..5).map { rating ->
                     RatingDistribution(rating, allMetadata.count { it.rating == rating })
                 }

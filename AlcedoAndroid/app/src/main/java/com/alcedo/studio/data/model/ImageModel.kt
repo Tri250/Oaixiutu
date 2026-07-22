@@ -314,7 +314,10 @@ data class ImageModel(
     val hasExif: Boolean = false,
     val hasExifDisplay: Boolean = false,
     val thumbPinned: Boolean = false,
-    val fullPinned: Boolean = false
+    val fullPinned: Boolean = false,
+    val rating: Int = 0,
+    val captureTimestamp: Long = 0L,
+    val addedTimestamp: Long = System.currentTimeMillis()
 ) {
     fun clearData() {
         imageData.release()
@@ -352,7 +355,9 @@ data class ImageModel(
         iso = exifDisplay.iso.toIntOrNull() ?: 0,
         captureDate = parseCaptureDate(exifDisplay.captureDate),
         imageSizeDisplay = exifDisplay.imageSize,
-        fileSizeDisplay = exifDisplay.fileSize
+        fileSizeDisplay = exifDisplay.fileSize,
+        rating = rating,
+        importedAt = addedTimestamp
     )
 
     companion object {
