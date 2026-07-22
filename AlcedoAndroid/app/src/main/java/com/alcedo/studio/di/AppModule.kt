@@ -234,6 +234,42 @@ object AppModule {
         RenderService()
     }
 
+    val gpuService: GpuService by lazy {
+        GpuService.getInstance(this.context)
+    }
+
+    val gpuPipelineService: GpuPipelineService by lazy {
+        GpuPipelineService(this.context)
+    }
+
+    val decodeService: DecodeService by lazy {
+        DecodeService()
+    }
+
+    val maskInferenceService: MaskInferenceService by lazy {
+        MaskInferenceService()
+    }
+
+    val maskRenderService: MaskRenderService by lazy {
+        MaskRenderService(maskInferenceService)
+    }
+
+    val watermarkService: WatermarkService by lazy {
+        WatermarkService()
+    }
+
+    val exifEditorService: ExifEditorService by lazy {
+        ExifEditorService()
+    }
+
+    val ultraHdrWriter: UltraHdrWriter by lazy {
+        UltraHdrWriter.create(this.context)
+    }
+
+    val modelAssetCatalog: ModelAssetCatalog by lazy {
+        ModelAssetCatalog().apply { initialize() }
+    }
+
     // DAOs from data.dao package
     val editHistoryDao: EditHistoryDao by lazy { database.editHistoryDao() }
     val pipelinePresetDao: PipelinePresetDao by lazy { database.pipelinePresetDao() }

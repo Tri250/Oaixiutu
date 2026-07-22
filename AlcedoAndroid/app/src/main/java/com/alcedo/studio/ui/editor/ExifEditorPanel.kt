@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.ExifData
 import com.alcedo.studio.domain.service.ExifEditorService
 import com.alcedo.studio.i18n.Strings
@@ -30,7 +31,7 @@ fun ExifEditorDialog(
     filePath: String,
     onDismiss: () -> Unit
 ) {
-    val service = remember { ExifEditorService() }
+    val service = remember { AppModule.exifEditorService }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 

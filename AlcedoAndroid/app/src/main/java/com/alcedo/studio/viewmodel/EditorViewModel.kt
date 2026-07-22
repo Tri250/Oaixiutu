@@ -196,7 +196,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     // ── Masks (AI local adjustments) ──
 
-    val maskRenderService by lazy { MaskRenderService() }
+    val maskRenderService by lazy { AppModule.maskRenderService }
 
     private val _maskContainers = MutableStateFlow<List<MaskContainer>>(emptyList())
     val maskContainers: StateFlow<List<MaskContainer>> = _maskContainers.asStateFlow()

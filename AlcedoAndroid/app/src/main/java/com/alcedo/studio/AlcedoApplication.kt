@@ -94,7 +94,7 @@ class AlcedoApplication : Application() {
         // 与服务装配，不创建 GL 上下文。
         var gpuAvailable = false
         try {
-            val gpuService = GpuService.getInstance(this)
+            val gpuService = AppModule.gpuService
             gpuService.initialize()
             Log.i("AlcedoApp", "GPU backend: ${gpuService.currentBackend.value.displayName}")
             gpuAvailable = true
@@ -104,7 +104,7 @@ class AlcedoApplication : Application() {
 
         if (gpuAvailable) {
             try {
-                val gpuPipelineService = GpuPipelineService(this)
+                val gpuPipelineService = AppModule.gpuPipelineService
                 val supported = gpuPipelineService.checkGpuSupport()
                 Log.i("AlcedoApp", "GPU Compute (GLES 3.1) supported: $supported")
                 if (supported) {

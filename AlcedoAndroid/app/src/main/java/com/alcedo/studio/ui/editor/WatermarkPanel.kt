@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.alcedo.studio.di.AppModule
 import com.alcedo.studio.domain.service.WatermarkConfig
 import com.alcedo.studio.domain.service.WatermarkPosition
 import com.alcedo.studio.domain.service.WatermarkService
@@ -52,7 +53,7 @@ fun WatermarkPanelDialog(
 ) {
     var config by remember { mutableStateOf(initialConfig) }
     val context = LocalContext.current
-    val service = remember { WatermarkService() }
+    val service = remember { AppModule.watermarkService }
 
     // Sample bitmap used as the preview backdrop (a soft diagonal gradient).
     val sampleBitmap = remember {

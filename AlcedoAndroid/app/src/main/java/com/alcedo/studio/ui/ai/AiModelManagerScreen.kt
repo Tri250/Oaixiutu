@@ -37,7 +37,7 @@ fun AiModelManagerScreen(navController: NavController) {
     val scope = rememberCoroutineScope()
 
     val modelDownloadService = remember { AppModule.modelDownloadService }
-    val modelAssetCatalog = remember { ModelAssetCatalog().apply { initialize() } }
+    val modelAssetCatalog = remember { AppModule.modelAssetCatalog }
 
     // Observe the live model list from ModelDownloadService
     val serviceModels by modelDownloadService.models.collectAsState()
