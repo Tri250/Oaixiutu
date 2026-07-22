@@ -285,7 +285,7 @@ data class ImageBuffer(
 
     fun clone(): ImageBuffer {
         val clonedCpu = cpuData?.let {
-            if (!it.isRecycled) it.copy(it.config, false) else null
+            if (!it.isRecycled) it.copy(it.config ?: Bitmap.Config.ARGB_8888, false) else null
         }
         return copy(cpuData = clonedCpu)
     }
