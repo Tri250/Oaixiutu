@@ -423,7 +423,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     }
                     _originalBitmap.value = bitmap
                     // C8 修复: 为预览生成降采样位图,避免实时处理大图 OOM
-                    previewSourceBitmap = downscaleForPreview(bitmap)
+                    previewSourceBitmap = bitmap?.let { downscaleForPreview(it) }
                     _previewBitmap.value = previewSourceBitmap
                 } catch (e: OutOfMemoryError) {
                     Log.e("EditorVM", "OOM loading image, attempting recovery", e)
