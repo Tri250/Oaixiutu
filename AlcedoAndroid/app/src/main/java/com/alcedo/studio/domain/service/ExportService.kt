@@ -810,8 +810,12 @@ class ExportService(private val context: Context) {
     private fun writePng(bitmap: Bitmap, file: File, settings: ExportSettings): Boolean {
         val outputBitmap = if (settings.bitDepth == 16) {
             // Convert to RGBA_F16 for 16-bit PNG (Android 9+)
-            val f16 = bitmap.copy(Bitmap.Config.RGBA_F16, false)
-            f16 ?: bitmap
+            try {
+                bitmap.copy(Bitmap.Config.RGBA_F16, false) ?: bitmap
+            } catch (_: OutOfMemoryError) {
+                // OOM 回退到 8-bit PNG
+                bitmap
+            }
         } else {
             bitmap
         }

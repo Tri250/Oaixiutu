@@ -90,8 +90,13 @@ class ThumbnailService(
         // 1. Check memory cache
         synchronized(memoryCacheLock) {
             memoryCache[cacheKey]?.let {
-                memoryHits.incrementAndGet()
-                return@withContext ThumbnailResult.Success(it, ThumbnailSource.MEMORY)
+                if (!it.isRecycled) {
+                    memoryHits.incrementAndGet()
+                    return@withContext ThumbnailResult.Success(it, ThumbnailSource.MEMORY)
+                } else {
+                    // 已回收的 Bitmap 从缓存移除, 避免后续命中
+                    memoryCache.remove(cacheKey)
+                }
             }
         }
 
@@ -124,8 +129,12 @@ class ThumbnailService(
         // Check memory cache
         synchronized(memoryCacheLock) {
             memoryCache[cacheKey]?.let {
-                memoryHits.incrementAndGet()
-                return@withContext ThumbnailResult.Success(it, ThumbnailSource.MEMORY)
+                if (!it.isRecycled) {
+                    memoryHits.incrementAndGet()
+                    return@withContext ThumbnailResult.Success(it, ThumbnailSource.MEMORY)
+                } else {
+                    memoryCache.remove(cacheKey)
+                }
             }
         }
 

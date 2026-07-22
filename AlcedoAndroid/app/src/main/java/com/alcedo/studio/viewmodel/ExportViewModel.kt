@@ -17,6 +17,7 @@ import com.alcedo.studio.service.TaskNotificationHelper
 import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -375,6 +376,8 @@ class ExportViewModel : ViewModel() {
 
                 val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
                 _lastExportResult.value = result
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportImage failed", e)
             } finally {
@@ -400,6 +403,8 @@ class ExportViewModel : ViewModel() {
 
                 val result = exportService.exportImage(imagePath, exportSettings, processedBitmap)
                 _lastExportResult.value = result
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportImageWithBitmap failed", e)
             } finally {
@@ -496,6 +501,8 @@ class ExportViewModel : ViewModel() {
                 _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
                 // Notify completion in notification bar
                 TaskNotificationHelper.notifyExportComplete(context, items.size, totalItems)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportBatch failed", e)
                 // Notify failure in notification bar
@@ -544,6 +551,8 @@ class ExportViewModel : ViewModel() {
                 _batchProgress.value = _batchProgress.value.copy(completedItems = items.size)
                 // Notify completion in notification bar
                 TaskNotificationHelper.notifyExportComplete(context, result.successCount, items.size)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("ExportVM", "exportBatch(items) failed", e)
                 TaskNotificationHelper.notifyExportFailed(context, e.message ?: "导出失败")

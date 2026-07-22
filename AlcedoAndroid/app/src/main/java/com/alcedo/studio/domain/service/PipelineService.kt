@@ -23,8 +23,15 @@ class PipelineService {
     // ================================================================
 
     suspend fun applyPipeline(bitmap: Bitmap, params: PipelineParams): Bitmap = withContext(Dispatchers.Default) {
+        // 验证输入 Bitmap 有效性
+        if (bitmap.isRecycled) {
+            return@withContext bitmap
+        }
         val width = bitmap.width
         val height = bitmap.height
+        if (width <= 0 || height <= 0) {
+            return@withContext bitmap
+        }
         val pixelCount = width * height
 
         // Convert Bitmap to float array

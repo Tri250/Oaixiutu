@@ -653,6 +653,8 @@ class DecodeService(
         activeJobs.values.forEach { it.cancel() }
         activeJobs.clear()
         decodeBridge.nativeCancelAllDecodes()
+        // 取消所有解码后清理缓存, 避免残留不完整数据
+        clearAllCaches()
     }
 
     fun onDestroy() {

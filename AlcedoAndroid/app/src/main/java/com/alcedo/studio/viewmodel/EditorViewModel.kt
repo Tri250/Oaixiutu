@@ -27,6 +27,7 @@ import com.alcedo.studio.ui.editor.WaveformMode
 import com.alcedo.studio.ui.editor.BrushState
 import com.alcedo.studio.ui.editor.CompareMode
 import com.alcedo.studio.utils.MemoryGuard
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -431,6 +432,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     _originalBitmap.value = null
                     _previewBitmap.value = null
                     _imageLoadError.value = true
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e("EditorVM", "Failed to load image", e)
                     _originalBitmap.value = null
@@ -965,6 +968,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         oldPreview.recycle()
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 Log.e("EditorVM", "regeneratePreview failed", e)
             } finally {
@@ -1009,6 +1014,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 )
                 recordTransaction(OperatorType.EXPOSURE, "autoExposureValue", ev)
                 regeneratePreview()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
@@ -1061,6 +1068,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 recordTransaction(OperatorType.EXPOSURE, "autoEnhance", autoExposure)
                 saveVersion()
                 regeneratePreview()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "autoEnhance failed", e)
             }
@@ -1535,6 +1544,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     editHistoryRepository.saveHistory(hist)
                     // 通过 HistoryMgmtService 同步版本管理状态
                     historyMgmtService.loadHistory(hist.boundImageId)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Throwable) {
                     android.util.Log.e("EditorVM", "Coroutine failed", e)
                 }
@@ -1556,6 +1567,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 viewModelScope.launch {
                     try {
                         editHistoryRepository.saveHistory(hist)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Throwable) {
                         android.util.Log.e("EditorVM", "Coroutine failed", e)
                     }
@@ -1573,6 +1586,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 viewModelScope.launch {
                     try {
                         editHistoryRepository.saveHistory(hist)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Throwable) {
                         android.util.Log.e("EditorVM", "Coroutine failed", e)
                     }
@@ -1588,6 +1603,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             viewModelScope.launch {
                 try {
                     editHistoryRepository.saveHistory(cloned)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Throwable) {
                     android.util.Log.e("EditorVM", "Coroutine failed", e)
                 }
@@ -1616,7 +1633,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         if (projectService.isProjectOpen()) {
                             projectService.markDirty()
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Throwable) { /* 项目服务不可用时静默跳过 */ }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Throwable) {
                     android.util.Log.e("EditorVM", "Coroutine failed", e)
                 }
@@ -1892,6 +1913,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 presetService.ensureBuiltInPresetsInitialized()
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Throwable) {
                 // Non-fatal: preset panel will simply show an empty state.
             }
@@ -1965,6 +1988,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 presetService.createPreset(name, category, _params.value, previewBitmap, description)
                 Log.d(TAG, "Preset saved: $name")
                 showSnackbar("预设已保存")
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Throwable) {
                 Log.e(TAG, "Failed to save preset", null)
             }
@@ -1982,6 +2007,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             try {
                 presetService.deletePreset(id)
                 showSnackbar("预设已删除")
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Throwable) {}
         }
     }
@@ -2166,6 +2193,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             try {
                 _maskPreviewBitmap.value =
                     maskRenderService.renderMaskOverlay(containers, source)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 Log.e("EditorVM", "regenerateMaskPreview failed", e)
             } finally {
@@ -2248,6 +2277,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         peakLuminance = 100f
                     )
                     true
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Throwable) {
                     false
                 }
@@ -2256,6 +2287,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 if (colorScienceAvailable) {
                     Log.d(TAG, "Color science bridge available for export")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
@@ -2307,6 +2340,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         viewModelScope.launch {
             try {
                 exportService.exportBatch(items, settings)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
@@ -2346,6 +2381,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
                 snapshotHandle = pipelineService.createSnapshot(
                     floatPixels, width, height, 4, _params.value)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "Coroutine failed", e)
             }
