@@ -70,7 +70,7 @@
 
         <!-- Foreground service for long-running export/import tasks -->
         <service
-            android:name=".service.ExportService"
+            android:name=".domain.service.ExportService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
