@@ -485,7 +485,22 @@ fun AlbumScreen(
             },
             onSelectDirectory = {
                 showImport = false
-                safDirLauncher.launch(null)
+                try {
+                    safDirLauncher.launch(null)
+                } catch (e: Exception) {
+                    // OpenDocumentTree 不被所有设备/文档提供者支持,
+                    // 回退到文件选择 (多选模式)
+                    try {
+                        fallbackFileLauncher.launch("image/*")
+                    } catch (e2: Exception) {
+                        try {
+                            singleFileLauncher.launch("image/*")
+                        } catch (_: Exception) {
+                            // 全部回退失败时通过 ViewModel 提示用户
+                            viewModel.setPermissionError("设备不支持目录选择，请使用文件选择导入")
+                        }
+                    }
+                }
             }
         )
     }
@@ -933,7 +948,7 @@ private fun AlbumContent(
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = selectedImages.isEmpty(),
+                visible = selectedImages.isEmpty() && (importProgress == null || importProgress.phase == "completed"),
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
                 exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeOut()
             ) {
@@ -954,18 +969,30 @@ private fun AlbumContent(
     ) { padding ->
         // Import progress bar shown during bulk imports
         importProgress?.let { progress ->
-            if (progress.phase != "completed" && progress.total > 0) {
+            if (progress.phase != "completed") {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = padding.calculateTopPadding())
                 ) {
-                    LinearProgressIndicator(
-                        progress = { progress.current.toFloat() / progress.total.toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "正在导入 ${progress.current}/${progress.total}...",
+                    if (progress.phase == "scanning" || progress.total <= 0) {
+                        // 扫描阶段或目录递归阶段 — 不确定进度
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = "正在扫描目录...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { progress.current.toFloat() / progress.total.toFloat() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = "正在导入 ${progress.current}/${progress.total}...",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
@@ -997,6 +1024,7 @@ private fun AlbumContent(
                             action = {
                                 Button(
                                     onClick = onImport,
+                                    enabled = importProgress == null || importProgress.phase == "completed",
                                     shape = RoundedCornerShape(28.dp),
                                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                                 ) {

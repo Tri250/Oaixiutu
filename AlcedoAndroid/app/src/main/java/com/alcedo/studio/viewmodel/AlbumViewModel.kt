@@ -290,6 +290,9 @@ class AlbumViewModel : ViewModel() {
                     // Some providers don't support persistable permission
                 }
 
+                // 显示扫描进度,让用户知道正在扫描目录
+                _importProgress.value = ImportProgress(0, 0, "scanning")
+
                 // Use recursive listing to find all image files in the
                 // directory tree (including subdirectories), filtered by
                 // image extensions to avoid importing non-image files.
@@ -297,6 +300,7 @@ class AlbumViewModel : ViewModel() {
 
                 if (imageFiles.isEmpty()) {
                     _permissionRationale.value = "所选目录中没有图片文件"
+                    _importProgress.value = null
                     return@launch
                 }
 
@@ -313,6 +317,9 @@ class AlbumViewModel : ViewModel() {
                 TaskNotificationHelper.notifyImportComplete(context, result.successCount)
                 loadImagesInternal()
                 loadFoldersInternal()
+                // 完成后延迟清理进度状态,避免进度条永久残留
+                kotlinx.coroutines.delay(1500)
+                _importProgress.value = null
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromSafDirectory failed", e)
                 _permissionRationale.value = "目录导入失败: ${e.message ?: "未知错误"}"
@@ -359,6 +366,9 @@ class AlbumViewModel : ViewModel() {
                 TaskNotificationHelper.notifyImportComplete(context, result.successCount)
                 loadImagesInternal()
                 loadFoldersInternal()
+                // 完成后延迟清理进度状态,避免进度条永久残留
+                kotlinx.coroutines.delay(1500)
+                _importProgress.value = null
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
                 _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
