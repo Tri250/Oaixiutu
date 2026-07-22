@@ -20,7 +20,8 @@ object SafHelper {
     // Supported image extensions for directory import filtering
     private val IMAGE_EXTENSIONS = setOf(
         "jpg", "jpeg", "png", "tiff", "tif", "arw", "cr2", "cr3", "nef", "dng",
-        "heic", "heif", "webp", "bmp", "gif", "exr"
+        "heic", "heif", "webp", "bmp", "gif", "exr",
+        "orf", "pef", "srw", "x3f", "raf", "rw2", "mos"
     )
 
     fun isImageFile(fileName: String, mimeType: String): Boolean {

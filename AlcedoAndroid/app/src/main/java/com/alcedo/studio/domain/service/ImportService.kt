@@ -121,8 +121,22 @@ class ImportService(
         byteArrayOf(0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x10, 0x43, 0x52) to ImageType.CR2,
         // 10 字节 – ARW (含 TIFF 前缀 + Sony 标记)
         byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x2F, 0x00) to ImageType.ARW,
-        // NEF 不做 magic bytes 检测 (NEF 与 TIFF 同前缀, 8 字节无法可靠区分),
-        // 仅依赖 .nef 后缀名识别。无后缀名 NEF 会回退到 TIFF 兜底识别。
+        // 10 字节 – NEF (Nikon RAW, TIFF little-endian + Nikon offset)
+        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00) to ImageType.NEF,
+        // 10 字节 – ORF (Olympus RAW, TIFF little-endian + Olympus offset)
+        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x4F, 0x4C) to ImageType.ORF,
+        // 10 字节 – PEF (Pentax RAW, TIFF little-endian + Pentax offset)
+        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x50, 0x45) to ImageType.PEF,
+        // 10 字节 – SRW (Samsung RAW, TIFF little-endian + Samsung offset)
+        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x08, 0x53, 0x52) to ImageType.SRW,
+        // 8 字节 – X3F (Sigma RAW)
+        byteArrayOf(0x58, 0x33, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00) to ImageType.X3F,
+        // 8 字节 – RAF (Fujifilm RAW)
+        byteArrayOf(0x46, 0x55, 0x4A, 0x49, 0x46, 0x49, 0x4C, 0x4D) to ImageType.RAF,
+        // 8 字节 – RW2 (Panasonic RAW)
+        byteArrayOf(0x50, 0x41, 0x4E, 0x41, 0x53, 0x4F, 0x4E, 0x49) to ImageType.RW2,
+        // 8 字节 – MOS (Leica RAW)
+        byteArrayOf(0x4D, 0x4F, 0x53, 0x20, 0x4D, 0x41, 0x47, 0x49) to ImageType.MOS,
         // 8 字节 – JPEG2000 (映射为 DEFAULT 避免误用 JPEG 解码器)
         byteArrayOf(0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20) to ImageType.DEFAULT,
         // 4 字节 – CR3 (cimg)
@@ -133,20 +147,25 @@ class ImportService(
         byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) to ImageType.PNG,
         // 4 字节 – GIF
         byteArrayOf(0x47, 0x49, 0x46, 0x38) to ImageType.GIF,
+        // 4 字节 – TIFF little-endian (II*) - 放在RAW格式之后,避免误判
+        byteArrayOf(0x49, 0x49, 0x2A, 0x00) to ImageType.TIFF,
+        // 4 字节 – TIFF big-endian (MM*) - 放在RAW格式之后,避免误判
+        byteArrayOf(0x4D, 0x4D, 0x00, 0x2A) to ImageType.TIFF,
+        // 4 字节 – RIFF 容器 (WEBP专用检测,在detectImageType中额外校验brand)
+        byteArrayOf(0x52, 0x49, 0x46, 0x46) to ImageType.WEBP,
         // 3 字节 – JPEG
         byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) to ImageType.JPEG,
         // 2 字节 – BMP
-        byteArrayOf(0x42, 0x4D) to ImageType.BMP,
-        // 4 字节 – RIFF (需进一步校验 WEBP brand,见 detectImageType)
-        byteArrayOf(0x52, 0x49, 0x46, 0x46) to ImageType.WEBP
+        byteArrayOf(0x42, 0x4D) to ImageType.BMP
     )
 
     private val supportedExtensions = setOf(
         "jpg", "jpeg", "png", "tiff", "tif", "arw", "cr2", "cr3", "nef", "dng",
-        "heic", "heif", "webp", "bmp", "gif", "exr"
+        "heic", "heif", "webp", "bmp", "gif", "exr",
+        "orf", "pef", "srw", "x3f", "raf", "rw2", "mos"
     )
 
-    private val rawExtensions = setOf("arw", "cr2", "cr3", "nef", "dng")
+    private val rawExtensions = setOf("arw", "cr2", "cr3", "nef", "dng", "orf", "pef", "srw", "x3f", "raf", "rw2", "mos")
 
     // ================================================================
     // Phase A: Quick scan info (minimal data for fast import)
@@ -893,14 +912,12 @@ class ImportService(
             // HEIC/HEIF 检测:校验 ftyp box (偏移 4-7 = "ftyp")
             if (bytesRead >= 8 && header[4] == 0x66.toByte() && header[5] == 0x74.toByte() &&
                 header[6] == 0x79.toByte() && header[7] == 0x70.toByte()) {
-                if (bytesRead >= 11) {
-                    // 读取 brand (偏移 8-11)
-                    val brand = String(header, 8, 3, Charsets.US_ASCII)
+                if (bytesRead >= 12) {
+                    // 读取 brand (偏移 8-11,4字节)
+                    val brand = String(header, 8, 4, Charsets.US_ASCII)
                     when (brand) {
-                        "hei" -> return ImageType.HEIC    // heic/heix/heim
-                        "mif" -> return ImageType.HEIF    // mif1
-                        "msf" -> return ImageType.HEIF    // msf1
-                        "hevc", "hevx" -> return ImageType.HEIC
+                        "heic", "heix", "heim", "hevc", "hevx" -> return ImageType.HEIC
+                        "mif1", "msf1" -> return ImageType.HEIF
                     }
                 }
                 return ImageType.HEIF
@@ -922,13 +939,20 @@ class ImportService(
             "cr2" -> ImageType.CR2
             "cr3" -> ImageType.CR3
             "nef" -> ImageType.NEF
-            "dng" -> ImageType.DNG  // DNG 优先用扩展名判定 (magic 与 TIFF 相同)
+            "dng" -> ImageType.DNG
             "heic" -> ImageType.HEIC
             "heif" -> ImageType.HEIF
             "webp" -> ImageType.WEBP
             "bmp" -> ImageType.BMP
             "gif" -> ImageType.GIF
             "exr" -> ImageType.EXR
+            "orf" -> ImageType.ORF
+            "pef" -> ImageType.PEF
+            "srw" -> ImageType.SRW
+            "x3f" -> ImageType.X3F
+            "raf" -> ImageType.RAF
+            "rw2" -> ImageType.RW2
+            "mos" -> ImageType.MOS
             else -> ImageType.DEFAULT
         }
     }
@@ -948,6 +972,13 @@ class ImportService(
         ImageType.BMP -> "image/bmp"
         ImageType.GIF -> "image/gif"
         ImageType.EXR -> "image/x-exr"
+        ImageType.ORF -> "image/x-olympus-orf"
+        ImageType.PEF -> "image/x-pentax-pef"
+        ImageType.SRW -> "image/x-samsung-srw"
+        ImageType.X3F -> "image/x-sigma-x3f"
+        ImageType.RAF -> "image/x-fujifilm-raf"
+        ImageType.RW2 -> "image/x-panasonic-rw2"
+        ImageType.MOS -> "image/x-leica-mos"
         ImageType.DEFAULT -> "application/octet-stream"
     }
 

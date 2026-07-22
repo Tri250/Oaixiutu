@@ -14,7 +14,8 @@ import java.time.Instant
 // ================================================================
 
 enum class ImageType {
-    DEFAULT, JPEG, PNG, TIFF, ARW, CR2, CR3, NEF, DNG, HEIC, HEIF, WEBP, BMP, GIF, EXR
+    DEFAULT, JPEG, PNG, TIFF, ARW, CR2, CR3, NEF, DNG, HEIC, HEIF, WEBP, BMP, GIF, EXR,
+    ORF, PEF, SRW, X3F, RAF, RW2, MOS
 }
 
 enum class ThumbState {
