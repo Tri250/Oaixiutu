@@ -451,7 +451,7 @@ fun EditorScreen(
                                     val params by remember { viewModel.params }
                                     HlsProfilePanel(
                                         params = params,
-                                        onParamsChanged = { viewModel.updateParams(it) }
+                                        onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.HSL) }
                                     )
                                 }
                                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
@@ -460,7 +460,7 @@ fun EditorScreen(
                                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
                                 EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
                                     params = viewModel.params.value,
-                                    onParamsChanged = { viewModel.updateParams(it) }
+                                    onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.DISPLAY_TRANSFORM) }
                                 )
                                 EditorPanel.LMT -> {
                                     val lmtParams = viewModel.params.value
@@ -469,12 +469,13 @@ fun EditorScreen(
                                         lmtPath = lmtParams.lutPath,
                                         lmtIntensity = lmtParams.lutIntensity,
                                         onLmtChanged = { enabled, path, intensity ->
-                                            viewModel.updateParams(
+                                            viewModel.updateParamsWithHistory(
                                                 lmtParams.copy(
                                                     lutEnabled = enabled,
                                                     lutPath = path,
                                                     lutIntensity = intensity
-                                                )
+                                                ),
+                                                OperatorType.LUT
                                             )
                                         }
                                     )
@@ -1072,7 +1073,7 @@ private fun EditorPanelColumn(
                     val params by remember { viewModel.params }
                     HlsProfilePanel(
                         params = params,
-                        onParamsChanged = { viewModel.updateParams(it) }
+                        onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.HSL) }
                     )
                 }
                 EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
@@ -1081,7 +1082,7 @@ private fun EditorPanelColumn(
                 EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
                 EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
                     params = viewModel.params.value,
-                    onParamsChanged = { viewModel.updateParams(it) }
+                    onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.DISPLAY_TRANSFORM) }
                 )
                 EditorPanel.LMT -> {
                     val lmtParams = viewModel.params.value
@@ -1090,12 +1091,13 @@ private fun EditorPanelColumn(
                         lmtPath = lmtParams.lutPath,
                         lmtIntensity = lmtParams.lutIntensity,
                         onLmtChanged = { enabled, path, intensity ->
-                            viewModel.updateParams(
+                            viewModel.updateParamsWithHistory(
                                 lmtParams.copy(
                                     lutEnabled = enabled,
                                     lutPath = path,
                                     lutIntensity = intensity
-                                )
+                                ),
+                                OperatorType.LUT
                             )
                         }
                     )
@@ -1130,12 +1132,13 @@ private fun RawDecodePanel(
                 FilterChip(
                     selected = params.rawDecodeParams.demosaicAlgorithm == algo,
                     onClick = {
-                        viewModel.updateParams(
+                        viewModel.updateParamsWithHistory(
                             params.copy(
                                 rawDecodeParams = params.rawDecodeParams.copy(
                                     demosaicAlgorithm = algo
                                 )
-                            )
+                            ),
+                            OperatorType.RAW_DECODE
                         )
                     },
                     label = { Text(algo.name) }
@@ -1147,12 +1150,13 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.highlightReconstruction,
                 onCheckedChange = {
-                    viewModel.updateParams(
+                    viewModel.updateParamsWithHistory(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 highlightReconstruction = it
                             )
-                        )
+                        ),
+                        OperatorType.RAW_DECODE
                     )
                 }
             )
@@ -1163,12 +1167,13 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.autoBrightness,
                 onCheckedChange = {
-                    viewModel.updateParams(
+                    viewModel.updateParamsWithHistory(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 autoBrightness = it
                             )
-                        )
+                        ),
+                        OperatorType.RAW_DECODE
                     )
                 }
             )
@@ -1179,12 +1184,13 @@ private fun RawDecodePanel(
             Checkbox(
                 checked = params.rawDecodeParams.useCameraMatrix,
                 onCheckedChange = {
-                    viewModel.updateParams(
+                    viewModel.updateParamsWithHistory(
                         params.copy(
                             rawDecodeParams = params.rawDecodeParams.copy(
                                 useCameraMatrix = it
                             )
-                        )
+                        ),
+                        OperatorType.RAW_DECODE
                     )
                 }
             )

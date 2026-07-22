@@ -885,11 +885,21 @@ class AlbumViewModel : ViewModel() {
         _currentFilter.value = filter
         val source = _images.value
         val filtered = applyFilter(source, filter)
-        _filteredImages.value = when (_sortMode.value) {
-            SortMode.DATE -> filtered.sortedByDescending { it.imageId }
+        // P7 修复: 统一使用与 applyCurrentSortAndFilter 相同的排序逻辑,
+        // 之前 DATE 按 imageId 排序、RATING 不排序,与 applyCurrentSortAndFilter 行为不同,
+        // 导致筛选 + 日期/评分排序组合下结果错误。
+        val sorted = when (_sortMode.value) {
+            SortMode.DATE -> filtered.sortedWith(
+                compareByDescending<ImageModel> { it.exifDisplay.captureDate.isNotEmpty() }
+                    .thenByDescending { it.exifDisplay.captureDate }
+            )
             SortMode.NAME -> filtered.sortedBy { it.imageName }
-            SortMode.RATING -> filtered
+            SortMode.RATING -> filtered.sortedByDescending { it.exifDisplay.rating }
             SortMode.TYPE -> filtered.sortedBy { it.imageType.ordinal }
+        }
+        // 搜索激活时不覆盖 _filteredImages (S-6 修复)
+        if (_searchQuery.value.isBlank()) {
+            _filteredImages.value = sorted
         }
     }
 
@@ -1005,17 +1015,25 @@ class AlbumViewModel : ViewModel() {
                 val count = ids.size
                 ids.map { id ->
                     async {
-                        // 完整删除链路 (F-2 修复):
+                        // 完整删除链路 (F-2 修复 + P14 修复):
                         // 1. 删除 SleeveFile 记录 (避免孤儿数据)
                         // 2. 删除 metadata 记录
-                        // 3. 清理缩略图缓存
+                        // 3. 清理内存缩略图缓存 + 递增版本号通知 UI
+                        // 4. 清理磁盘缩略图缓存
                         // 物理文件不删除 (SAF/MediaStore URI 无写权限时静默跳过)
                         try {
                             sleeveRepository.removeElementByImageId(id)
                         } catch (_: Throwable) { /* SleeveFile 可能不存在 */ }
                         imageRepository.deleteImage(id)
+                        // P14 修复: 真正清理缩略图缓存,之前注释声称清理但实际未调用
+                        thumbnailLruCache.remove(id)
+                        try {
+                            AppModule.thumbnailDiskCache.evict(id)
+                        } catch (_: Throwable) { /* 磁盘缓存清理失败不阻塞删除 */ }
                     }
                 }.awaitAll()
+                // 通知 UI 缩略图缓存已变更,触发重组移除已删除项的缩略图
+                _thumbnailCacheVersion.value = _thumbnailCacheVersion.value + 1
                 clearSelection()
                 loadImages()
                 loadFolders()
@@ -1037,6 +1055,12 @@ class AlbumViewModel : ViewModel() {
                     sleeveRepository.removeElementByImageId(imageId)
                 } catch (_: Throwable) { }
                 imageRepository.deleteImage(imageId)
+                // P14 修复: 清理缩略图缓存,避免残留
+                thumbnailLruCache.remove(imageId)
+                try {
+                    AppModule.thumbnailDiskCache.evict(imageId)
+                } catch (_: Throwable) { }
+                _thumbnailCacheVersion.value = _thumbnailCacheVersion.value + 1
                 loadImages()
                 loadFolders()
             } catch (e: Throwable) {

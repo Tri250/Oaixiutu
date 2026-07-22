@@ -226,6 +226,7 @@ fun AlbumScreen(
         FolderSidebar(
             folders = folders,
             onFolderSelected = { folderId ->
+                // P12 修复: null 表示"全部图片"(根目录),0L 不再作为虚拟根目录
                 viewModel.navigateToFolder(folderId)
                 if (!isWideScreen) {
                     scope.launch { drawerState.close() }
@@ -287,6 +288,7 @@ fun AlbumScreen(
                 onToggleSemantic = viewModel::toggleSemanticSearch,
                 onToggleImageSelection = viewModel::toggleImageSelection,
                 onClearSelection = viewModel::clearSelection,
+                onSelectAll = viewModel::selectAll,
                 onDeleteSelected = { showBatchDeleteConfirm = true },
                 onBatchAiTag = { showBatchAiTagDialog = true },
                 onBatchRating = { showBatchRatingDialog = true },
@@ -351,6 +353,7 @@ fun AlbumScreen(
                 onToggleSemantic = viewModel::toggleSemanticSearch,
                 onToggleImageSelection = viewModel::toggleImageSelection,
                 onClearSelection = viewModel::clearSelection,
+                onSelectAll = viewModel::selectAll,
                 // G-5 修复: 批量删除前需用户确认,避免误操作
                 onDeleteSelected = { showBatchDeleteConfirm = true },
                 onBatchAiTag = { showBatchAiTagDialog = true },
@@ -409,6 +412,7 @@ fun AlbumScreen(
             onToggleSemantic = viewModel::toggleSemanticSearch,
             onToggleImageSelection = viewModel::toggleImageSelection,
             onClearSelection = viewModel::clearSelection,
+            onSelectAll = viewModel::selectAll,
             // G-5 修复: 批量删除前需用户确认,避免误操作 (与 showFolderSidebar 分支保持一致)
             onDeleteSelected = { showBatchDeleteConfirm = true },
             onBatchAiTag = { showBatchAiTagDialog = true },
@@ -772,7 +776,8 @@ private fun AlbumContent(
     onToggleSemantic: () -> Unit,
     onToggleImageSelection: (Long) -> Unit,
     onClearSelection: () -> Unit,
-    onDeleteSelected: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDeleteSelected: () => Unit,
     onBatchAiTag: () -> Unit,
     onBatchRating: () -> Unit,
     onBatchExport: () -> Unit,
@@ -918,6 +923,11 @@ private fun AlbumContent(
                             }
                         },
                         actions = {
+                            // P13 修复: 添加"全选"按钮,之前 selectAll() 已实现但无 UI 入口
+                            IconButton(onClick = onSelectAll) {
+                                Icon(Icons.Default.SelectAll, contentDescription = stringRes { albumAllImages },
+                                    tint = MaterialTheme.colorScheme.onSurface)
+                            }
                             IconButton(onClick = onBatchEdit) {
                                 Icon(Icons.Default.AutoFixHigh, contentDescription = stringRes { batchCopyAdjustments },
                                     tint = MaterialTheme.colorScheme.onSurface)
@@ -1919,7 +1929,7 @@ private fun SortFilterBar(
 @Composable
 private fun FolderSidebar(
     folders: List<SleeveFolder>,
-    onFolderSelected: (Long) -> Unit,
+    onFolderSelected: (Long?) -> Unit,
     onSmartAlbumSelected: (String) -> Unit,
     onClose: () -> Unit
 ) {
@@ -2022,7 +2032,7 @@ private fun FolderSidebar(
                 SidebarItem(
                     icon = Icons.Default.PhotoLibrary,
                     label = stringRes { albumAllImages },
-                    onClick = { onFolderSelected(0L) }
+                    onClick = { onFolderSelected(null) }
                 )
             }
             items(folders, key = { it.elementId }) { folder: SleeveFolder ->

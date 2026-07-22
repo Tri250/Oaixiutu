@@ -149,7 +149,7 @@ fun ToneCurvePanel(
                                 value = params.sigmoidShoulder,
                                 range = 0f..1f,
                                 onValueChange = {
-                                    viewModel.updateParams(params.copy(sigmoidShoulder = it))
+                                    viewModel.updateSigmoidShoulder(it)
                                 },
                                 defaultValue = 0.5f
                             )
@@ -158,7 +158,7 @@ fun ToneCurvePanel(
                                 value = params.sigmoidPivot,
                                 range = 0f..1f,
                                 onValueChange = {
-                                    viewModel.updateParams(params.copy(sigmoidPivot = it))
+                                    viewModel.updateSigmoidPivot(it)
                                 },
                                 defaultValue = 0.18f
                             )

@@ -617,6 +617,16 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    /**
+     * H5 修复: sigmoidPivot 调整需记录事务,否则 PARAMETRIC 曲线模式的
+     * pivot 滑块无法撤销/重做
+     */
+    fun updateSigmoidPivot(value: Float) {
+        _params.value = _params.value.copy(sigmoidPivot = value)
+        recordTransaction(OperatorType.CONTRAST, "sigmoidPivot", value)
+        regeneratePreview()
+    }
+
     fun updateShadowBoundary(value: Float) {
         _params.value = _params.value.copy(shadowBoundary = value)
         recordTransaction(OperatorType.TONE_REGION, "shadowBoundary", value)
@@ -758,6 +768,86 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     }
 
     fun updateParams(newParams: PipelineParams) {
+        _params.value = newParams
+        regeneratePreview()
+    }
+
+    /**
+     * H1-H4 修复: 带历史记录的批量参数更新。
+     *
+     * 用于 HlsProfilePanel / DisplayTransformPanel / LmtPanel / RawDecodePanel 等面板,
+     * 这些面板通过 onParamsChanged 回调直接传入完整 PipelineParams,绕过了 recordTransaction,
+     * 导致撤销/重做失效。此方法对比新旧 params 的标量与数组字段,为每个变更记录事务。
+     *
+     * 注意: recordTransaction 读取 _params.value 当前值作为 paramsBefore,
+     * 因此必须先记录所有事务(此时 _params 仍为旧值),最后再更新 _params。
+     */
+    fun updateParamsWithHistory(newParams: PipelineParams, operatorType: OperatorType) {
+        val old = _params.value
+        // ── 标量字段对比 ──
+        if (old.exposure != newParams.exposure) recordTransaction(operatorType, "exposure", newParams.exposure)
+        if (old.contrast != newParams.contrast) recordTransaction(operatorType, "contrast", newParams.contrast)
+        if (old.saturation != newParams.saturation) recordTransaction(operatorType, "saturation", newParams.saturation)
+        if (old.vibrance != newParams.vibrance) recordTransaction(operatorType, "vibrance", newParams.vibrance)
+        if (old.highlights != newParams.highlights) recordTransaction(operatorType, "highlights", newParams.highlights)
+        if (old.shadows != newParams.shadows) recordTransaction(operatorType, "shadows", newParams.shadows)
+        if (old.midtones != newParams.midtones) recordTransaction(operatorType, "midtones", newParams.midtones)
+        if (old.sigmoidContrast != newParams.sigmoidContrast) recordTransaction(operatorType, "sigmoidContrast", newParams.sigmoidContrast)
+        if (old.sigmoidPivot != newParams.sigmoidPivot) recordTransaction(operatorType, "sigmoidPivot", newParams.sigmoidPivot)
+        if (old.sigmoidShoulder != newParams.sigmoidShoulder) recordTransaction(operatorType, "sigmoidShoulder", newParams.sigmoidShoulder)
+        if (old.whiteBalanceTemp != newParams.whiteBalanceTemp) recordTransaction(operatorType, "whiteBalanceTemp", newParams.whiteBalanceTemp)
+        if (old.whiteBalanceTint != newParams.whiteBalanceTint) recordTransaction(operatorType, "whiteBalanceTint", newParams.whiteBalanceTint)
+        if (old.clarityAmount != newParams.clarityAmount) recordTransaction(operatorType, "clarityAmount", newParams.clarityAmount)
+        if (old.sharpenAmount != newParams.sharpenAmount) recordTransaction(operatorType, "sharpenAmount", newParams.sharpenAmount)
+        if (old.filmGrainIntensity != newParams.filmGrainIntensity) recordTransaction(operatorType, "filmGrainIntensity", newParams.filmGrainIntensity)
+        if (old.lutIntensity != newParams.lutIntensity) recordTransaction(operatorType, "lutIntensity", newParams.lutIntensity)
+        if (old.lutEnabled != newParams.lutEnabled) recordTransaction(operatorType, "lutEnabled", if (newParams.lutEnabled) 1f else 0f)
+
+        // ── DisplayTransform 子字段对比 (H2) ──
+        if (old.displayTransform.colorScience != newParams.displayTransform.colorScience)
+            recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_colorScience", newParams.displayTransform.colorScience.ordinal.toFloat())
+        if (old.displayTransform.eotf != newParams.displayTransform.eotf)
+            recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_eotf", newParams.displayTransform.eotf.ordinal.toFloat())
+        if (old.displayTransform.peakLuminance != newParams.displayTransform.peakLuminance)
+            recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_peakLuminance", newParams.displayTransform.peakLuminance)
+        if (old.displayTransform.displayColorSpace != newParams.displayTransform.displayColorSpace)
+            recordTransaction(OperatorType.DISPLAY_TRANSFORM, "displayTransform_displayColorSpace", newParams.displayTransform.displayColorSpace.ordinal.toFloat())
+
+        // ── HSL 数组对比 (H1) ──
+        for (i in 0 until 8) {
+            if (old.hslHueShift[i] != newParams.hslHueShift[i])
+                recordTransaction(OperatorType.HSL, "hslHueShift[$i]", newParams.hslHueShift[i])
+            if (old.hslSaturationScale[i] != newParams.hslSaturationScale[i])
+                recordTransaction(OperatorType.HSL, "hslSaturationScale[$i]", newParams.hslSaturationScale[i])
+            if (old.hslLuminanceScale[i] != newParams.hslLuminanceScale[i])
+                recordTransaction(OperatorType.HSL, "hslLuminanceScale[$i]", newParams.hslLuminanceScale[i])
+        }
+
+        // ── Tone curve 数组对比 (H5 补充) ──
+        for (i in newParams.toneCurveX.indices) {
+            if (i < old.toneCurveX.size && old.toneCurveX[i] != newParams.toneCurveX[i])
+                recordTransaction(OperatorType.TONE_CURVE, "toneCurveX[$i]", newParams.toneCurveX[i])
+            if (i < old.toneCurveY.size && old.toneCurveY[i] != newParams.toneCurveY[i])
+                recordTransaction(OperatorType.TONE_CURVE, "toneCurveY[$i]", newParams.toneCurveY[i])
+        }
+
+        // ── Channel mixer 数组对比 ──
+        for (i in newParams.channelMixerMatrix.indices) {
+            if (i < old.channelMixerMatrix.size && old.channelMixerMatrix[i] != newParams.channelMixerMatrix[i])
+                recordTransaction(OperatorType.COLOR_WHEEL, "channelMixerMatrix[$i]", newParams.channelMixerMatrix[i])
+        }
+
+        // ── RawDecodeParams 子字段对比 (H4) ──
+        if (old.rawDecodeParams.demosaicAlgorithm != newParams.rawDecodeParams.demosaicAlgorithm)
+            recordTransaction(OperatorType.RAW_DECODE, "rawDecode_demosaicAlgorithm", newParams.rawDecodeParams.demosaicAlgorithm.ordinal.toFloat())
+        if (old.rawDecodeParams.highlightReconstruction != newParams.rawDecodeParams.highlightReconstruction)
+            recordTransaction(OperatorType.RAW_DECODE, "rawDecode_highlightReconstruction", if (newParams.rawDecodeParams.highlightReconstruction) 1f else 0f)
+        if (old.rawDecodeParams.autoBrightness != newParams.rawDecodeParams.autoBrightness)
+            recordTransaction(OperatorType.RAW_DECODE, "rawDecode_autoBrightness", if (newParams.rawDecodeParams.autoBrightness) 1f else 0f)
+        if (old.rawDecodeParams.useCameraMatrix != newParams.rawDecodeParams.useCameraMatrix)
+            recordTransaction(OperatorType.RAW_DECODE, "rawDecode_useCameraMatrix", if (newParams.rawDecodeParams.useCameraMatrix) 1f else 0f)
+
+        // 最后更新 _params 并刷新预览
         _params.value = newParams
         regeneratePreview()
     }
@@ -1298,6 +1388,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "displayTransform_eotf" -> displayTransform.eotf.ordinal.toFloat()
                 "displayTransform_peakLuminance" -> displayTransform.peakLuminance
                 "displayTransform_displayColorSpace" -> displayTransform.displayColorSpace.ordinal.toFloat()
+                // RawDecodeParams 子字段 (H4)
+                "rawDecode_demosaicAlgorithm" -> rawDecodeParams.demosaicAlgorithm.ordinal.toFloat()
+                "rawDecode_highlightReconstruction" -> if (rawDecodeParams.highlightReconstruction) 1f else 0f
+                "rawDecode_autoBrightness" -> if (rawDecodeParams.autoBrightness) 1f else 0f
+                "rawDecode_useCameraMatrix" -> if (rawDecodeParams.useCameraMatrix) 1f else 0f
                 // HSL / 数组元素 — 通过索引键查询
                 else -> {
                     val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
@@ -1389,6 +1484,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         var eotf = EOTF.SRGB
         var peakLuminance = 100f
         var displayColorSpace = ColorSpace.SRGB
+        // RawDecodeParams 可变累积 (H4)
+        var rawDemosaic = DemosaicAlgorithm.RCD
+        var rawHighlightRecon = true
+        var rawAutoBrightness = false
+        var rawUseCameraMatrix = true
 
         for (tx in applied) {
             val after = tx.paramsAfter
@@ -1457,6 +1557,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "displayTransform_eotf" -> { eotf = EOTF.entries.getOrNull(floatValue.toInt()) ?: eotf; reconstructed }
                     "displayTransform_peakLuminance" -> { peakLuminance = floatValue; reconstructed }
                     "displayTransform_displayColorSpace" -> { displayColorSpace = ColorSpace.entries.getOrNull(floatValue.toInt()) ?: displayColorSpace; reconstructed }
+                    // RawDecodeParams 子字段恢复 (H4)
+                    "rawDecode_demosaicAlgorithm" -> { rawDemosaic = DemosaicAlgorithm.entries.getOrNull(floatValue.toInt()) ?: rawDemosaic; reconstructed }
+                    "rawDecode_highlightReconstruction" -> { rawHighlightRecon = floatValue != 0f; reconstructed }
+                    "rawDecode_autoBrightness" -> { rawAutoBrightness = floatValue != 0f; reconstructed }
+                    "rawDecode_useCameraMatrix" -> { rawUseCameraMatrix = floatValue != 0f; reconstructed }
                     else -> {
                         // HSL / 数组元素 — 累积写入对应索引
                         val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
@@ -1499,6 +1604,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 eotf = eotf,
                 peakLuminance = peakLuminance,
                 displayColorSpace = displayColorSpace
+            ),
+            rawDecodeParams = RawDecodeParams(
+                demosaicAlgorithm = rawDemosaic,
+                highlightReconstruction = rawHighlightRecon,
+                autoBrightness = rawAutoBrightness,
+                useCameraMatrix = rawUseCameraMatrix
             )
         )
         // 同步 UI 状态
@@ -2268,7 +2379,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 // Use _originalBitmap for full-quality export, not the downscaled preview.
                 // Apply the pipeline to the original to get the full-resolution result.
                 val originalBitmap = _originalBitmap.value ?: return@launch
-                val finalBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
+                var finalBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
+                // C1 修复: 导出时必须应用蒙版/局部调整,否则用户所有蒙版调整
+                // (主体/天空/画笔等)不会出现在导出图像中
+                val containers = _maskContainers.value
+                if (containers.isNotEmpty()) {
+                    finalBitmap = try {
+                        maskRenderService.applyMasks(containers, finalBitmap)
+                    } catch (e: Throwable) {
+                        Log.e("EditorVM", "applyMasks during export failed, exporting pipeline-only result", e)
+                        finalBitmap
+                    }
+                }
                 val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
                 // 通过 ColorScienceBridge 获取显示变换函数（用于导出时色彩空间转换）
                 val colorScienceAvailable = try {
