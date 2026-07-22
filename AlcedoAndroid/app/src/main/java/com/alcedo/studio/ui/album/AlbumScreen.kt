@@ -1000,6 +1000,7 @@ private fun AlbumContent(
                 }
             }
         }
+        }
         AlcedoPullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
