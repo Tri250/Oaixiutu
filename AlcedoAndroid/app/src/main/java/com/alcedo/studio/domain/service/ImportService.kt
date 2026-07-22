@@ -119,9 +119,10 @@ class ImportService(
         // 10 字节 – CR2 (含 TIFF 前缀 + CR 标记)
         byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x10, 0x00, 0x00, 0x00, 0x43, 0x52) to ImageType.CR2,
         byteArrayOf(0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x10, 0x43, 0x52) to ImageType.CR2,
-        // 8 字节 – NEF / ARW (含 TIFF 前缀)
+        // 10 字节 – ARW (含 TIFF 前缀 + Sony 标记)
         byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x2F, 0x00) to ImageType.ARW,
-        byteArrayOf(0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00) to ImageType.NEF,
+        // NEF 不做 magic bytes 检测 (NEF 与 TIFF 同前缀, 8 字节无法可靠区分),
+        // 仅依赖 .nef 后缀名识别。无后缀名 NEF 会回退到 TIFF 兜底识别。
         // 8 字节 – JPEG2000 (映射为 DEFAULT 避免误用 JPEG 解码器)
         byteArrayOf(0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20) to ImageType.DEFAULT,
         // 4 字节 – CR3 (cimg)
@@ -319,14 +320,20 @@ class ImportService(
                     )
 
                     metadataDao.insertMetadata(metadata)
-                    val elementId = sleeveService.createElement(
-                        name = info.fileName.substringBeforeLast('.'),
-                        type = ElementType.FILE,
-                        parentId = parentFolderId,
-                        imageId = imageId,
-                        filePath = info.filePath,
-                        fileExtension = info.fileName.substringAfterLast('.', "").lowercase()
-                    )
+                    val elementId = try {
+                        sleeveService.createElement(
+                            name = info.fileName.substringBeforeLast('.'),
+                            type = ElementType.FILE,
+                            parentId = parentFolderId,
+                            imageId = imageId,
+                            filePath = info.filePath,
+                            fileExtension = info.fileName.substringAfterLast('.', "").lowercase()
+                        )
+                    } catch (ce: Exception) {
+                        // Rollback: 删除已插入的 metadata, 避免孤儿记录堵塞后续导入
+                        metadataDao.deleteMetadataByImageId(imageId)
+                        throw ce
+                    }
 
                     // Use putIfAbsent for atomic check-and-set to avoid race condition
                     val existingName = importedChecksums.putIfAbsent(info.checksum, info.fileName)
@@ -410,7 +417,8 @@ class ImportService(
                             iso = exifDisplay.iso.toIntOrNull() ?: 0,
                             captureDate = parseCaptureDate(exifDisplay.captureDate),
                             imageSizeDisplay = exifDisplay.imageSize,
-                            exifJson = exif?.let { serializeExif(it) } ?: ""
+                            exifJson = exif?.let { serializeExif(it) } ?: "",
+                            exifDisplayJson = exif?.let { serializeExifDisplay(it) } ?: ""
                         ))
                     }
 
@@ -485,13 +493,22 @@ class ImportService(
             throw e
         } catch (e: Throwable) {
             android.util.Log.e("ImportService", "importTwoPhase failed", e)
+            val errorMsg = when {
+                e is OutOfMemoryError -> "内存不足, 请减少导入数量"
+                e is kotlin.coroutines.cancellation.CancellationException -> {
+                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
+                    throw e
+                }
+                e.message != null -> e.message!!
+                else -> "导入失败: ${e::class.simpleName}"
+            }
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             ImportDirectoryResult(
                 totalFiles = uris.size,
                 successCount = 0,
                 duplicateCount = 0,
                 errorCount = 1,
-                results = listOf(ImportResult.Error(e.message ?: "Import failed"))
+                results = listOf(ImportResult.Error(errorMsg))
             )
         }
     }
@@ -674,18 +691,24 @@ class ImportService(
                 imageSizeDisplay = exifDisplay.imageSize,
                 fileSizeDisplay = formatFileSize(fileSize),
                 exifJson = exif?.let { serializeExif(it) } ?: "",
-                exifDisplayJson = ""
+                exifDisplayJson = exif?.let { serializeExifDisplay(it) } ?: ""
             )
 
             // Insert into database
             metadataDao.insertMetadata(metadata)
-            val elementId = sleeveService.createElement(
-                name = fileName.substringBeforeLast('.'),
-                type = ElementType.FILE,
-                parentId = parentFolderId,
-                imageId = imageId,
-                filePath = path
-            )
+            val elementId = try {
+                sleeveService.createElement(
+                    name = fileName.substringBeforeLast('.'),
+                    type = ElementType.FILE,
+                    parentId = parentFolderId,
+                    imageId = imageId,
+                    filePath = path
+                )
+            } catch (ce: Exception) {
+                // Rollback: 删除已插入的 metadata, 避免孤儿记录堵塞后续导入
+                metadataDao.deleteMetadataByImageId(imageId)
+                throw ce
+            }
 
             // 仅对非零 checksum 写入去重缓存,避免 0L 污染 (S1 修复)
             if (checksum != 0L) {
@@ -1052,6 +1075,23 @@ class ImportService(
         if (sb.endsWith(",")) sb.deleteCharAt(sb.length - 1)
         sb.append("}")
         return sb.toString()
+    }
+
+    private fun serializeExifDisplay(exif: ExifInterface): String {
+        return try {
+            val display = parseExifDisplay(exif)
+            val sb = StringBuilder("{")
+            if (display.cameraMake.isNotEmpty()) sb.append("\"make\":\"${display.cameraMake}\",")
+            if (display.cameraModel.isNotEmpty()) sb.append("\"model\":\"${display.cameraModel}\",")
+            if (display.lensModel.isNotEmpty()) sb.append("\"lens\":\"${display.lensModel}\",")
+            if (display.focalLength.isNotEmpty()) sb.append("\"focalLength\":\"${display.focalLength}\",")
+            if (display.aperture.isNotEmpty()) sb.append("\"aperture\":\"${display.aperture}\",")
+            if (display.shutterSpeed.isNotEmpty()) sb.append("\"shutterSpeed\":\"${display.shutterSpeed}\",")
+            if (display.iso.isNotEmpty()) sb.append("\"iso\":\"${display.iso}\",")
+            if (sb.endsWith(",")) sb.deleteCharAt(sb.length - 1)
+            sb.append("}")
+            sb.toString()
+        } catch (_: Throwable) { "" }
     }
 
     // ================================================================

@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class AlbumViewModel : ViewModel() {
@@ -320,6 +321,9 @@ class AlbumViewModel : ViewModel() {
                 // 完成后延迟清理进度状态,避免进度条永久残留
                 kotlinx.coroutines.delay(1500)
                 _importProgress.value = null
+            } catch (e: CancellationException) {
+                _importProgress.value = null
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromSafDirectory failed", e)
                 _permissionRationale.value = "目录导入失败: ${e.message ?: "未知错误"}"
@@ -369,6 +373,9 @@ class AlbumViewModel : ViewModel() {
                 // 完成后延迟清理进度状态,避免进度条永久残留
                 kotlinx.coroutines.delay(1500)
                 _importProgress.value = null
+            } catch (e: CancellationException) {
+                _importProgress.value = null
+                throw e
             } catch (e: Throwable) {
                 android.util.Log.e("AlbumVM", "importFromPhotoPicker failed", e)
                 _permissionRationale.value = "导入失败: ${e.message ?: "未知错误"}"
