@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.alcedo.studio.data.model.*
@@ -157,13 +156,7 @@ abstract class SleeveDatabase : RoomDatabase() {
             // the explicit migrations in DatabaseMigrations so user data is
             // never silently wiped.
             .fallbackToDestructiveMigrationOnDowngrade()
-            .setJournalMode(JournalMode.AUTOMATIC)
-            .addCallback(object : RoomDatabase.Callback() {
-                override fun onOpen(db: SupportSQLiteDatabase) {
-                    super.onOpen(db)
-                    db.execSQL("PRAGMA journal_mode=WAL")
-                }
-            })
+            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
             .build()
         }
 
@@ -172,16 +165,8 @@ abstract class SleeveDatabase : RoomDatabase() {
                 appContext, SleeveDatabase::class.java, "alcedo_sleeve.db"
             )
             .addMigrations(*DatabaseMigrations.ALL)
-            // Safe fallback: only allow destructive recreation on DOWNGRADE.
-            // See buildEncryptedDatabase for rationale.
             .fallbackToDestructiveMigrationOnDowngrade()
-            .setJournalMode(JournalMode.AUTOMATIC)
-            .addCallback(object : RoomDatabase.Callback() {
-                override fun onOpen(db: SupportSQLiteDatabase) {
-                    super.onOpen(db)
-                    db.execSQL("PRAGMA journal_mode=WAL")
-                }
-            })
+            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
             .build()
         }
 
