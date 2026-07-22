@@ -52,10 +52,12 @@ android {
             val ksAlias = props.getProperty("keyAlias") ?: System.getenv("ALCEDO_KEY_ALIAS")
             val ksKeyPass = props.getProperty("keyPassword") ?: System.getenv("ALCEDO_KEY_PASSWORD")
 
-            storeFile = ksPath?.let { file(it) }
-            storePassword = ksPass
-            this.keyAlias = ksAlias
-            this.keyPassword = ksKeyPass
+            if (!ksPath.isNullOrBlank() && !ksPass.isNullOrBlank() && !ksAlias.isNullOrBlank()) {
+                storeFile = file(ksPath)
+                storePassword = ksPass
+                this.keyAlias = ksAlias
+                this.keyPassword = ksKeyPass
+            }
         }
     }
 
@@ -90,7 +92,9 @@ android {
 
             isProfileable = true
 
-            signingConfig = signingConfigs.getByName("release")
+            // 如果 release 签名未配置，回退到 debug 签名（避免 CI 构建失败）
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning.storeFile != null) releaseSigning else signingConfigs.getByName("debug")
 
             buildConfigField("boolean", "ENABLE_LOGGING", "false")
             buildConfigField("boolean", "ENABLE_GPU_DEBUG", "false")

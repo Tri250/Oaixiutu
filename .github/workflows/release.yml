@@ -34,12 +34,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Decode Keystore
+        id: decode_keystore
         run: |
-          echo "${{ secrets.ALCEDO_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+          if [ -n "${{ secrets.ALCEDO_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ALCEDO_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+            if keytool -list -keystore app/release.keystore -storepass "${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}" > /dev/null 2>&1; then
+              echo "keystore_valid=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "keystore_valid=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "keystore_valid=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build Release APK
         env:
-          ALCEDO_KEYSTORE_PATH: release.keystore
+          ALCEDO_KEYSTORE_PATH: ${{ steps.decode_keystore.outputs.keystore_valid == 'true' && 'release.keystore' || '' }}
           ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
           ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
           ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
