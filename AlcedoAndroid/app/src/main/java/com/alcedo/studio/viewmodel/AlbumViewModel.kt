@@ -314,8 +314,8 @@ class AlbumViewModel : ViewModel() {
                         _permissionRationale.value = "所选图片已存在于图库中"
                     } else {
                         val firstError = result.results.firstOrNull {
-                            it is com.alcedo.studio.domain.service.ImportResult.Error
-                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                            it is com.alcedo.studio.domain.service.ImportService.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportService.ImportResult.Error
                         val detail = firstError?.message ?: ""
                         _permissionRationale.value = if (detail.isNotBlank()) {
                             "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
@@ -384,8 +384,8 @@ class AlbumViewModel : ViewModel() {
                     } else {
                         // 提取首个错误详情,帮助用户了解具体原因
                         val firstError = result.results.firstOrNull {
-                            it is com.alcedo.studio.domain.service.ImportResult.Error
-                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                            it is com.alcedo.studio.domain.service.ImportService.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportService.ImportResult.Error
                         val detail = firstError?.message ?: ""
                         _permissionRationale.value = if (detail.isNotBlank()) {
                             "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
@@ -701,8 +701,8 @@ class AlbumViewModel : ViewModel() {
                         _permissionRationale.value = "所选图片已存在于图库中"
                     } else {
                         val firstError = result.results.firstOrNull {
-                            it is com.alcedo.studio.domain.service.ImportResult.Error
-                        } as? com.alcedo.studio.domain.service.ImportResult.Error
+                            it is com.alcedo.studio.domain.service.ImportService.ImportResult.Error
+                        } as? com.alcedo.studio.domain.service.ImportService.ImportResult.Error
                         val detail = firstError?.message ?: ""
                         _permissionRationale.value = if (detail.isNotBlank()) {
                             "导入失败：${result.errorCount} 个文件无法导入\n原因：$detail"
