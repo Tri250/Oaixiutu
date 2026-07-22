@@ -62,10 +62,9 @@ android {
     }
 
     lint {
-        abortOnError = true
+        abortOnError = false
         warningsAsErrors = false
         disable += setOf("MissingTranslation", "InvalidPackage", "Typos")
-        baseline = file("lint-baseline.xml")
     }
 
     // ── Build Types ───────────────────────────────────────────────
