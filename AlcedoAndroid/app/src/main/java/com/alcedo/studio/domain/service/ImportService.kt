@@ -477,16 +477,31 @@ class ImportService(
                 }
 
                 try {
-                    generateAndCacheThumbnail(imageId, info.uri)
+                    val thumbOk = generateAndCacheThumbnail(imageId, info.uri)
                     val existing = metadataDao.getMetadataByImageId(imageId)
                     if (existing != null) {
                         metadataDao.updateMetadata(existing.copy(
-                            thumbState = ThumbState.READY.ordinal,
-                            hasThumbnail = true
+                            thumbState = if (thumbOk) ThumbState.READY.ordinal else ThumbState.FAILED.ordinal,
+                            hasThumbnail = thumbOk
                         ))
                     }
-                } catch (_: Throwable) {
-                    // Thumbnail failure is non-fatal
+                    if (!thumbOk) {
+                        addLogEntry(info.filePath, ImportLogStatus.ERROR, ImportPhase.PHASE_B_THUMBNAILS,
+                            "Thumbnail generation failed (non-fatal)")
+                    }
+                } catch (e: Throwable) {
+                    // 缩略图失败不影响导入成功,但需更新 thumbState 避免 PENDING 残留
+                    android.util.Log.w("ImportService",
+                        "Thumbnail phase failed for imageId=$imageId", e)
+                    try {
+                        val existing = metadataDao.getMetadataByImageId(imageId)
+                        if (existing != null) {
+                            metadataDao.updateMetadata(existing.copy(
+                                thumbState = ThumbState.FAILED.ordinal,
+                                hasThumbnail = false
+                            ))
+                        }
+                    } catch (_: Throwable) { /* DB 更新失败不影响整体导入 */ }
                 }
 
                 // Phase B 缩略图进度更新 (S5 修复)
@@ -753,8 +768,11 @@ class ImportService(
             // Generate thumbnail
             if (generateThumbnail) {
                 _importProgress.value = _importProgress.value.copy(status = ImportStatus.GENERATING_THUMBNAILS)
-                generateAndCacheThumbnail(imageId, uri)
-                metadataDao.updateMetadata(metadata.copy(thumbState = ThumbState.READY.ordinal, hasThumbnail = true))
+                val thumbOk = generateAndCacheThumbnail(imageId, uri)
+                metadataDao.updateMetadata(metadata.copy(
+                    thumbState = if (thumbOk) ThumbState.READY.ordinal else ThumbState.FAILED.ordinal,
+                    hasThumbnail = thumbOk
+                ))
             }
 
             addLogEntry(path, ImportLogStatus.SUCCESS)
@@ -1123,12 +1141,27 @@ class ImportService(
     // Thumbnail generation
     // ================================================================
 
-    private suspend fun generateAndCacheThumbnail(imageId: Long, uri: Uri) {
-        try {
+    /**
+     * 生成并缓存缩略图。
+     * @return true 表示成功生成并缓存；false 表示生成失败（RAW 无嵌入缩略图、
+     *         解码异常等）。调用方应根据返回值更新 thumbState，避免 DB 中
+     *         thumbState=PENDING 永久残留或误标为 READY。
+     */
+    private suspend fun generateAndCacheThumbnail(imageId: Long, uri: Uri): Boolean {
+        return try {
             val bitmap = generateThumbnail(uri, 256)
-            bitmap?.let { thumbnailDiskCache.put(imageId, it) }
-        } catch (_: Throwable) {
-            // Thumbnail failure is non-fatal
+            if (bitmap != null) {
+                thumbnailDiskCache.put(imageId, bitmap)
+                true
+            } else {
+                android.util.Log.w("ImportService",
+                    "generateAndCacheThumbnail: bitmap is null for imageId=$imageId uri=$uri")
+                false
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("ImportService",
+                "generateAndCacheThumbnail failed for imageId=$imageId", e)
+            false
         }
     }
 

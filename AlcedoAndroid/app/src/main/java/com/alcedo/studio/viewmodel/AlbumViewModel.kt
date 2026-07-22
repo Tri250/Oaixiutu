@@ -278,6 +278,7 @@ class AlbumViewModel : ViewModel() {
     fun importFromSafDirectory(treeUri: Uri) {
         viewModelScope.launch {
             _isLoading.value = true
+            _permissionRationale.value = null  // 清除前次错误消息,避免显示陈旧信息
             val context = AppModule.context
             try {
                 // Persist tree URI permission so we can access files later
@@ -358,6 +359,7 @@ class AlbumViewModel : ViewModel() {
     fun importFromPhotoPicker(uris: List<Uri>) {
         viewModelScope.launch {
             _isLoading.value = true
+            _permissionRationale.value = null  // 清除前次错误消息,避免显示陈旧信息
             val context = AppModule.context
             try {
                 // Take persistable URI permissions so URIs remain accessible
@@ -690,6 +692,7 @@ class AlbumViewModel : ViewModel() {
     fun importFromStorage(uris: List<Uri>) {
         viewModelScope.launch {
             _isLoading.value = true
+            _permissionRationale.value = null  // 清除前次错误消息,避免显示陈旧信息
             val context = AppModule.context
             try {
                 // 使用两阶段导入替代逐个 importImage,提升批量导入性能和 UI 响应 (S11 修复)
