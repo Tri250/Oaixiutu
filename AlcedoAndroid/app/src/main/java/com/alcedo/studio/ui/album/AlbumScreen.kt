@@ -777,7 +777,7 @@ private fun AlbumContent(
     onToggleImageSelection: (Long) -> Unit,
     onClearSelection: () -> Unit,
     onSelectAll: () -> Unit,
-    onDeleteSelected: () => Unit,
+    onDeleteSelected: () -> Unit,
     onBatchAiTag: () -> Unit,
     onBatchRating: () -> Unit,
     onBatchExport: () -> Unit,
