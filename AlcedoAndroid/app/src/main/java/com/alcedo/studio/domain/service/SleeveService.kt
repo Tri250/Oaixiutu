@@ -52,30 +52,33 @@ class SleeveService(
             lastModifiedTime = now
         )
 
-        elementDao.insertElement(element)
+        // 包裹在事务中,确保 4 个 DB 操作原子性,避免部分写入导致数据不一致
+        database.withTransaction {
+            elementDao.insertElement(element)
 
-        // Insert into FTS
-        elementDao.insertFts(ElementFts(elementId = elementId, elementName = name))
+            // Insert into FTS
+            elementDao.insertFts(ElementFts(elementId = elementId, elementName = name))
 
-        if (type == ElementType.FILE) {
-            fileDao.insertFile(
-                SleeveFileEntity(
-                    elementId = elementId,
-                    imageId = imageId ?: elementId,
-                    filePath = filePath ?: "",
-                    fileExtension = fileExtension ?: filePath?.substringAfterLast('.', "") ?: name.substringAfterLast('.', "")
+            if (type == ElementType.FILE) {
+                fileDao.insertFile(
+                    SleeveFileEntity(
+                        elementId = elementId,
+                        imageId = imageId ?: elementId,
+                        filePath = filePath ?: "",
+                        fileExtension = fileExtension ?: filePath?.substringAfterLast('.', "") ?: name.substringAfterLast('.', "")
+                    )
                 )
-            )
-        } else {
-            folderDao.insertFolder(
-                SleeveFolderEntity(elementId = elementId)
-            )
+            } else {
+                folderDao.insertFolder(
+                    SleeveFolderEntity(elementId = elementId)
+                )
+            }
+
+            // Update parent folder counts
+            parentId?.let { folderDao.recalculateCounts(it) }
         }
 
-        // Update parent folder counts
-        parentId?.let { folderDao.recalculateCounts(it) }
-
-        // Invalidate cache
+        // Invalidate cache (在事务外执行,避免缓存操作参与DB事务)
         parentId?.let { cacheManager.invalidate(it) }
         cacheManager.invalidateChain(parentId ?: 0, elementDao)
 
@@ -481,7 +484,10 @@ class SleeveService(
     // ================================================================
 
     private fun generateElementId(): Long {
-        return (System.nanoTime() / 1000) + (Math.random() * 1000).toLong()
+        // 使用 UUID 最高 63 位,碰撞概率可忽略 (~9.2×10^18 种可能值)
+        // 旧实现 nanoTime/1000 + random*1000 在批量导入时高概率碰撞,
+        // REPLACE 策略导致前序 SleeveFile 记录被级联删除 (致命 Bug)
+        return java.util.UUID.randomUUID().mostSignificantBits and Long.MAX_VALUE
     }
 
     // ================================================================

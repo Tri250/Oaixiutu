@@ -30,11 +30,11 @@
 }
 
 # ── Room Database ───────────────────────────────────────────────
-# Keep Room entities
--keep class * extends androidx.room.Entity { *; }
+# Keep Room entities (使用注解匹配,而非无效的 extends 注解)
+-keep @androidx.room.Entity class * { *; }
 
-# Keep Room DAOs
--keep class * extends androidx.room.Dao { *; }
+# Keep Room DAOs (使用注解匹配)
+-keep @androidx.room.Dao class * { *; }
 
 # Keep Room Database subclass
 -keep class * extends androidx.room.RoomDatabase { *; }
@@ -71,12 +71,17 @@
 -keep @interface androidx.room.Database { *; }
 
 # Keep Room-generated implementations
--keep class * extends androidx.room.Dao { *; }
--keep class * implements androidx.room.Dao { *; }
 -keep class * { @androidx.room.Query <methods>; }
 -keep class * { @androidx.room.Insert <methods>; }
 -keep class * { @androidx.room.Update <methods>; }
 -keep class * { @androidx.room.Delete <methods>; }
+-keep class * { @androidx.room.RawQuery <methods>; }
+
+# Keep Room TypeConverters
+-keep class * { @androidx.room.TypeConverter <methods>; }
+-keepclasseswithmembers class * {
+    @androidx.room.TypeConverter <methods>;
+}
 
 # Room schema export
 -keep class androidx.room.migration.Migration { *; }

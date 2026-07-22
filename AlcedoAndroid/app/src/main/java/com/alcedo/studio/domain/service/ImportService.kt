@@ -254,6 +254,12 @@ class ImportService(
                         }
 
                         scannedFiles.add(info)
+                    } else {
+                        // quickScanFile 返回 null — 记录错误而非静默跳过
+                        addLogEntry(uri.toString(), ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING,
+                            "无法读取文件信息")
+                        errorCount++
+                        results.add(ImportResult.Error("无法读取文件信息: $uri"))
                     }
                 } catch (e: Exception) {
                     addLogEntry(uri.toString(), ImportLogStatus.ERROR, ImportPhase.PHASE_A_SCANNING,
@@ -498,20 +504,17 @@ class ImportService(
             android.util.Log.e("ImportService", "importTwoPhase failed", e)
             val errorMsg = when {
                 e is OutOfMemoryError -> "内存不足, 请减少导入数量"
-                e is kotlin.coroutines.cancellation.CancellationException -> {
-                    _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
-                    throw e
-                }
                 e.message != null -> e.message!!
                 else -> "导入失败: ${e::class.simpleName}"
             }
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
+            // 保留已成功的计数: 外层异常不应抹除 Phase A 已成功导入的文件数
             ImportDirectoryResult(
                 totalFiles = uris.size,
-                successCount = 0,
-                duplicateCount = 0,
-                errorCount = 1,
-                results = listOf(ImportResult.Error(errorMsg))
+                successCount = successCount,
+                duplicateCount = duplicateCount,
+                errorCount = errorCount + 1,
+                results = results + ImportResult.Error(errorMsg)
             )
         }
     }

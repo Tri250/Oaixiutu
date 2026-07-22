@@ -57,7 +57,18 @@ class AlcedoApplication : Application() {
             }
         }
 
-        runSafe("AppModule.initialize") { AppModule.initialize(this) }
+        // AppModule.initialize 不能被吞掉异常 — 如果失败,整个应用的 DI 容器
+        // 将不可用 (所有 AppModule.context 访问都会抛 IllegalStateException),
+        // 导致导入等功能完全瘫痪。必须让初始化失败直接崩溃,让用户立即发现问题。
+        AppModule.initialize(this)
+
+        // 预热数据库: 在 Application.onCreate 中触发 Room 惰性初始化,
+        // 将数据库打开/迁移失败提前到启动阶段,避免首次导入才发现问题
+        try {
+            AppModule.database.openHelper.writableDatabase
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "Database pre-warm failed", e)
+        }
 
         // Register memory pressure callback
         registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
