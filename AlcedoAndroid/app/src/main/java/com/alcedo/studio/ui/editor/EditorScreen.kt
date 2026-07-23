@@ -3,6 +3,7 @@ package com.alcedo.studio.ui.editor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -25,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -51,6 +53,8 @@ import com.alcedo.studio.ui.common.LoadingOverlay
 import com.alcedo.studio.ui.common.LocalEditorEnabled
 import com.alcedo.studio.ui.common.AlcedoEasing
 import com.alcedo.studio.ui.editor.HlsProfilePanel
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoGlass
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
@@ -302,8 +306,20 @@ fun EditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = AlcedoGlass.toolbarOpacity),
                     titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                // 2026: 顶部工具栏增加微妙的底部边框
+                modifier = Modifier.then(
+                    Modifier.drawWithContent {
+                        drawContent()
+                        drawLine(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            start = Offset(0f, size.height),
+                            end = Offset(size.width, size.height),
+                            strokeWidth = 0.5.dp.toPx()
+                        )
+                    }
                 )
             )
         },
@@ -1388,9 +1404,10 @@ private fun EditorBottomToolbar(
     onExport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 2026: 底部工具栏 — 玻璃态 + 顶部渐变边框
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity),
         tonalElevation = 3.dp,
         shadowElevation = 8.dp
     ) {
@@ -1398,11 +1415,11 @@ private fun EditorBottomToolbar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.sm),
+                .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.xs),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 智能优化 — 一键自动增强（置于工具栏首位，Undo 之前）
+            // 智能优化 — 一键自动增强
             EditorToolbarButton(
                 icon = Icons.Default.AutoAwesome,
                 label = stringRes { editorAutoEnhance },
@@ -1456,6 +1473,14 @@ private fun EditorToolbarButton(
     tint: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit
 ) {
+    // 2026: 按钮按下缩放动画
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = AlcedoAnimation.buttonPressScale,
+        label = "toolbarScale"
+    )
+
     val iconColor = when {
         !enabled -> tint.copy(alpha = 0.38f)
         selected -> MaterialTheme.colorScheme.primary
@@ -1469,13 +1494,21 @@ private fun EditorToolbarButton(
     // 选中时显示暖色背景,加强可读性
     val backgroundColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     else Color.Transparent
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(AlcedoRadius.sm))
             .background(backgroundColor)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.sm)
+            .clickable(enabled = enabled) {
+                isPressed = true
+                onClick()
+            }
+            .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.xs)
     ) {
         Icon(
             icon,
@@ -1483,13 +1516,20 @@ private fun EditorToolbarButton(
             modifier = Modifier.size(AlcedoIconSize.lg),
             tint = iconColor
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
             color = labelColor,
-            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
-            else androidx.compose.ui.text.font.FontWeight.Medium
+            maxLines = 1
         )
+    }
+
+    // 2026: 释放缩放动画
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            kotlinx.coroutines.delay(120)
+            isPressed = false
+        }
     }
 }
