@@ -72,6 +72,7 @@ class ImportService(
     // ================================================================
 
     private val _importProgress = MutableStateFlow(ImportProgress())
+    private var activeToken: CancellationToken? = null
     val importProgress: Flow<ImportProgress> = _importProgress.asStateFlow()
 
     private val _importLog = MutableStateFlow<List<ImportLogEntry>>(emptyList())
@@ -197,6 +198,7 @@ class ImportService(
         checkDuplicates: Boolean = true,
         cancellationToken: CancellationToken? = null
     ): ImportDirectoryResult = withContext(Dispatchers.IO) {
+            activeToken = cancellationToken
         // 声明在 try 之前,使 catch 块也能访问已完成的计数 (S12 修复)
         val results = mutableListOf<ImportResult>()
         var successCount = 0
@@ -1311,6 +1313,7 @@ class ImportService(
     // ================================================================
 
     fun cancelImport() {
+        activeToken?.cancel()
         _importProgress.value = _importProgress.value.copy(status = ImportStatus.CANCELLED)
     }
 
