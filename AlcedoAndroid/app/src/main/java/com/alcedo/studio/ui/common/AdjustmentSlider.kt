@@ -60,20 +60,19 @@ fun AdjustmentSlider(
     defaultValue: Float,
     modifier: Modifier = Modifier,
     valueDisplayTransform: (Float) -> String = { "%.2f".format(it) },
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onValueChangeFinished: (() -> Unit)? = null
 ) {
     val isModified = value != defaultValue
     val interactionSource = remember { MutableInteractionSource() }
     val isDragged by interactionSource.collectIsDraggedAsState()
 
-    // 2026: 拇指尺寸动画 — 拖动时扩张
     val thumbSize by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.thumbRadiusActive * 2
         else AlcedoSlider.thumbRadius * 2,
         animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
         label = "thumbSize"
     )
-    // 轨道高度动画 — 拖动时微扩张
     val trackHeight by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.trackHeightActive
         else AlcedoSlider.trackHeight,
@@ -81,7 +80,6 @@ fun AdjustmentSlider(
         label = "trackHeight"
     )
 
-    // 2026: 标签颜色动画 — 修改时高亮
     val labelColor by animateFloatAsState(
         targetValue = if (enabled && isModified) 1f else 0f,
         animationSpec = AlcedoAnimation.valueFlash,
@@ -94,6 +92,14 @@ fun AdjustmentSlider(
     )
 
     var showInputDialog by remember { mutableStateOf(false) }
+    // 稳定性: 拖动结束后通过 DisposableEffect 通知 finished,避免 onValueChange 被调用过多次
+    val wasDragged = remember { mutableStateOf(false) }
+    LaunchedEffect(isDragged) {
+        if (wasDragged.value && !isDragged) {
+            onValueChangeFinished?.invoke()
+        }
+        wasDragged.value = isDragged
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -163,6 +169,7 @@ fun AdjustmentSlider(
         Slider(
             value = value,
             onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
             valueRange = range,
             enabled = enabled,
             interactionSource = interactionSource,

@@ -79,51 +79,56 @@ fun BasicPanel(
                         label = stringRes { editorExposure },
                         value = params.exposure,
                         range = -5f..5f,
-                        onValueChange = { viewModel.updateExposure(it) },
+                        onValueChange = { viewModel.updateExposureDrag(it) },
+                        onValueChangeFinished = { viewModel.updateExposure(params.exposure) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorContrast },
                         value = params.contrast,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateContrast(it) },
+                        onValueChange = { viewModel.updateContrastDrag(it) },
+                        onValueChangeFinished = { viewModel.updateContrast(params.contrast) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorHighlights },
                         value = params.highlights,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateHighlights(it) },
+                        onValueChange = { viewModel.updateHighlightsDrag(it) },
+                        onValueChangeFinished = { viewModel.updateHighlights(params.highlights) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorShadows },
                         value = params.shadows,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateShadows(it) },
+                        onValueChange = { viewModel.updateShadowsDrag(it) },
+                        onValueChangeFinished = { viewModel.updateShadows(params.shadows) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorSigmoidShoulder },
                         value = params.sigmoidShoulder,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateSigmoidShoulder(it) },
+                        onValueChange = { viewModel.updateSigmoidShoulderDrag(it) },
+                        onValueChangeFinished = { viewModel.updateSigmoidShoulder(params.sigmoidShoulder) },
                         defaultValue = 0.5f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorBlacks },
                         value = params.shadowBoundary,
                         range = 0f..0.5f,
-                        onValueChange = {
-                            viewModel.updateShadowBoundary(it)
-                        },
+                        onValueChange = { viewModel.updateShadowBoundaryDrag(it) },
+                        onValueChangeFinished = { viewModel.updateShadowBoundary(params.shadowBoundary) },
                         defaultValue = 0.25f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorMidtones },
                         value = params.midtones,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateMidtones(it) },
+                        onValueChange = { viewModel.updateMidtonesDrag(it) },
+                        onValueChangeFinished = { viewModel.updateMidtones(params.midtones) },
                         defaultValue = 0f
                     )
                 }
@@ -163,7 +168,8 @@ fun BasicPanel(
                         label = stringRes { editorTemperature },
                         value = params.whiteBalanceTemp,
                         range = 2000f..15000f,
-                        onValueChange = { viewModel.updateWhiteBalance(it, params.whiteBalanceTint) },
+                        onValueChange = { viewModel.updateWhiteBalanceTempDrag(it) },
+                        onValueChangeFinished = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, params.whiteBalanceTint) },
                         defaultValue = 6500f,
                         valueDisplayTransform = { "%.0fK".format(it) }
                     )
@@ -171,7 +177,8 @@ fun BasicPanel(
                         label = stringRes { editorTint },
                         value = params.whiteBalanceTint,
                         range = -100f..100f,
-                        onValueChange = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, it) },
+                        onValueChange = { viewModel.updateWhiteBalanceTintDrag(it) },
+                        onValueChangeFinished = { viewModel.updateWhiteBalance(params.whiteBalanceTemp, params.whiteBalanceTint) },
                         defaultValue = 0f
                     )
                 }
@@ -213,21 +220,24 @@ fun BasicPanel(
                         label = stringRes { editorSectionClarity },
                         value = params.clarityAmount,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateClarity(it) },
+                        onValueChange = { viewModel.updateClarityDrag(it) },
+                        onValueChangeFinished = { viewModel.updateClarity(params.clarityAmount) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorVibrance },
                         value = params.vibrance,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateVibrance(it) },
+                        onValueChange = { viewModel.updateVibranceDrag(it) },
+                        onValueChangeFinished = { viewModel.updateVibrance(params.vibrance) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorSaturation },
                         value = params.saturation,
                         range = -1f..1f,
-                        onValueChange = { viewModel.updateSaturation(it) },
+                        onValueChange = { viewModel.updateSaturationDrag(it) },
+                        onValueChangeFinished = { viewModel.updateSaturation(params.saturation) },
                         defaultValue = 0f
                     )
                 }
@@ -267,9 +277,10 @@ fun BasicPanel(
                         label = stringRes { editorHighlightHue },
                         value = params.tintHighlightHue,
                         range = 0f..360f,
-                        onValueChange = {
+                        onValueChange = { viewModel.updateTintHighlightHueDrag(it) },
+                        onValueChangeFinished = {
                             viewModel.updateTint(
-                                it, params.tintHighlightStrength,
+                                params.tintHighlightHue, params.tintHighlightStrength,
                                 params.tintShadowHue, params.tintShadowStrength,
                                 params.tintBalance
                             )
@@ -281,9 +292,10 @@ fun BasicPanel(
                         label = stringRes { editorHighlightStrength },
                         value = params.tintHighlightStrength,
                         range = 0f..1f,
-                        onValueChange = {
+                        onValueChange = { viewModel.updateTintHighlightStrengthDrag(it) },
+                        onValueChangeFinished = {
                             viewModel.updateTint(
-                                params.tintHighlightHue, it,
+                                params.tintHighlightHue, params.tintHighlightStrength,
                                 params.tintShadowHue, params.tintShadowStrength,
                                 params.tintBalance
                             )
@@ -294,10 +306,11 @@ fun BasicPanel(
                         label = stringRes { editorShadowHue },
                         value = params.tintShadowHue,
                         range = 0f..360f,
-                        onValueChange = {
+                        onValueChange = { viewModel.updateTintShadowHueDrag(it) },
+                        onValueChangeFinished = {
                             viewModel.updateTint(
                                 params.tintHighlightHue, params.tintHighlightStrength,
-                                it, params.tintShadowStrength,
+                                params.tintShadowHue, params.tintShadowStrength,
                                 params.tintBalance
                             )
                         },
@@ -308,10 +321,11 @@ fun BasicPanel(
                         label = stringRes { editorShadowStrength },
                         value = params.tintShadowStrength,
                         range = 0f..1f,
-                        onValueChange = {
+                        onValueChange = { viewModel.updateTintShadowStrengthDrag(it) },
+                        onValueChangeFinished = {
                             viewModel.updateTint(
                                 params.tintHighlightHue, params.tintHighlightStrength,
-                                params.tintShadowHue, it,
+                                params.tintShadowHue, params.tintShadowStrength,
                                 params.tintBalance
                             )
                         },
@@ -321,11 +335,12 @@ fun BasicPanel(
                         label = stringRes { editorBalance },
                         value = params.tintBalance,
                         range = -1f..1f,
-                        onValueChange = {
+                        onValueChange = { viewModel.updateTintBalanceDrag(it) },
+                        onValueChangeFinished = {
                             viewModel.updateTint(
                                 params.tintHighlightHue, params.tintHighlightStrength,
                                 params.tintShadowHue, params.tintShadowStrength,
-                                it
+                                params.tintBalance
                             )
                         },
                         defaultValue = 0f

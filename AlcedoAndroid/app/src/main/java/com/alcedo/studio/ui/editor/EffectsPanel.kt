@@ -98,14 +98,16 @@ fun EffectsPanel(
                         label = stringRes { editorStrength },
                         value = params.luminanceDenoiseStrength,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateLuminanceDenoise(it, params.luminanceDenoiseDetail) },
+                        onValueChange = { viewModel.updateLuminanceDenoiseStrengthDrag(it) },
+                        onValueChangeFinished = { viewModel.updateLuminanceDenoise(params.luminanceDenoiseStrength, params.luminanceDenoiseDetail) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorDetailPreserve },
                         value = params.luminanceDenoiseDetail,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateLuminanceDenoise(params.luminanceDenoiseStrength, it) },
+                        onValueChange = { viewModel.updateLuminanceDenoiseDetailDrag(it) },
+                        onValueChangeFinished = { viewModel.updateLuminanceDenoise(params.luminanceDenoiseStrength, params.luminanceDenoiseDetail) },
                         defaultValue = 0.5f
                     )
                 }
@@ -146,14 +148,16 @@ fun EffectsPanel(
                         label = stringRes { editorStrength },
                         value = params.chromaDenoiseStrength,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateChromaDenoise(it, params.chromaDenoiseThreshold) },
+                        onValueChange = { viewModel.updateChromaDenoiseStrengthDrag(it) },
+                        onValueChangeFinished = { viewModel.updateChromaDenoise(params.chromaDenoiseStrength, params.chromaDenoiseThreshold) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorColorThreshold },
                         value = params.chromaDenoiseThreshold,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateChromaDenoise(params.chromaDenoiseStrength, it) },
+                        onValueChange = { viewModel.updateChromaDenoiseThresholdDrag(it) },
+                        onValueChangeFinished = { viewModel.updateChromaDenoise(params.chromaDenoiseStrength, params.chromaDenoiseThreshold) },
                         defaultValue = 0.5f
                     )
                 }
@@ -194,7 +198,8 @@ fun EffectsPanel(
                     label = stringRes { editorIntensity },
                     value = params.filmGrainIntensity,
                     range = 0f..1f,
-                    onValueChange = { viewModel.updateFilmGrain(it) },
+                    onValueChange = { viewModel.updateFilmGrainDrag(it) },
+                    onValueChangeFinished = { viewModel.updateFilmGrain(params.filmGrainIntensity) },
                     defaultValue = 0f
                 )
             }
@@ -235,9 +240,10 @@ fun EffectsPanel(
                     label = stringRes { editorIntensity },
                     value = params.halationIntensity,
                     range = 0f..1f,
-                    onValueChange = {
+                    onValueChange = { viewModel.updateHalationIntensityDrag(it) },
+                    onValueChangeFinished = {
                         viewModel.updateHalation(
-                            it, params.halationThreshold,
+                            params.halationIntensity, params.halationThreshold,
                             params.halationSpread, params.halationRedBias
                         )
                     },
@@ -247,10 +253,11 @@ fun EffectsPanel(
                     label = stringRes { editorSpread },
                     value = params.halationSpread,
                     range = 0f..50f,
-                    onValueChange = {
+                    onValueChange = { viewModel.updateHalationSpreadDrag(it) },
+                    onValueChangeFinished = {
                         viewModel.updateHalation(
                             params.halationIntensity, params.halationThreshold,
-                            it, params.halationRedBias
+                            params.halationSpread, params.halationRedBias
                         )
                     },
                     defaultValue = 10f,
@@ -260,9 +267,10 @@ fun EffectsPanel(
                     label = stringRes { editorThreshold },
                     value = params.halationThreshold,
                     range = 0f..1f,
-                    onValueChange = {
+                    onValueChange = { viewModel.updateHalationThresholdDrag(it) },
+                    onValueChangeFinished = {
                         viewModel.updateHalation(
-                            params.halationIntensity, it,
+                            params.halationIntensity, params.halationThreshold,
                             params.halationSpread, params.halationRedBias
                         )
                     },
@@ -272,10 +280,11 @@ fun EffectsPanel(
                     label = stringRes { editorRedBias },
                     value = params.halationRedBias,
                     range = 0f..1f,
-                    onValueChange = {
+                    onValueChange = { viewModel.updateHalationRedBiasDrag(it) },
+                    onValueChangeFinished = {
                         viewModel.updateHalation(
                             params.halationIntensity, params.halationThreshold,
-                            params.halationSpread, it
+                            params.halationSpread, params.halationRedBias
                         )
                     },
                     defaultValue = 0.7f
@@ -318,7 +327,8 @@ fun EffectsPanel(
                     label = stringRes { editorAmount },
                     value = params.sharpenAmount,
                     range = 0f..2f,
-                    onValueChange = { viewModel.updateSharpen(it) },
+                    onValueChange = { viewModel.updateSharpenDrag(it) },
+                    onValueChangeFinished = { viewModel.updateSharpen(params.sharpenAmount) },
                     defaultValue = 0f
                 )
                 // P2-8 锐化蒙版可视化：切换显示边缘蒙版叠加层
@@ -387,14 +397,16 @@ fun EffectsPanel(
                     label = stringRes { editorAmount },
                     value = params.clarityAmount,
                     range = -1f..1f,
-                    onValueChange = { viewModel.updateClarity(it, params.clarityRadius) },
+                    onValueChange = { viewModel.updateClarityDrag(it, params.clarityRadius) },
+                    onValueChangeFinished = { viewModel.updateClarity(params.clarityAmount, params.clarityRadius) },
                     defaultValue = 0f
                 )
                 AdjustmentSlider(
                     label = stringRes { editorRadius },
                     value = params.clarityRadius,
                     range = 1f..50f,
-                    onValueChange = { viewModel.updateClarity(params.clarityAmount, it) },
+                    onValueChange = { viewModel.updateClarity(params.clarityAmount, it, intermediate = true) },
+                    onValueChangeFinished = { viewModel.updateClarity(params.clarityAmount, params.clarityRadius) },
                     defaultValue = 15f,
                     valueDisplayTransform = { "%.0f".format(it) }
                 )
@@ -436,9 +448,8 @@ fun EffectsPanel(
                     label = stringRes { effectsStrength },
                     value = params.lensVignetteStrength,
                     range = 0f..1f,
-                    onValueChange = {
-                        viewModel.updateVignette(it)
-                    },
+                    onValueChange = { viewModel.updateVignetteDrag(it) },
+                    onValueChangeFinished = { viewModel.updateVignette(params.lensVignetteStrength) },
                     defaultValue = 0f
                 )
             }

@@ -52,14 +52,16 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     companion object {
         private const val TAG = "EditorViewModel"
-        private const val MAX_BITMAP_PIXELS = 4096 * 4096  // 16M pixels max
-        // C8 修复: 预览处理使用降采样位图,避免 4096x4096 时 256MB float 数组 OOM
-        // 2048x2048 = 4M 像素,float 数组 64MB,足够预览质量且不爆内存
+        private const val MAX_BITMAP_PIXELS = 4096 * 4096
         private const val PREVIEW_MAX_PIXELS = 2048 * 2048
-        // S2 修复: 预览防抖时间延长至 100ms,减少滑块快速拖动时过度重绘
-        private const val PREVIEW_DEBOUNCE_MS = 100L
-        // S2 修复: 示波器计算防抖时间,避免预览高速变化时全量重算
+        // S2+ 修复: 两级防抖 —— 拖动中 40ms 快速响应预览;拖动结束 120ms 精确预览
+        private const val PREVIEW_DEBOUNCE_MS = 40L
+        private const val PREVIEW_FINAL_DEBOUNCE_MS = 120L
         private const val SCOPE_DEBOUNCE_MS = 300L
+        // 性能: 历史栈事务上限,超过后早期事务丢弃以控制内存
+        private const val MAX_HISTORY_TRANSACTIONS = 500
+        // 稳定性: 同一键值未变化时不重复记录事务,避免历史栈膨胀
+        private const val TX_DEDUP_WINDOW_MS = 120L
     }
     private val imageRepository by lazy { AppModule.imageRepository }
     private val editHistoryRepository by lazy { AppModule.editHistoryRepository }
@@ -534,11 +536,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.EXPOSURE, "exposure", value)
         regeneratePreview()
     }
+    fun updateExposureDrag(value: Float) {
+        _params.value = _params.value.copy(exposure = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updateContrast(value: Float) {
         _params.value = _params.value.copy(contrast = value)
         recordTransaction(OperatorType.CONTRAST, "contrast", value)
         regeneratePreview()
+    }
+    fun updateContrastDrag(value: Float) {
+        _params.value = _params.value.copy(contrast = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateHighlights(value: Float) {
@@ -546,11 +556,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.HIGHLIGHTS, "highlights", value)
         regeneratePreview()
     }
+    fun updateHighlightsDrag(value: Float) {
+        _params.value = _params.value.copy(highlights = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updateShadows(value: Float) {
         _params.value = _params.value.copy(shadows = value)
         recordTransaction(OperatorType.SHADOWS, "shadows", value)
         regeneratePreview()
+    }
+    fun updateShadowsDrag(value: Float) {
+        _params.value = _params.value.copy(shadows = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateMidtones(value: Float) {
@@ -558,19 +576,34 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.TONE_REGION, "midtones", value)
         regeneratePreview()
     }
-
-    fun updateWhiteBalance(temperature: Float, tint: Float) {
-        _params.value = _params.value.copy(whiteBalanceTemp = temperature, whiteBalanceTint = tint)
-        // C3 修复: 复合更新需记录全部变更的子参数,否则 tint 在撤销时丢失
-        recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", temperature)
-        recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", tint)
-        regeneratePreview()
+    fun updateMidtonesDrag(value: Float) {
+        _params.value = _params.value.copy(midtones = value)
+        regeneratePreview(isIntermediate = true)
     }
+
+    fun updateWhiteBalance(temperature: Float, tint: Float, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(whiteBalanceTemp = temperature, whiteBalanceTint = tint)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(whiteBalanceTemp = temperature, whiteBalanceTint = tint)
+            // C3 修复: 复合更新需记录全部变更的子参数,否则 tint 在撤销时丢失
+            recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", temperature)
+            recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", tint)
+            regeneratePreview()
+        }
+    }
+    fun updateWhiteBalanceTempDrag(value: Float) = updateWhiteBalance(value, _params.value.whiteBalanceTint, intermediate = true)
+    fun updateWhiteBalanceTintDrag(value: Float) = updateWhiteBalance(_params.value.whiteBalanceTemp, value, intermediate = true)
 
     fun updateSaturation(value: Float) {
         _params.value = _params.value.copy(saturation = value)
         recordTransaction(OperatorType.SATURATION, "saturation", value)
         regeneratePreview()
+    }
+    fun updateSaturationDrag(value: Float) {
+        _params.value = _params.value.copy(saturation = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateVibrance(value: Float) {
@@ -578,19 +611,33 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.SATURATION, "vibrance", value)
         regeneratePreview()
     }
-
-    fun updateClarity(amount: Float, radius: Float = 15f) {
-        _params.value = _params.value.copy(clarityAmount = amount, clarityRadius = radius)
-        // C3 修复: 同时记录 radius
-        recordTransaction(OperatorType.CLARITY, "clarityAmount", amount)
-        recordTransaction(OperatorType.CLARITY, "clarityRadius", radius)
-        regeneratePreview()
+    fun updateVibranceDrag(value: Float) {
+        _params.value = _params.value.copy(vibrance = value)
+        regeneratePreview(isIntermediate = true)
     }
+
+    fun updateClarity(amount: Float, radius: Float = 15f, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(clarityAmount = amount, clarityRadius = radius)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(clarityAmount = amount, clarityRadius = radius)
+            // C3 修复: 同时记录 radius
+            recordTransaction(OperatorType.CLARITY, "clarityAmount", amount)
+            recordTransaction(OperatorType.CLARITY, "clarityRadius", radius)
+            regeneratePreview()
+        }
+    }
+    fun updateClarityDrag(amount: Float, radius: Float = 15f) = updateClarity(amount, radius, intermediate = true)
 
     fun updateSharpen(value: Float) {
         _params.value = _params.value.copy(sharpenAmount = value)
         recordTransaction(OperatorType.SHARPEN, "sharpenAmount", value)
         regeneratePreview()
+    }
+    fun updateSharpenDrag(value: Float) {
+        _params.value = _params.value.copy(sharpenAmount = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     // ── P2-8 锐化蒙版可视化 ─────────────────────────────────────
@@ -607,46 +654,71 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
      * 将当前预览位图转为 float 数组后调用原生边缘检测，
      * 结果转回 Bitmap 供 UI 叠加层渲染。
      */
+    private var sharpeningMaskJob: Job? = null
     fun generateSharpeningMaskPreview() {
-        viewModelScope.launch {
-            val currentBitmap = _previewBitmap.value ?: return@launch
+        sharpeningMaskJob?.cancel()
+        sharpeningMaskJob = viewModelScope.launch(Dispatchers.Default) {
+            val currentBitmap = _previewBitmap.value
+            if (currentBitmap == null || currentBitmap.isRecycled) return@launch
             val params = _params.value
             val width = currentBitmap.width
             val height = currentBitmap.height
             val pixelCount = width * height
-            val pixels = IntArray(pixelCount)
-            currentBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-            // 转为 RGBA Float 数组
-            val floatArray = FloatArray(pixelCount * 4) { idx ->
-                val pixel = pixels[idx / 4]
-                when (idx % 4) {
-                    0 -> ((pixel shr 16) and 0xFF) / 255.0f   // R
-                    1 -> ((pixel shr 8) and 0xFF) / 255.0f    // G
-                    2 -> (pixel and 0xFF) / 255.0f             // B
-                    else -> ((pixel shr 24) and 0xFF) / 255.0f // A
-                }
+            if (pixelCount <= 0 || width <= 0 || height <= 0) return@launch
+            if (pixelCount > MAX_BITMAP_PIXELS / 2) {
+                Log.w(TAG, "Sharpening mask preview skipped: image too large ($pixelCount px)")
+                return@launch
             }
+            try {
+                val pixels = IntArray(pixelCount)
+                currentBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                ensureActive()
 
-            val edgeData = AlcedoNativeBridge.generateEdgeMask(
-                floatArray, width, height,
-                params.sharpenAmount.coerceAtLeast(1f),  // radius 映射自 sharpenAmount
-                0.3f                                        // threshold
-            )
-
-            if (edgeData != null && edgeData.size == pixelCount) {
-                // 单通道边缘数据 → 白色高亮叠加（Alpha 通道表示强度）
-                val maskPixels = IntArray(pixelCount) { i ->
-                    val intensity = (edgeData[i] * 255).toInt().coerceIn(0, 255)
-                    0xFF shl 24 or (intensity shl 16) or (intensity shl 8) or intensity
+                val floatArray = FloatArray(pixelCount * 4)
+                var i = 0
+                while (i < pixelCount) {
+                    val pixel = pixels[i]
+                    val base = i * 4
+                    floatArray[base]     = ((pixel shr 16) and 0xFF) / 255.0f
+                    floatArray[base + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                    floatArray[base + 2] = (pixel and 0xFF) / 255.0f
+                    floatArray[base + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+                    i++
                 }
-                try {
+                ensureActive()
+
+                val edgeData = AlcedoNativeBridge.generateEdgeMask(
+                    floatArray, width, height,
+                    params.sharpenAmount.coerceAtLeast(1f),
+                    0.3f
+                )
+                ensureActive()
+
+                if (edgeData != null && edgeData.size == pixelCount) {
+                    val maskPixels = IntArray(pixelCount)
+                    var j = 0
+                    while (j < pixelCount) {
+                        val intensity = (edgeData[j] * 255).toInt().coerceIn(0, 255)
+                        maskPixels[j] = 0xFF shl 24 or (intensity shl 16) or (intensity shl 8) or intensity
+                        j++
+                    }
                     val maskBitmap = Bitmap.createBitmap(maskPixels, width, height, Bitmap.Config.ARGB_8888)
+                    val old = _sharpeningMaskBitmap.value
                     _sharpeningMaskBitmap.value = maskBitmap
-                } catch (_: OutOfMemoryError) {
+                    if (old != null && old !== maskBitmap && !old.isRecycled) {
+                        try { old.recycle() } catch (_: Throwable) {}
+                    }
+                } else {
                     _sharpeningMaskBitmap.value = null
                 }
-            } else {
+            } catch (oom: OutOfMemoryError) {
+                Log.w(TAG, "OOM generating sharpening mask", oom)
+                try { System.gc() } catch (_: Throwable) {}
+                _sharpeningMaskBitmap.value = null
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Log.e(TAG, "generateSharpeningMaskPreview failed", t)
                 _sharpeningMaskBitmap.value = null
             }
         }
@@ -657,20 +729,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.FILM_GRAIN, "filmGrainIntensity", value)
         regeneratePreview()
     }
-
-    fun updateHalation(intensity: Float, threshold: Float = 0.8f, spread: Float = 10f, redBias: Float = 0.7f) {
-        _params.value = _params.value.copy(
-            halationIntensity = intensity,
-            halationThreshold = threshold,
-            halationSpread = spread,
-            halationRedBias = redBias
-        )
-        // C3 修复: 记录全部 halation 子参数,避免撤销时丢失 threshold/spread/redBias
-        recordTransaction(OperatorType.HALATION, "halationIntensity", intensity)
-        recordTransaction(OperatorType.HALATION, "halationThreshold", threshold)
-        recordTransaction(OperatorType.HALATION, "halationSpread", spread)
-        recordTransaction(OperatorType.HALATION, "halationRedBias", redBias)
-        regeneratePreview()
+    fun updateFilmGrainDrag(value: Float) {
+        _params.value = _params.value.copy(filmGrainIntensity = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateSigmoidContrast(value: Float) {
@@ -678,11 +739,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.CONTRAST, "sigmoidContrast", value)
         regeneratePreview()
     }
+    fun updateSigmoidContrastDrag(value: Float) {
+        _params.value = _params.value.copy(sigmoidContrast = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updateSigmoidShoulder(value: Float) {
         _params.value = _params.value.copy(sigmoidShoulder = value)
         recordTransaction(OperatorType.CONTRAST, "sigmoidShoulder", value)
         regeneratePreview()
+    }
+    fun updateSigmoidShoulderDrag(value: Float) {
+        _params.value = _params.value.copy(sigmoidShoulder = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     /**
@@ -694,29 +763,29 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.CONTRAST, "sigmoidPivot", value)
         regeneratePreview()
     }
+    fun updateSigmoidPivotDrag(value: Float) {
+        _params.value = _params.value.copy(sigmoidPivot = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updateShadowBoundary(value: Float) {
         _params.value = _params.value.copy(shadowBoundary = value)
         recordTransaction(OperatorType.TONE_REGION, "shadowBoundary", value)
         regeneratePreview()
     }
-
-    fun updateLensCorrection(k1: Float, k2: Float, k3: Float, p1: Float, p2: Float) {
-        _params.value = _params.value.copy(lensK1 = k1, lensK2 = k2, lensK3 = k3, lensP1 = p1, lensP2 = p2)
-        // C3 修复: 记录全部镜头校正参数,避免撤销只恢复 k1
-        recordTransaction(OperatorType.GEOMETRY, "lensK1", k1)
-        recordTransaction(OperatorType.GEOMETRY, "lensK2", k2)
-        recordTransaction(OperatorType.GEOMETRY, "lensK3", k3)
-        recordTransaction(OperatorType.GEOMETRY, "lensP1", p1)
-        recordTransaction(OperatorType.GEOMETRY, "lensP2", p2)
-        regeneratePreview()
+    fun updateShadowBoundaryDrag(value: Float) {
+        _params.value = _params.value.copy(shadowBoundary = value)
+        regeneratePreview(isIntermediate = true)
     }
 
-    fun updateLut(enabled: Boolean, path: String) {
-        _params.value = _params.value.copy(lutEnabled = enabled, lutPath = path)
-        // C3 修复: 单独记录 enabled 状态,path 字符串暂不入历史 (float 数组不支持 String)
-        recordTransaction(OperatorType.LUT, "lutEnabled", if (enabled) 1f else 0f)
+    fun updateHighlightBoundary(value: Float) {
+        _params.value = _params.value.copy(highlightBoundary = value)
+        recordTransaction(OperatorType.TONE_REGION, "highlightBoundary", value)
         regeneratePreview()
+    }
+    fun updateHighlightBoundaryDrag(value: Float) {
+        _params.value = _params.value.copy(highlightBoundary = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateGeometryRotate(value: Float) {
@@ -724,41 +793,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.GEOMETRY, "geometryRotate", value)
         regeneratePreview()
     }
+    fun updateGeometryRotateDrag(value: Float) {
+        _params.value = _params.value.copy(geometryRotate = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updateGeometryScale(value: Float) {
         _params.value = _params.value.copy(geometryScale = value)
         recordTransaction(OperatorType.GEOMETRY, "geometryScale", value)
         regeneratePreview()
     }
-
-    fun updateGeometryFlipH(flip: Boolean) {
-        _params.value = _params.value.copy(geometryFlipH = flip)
-        recordTransaction(OperatorType.GEOMETRY, "geometryFlipH", if (flip) 1f else 0f)
-        regeneratePreview()
-    }
-
-    fun updateGeometryFlipV(flip: Boolean) {
-        _params.value = _params.value.copy(geometryFlipV = flip)
-        recordTransaction(OperatorType.GEOMETRY, "geometryFlipV", if (flip) 1f else 0f)
-        regeneratePreview()
-    }
-
-    fun updateCrop(left: Float, top: Float, right: Float, bottom: Float) {
-        _params.value = _params.value.copy(cropLeft = left, cropTop = top, cropRight = right, cropBottom = bottom)
-        // C3 修复: 记录全部裁剪参数
-        recordTransaction(OperatorType.GEOMETRY, "cropLeft", left)
-        recordTransaction(OperatorType.GEOMETRY, "cropTop", top)
-        recordTransaction(OperatorType.GEOMETRY, "cropRight", right)
-        recordTransaction(OperatorType.GEOMETRY, "cropBottom", bottom)
-        regeneratePreview()
-    }
-
-    fun updatePerspective(horizontal: Float, vertical: Float) {
-        _params.value = _params.value.copy(perspectiveH = horizontal, perspectiveV = vertical)
-        // C3 修复: 记录水平+垂直透视
-        recordTransaction(OperatorType.GEOMETRY, "perspectiveH", horizontal)
-        recordTransaction(OperatorType.GEOMETRY, "perspectiveV", vertical)
-        regeneratePreview()
+    fun updateGeometryScaleDrag(value: Float) {
+        _params.value = _params.value.copy(geometryScale = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updateVignette(strength: Float) {
@@ -766,22 +813,128 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.VIGNETTE, "lensVignetteStrength", strength)
         regeneratePreview()
     }
+    fun updateVignetteDrag(strength: Float) {
+        _params.value = _params.value.copy(lensVignetteStrength = strength)
+        regeneratePreview(isIntermediate = true)
+    }
+
+    fun updateLensDistortionAmount(value: Float) {
+        _params.value = _params.value.copy(lensDistortionAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensDistortionAmount", value)
+        regeneratePreview()
+    }
+    fun updateLensDistortionAmountDrag(value: Float) {
+        _params.value = _params.value.copy(lensDistortionAmount = value)
+        regeneratePreview(isIntermediate = true)
+    }
+
+    fun updateLensVignetteAmount(value: Float) {
+        _params.value = _params.value.copy(lensVignetteAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteAmount", value)
+        regeneratePreview()
+    }
+    fun updateLensVignetteAmountDrag(value: Float) {
+        _params.value = _params.value.copy(lensVignetteAmount = value)
+        regeneratePreview(isIntermediate = true)
+    }
+
+    fun updateLensTcaAmount(value: Float) {
+        _params.value = _params.value.copy(lensTcaAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensTcaAmount", value)
+        regeneratePreview()
+    }
+    fun updateLensTcaAmountDrag(value: Float) {
+        _params.value = _params.value.copy(lensTcaAmount = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     // ── Denoise (luminance + chroma) ──
 
-    fun updateLuminanceDenoise(strength: Float, detail: Float = 0.5f) {
-        _params.value = _params.value.copy(luminanceDenoiseStrength = strength, luminanceDenoiseDetail = detail)
-        recordTransaction(OperatorType.DENOISE, "luminanceDenoiseStrength", strength)
-        recordTransaction(OperatorType.DENOISE, "luminanceDenoiseDetail", detail)
-        regeneratePreview()
+    fun updateLuminanceDenoise(strength: Float, detail: Float = 0.5f, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(luminanceDenoiseStrength = strength, luminanceDenoiseDetail = detail)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(luminanceDenoiseStrength = strength, luminanceDenoiseDetail = detail)
+            recordTransaction(OperatorType.DENOISE, "luminanceDenoiseStrength", strength)
+            recordTransaction(OperatorType.DENOISE, "luminanceDenoiseDetail", detail)
+            regeneratePreview()
+        }
     }
+    fun updateLuminanceDenoiseStrengthDrag(value: Float) = updateLuminanceDenoise(value, _params.value.luminanceDenoiseDetail, intermediate = true)
+    fun updateLuminanceDenoiseDetailDrag(value: Float) = updateLuminanceDenoise(_params.value.luminanceDenoiseStrength, value, intermediate = true)
 
-    fun updateChromaDenoise(strength: Float, threshold: Float = 0.5f) {
-        _params.value = _params.value.copy(chromaDenoiseStrength = strength, chromaDenoiseThreshold = threshold)
-        recordTransaction(OperatorType.DENOISE, "chromaDenoiseStrength", strength)
-        recordTransaction(OperatorType.DENOISE, "chromaDenoiseThreshold", threshold)
-        regeneratePreview()
+    fun updateChromaDenoise(strength: Float, threshold: Float = 0.5f, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(chromaDenoiseStrength = strength, chromaDenoiseThreshold = threshold)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(chromaDenoiseStrength = strength, chromaDenoiseThreshold = threshold)
+            recordTransaction(OperatorType.DENOISE, "chromaDenoiseStrength", strength)
+            recordTransaction(OperatorType.DENOISE, "chromaDenoiseThreshold", threshold)
+            regeneratePreview()
+        }
     }
+    fun updateChromaDenoiseStrengthDrag(value: Float) = updateChromaDenoise(value, _params.value.chromaDenoiseThreshold, intermediate = true)
+    fun updateChromaDenoiseThresholdDrag(value: Float) = updateChromaDenoise(_params.value.chromaDenoiseStrength, value, intermediate = true)
+
+    fun updateHalation(
+        intensity: Float,
+        threshold: Float = 0.8f,
+        spread: Float = 10f,
+        redBias: Float = 0.7f,
+        intermediate: Boolean = false
+    ) {
+        if (intermediate) {
+            _params.value = _params.value.copy(
+                halationIntensity = intensity,
+                halationThreshold = threshold,
+                halationSpread = spread,
+                halationRedBias = redBias
+            )
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(
+                halationIntensity = intensity,
+                halationThreshold = threshold,
+                halationSpread = spread,
+                halationRedBias = redBias
+            )
+            recordTransaction(OperatorType.HALATION, "halationIntensity", intensity)
+            recordTransaction(OperatorType.HALATION, "halationThreshold", threshold)
+            recordTransaction(OperatorType.HALATION, "halationSpread", spread)
+            recordTransaction(OperatorType.HALATION, "halationRedBias", redBias)
+            regeneratePreview()
+        }
+    }
+    fun updateHalationIntensityDrag(value: Float) = updateHalation(
+        value,
+        _params.value.halationThreshold,
+        _params.value.halationSpread,
+        _params.value.halationRedBias,
+        intermediate = true
+    )
+    fun updateHalationThresholdDrag(value: Float) = updateHalation(
+        _params.value.halationIntensity,
+        value,
+        _params.value.halationSpread,
+        _params.value.halationRedBias,
+        intermediate = true
+    )
+    fun updateHalationSpreadDrag(value: Float) = updateHalation(
+        _params.value.halationIntensity,
+        _params.value.halationThreshold,
+        value,
+        _params.value.halationRedBias,
+        intermediate = true
+    )
+    fun updateHalationRedBiasDrag(value: Float) = updateHalation(
+        _params.value.halationIntensity,
+        _params.value.halationThreshold,
+        _params.value.halationSpread,
+        value,
+        intermediate = true
+    )
 
     // ── Enhanced perspective transform ──
 
@@ -790,11 +943,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveDistortion", value)
         regeneratePreview()
     }
+    fun updatePerspectiveDistortionDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveDistortion = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updatePerspectiveVertical(value: Float) {
         _params.value = _params.value.copy(perspectiveVertical = value)
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveVertical", value)
         regeneratePreview()
+    }
+    fun updatePerspectiveVerticalDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveVertical = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updatePerspectiveHorizontal(value: Float) {
@@ -802,11 +963,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveHorizontal", value)
         regeneratePreview()
     }
+    fun updatePerspectiveHorizontalDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveHorizontal = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updatePerspectiveRotation(value: Float) {
         _params.value = _params.value.copy(perspectiveRotation = value)
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveRotation", value)
         regeneratePreview()
+    }
+    fun updatePerspectiveRotationDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveRotation = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updatePerspectiveAspect(value: Float) {
@@ -814,11 +983,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveAspect", value)
         regeneratePreview()
     }
+    fun updatePerspectiveAspectDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveAspect = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updatePerspectiveScale(value: Float) {
         _params.value = _params.value.copy(perspectiveScale = value)
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveScale", value)
         regeneratePreview()
+    }
+    fun updatePerspectiveScaleDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveScale = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun updatePerspectiveXOffset(value: Float) {
@@ -826,11 +1003,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveXOffset", value)
         regeneratePreview()
     }
+    fun updatePerspectiveXOffsetDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveXOffset = value)
+        regeneratePreview(isIntermediate = true)
+    }
 
     fun updatePerspectiveYOffset(value: Float) {
         _params.value = _params.value.copy(perspectiveYOffset = value)
         recordTransaction(OperatorType.PERSPECTIVE, "perspectiveYOffset", value)
         regeneratePreview()
+    }
+    fun updatePerspectiveYOffsetDrag(value: Float) {
+        _params.value = _params.value.copy(perspectiveYOffset = value)
+        regeneratePreview(isIntermediate = true)
     }
 
     fun resetPerspective() {
@@ -915,7 +1100,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         cx: Float? = null,
         cy: Float? = null,
         focalRatio: Float? = null,
-        vignetteStrength: Float? = null
+        vignetteStrength: Float? = null,
+        intermediate: Boolean = false
     ) {
         val old = _params.value
         val newCx = cx ?: old.lensCx
@@ -928,12 +1114,21 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             lensFocalRatio = newFocal,
             lensVignetteStrength = newVig
         )
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+            return
+        }
         if (cx != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensCx", newCx)
         if (cy != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensCy", newCy)
         if (focalRatio != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensFocalRatio", newFocal)
         if (vignetteStrength != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteStrength", newVig)
         regeneratePreview()
     }
+
+    fun updateLensAdvancedCxDrag(value: Float) = updateLensAdvanced(cx = value, intermediate = true)
+    fun updateLensAdvancedCyDrag(value: Float) = updateLensAdvanced(cy = value, intermediate = true)
+    fun updateLensAdvancedFocalRatioDrag(value: Float) = updateLensAdvanced(focalRatio = value, intermediate = true)
+    fun updateLensAdvancedVignetteStrengthDrag(value: Float) = updateLensAdvanced(vignetteStrength = value, intermediate = true)
 
     fun resetLensCorrection() {
         _params.value = _params.value.copy(
@@ -1059,11 +1254,17 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
-    fun updateLutIntensity(intensity: Float) {
-        _params.value = _params.value.copy(lutIntensity = intensity)
-        recordTransaction(OperatorType.LUT, "lutIntensity", intensity)
-        regeneratePreview()
+    fun updateLutIntensity(intensity: Float, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(lutIntensity = intensity)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(lutIntensity = intensity)
+            recordTransaction(OperatorType.LUT, "lutIntensity", intensity)
+            regeneratePreview()
+        }
     }
+    fun updateLutIntensityDrag(intensity: Float) = updateLutIntensity(intensity, intermediate = true)
 
     fun updateDisplayTransform(displayTransform: DisplayTransform) {
         _params.value = _params.value.copy(displayTransform = displayTransform)
@@ -1284,32 +1485,50 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // HSL editing
     // ================================================================
 
-    fun updateHslHueShift(index: Int, value: Float) {
+    fun updateHslHueShift(index: Int, value: Float, intermediate: Boolean = false) {
+        val safeIndex = index.coerceIn(0, 7)
         val current = _hslHueShift.value.copyOf()
-        current[index] = value
+        current[safeIndex] = value
         _hslHueShift.value = current
         _params.value = _params.value.copy(hslHueShift = current)
-        recordTransaction(OperatorType.HSL, "hslHueShift[$index]", value)
-        regeneratePreview()
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+        } else {
+            recordTransaction(OperatorType.HSL, "hslHueShift[$safeIndex]", value)
+            regeneratePreview()
+        }
     }
+    fun updateHslHueShiftDrag(index: Int, value: Float) = updateHslHueShift(index, value, intermediate = true)
 
-    fun updateHslSaturationScale(index: Int, value: Float) {
+    fun updateHslSaturationScale(index: Int, value: Float, intermediate: Boolean = false) {
+        val safeIndex = index.coerceIn(0, 7)
         val current = _hslSaturationScale.value.copyOf()
-        current[index] = value
+        current[safeIndex] = value
         _hslSaturationScale.value = current
         _params.value = _params.value.copy(hslSaturationScale = current)
-        recordTransaction(OperatorType.HSL, "hslSaturationScale[$index]", value)
-        regeneratePreview()
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+        } else {
+            recordTransaction(OperatorType.HSL, "hslSaturationScale[$safeIndex]", value)
+            regeneratePreview()
+        }
     }
+    fun updateHslSaturationScaleDrag(index: Int, value: Float) = updateHslSaturationScale(index, value, intermediate = true)
 
-    fun updateHslLuminanceScale(index: Int, value: Float) {
+    fun updateHslLuminanceScale(index: Int, value: Float, intermediate: Boolean = false) {
+        val safeIndex = index.coerceIn(0, 7)
         val current = _hslLuminanceScale.value.copyOf()
-        current[index] = value
+        current[safeIndex] = value
         _hslLuminanceScale.value = current
         _params.value = _params.value.copy(hslLuminanceScale = current)
-        recordTransaction(OperatorType.HSL, "hslLuminanceScale[$index]", value)
-        regeneratePreview()
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+        } else {
+            recordTransaction(OperatorType.HSL, "hslLuminanceScale[$safeIndex]", value)
+            regeneratePreview()
+        }
     }
+    fun updateHslLuminanceScaleDrag(index: Int, value: Float) = updateHslLuminanceScale(index, value, intermediate = true)
 
     fun resetHsl() {
         _hslHueShift.value = FloatArray(8) { 0f }
@@ -1329,7 +1548,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateTint(
         highlightHue: Float, highlightStrength: Float,
-        shadowHue: Float, shadowStrength: Float, balance: Float
+        shadowHue: Float, shadowStrength: Float, balance: Float,
+        intermediate: Boolean = false
     ) {
         _params.value = _params.value.copy(
             tintHighlightHue = highlightHue,
@@ -1338,6 +1558,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             tintShadowStrength = shadowStrength,
             tintBalance = balance
         )
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+            return
+        }
         // C3 修复: 记录全部 tint 子参数,避免撤销只恢复 balance
         recordTransaction(OperatorType.TINT, "tintHighlightHue", highlightHue)
         recordTransaction(OperatorType.TINT, "tintHighlightStrength", highlightStrength)
@@ -1346,6 +1570,31 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.TINT, "tintBalance", balance)
         regeneratePreview()
     }
+    fun updateTintHighlightHueDrag(value: Float) = updateTint(
+        value, _params.value.tintHighlightStrength,
+        _params.value.tintShadowHue, _params.value.tintShadowStrength,
+        _params.value.tintBalance, intermediate = true
+    )
+    fun updateTintHighlightStrengthDrag(value: Float) = updateTint(
+        _params.value.tintHighlightHue, value,
+        _params.value.tintShadowHue, _params.value.tintShadowStrength,
+        _params.value.tintBalance, intermediate = true
+    )
+    fun updateTintShadowHueDrag(value: Float) = updateTint(
+        _params.value.tintHighlightHue, _params.value.tintHighlightStrength,
+        value, _params.value.tintShadowStrength,
+        _params.value.tintBalance, intermediate = true
+    )
+    fun updateTintShadowStrengthDrag(value: Float) = updateTint(
+        _params.value.tintHighlightHue, _params.value.tintHighlightStrength,
+        _params.value.tintShadowHue, value,
+        _params.value.tintBalance, intermediate = true
+    )
+    fun updateTintBalanceDrag(value: Float) = updateTint(
+        _params.value.tintHighlightHue, _params.value.tintHighlightStrength,
+        _params.value.tintShadowHue, _params.value.tintShadowStrength,
+        value, intermediate = true
+    )
 
     // ================================================================
     // Channel mixer
@@ -1388,41 +1637,135 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     private var previewJob: Job? = null
+    private var previewFinalJob: Job? = null
 
-    // S2 修复: 示波器计算协程引用,用于取消和防抖
     private var scopeJob: Job? = null
 
-    fun regeneratePreview() {
+    /** 引用计数：避免并发预览任务导致 _isProcessing 频繁 true/false 抖动 */
+    @Volatile
+    private var processingRefCount: Int = 0
+
+    private inline fun incrementProcessing() {
+        if (processingRefCount++ == 0) _isProcessing.value = true
+    }
+    private inline fun decrementProcessing() {
+        if (--processingRefCount <= 0) {
+            processingRefCount = 0
+            if (_isProcessing.value) _isProcessing.value = false
+        }
+    }
+
+    // 性能优化: 预编译 Regex 避免每次事务创建;减少对象分配
+    private val hslHueRegex = Regex("""hslHueShift\[(\d+)]""")
+    private val hslSatRegex = Regex("""hslSaturationScale\[(\d+)]""")
+    private val hslLumRegex = Regex("""hslLuminanceScale\[(\d+)]""")
+    private val mixerRegex = Regex("""channelMixerMatrix\[(\d+)]""")
+    private val toneCurveXRegex = Regex("""toneCurveX\[(\d+)]""")
+    private val toneCurveYRegex = Regex("""toneCurveY\[(\d+)]""")
+
+    // 稳定性: 最近一次 recordTransaction 的 (key,value,time) 用于去重
+    private var lastTxKey: String? = null
+    private var lastTxValue: Float = Float.NaN
+    private var lastTxTime: Long = 0L
+
+    /**
+     * 性能优化: 统一内部更新入口。
+     * - intermediate=true: 拖动中。仅更新 params + 触发快速预览，不写历史栈
+     * - intermediate=false (默认): 操作完成。更新 params + 写事务 + 触发完整预览
+     */
+    private inline fun updateParam(
+        key: String,
+        operatorType: OperatorType,
+        apply: (PipelineParams) -> PipelineParams,
+        value: Float,
+        intermediate: Boolean = false
+    ) {
+        _params.value = apply(_params.value)
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+        } else {
+            recordTransaction(operatorType, key, value)
+            regeneratePreview(isIntermediate = false)
+        }
+    }
+
+    /** 便捷更新多个字段 —— 仅 final 模式可用，复合操作统一写事务 */
+    private inline fun updateParamsFinal(
+        block: (PipelineParams) -> PipelineParams,
+        transactions: List<Triple<OperatorType, String, Float>>
+    ) {
+        _params.value = block(_params.value)
+        transactions.forEach { (op, k, v) -> recordTransaction(op, k, v) }
+        regeneratePreview(isIntermediate = false)
+    }
+
+    /**
+     * 性能优化: requestPreview 支持 isIntermediate（拖动中） 与 final（停止）两级策略。
+     * - 拖动中: 短 debounce + 不触发示波器 + 可被下一帧取消
+     * - 停止后: 长一点 debounce + 触发示波器与蒙版预览
+     */
+    fun regeneratePreview(isIntermediate: Boolean = false) {
         previewJob?.cancel()
-        previewJob = viewModelScope.launch {
-            delay(PREVIEW_DEBOUNCE_MS) // S2 修复: 100ms 防抖,减少快速拖动滑块时的过度重绘
-            _isProcessing.value = true
+        previewJob = viewModelScope.launch(Dispatchers.Default) {
+            delay(if (isIntermediate) PREVIEW_DEBOUNCE_MS else PREVIEW_FINAL_DEBOUNCE_MS)
+            ensureActive()
+            val source = previewSourceBitmap ?: _originalBitmap.value
+            if (source == null || source.isRecycled) return@launch
+            incrementProcessing()
             try {
-                // C8 修复: 使用降采样位图进行预览,避免大图 OOM
-                val source = previewSourceBitmap ?: _originalBitmap.value
-                if (source != null && !source.isRecycled) {
-                    val oldPreview = _previewBitmap.value
-                    val newPreview = pipelineService.applyPipeline(source, _params.value)
+                val oldPreview = _previewBitmap.value
+                val newPreview: Bitmap? = try {
+                    pipelineService.applyPipeline(source, _params.value)
+                } catch (oom: OutOfMemoryError) {
+                    Log.e(TAG, "OOM during applyPipeline, attempting recovery", oom)
+                    try { System.gc() } catch (_: Throwable) {}
+                    null
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    Log.e(TAG, "applyPipeline failed", t)
+                    null
+                }
+                ensureActive()
+                if (newPreview != null) {
                     _previewBitmap.value = newPreview
-                    // P3-2 修复: 回收旧预览时必须排除 previewSourceBitmap 和 _originalBitmap,
-                    // 因为 downscaleForPreview 在小图时直接返回 source (同一对象),
-                    // 回收它们会导致 source 被 destroy,后续预览和导出全部崩溃。
                     if (oldPreview != null && !oldPreview.isRecycled
                         && oldPreview !== previewSourceBitmap
                         && oldPreview !== _originalBitmap.value
                         && oldPreview !== newPreview
                     ) {
-                        oldPreview.recycle()
+                        try { oldPreview.recycle() } catch (_: Throwable) {}
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Log.e("EditorVM", "regeneratePreview failed", e)
             } finally {
-                _isProcessing.value = false
+                decrementProcessing()
             }
         }
+        if (!isIntermediate) {
+            previewFinalJob?.cancel()
+            previewFinalJob = viewModelScope.launch {
+                delay(PREVIEW_FINAL_DEBOUNCE_MS + 20)
+                ensureActive()
+                regenerateScopesIfNeeded()
+                regenerateMaskPreviewIfNeeded()
+                regenerateSharpeningMaskIfNeeded()
+            }
+        }
+    }
+
+    private fun regenerateScopesIfNeeded() {
+        if ((_showHistogram.value || _showWaveform.value || _showVectorscope.value) && _previewBitmap.value != null) {
+            scopeJob?.cancel()
+            scopeJob = viewModelScope.launch {
+                delay(SCOPE_DEBOUNCE_MS)
+            }
+        }
+    }
+    private fun regenerateMaskPreviewIfNeeded() {
+        if (_showMaskOverlay.value && _maskContainers.value.isNotEmpty()) regenerateMaskPreview()
+    }
+    private fun regenerateSharpeningMaskIfNeeded() {
+        if (_showSharpeningMask.value) generateSharpeningMaskPreview()
     }
 
     // ================================================================
@@ -1986,135 +2329,148 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ================================================================
 
     private fun recordTransaction(operatorType: OperatorType, key: String, value: Float) {
-        // C3 修复: 扩展 when 块以覆盖所有可调标量参数,
-        // 否则未列出的 key 会落入 else 分支,paramsBefore == paramsAfter,撤销无效
-        val paramsBefore = JsonObject(mapOf(key to JsonPrimitive(_params.value.run {
+        // 稳定性: 同一键值在短窗口内完全重复,直接跳过,避免滑块回到同一点产生无效事务
+        val now = System.currentTimeMillis()
+        if (lastTxKey == key
+            && !lastTxValue.isNaN()
+            && (lastTxValue == value || kotlin.math.abs(lastTxValue - value) < 1e-5f)
+            && (now - lastTxTime) < TX_DEDUP_WINDOW_MS
+        ) {
+            return
+        }
+        lastTxKey = key
+        lastTxValue = value
+        lastTxTime = now
+        val beforeFloat = _params.value.let { p ->
             when (key) {
-                "exposure" -> exposure
-                "contrast" -> contrast
-                "highlights" -> highlights
-                "shadows" -> shadows
-                "midtones" -> midtones
-                "saturation" -> saturation
-                "vibrance" -> vibrance
-                "clarityAmount" -> clarityAmount
-                "clarityRadius" -> clarityRadius
-                "sharpenAmount" -> sharpenAmount
-                "filmGrainIntensity" -> filmGrainIntensity
-                "halationIntensity" -> halationIntensity
-                "halationThreshold" -> halationThreshold
-                "halationSpread" -> halationSpread
-                "halationRedBias" -> halationRedBias
-                "sigmoidContrast" -> sigmoidContrast
-                "sigmoidPivot" -> sigmoidPivot
-                "sigmoidShoulder" -> sigmoidShoulder
-                "shadowBoundary" -> shadowBoundary
-                "highlightBoundary" -> highlightBoundary
-                "whiteBalanceTemp" -> whiteBalanceTemp
-                "whiteBalanceTint" -> whiteBalanceTint
-                "autoExposureValue" -> autoExposureValue
-                "geometryRotate" -> geometryRotate
-                "geometryScale" -> geometryScale
-                "geometryFlipH" -> if (geometryFlipH) 1f else 0f
-                "geometryFlipV" -> if (geometryFlipV) 1f else 0f
-                "cropLeft" -> cropLeft
-                "cropTop" -> cropTop
-                "cropRight" -> cropRight
-                "cropBottom" -> cropBottom
-                "perspectiveH" -> perspectiveH
-                "perspectiveV" -> perspectiveV
-                "lensK1" -> lensK1
-                "lensK2" -> lensK2
-                "lensK3" -> lensK3
-                "lensP1" -> lensP1
-                "lensP2" -> lensP2
-                "lensVignetteStrength" -> lensVignetteStrength
-                "lensCx" -> lensCx
-                "lensCy" -> lensCy
-                "lensFocalRatio" -> lensFocalRatio
-                // Denoise params
-                "luminanceDenoiseStrength" -> luminanceDenoiseStrength
-                "luminanceDenoiseDetail" -> luminanceDenoiseDetail
-                "chromaDenoiseStrength" -> chromaDenoiseStrength
-                "chromaDenoiseThreshold" -> chromaDenoiseThreshold
-                // Perspective transform params
-                "perspectiveDistortion" -> perspectiveDistortion
-                "perspectiveVertical" -> perspectiveVertical
-                "perspectiveHorizontal" -> perspectiveHorizontal
-                "perspectiveRotation" -> perspectiveRotation
-                "perspectiveAspect" -> perspectiveAspect
-                "perspectiveScale" -> perspectiveScale
-                "perspectiveXOffset" -> perspectiveXOffset
-                "perspectiveYOffset" -> perspectiveYOffset
-                // Crop params
-                "cropRotation" -> cropRotation.toFloat()
-                "cropFlipHorizontal" -> if (cropFlipHorizontal) 1f else 0f
-                "cropFlipVertical" -> if (cropFlipVertical) 1f else 0f
-                "geometryCropLeft" -> geometryCropLeft
-                "geometryCropTop" -> geometryCropTop
-                "geometryCropRight" -> geometryCropRight
-                "geometryCropBottom" -> geometryCropBottom
-                // Lens correction toggles and amounts
-                "lensAutoDetect" -> if (lensAutoDetect) 1f else 0f
-                "lensCorrectDistortion" -> if (lensCorrectDistortion) 1f else 0f
-                "lensCorrectVignette" -> if (lensCorrectVignette) 1f else 0f
-                "lensCorrectTca" -> if (lensCorrectTca) 1f else 0f
-                "lensDistortionAmount" -> lensDistortionAmount
-                "lensVignetteAmount" -> lensVignetteAmount
-                "lensTcaAmount" -> lensTcaAmount
-                "lutIntensity" -> lutIntensity
-                "lutEnabled" -> if (lutEnabled) 1f else 0f
-                "tintHighlightHue" -> tintHighlightHue
-                "tintHighlightStrength" -> tintHighlightStrength
-                "tintShadowHue" -> tintShadowHue
-                "tintShadowStrength" -> tintShadowStrength
-                "tintBalance" -> tintBalance
-                "colorWheelLiftR" -> colorWheelLiftR
-                "colorWheelLiftG" -> colorWheelLiftG
-                "colorWheelLiftB" -> colorWheelLiftB
-                "colorWheelGammaR" -> colorWheelGammaR
-                "colorWheelGammaG" -> colorWheelGammaG
-                "colorWheelGammaB" -> colorWheelGammaB
-                "colorWheelGainR" -> colorWheelGainR
-                "colorWheelGainG" -> colorWheelGainG
-                "colorWheelGainB" -> colorWheelGainB
-                "channelMixerMonochrome" -> if (channelMixerMonochrome) 1f else 0f
-                "toneCurvePoints" -> toneCurvePoints.toFloat()
-                "displayTransform_colorScience" -> displayTransform.colorScience.ordinal.toFloat()
-                "displayTransform_eotf" -> displayTransform.eotf.ordinal.toFloat()
-                "displayTransform_peakLuminance" -> displayTransform.peakLuminance
-                "displayTransform_displayColorSpace" -> displayTransform.displayColorSpace.ordinal.toFloat()
-                // RawDecodeParams 子字段 (H4)
-                "rawDecode_demosaicAlgorithm" -> rawDecodeParams.demosaicAlgorithm.ordinal.toFloat()
-                "rawDecode_highlightReconstruction" -> if (rawDecodeParams.highlightReconstruction) 1f else 0f
-                "rawDecode_autoBrightness" -> if (rawDecodeParams.autoBrightness) 1f else 0f
-                "rawDecode_useCameraMatrix" -> if (rawDecodeParams.useCameraMatrix) 1f else 0f
-                // HSL / 数组元素 — 通过索引键查询
+                "exposure" -> p.exposure
+                "contrast" -> p.contrast
+                "highlights" -> p.highlights
+                "shadows" -> p.shadows
+                "midtones" -> p.midtones
+                "saturation" -> p.saturation
+                "vibrance" -> p.vibrance
+                "clarityAmount" -> p.clarityAmount
+                "clarityRadius" -> p.clarityRadius
+                "sharpenAmount" -> p.sharpenAmount
+                "filmGrainIntensity" -> p.filmGrainIntensity
+                "halationIntensity" -> p.halationIntensity
+                "halationThreshold" -> p.halationThreshold
+                "halationSpread" -> p.halationSpread
+                "halationRedBias" -> p.halationRedBias
+                "sigmoidContrast" -> p.sigmoidContrast
+                "sigmoidPivot" -> p.sigmoidPivot
+                "sigmoidShoulder" -> p.sigmoidShoulder
+                "shadowBoundary" -> p.shadowBoundary
+                "highlightBoundary" -> p.highlightBoundary
+                "whiteBalanceTemp" -> p.whiteBalanceTemp
+                "whiteBalanceTint" -> p.whiteBalanceTint
+                "autoExposureValue" -> p.autoExposureValue
+                "geometryRotate" -> p.geometryRotate
+                "geometryScale" -> p.geometryScale
+                "geometryFlipH" -> if (p.geometryFlipH) 1f else 0f
+                "geometryFlipV" -> if (p.geometryFlipV) 1f else 0f
+                "cropLeft" -> p.cropLeft
+                "cropTop" -> p.cropTop
+                "cropRight" -> p.cropRight
+                "cropBottom" -> p.cropBottom
+                "perspectiveH" -> p.perspectiveH
+                "perspectiveV" -> p.perspectiveV
+                "lensK1" -> p.lensK1
+                "lensK2" -> p.lensK2
+                "lensK3" -> p.lensK3
+                "lensP1" -> p.lensP1
+                "lensP2" -> p.lensP2
+                "lensVignetteStrength" -> p.lensVignetteStrength
+                "lensCx" -> p.lensCx
+                "lensCy" -> p.lensCy
+                "lensFocalRatio" -> p.lensFocalRatio
+                "luminanceDenoiseStrength" -> p.luminanceDenoiseStrength
+                "luminanceDenoiseDetail" -> p.luminanceDenoiseDetail
+                "chromaDenoiseStrength" -> p.chromaDenoiseStrength
+                "chromaDenoiseThreshold" -> p.chromaDenoiseThreshold
+                "perspectiveDistortion" -> p.perspectiveDistortion
+                "perspectiveVertical" -> p.perspectiveVertical
+                "perspectiveHorizontal" -> p.perspectiveHorizontal
+                "perspectiveRotation" -> p.perspectiveRotation
+                "perspectiveAspect" -> p.perspectiveAspect
+                "perspectiveScale" -> p.perspectiveScale
+                "perspectiveXOffset" -> p.perspectiveXOffset
+                "perspectiveYOffset" -> p.perspectiveYOffset
+                "cropRotation" -> p.cropRotation.toFloat()
+                "cropFlipHorizontal" -> if (p.cropFlipHorizontal) 1f else 0f
+                "cropFlipVertical" -> if (p.cropFlipVertical) 1f else 0f
+                "geometryCropLeft" -> p.geometryCropLeft
+                "geometryCropTop" -> p.geometryCropTop
+                "geometryCropRight" -> p.geometryCropRight
+                "geometryCropBottom" -> p.geometryCropBottom
+                "lensAutoDetect" -> if (p.lensAutoDetect) 1f else 0f
+                "lensCorrectDistortion" -> if (p.lensCorrectDistortion) 1f else 0f
+                "lensCorrectVignette" -> if (p.lensCorrectVignette) 1f else 0f
+                "lensCorrectTca" -> if (p.lensCorrectTca) 1f else 0f
+                "lensDistortionAmount" -> p.lensDistortionAmount
+                "lensVignetteAmount" -> p.lensVignetteAmount
+                "lensTcaAmount" -> p.lensTcaAmount
+                "lutIntensity" -> p.lutIntensity
+                "lutEnabled" -> if (p.lutEnabled) 1f else 0f
+                "tintHighlightHue" -> p.tintHighlightHue
+                "tintHighlightStrength" -> p.tintHighlightStrength
+                "tintShadowHue" -> p.tintShadowHue
+                "tintShadowStrength" -> p.tintShadowStrength
+                "tintBalance" -> p.tintBalance
+                "colorWheelLiftR" -> p.colorWheelLiftR
+                "colorWheelLiftG" -> p.colorWheelLiftG
+                "colorWheelLiftB" -> p.colorWheelLiftB
+                "colorWheelGammaR" -> p.colorWheelGammaR
+                "colorWheelGammaG" -> p.colorWheelGammaG
+                "colorWheelGammaB" -> p.colorWheelGammaB
+                "colorWheelGainR" -> p.colorWheelGainR
+                "colorWheelGainG" -> p.colorWheelGainG
+                "colorWheelGainB" -> p.colorWheelGainB
+                "channelMixerMonochrome" -> if (p.channelMixerMonochrome) 1f else 0f
+                "toneCurvePoints" -> p.toneCurvePoints.toFloat()
+                "displayTransform_colorScience" -> p.displayTransform.colorScience.ordinal.toFloat()
+                "displayTransform_eotf" -> p.displayTransform.eotf.ordinal.toFloat()
+                "displayTransform_peakLuminance" -> p.displayTransform.peakLuminance
+                "displayTransform_displayColorSpace" -> p.displayTransform.displayColorSpace.ordinal.toFloat()
+                "rawDecode_demosaicAlgorithm" -> p.rawDecodeParams.demosaicAlgorithm.ordinal.toFloat()
+                "rawDecode_highlightReconstruction" -> if (p.rawDecodeParams.highlightReconstruction) 1f else 0f
+                "rawDecode_autoBrightness" -> if (p.rawDecodeParams.autoBrightness) 1f else 0f
+                "rawDecode_useCameraMatrix" -> if (p.rawDecodeParams.useCameraMatrix) 1f else 0f
                 else -> {
-                    val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
-                    if (m != null) return@run hslHueShift[m.groupValues[1].toInt()]
-                    val m2 = Regex("""hslSaturationScale\[(\d+)]""").matchEntire(key)
-                    if (m2 != null) return@run hslSaturationScale[m2.groupValues[1].toInt()]
-                    val m3 = Regex("""hslLuminanceScale\[(\d+)]""").matchEntire(key)
-                    if (m3 != null) return@run hslLuminanceScale[m3.groupValues[1].toInt()]
-                    val m4 = Regex("""channelMixerMatrix\[(\d+)]""").matchEntire(key)
-                    if (m4 != null) return@run channelMixerMatrix[m4.groupValues[1].toInt()]
-                    val m5 = Regex("""toneCurveX\[(\d+)]""").matchEntire(key)
-                    if (m5 != null) return@run toneCurveX[m5.groupValues[1].toInt()]
-                    val m6 = Regex("""toneCurveY\[(\d+)]""").matchEntire(key)
-                    if (m6 != null) return@run toneCurveY[m6.groupValues[1].toInt()]
+                    val m = hslHueRegex.matchEntire(key)
+                    if (m != null) return@let hslHueShift[m.groupValues[1].toInt()]
+                    val m2 = hslSatRegex.matchEntire(key)
+                    if (m2 != null) return@let hslSaturationScale[m2.groupValues[1].toInt()]
+                    val m3 = hslLumRegex.matchEntire(key)
+                    if (m3 != null) return@let hslLuminanceScale[m3.groupValues[1].toInt()]
+                    val m4 = mixerRegex.matchEntire(key)
+                    if (m4 != null) return@let channelMixerMatrix[m4.groupValues[1].toInt()]
+                    val m5 = toneCurveXRegex.matchEntire(key)
+                    if (m5 != null) return@let toneCurveX[m5.groupValues[1].toInt()]
+                    val m6 = toneCurveYRegex.matchEntire(key)
+                    if (m6 != null) return@let toneCurveY[m6.groupValues[1].toInt()]
                     value
                 }
             }
-        })))
-        val paramsAfter = JsonObject(mapOf(key to JsonPrimitive(value)))
+        }
         val tx = EditTransaction(
             transactionId = System.currentTimeMillis().toUInt(),
             operatorType = operatorType,
-            paramsBefore = paramsBefore,
-            paramsAfter = paramsAfter
+            paramsBefore = JsonObject(mapOf(key to JsonPrimitive(beforeFloat))),
+            paramsAfter = JsonObject(mapOf(key to JsonPrimitive(value)))
         )
         _workingVersion.value.appendTransaction(tx)
+        // 性能: 历史栈事务超过上限时,丢弃最早的超出部分,控制内存
+        val wv = _workingVersion.value
+        if (wv.transactions.size > MAX_HISTORY_TRANSACTIONS) {
+            val dropCount = wv.transactions.size - MAX_HISTORY_TRANSACTIONS
+            val newList = wv.transactions.drop(dropCount)
+            wv.transactions.clear()
+            wv.transactions.addAll(newList)
+            wv.cursor = (wv.cursor - dropCount).coerceAtLeast(0)
+            savedCursor = (savedCursor - dropCount).coerceAtLeast(0)
+        }
         updateUndoRedoState()
     }
 
@@ -2164,11 +2520,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private fun reconstructParamsFromWorkingVersion() {
         val applied = _workingVersion.value.appliedTransactions()
-        if (applied.isEmpty()) return
+        if (applied.isEmpty()) {
+            _params.value = PipelineParams()
+            regeneratePreview()
+            return
+        }
 
-        // Start from default and replay all applied transactions
         var reconstructed = PipelineParams()
-        // 数组类型需可变累积,避免每次事务覆盖前面的索引
         val hslHue = FloatArray(8) { 0f }
         val hslSat = FloatArray(8) { 1f }
         val hslLum = FloatArray(8) { 1f }
@@ -2180,15 +2538,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         var eotf = EOTF.SRGB
         var peakLuminance = 100f
         var displayColorSpace = ColorSpace.SRGB
-        // RawDecodeParams 可变累积 (H4)
         var rawDemosaic = DemosaicAlgorithm.RCD
         var rawHighlightRecon = true
         var rawAutoBrightness = false
         var rawUseCameraMatrix = true
 
         for (tx in applied) {
-            val after = tx.paramsAfter
-            for ((key, value) in after) {
+            for ((key, value) in tx.paramsAfter) {
                 val floatValue = value.jsonPrimitive.floatOrNull ?: continue
                 reconstructed = when (key) {
                     "exposure" -> reconstructed.copy(exposure = floatValue)
@@ -2282,31 +2638,47 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "displayTransform_eotf" -> { eotf = EOTF.entries.getOrNull(floatValue.toInt()) ?: eotf; reconstructed }
                     "displayTransform_peakLuminance" -> { peakLuminance = floatValue; reconstructed }
                     "displayTransform_displayColorSpace" -> { displayColorSpace = ColorSpace.entries.getOrNull(floatValue.toInt()) ?: displayColorSpace; reconstructed }
-                    // RawDecodeParams 子字段恢复 (H4)
                     "rawDecode_demosaicAlgorithm" -> { rawDemosaic = DemosaicAlgorithm.entries.getOrNull(floatValue.toInt()) ?: rawDemosaic; reconstructed }
                     "rawDecode_highlightReconstruction" -> { rawHighlightRecon = floatValue != 0f; reconstructed }
                     "rawDecode_autoBrightness" -> { rawAutoBrightness = floatValue != 0f; reconstructed }
                     "rawDecode_useCameraMatrix" -> { rawUseCameraMatrix = floatValue != 0f; reconstructed }
                     else -> {
-                        // HSL / 数组元素 — 累积写入对应索引
-                        val m = Regex("""hslHueShift\[(\d+)]""").matchEntire(key)
-                        if (m != null) { hslHue[m.groupValues[1].toInt()] = floatValue; reconstructed }
-                        else {
-                            val m2 = Regex("""hslSaturationScale\[(\d+)]""").matchEntire(key)
-                            if (m2 != null) { hslSat[m2.groupValues[1].toInt()] = floatValue; reconstructed }
-                            else {
-                                val m3 = Regex("""hslLuminanceScale\[(\d+)]""").matchEntire(key)
-                                if (m3 != null) { hslLum[m3.groupValues[1].toInt()] = floatValue; reconstructed }
-                                else {
-                                    val m4 = Regex("""channelMixerMatrix\[(\d+)]""").matchEntire(key)
-                                    if (m4 != null) { mixer[m4.groupValues[1].toInt()] = floatValue; reconstructed }
-                                    else {
-                                        val m5 = Regex("""toneCurveX\[(\d+)]""").matchEntire(key)
-                                        if (m5 != null) { tcX[m5.groupValues[1].toInt()] = floatValue; reconstructed }
-                                        else {
-                                            val m6 = Regex("""toneCurveY\[(\d+)]""").matchEntire(key)
-                                            if (m6 != null) { tcY[m6.groupValues[1].toInt()] = floatValue; reconstructed }
-                                            else reconstructed
+                        val m = hslHueRegex.matchEntire(key)
+                        if (m != null) {
+                            val idx = m.groupValues[1].toInt().coerceIn(0, 7)
+                            hslHue[idx] = floatValue
+                            reconstructed
+                        } else {
+                            val m2 = hslSatRegex.matchEntire(key)
+                            if (m2 != null) {
+                                val idx = m2.groupValues[1].toInt().coerceIn(0, 7)
+                                hslSat[idx] = floatValue
+                                reconstructed
+                            } else {
+                                val m3 = hslLumRegex.matchEntire(key)
+                                if (m3 != null) {
+                                    val idx = m3.groupValues[1].toInt().coerceIn(0, 7)
+                                    hslLum[idx] = floatValue
+                                    reconstructed
+                                } else {
+                                    val m4 = mixerRegex.matchEntire(key)
+                                    if (m4 != null) {
+                                        val idx = m4.groupValues[1].toInt().coerceIn(0, 8)
+                                        mixer[idx] = floatValue
+                                        reconstructed
+                                    } else {
+                                        val m5 = toneCurveXRegex.matchEntire(key)
+                                        if (m5 != null) {
+                                            val idx = m5.groupValues[1].toInt().coerceIn(0, 4)
+                                            tcX[idx] = floatValue
+                                            reconstructed
+                                        } else {
+                                            val m6 = toneCurveYRegex.matchEntire(key)
+                                            if (m6 != null) {
+                                                val idx = m6.groupValues[1].toInt().coerceIn(0, 4)
+                                                tcY[idx] = floatValue
+                                                reconstructed
+                                            } else reconstructed
                                         }
                                     }
                                 }
@@ -2337,7 +2709,6 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 useCameraMatrix = rawUseCameraMatrix
             )
         )
-        // 同步 UI 状态
         _toneCurveX.value = tcX
         _toneCurveY.value = tcY
         _colorWheelLift.value = floatArrayOf(
@@ -3302,14 +3673,29 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        // S2 修复: 取消所有协程任务,避免 ViewModel 销毁后泄漏
+        previewFinalJob?.cancel()
+        previewFinalJob = null
         previewJob?.cancel()
         previewJob = null
         scopeJob?.cancel()
         scopeJob = null
+        sharpeningMaskJob?.cancel()
+        sharpeningMaskJob = null
+        maskPreviewJob?.cancel()
+        maskPreviewJob = null
         stopAutoSave()
         releasePipelineSnapshot()
-        // 不 recycle — 避免配置变更期间 use-after-recycle 崩溃
+        // 稳定性: 释放所有派生预览 Bitmap,避免 use-after-recycle 风险
+        try {
+            _sharpeningMaskBitmap.value?.let { bmp ->
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+            _sharpeningMaskBitmap.value = null
+            _maskPreviewBitmap.value?.let { bmp ->
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+            _maskPreviewBitmap.value = null
+        } catch (_: Throwable) { /* ignore recycle errors */ }
         clearBitmaps()
     }
 
