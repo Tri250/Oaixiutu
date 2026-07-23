@@ -260,7 +260,11 @@ class ExportService(private val context: Context) {
 
             // 5. Embed ICC profile if requested
             if (settings.embedIcc && settings.format != ExportFormat.TIFF) {
-                embedIccProfile(outputFile, settings.colorSpace, settings.format)
+                try {
+                    embedIccProfile(outputFile, settings.colorSpace, settings.format)
+                } catch (_: Exception) {
+                    // ICC embedding failure is non-fatal - image data is already written
+                }
             }
             updateItemProgress(0.8f)
 
@@ -812,7 +816,7 @@ class ExportService(private val context: Context) {
             // Convert to RGBA_F16 for 16-bit PNG (Android 9+)
             try {
                 bitmap.copy(Bitmap.Config.RGBA_F16, false) ?: bitmap
-            } catch (_: OutOfMemoryError) {
+            } catch (_: Throwable) {
                 // OOM 回退到 8-bit PNG
                 bitmap
             }
