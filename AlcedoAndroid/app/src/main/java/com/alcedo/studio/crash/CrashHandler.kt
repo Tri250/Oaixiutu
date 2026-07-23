@@ -65,7 +65,13 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             Log.e(TAG, "Error in crash handler", e)
         } finally {
             // Chain to default handler so the process exits normally.
-            defaultHandler?.uncaughtException(thread, throwable)
+            // If handler was never initialized, re-throw to ensure proper crash behavior
+            if (defaultHandler != null) {
+                defaultHandler!!.uncaughtException(thread, throwable)
+            } else {
+                // No default handler available; ensure the process does not hang
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
         }
     }
 
