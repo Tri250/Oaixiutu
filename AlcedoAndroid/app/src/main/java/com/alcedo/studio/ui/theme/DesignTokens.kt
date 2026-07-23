@@ -101,15 +101,15 @@ object AlcedoAnimation {
     // 面板切换：快速、果断
     val panelEnter = tween<Float>(
         durationMillis = 280,
-        easing = AlcedoEasing.emphasizedDecelerate
+        easing = AlcedoEasing.EmphasizedDecelerate
     )
     val panelExit = tween<Float>(
         durationMillis = 200,
-        easing = AlcedoEasing.emphasizedAccelerate
+        easing = AlcedoEasing.EmphasizedAccelerate
     )
 
     // 滑块值变化：即时但有微妙的弹性
-    val sliderChange = spring(
+    val sliderChange = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessLow
     )
@@ -117,11 +117,11 @@ object AlcedoAnimation {
     // 卡片展开/折叠：流畅优雅
     val expandCollapse = tween<Float>(
         durationMillis = 300,
-        easing = AlcedoEasing.emphasized
+        easing = AlcedoEasing.Emphasized
     )
 
     // 开关切换：快速的阻尼弹簧
-    val switchToggle = spring(
+    val switchToggle = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
     )
@@ -129,21 +129,21 @@ object AlcedoAnimation {
     // 内容淡入：柔和的透明度过渡
     val contentFadeIn = tween<Float>(
         durationMillis = 250,
-        easing = AlcedoEasing.emphasizedDecelerate
+        easing = AlcedoEasing.EmphasizedDecelerate
     )
     val contentFadeOut = tween<Float>(
         durationMillis = 150,
-        easing = AlcedoEasing.emphasizedAccelerate
+        easing = AlcedoEasing.EmphasizedAccelerate
     )
 
     // 示波器面板弹出
     val scopeSlideIn = tween<Float>(
         durationMillis = 320,
-        easing = AlcedoEasing.emphasizedDecelerate
+        easing = AlcedoEasing.EmphasizedDecelerate
     )
     val scopeSlideOut = tween<Float>(
         durationMillis = 240,
-        easing = AlcedoEasing.emphasizedAccelerate
+        easing = AlcedoEasing.EmphasizedAccelerate
     )
 
     // 长按对比：瞬时切换
@@ -153,13 +153,13 @@ object AlcedoAnimation {
     )
 
     // 标签切换指示器：平滑滑动
-    val tabIndicator = spring(
+    val tabIndicator = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
 
     // 复位按钮微动效：按下缩放
-    val resetButtonPress = spring(
+    val resetButtonPress = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessHigh
     )
@@ -172,22 +172,22 @@ object AlcedoAnimation {
 
     // ── 2026 新增: 微交互动画 ───────────────────────────────────
     // 按钮按下缩放
-    val buttonPressScale = spring(
+    val buttonPressScale = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessHigh
     )
     // 滑块拇指弹入
-    val sliderThumbPop = spring(
+    val sliderThumbPop = spring<Float>(
         dampingRatio = Spring.DampingRatioLowBouncy,
         stiffness = Spring.StiffnessMedium
     )
     // 数值闪烁 (修改时短暂高亮)
     val valueFlash = tween<Float>(
         durationMillis = 400,
-        easing = AlcedoEasing.emphasized
+        easing = AlcedoEasing.Emphasized
     )
     // 工具栏图标激活
-    val toolbarIconActivate = spring(
+    val toolbarIconActivate = spring<Float>(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMediumLow
     )
