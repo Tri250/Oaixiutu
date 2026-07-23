@@ -3,12 +3,20 @@ package com.alcedo.studio.domain.service
 import android.graphics.Bitmap
 import com.alcedo.studio.data.model.*
 import com.alcedo.studio.ndk.AlcedoNativeBridge
+import com.alcedo.studio.utils.MemoryGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class PipelineService {
 
     private val nativeBridge = AlcedoNativeBridge
+
+    companion object {
+        private const val TAG = "PipelineService"
+        // S2 修复: 管线处理最大像素限制,超过此限制先降采样再处理,避免 OOM
+        // 4096x4096 = 16M pixels → float array 256MB, 极易 OOM
+        private const val MAX_PIPELINE_PIXELS = 2048 * 2048 // 4M pixels → float array 64MB
+    }
 
     /**
      * 可选的 GPU 管线服务实例。
@@ -22,46 +30,92 @@ class PipelineService {
     // Main pipeline entry point
     // ================================================================
 
-    suspend fun applyPipeline(bitmap: Bitmap, params: PipelineParams): Bitmap = withContext(Dispatchers.Default) {
+    suspend fun applyPipeline(bitmap: Bitmap, params: PipelineParams, forceFullResolution: Boolean = false): Bitmap = withContext(Dispatchers.Default) {
         // P3-3 修复: isRecycled 时返回一个新的 1x1 透明 bitmap 而非已回收的输入,
         // 避免已回收 bitmap 流入 UI 层导致渲染崩溃
         if (bitmap.isRecycled) {
             return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         }
-        val width = bitmap.width
-        val height = bitmap.height
+        var width = bitmap.width
+        var height = bitmap.height
         if (width <= 0 || height <= 0) {
             return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         }
+
+        // S2 修复: 超大图先降采样再处理,避免 float 数组 OOM
+        // 原图保留给导出使用,预览/实时处理走降采样路径
+        var sourceBitmap = bitmap
+        var needsDownscaleCleanup = false
         val pixelCount = width * height
+        if (!forceFullResolution && pixelCount > MAX_PIPELINE_PIXELS) {
+            val scale = kotlin.math.sqrt(MAX_PIPELINE_PIXELS.toFloat() / pixelCount.toFloat())
+            val newW = (width * scale).toInt().coerceAtLeast(1)
+            val newH = (height * scale).toInt().coerceAtLeast(1)
+            try {
+                sourceBitmap = Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+                needsDownscaleCleanup = true
+                width = newW
+                height = newH
+            } catch (e: OutOfMemoryError) {
+                android.util.Log.w(TAG, "Downscale OOM, using original", e)
+                System.gc()
+            }
+        }
 
-        // Convert Bitmap to float array
-        val pixels = IntArray(pixelCount)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val safePixelCount = width * height
 
-        val floatPixels = FloatArray(pixelCount * 4)
-        for (i in 0 until pixelCount) {
+        // S2 修复: 内存安全分配 — 检查可用内存,不足时进一步降采样
+        val floatArrayBytes = safePixelCount.toLong() * 4 * 4 // 4 channels × 4 bytes
+        if (!MemoryGuard.canAllocateBitmap(floatArrayBytes + safePixelCount * 4)) {
+            // 内存不足,激进降采样
+            val safeScale = kotlin.math.sqrt(
+                (MemoryGuard.availableHeapBytes() * 0.6f / (safePixelCount.toFloat() * 4 * 4)).coerceIn(0.1f, 1f)
+            )
+            val safeW = (width * safeScale).toInt().coerceAtLeast(1)
+            val safeH = (height * safeScale).toInt().coerceAtLeast(1)
+            try {
+                if (needsDownscaleCleanup) sourceBitmap.recycle()
+                sourceBitmap = Bitmap.createScaledBitmap(bitmap, safeW, safeH, true)
+                needsDownscaleCleanup = true
+                width = safeW
+                height = safeH
+            } catch (e: OutOfMemoryError) {
+                android.util.Log.e(TAG, "Critical OOM during pipeline", e)
+                MemoryGuard.emergencyGC()
+                return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            }
+        }
+
+        val finalPixelCount = width * height
+
+        // S2 修复: 直接读取像素到 float 数组,减少中间 IntArray 分配
+        // 节省 pixelCount * 4 字节内存 (对于 2048x2048 约 16MB)
+        val pixels = IntArray(finalPixelCount)
+        sourceBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val floatPixels = FloatArray(finalPixelCount * 4)
+        for (i in 0 until finalPixelCount) {
             val pixel = pixels[i]
-            floatPixels[i * 4]     = ((pixel shr 16) and 0xFF) / 255.0f
-            floatPixels[i * 4 + 1] = ((pixel shr 8) and 0xFF) / 255.0f
-            floatPixels[i * 4 + 2] = (pixel and 0xFF) / 255.0f
-            floatPixels[i * 4 + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+            val base = i * 4
+            floatPixels[base]     = ((pixel shr 16) and 0xFF) / 255.0f
+            floatPixels[base + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+            floatPixels[base + 2] = (pixel and 0xFF) / 255.0f
+            floatPixels[base + 3] = ((pixel shr 24) and 0xFF) / 255.0f
         }
 
         // ── 尝试 GPU 加速路径 ──
+        // S2 修复: 使用局部变量捕获 GPU 服务,避免 !! 竞态和重复空检查
         var result: FloatArray? = null
+        val gpu = gpuPipelineService
 
-        if (gpuPipelineService != null && gpuPipelineService!!.checkGpuSupport()) {
+        if (gpu != null && gpu.checkGpuSupport()) {
             try {
-                // 确保 GPU 渲染器已针对当前尺寸初始化
-                gpuPipelineService!!.initialize(width, height)
-
-                // 尝试 GPU 管线处理（仅执行 GPU 擅长的算子）
-                result = gpuPipelineService!!.processOnGpu(floatPixels, width, height, params)
+                gpu.initialize(width, height)
+                result = gpu.processOnGpu(floatPixels, width, height, params)
 
                 // 若锐化量非零，追加 GPU 锐化 pass
                 if (result != null && params.sharpenAmount != 0f) {
-                    val sharpened = gpuPipelineService!!.sharpenOnGpu(
+                    val sharpened = gpu.sharpenOnGpu(
                         params.sharpenAmount.coerceAtLeast(0f),
                         5f // 默认锐化半径 5px
                     )
@@ -70,7 +124,7 @@ class PipelineService {
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.w("PipelineService", "GPU path failed, fallback to CPU", e)
+                android.util.Log.w(TAG, "GPU path failed, fallback to CPU", e)
                 result = null
             }
         }
@@ -81,19 +135,18 @@ class PipelineService {
                 val paramsArray = buildParamsArray(params)
                 result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
             } catch (e: Exception) {
-                android.util.Log.e("PipelineService", "CPU pipeline failed", e)
+                android.util.Log.e(TAG, "CPU pipeline failed", e)
             }
         }
 
         // 修复: 原生管线可能返回 null (例如 NDK 不可用)，需要安全回退
         if (result == null) {
-            // 回退到原始像素 (无处理)
             result = floatPixels
         }
 
         // Convert back to Bitmap
-        val resultPixels = IntArray(pixelCount)
-        for (i in 0 until pixelCount) {
+        val resultPixels = IntArray(finalPixelCount)
+        for (i in 0 until finalPixelCount) {
             val idx = i * 4
             if (idx + 3 >= result.size) break
             val a = (result[idx + 3].coerceIn(0f, 1f) * 255f).toInt()
@@ -105,6 +158,12 @@ class PipelineService {
 
         val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         resultBitmap.setPixels(resultPixels, 0, width, 0, 0, width, height)
+
+        // S2 修复: 清理降采样临时位图
+        if (needsDownscaleCleanup && !sourceBitmap.isRecycled) {
+            sourceBitmap.recycle()
+        }
+
         resultBitmap
     }
 

@@ -113,6 +113,24 @@ fun EditorScreen(
         }
     }
 
+    // S2 修复: 监听系统内存压力,低内存时释放非关键位图资源
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val componentCallback = object : android.content.ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) {
+                viewModel.onTrimMemory(level)
+            }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+            override fun onLowMemory() {
+                viewModel.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
+            }
+        }
+        context.registerComponentCallbacks(componentCallback)
+        onDispose {
+            context.unregisterComponentCallbacks(componentCallback)
+        }
+    }
+
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
@@ -153,19 +171,28 @@ fun EditorScreen(
 
     // 位图变化时计算示波器数据 — 在后台线程执行，避免阻塞 UI
     // UX 修复: 仅在示波器面板可见时计算,避免拖动滑块时全量重算导致卡顿
+    // S2 修复: 添加防抖 + 取消前次计算,避免滑块快速拖动时竞态和 ANR
     LaunchedEffect(preview, showScope) {
         if (!showScope) return@LaunchedEffect
         preview?.let { bitmap ->
+            // 延迟防抖,等待滑块停止后再计算
+            delay(300)
+            // 再次检查 scope 是否仍然可见
+            if (!showScope) return@LaunchedEffect
             isScopeComputing = true
-            withContext(Dispatchers.Default) {
-                try {
+            try {
+                withContext(Dispatchers.Default) {
                     histogramData = ScopeAnalyzer.computeHistogram(bitmap)
                     waveformData = ScopeAnalyzer.computeWaveform(bitmap)
                     vectorscopeData = ScopeAnalyzer.computeVectorscope(bitmap)
                     chromaticityData = ScopeAnalyzer.computeChromaticity(bitmap)
-                } finally {
-                    isScopeComputing = false
                 }
+            } catch (e: CancellationException) {
+                // 正常取消,不处理
+            } catch (e: Exception) {
+                android.util.Log.e("EditorScreen", "Scope computation failed", e)
+            } finally {
+                isScopeComputing = false
             }
         }
     }

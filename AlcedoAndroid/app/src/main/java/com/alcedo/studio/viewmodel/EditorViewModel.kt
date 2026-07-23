@@ -54,6 +54,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         // C8 修复: 预览处理使用降采样位图,避免 4096x4096 时 256MB float 数组 OOM
         // 2048x2048 = 4M 像素,float 数组 64MB,足够预览质量且不爆内存
         private const val PREVIEW_MAX_PIXELS = 2048 * 2048
+        // S2 修复: 预览防抖时间延长至 100ms,减少滑块快速拖动时过度重绘
+        private const val PREVIEW_DEBOUNCE_MS = 100L
+        // S2 修复: 示波器计算防抖时间,避免预览高速变化时全量重算
+        private const val SCOPE_DEBOUNCE_MS = 300L
     }
     private val imageRepository by lazy { AppModule.imageRepository }
     private val editHistoryRepository by lazy { AppModule.editHistoryRepository }
@@ -379,11 +383,20 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
      * C8 修复: 将原图降采样到 PREVIEW_MAX_PIXELS 以内,供实时预览 Pipeline 使用。
      * 2048x2048 足够预览质量,float 数组约 64MB,显著降低 OOM 风险。
      * 原图保留在 [_originalBitmap] 供导出使用。
+     *
+     * S2 修复: 根据设备内存自适应调整预览最大像素,低内存设备使用更小的预览尺寸。
      */
     private fun downscaleForPreview(source: Bitmap): Bitmap {
         val pixelCount = source.width.toLong() * source.height.toLong()
-        if (pixelCount <= PREVIEW_MAX_PIXELS) return source
-        val scale = kotlin.math.sqrt(PREVIEW_MAX_PIXELS.toFloat() / pixelCount.toFloat())
+        // S2 修复: 根据设备内存自适应预览尺寸
+        val adaptiveMaxPixels = try {
+            MemoryGuard.suggestedMaxPixels(AppModule.context)
+        } catch (e: Exception) {
+            PREVIEW_MAX_PIXELS
+        }
+        val effectiveMaxPixels = adaptiveMaxPixels.coerceIn(1024 * 1024, PREVIEW_MAX_PIXELS)
+        if (pixelCount <= effectiveMaxPixels) return source
+        val scale = kotlin.math.sqrt(effectiveMaxPixels.toFloat() / pixelCount.toFloat())
         val newW = (source.width * scale).toInt().coerceAtLeast(1)
         val newH = (source.height * scale).toInt().coerceAtLeast(1)
         return Bitmap.createScaledBitmap(source, newW, newH, true)
@@ -447,7 +460,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                         }
                         val decodeOptions = BitmapFactory.Options().apply {
                             inSampleSize = finalSampleSize
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                            // S2 修复: 低内存设备使用 RGB_565 解码原图,节省 50% 内存
+                            // RGB_565 色彩精度足够预览使用,导出时管线会重新处理
+                            inPreferredConfig = if (MemoryGuard.availableHeapBytes() < 128L * 1024 * 1024) {
+                                Bitmap.Config.RGB_565
+                            } else {
+                                Bitmap.Config.ARGB_8888
+                            }
                         }
                         BitmapDecoder.decodeBitmap(AppModule.context, img.imagePath, decodeOptions)
                     }
@@ -1336,10 +1355,13 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private var previewJob: Job? = null
 
+    // S2 修复: 示波器计算协程引用,用于取消和防抖
+    private var scopeJob: Job? = null
+
     fun regeneratePreview() {
         previewJob?.cancel()
         previewJob = viewModelScope.launch {
-            delay(50) // 50ms debounce
+            delay(PREVIEW_DEBOUNCE_MS) // S2 修复: 100ms 防抖,减少快速拖动滑块时的过度重绘
             _isProcessing.value = true
             try {
                 // C8 修复: 使用降采样位图进行预览,避免大图 OOM
@@ -1376,10 +1398,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun applyAutoExposure() {
         viewModelScope.launch {
             try {
-                val bitmap = _originalBitmap.value ?: return@launch
+                // S2 修复: 使用预览降采样位图进行自动曝光分析,避免大图 OOM
+                // 原图可能是 4096x4096,IntArray+FloatArray 需要 80MB,极易 OOM
+                val bitmap = previewSourceBitmap ?: _originalBitmap.value ?: return@launch
                 val width = bitmap.width
                 val height = bitmap.height
                 val pixelCount = width * height
+
+                // S2 修复: 超大图额外安全检查
+                if (pixelCount > MAX_BITMAP_PIXELS / 4) {
+                    // 超过 4M 像素,跳过自动曝光分析以避免 OOM
+                    android.util.Log.w(TAG, "applyAutoExposure skipped: image too large (${pixelCount}px)")
+                    return@launch
+                }
 
                 val pixels = IntArray(pixelCount)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
@@ -2756,7 +2787,19 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     showSnackbar("导出失败：无法加载原始图片")
                     return@launch
                 }
-                var pipelineBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
+
+                // S2 修复: 导出前检查内存,超大图导出可能 OOM
+                val pixelCount = originalBitmap.width.toLong() * originalBitmap.height.toLong()
+                if (pixelCount > MAX_BITMAP_PIXELS) {
+                    Log.w(TAG, "Export: image ${pixelCount}px exceeds safe limit, may OOM")
+                }
+                if (!MemoryGuard.canAllocateBitmap(pixelCount * 4 * 5)) {
+                    // 需要约 5x 像素字节的内存 (原图 + float数组 + 结果)
+                    Log.w(TAG, "Export: low memory, triggering GC")
+                    MemoryGuard.emergencyGC()
+                }
+
+                var pipelineBitmap = pipelineService.applyPipeline(originalBitmap, _params.value, forceFullResolution = true)
                 // C1 修复: 导出时必须应用蒙版/局部调整,否则用户所有蒙版调整
                 // (主体/天空/画笔等)不会出现在导出图像中
                 val containers = _maskContainers.value
@@ -2930,10 +2973,53 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        // S2 修复: 取消所有协程任务,避免 ViewModel 销毁后泄漏
+        previewJob?.cancel()
+        previewJob = null
+        scopeJob?.cancel()
+        scopeJob = null
         stopAutoSave()
         releasePipelineSnapshot()
         // 不 recycle — 避免配置变更期间 use-after-recycle 崩溃
         clearBitmaps()
+    }
+
+    /**
+     * S2 修复: 系统内存压力回调 — 低内存时主动释放非关键资源。
+     * 由 Activity/Fragment 在 onTrimMemory/onLowMemory 中调用。
+     */
+    fun onTrimMemory(level: Int) {
+        when (level) {
+            android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+            android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
+                // 中等压力: 释放预览缓存,保留原图
+                Log.w(TAG, "Trim memory level $level: clearing preview cache")
+                _previewBitmap.value?.let { bmp ->
+                    if (!bmp.isRecycled && bmp !== previewSourceBitmap && bmp !== _originalBitmap.value) {
+                        bmp.recycle()
+                    }
+                }
+                _previewBitmap.value = null
+                System.gc()
+            }
+            android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+            android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE,
+            android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                // 高压力: 释放所有位图,仅保留参数
+                Log.w(TAG, "Trim memory level $level: releasing all bitmaps")
+                releasePipelineSnapshot()
+                _originalBitmap.value?.let { bmp ->
+                    if (!bmp.isRecycled) bmp.recycle()
+                }
+                _originalBitmap.value = null
+                _previewBitmap.value?.let { bmp ->
+                    if (!bmp.isRecycled) bmp.recycle()
+                }
+                _previewBitmap.value = null
+                previewSourceBitmap = null
+                MemoryGuard.emergencyGC()
+            }
+        }
     }
 }
 
