@@ -911,6 +911,30 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    fun updateLensAdvanced(
+        cx: Float? = null,
+        cy: Float? = null,
+        focalRatio: Float? = null,
+        vignetteStrength: Float? = null
+    ) {
+        val old = _params.value
+        val newCx = cx ?: old.lensCx
+        val newCy = cy ?: old.lensCy
+        val newFocal = focalRatio ?: old.lensFocalRatio
+        val newVig = vignetteStrength ?: old.lensVignetteStrength
+        _params.value = old.copy(
+            lensCx = newCx,
+            lensCy = newCy,
+            lensFocalRatio = newFocal,
+            lensVignetteStrength = newVig
+        )
+        if (cx != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensCx", newCx)
+        if (cy != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensCy", newCy)
+        if (focalRatio != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensFocalRatio", newFocal)
+        if (vignetteStrength != null) recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteStrength", newVig)
+        regeneratePreview()
+    }
+
     fun resetLensCorrection() {
         _params.value = _params.value.copy(
             lensK1 = 0f,
@@ -918,6 +942,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             lensK3 = 0f,
             lensP1 = 0f,
             lensP2 = 0f,
+            lensCx = 0.5f,
+            lensCy = 0.5f,
+            lensFocalRatio = 1f,
+            lensVignetteStrength = 0f,
             lensAutoDetect = false,
             lensMaker = "",
             lensModel = "",
@@ -933,6 +961,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         recordTransaction(OperatorType.LENS_CORRECTION, "lensK3", 0f)
         recordTransaction(OperatorType.LENS_CORRECTION, "lensP1", 0f)
         recordTransaction(OperatorType.LENS_CORRECTION, "lensP2", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCx", 0.5f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCy", 0.5f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensFocalRatio", 1f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteStrength", 0f)
         recordTransaction(OperatorType.LENS_CORRECTION, "lensAutoDetect", 0f)
         recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectDistortion", 0f)
         recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectVignette", 0f)
@@ -1997,6 +2029,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "lensP1" -> lensP1
                 "lensP2" -> lensP2
                 "lensVignetteStrength" -> lensVignetteStrength
+                "lensCx" -> lensCx
+                "lensCy" -> lensCy
+                "lensFocalRatio" -> lensFocalRatio
                 // Denoise params
                 "luminanceDenoiseStrength" -> luminanceDenoiseStrength
                 "luminanceDenoiseDetail" -> luminanceDenoiseDetail
@@ -2196,6 +2231,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "lensP1" -> reconstructed.copy(lensP1 = floatValue)
                     "lensP2" -> reconstructed.copy(lensP2 = floatValue)
                     "lensVignetteStrength" -> reconstructed.copy(lensVignetteStrength = floatValue)
+                    "lensCx" -> reconstructed.copy(lensCx = floatValue)
+                    "lensCy" -> reconstructed.copy(lensCy = floatValue)
+                    "lensFocalRatio" -> reconstructed.copy(lensFocalRatio = floatValue)
                     "luminanceDenoiseStrength" -> reconstructed.copy(luminanceDenoiseStrength = floatValue)
                     "luminanceDenoiseDetail" -> reconstructed.copy(luminanceDenoiseDetail = floatValue)
                     "chromaDenoiseStrength" -> reconstructed.copy(chromaDenoiseStrength = floatValue)

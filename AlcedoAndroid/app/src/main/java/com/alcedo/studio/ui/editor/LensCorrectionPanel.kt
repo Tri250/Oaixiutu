@@ -110,22 +110,57 @@ fun LensCorrectionPanel(
                 AdjustmentSlider(label = "K1", value = params.lensK1, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(it, params.lensK2, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "K2", value = params.lensK2, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, it, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "K3", value = params.lensK3, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, it, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "P1", value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
+                AdjustmentSlider(label = "P1 (Tangential)", value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, it, params.lensP2)
                 }, defaultValue = 0f)
-                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "P2", value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
+                AdjustmentSlider(label = "P2 (Tangential)", value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, params.lensP1, it)
                 }, defaultValue = 0f)
+            }
+        }
+
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Text(
+                    stringRes { lensAdvanced },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
+                AdjustmentSlider(
+                    label = stringRes { lensOpticalCenterX },
+                    value = params.lensCx,
+                    range = 0f..1f,
+                    onValueChange = { viewModel.updateLensAdvanced(cx = it) },
+                    defaultValue = 0.5f
+                )
+                AdjustmentSlider(
+                    label = stringRes { lensOpticalCenterY },
+                    value = params.lensCy,
+                    range = 0f..1f,
+                    onValueChange = { viewModel.updateLensAdvanced(cy = it) },
+                    defaultValue = 0.5f
+                )
+                AdjustmentSlider(
+                    label = stringRes { lensFocalRatio },
+                    value = params.lensFocalRatio,
+                    range = 0.5f..2f,
+                    onValueChange = { viewModel.updateLensAdvanced(focalRatio = it) },
+                    defaultValue = 1f
+                )
+                AdjustmentSlider(
+                    label = stringRes { lensVignetteStrength },
+                    value = params.lensVignetteStrength,
+                    range = 0f..1f,
+                    onValueChange = { viewModel.updateLensAdvanced(vignetteStrength = it) },
+                    defaultValue = 0f
+                )
             }
         }
     }

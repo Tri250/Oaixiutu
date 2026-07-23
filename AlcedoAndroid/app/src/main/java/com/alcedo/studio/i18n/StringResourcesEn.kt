@@ -906,6 +906,28 @@ class EnglishStrings : StringResources {
     override val aboutMinSdk = "Min SDK"
     override val aboutArchitecture = "Architecture"
     override val aboutLicense = "License"
+
+    // Lens Advanced (高级镜头校正参数)
+    override val lensAdvanced = "Advanced"
+    override val lensOpticalCenterX = "Optical Center X"
+    override val lensOpticalCenterY = "Optical Center Y"
+    override val lensFocalRatio = "Focal Ratio"
+
+    // RAW Decode (RAW 解码面板)
+    override val rawDemosaicTitle = "RAW Decode"
+    override val rawDemosaicAlgorithm = "Demosaic Algorithm"
+    override val rawProcessingOptions = "Processing Options"
+    override val rawHighlightReconstruction = "Highlight Reconstruction"
+    override val rawHighlightReconstructionDesc = "Interpolate clipped highlight detail from neighboring pixels"
+    override val rawAutoBrightness = "Auto Brightness"
+    override val rawAutoBrightnessDesc = "Auto-adjust RAW decode luminance range from histogram"
+    override val rawUseCameraMatrix = "Use Camera Color Matrix"
+    override val rawUseCameraMatrixDesc = "Use native camera color matrix instead of generic standard matrix"
+    override val rawSensorParameters = "Sensor Parameters"
+    override val rawBayerPattern = "Bayer Pattern"
+    override val rawWhiteLevel = "White Level"
+    override val rawBlackLevel = "Black Level"
+    override val rawReset = "Reset RAW"
     override val privacyContent = """Alcedo Studio Privacy Policy
 
 Effective Date: January 1, 2026

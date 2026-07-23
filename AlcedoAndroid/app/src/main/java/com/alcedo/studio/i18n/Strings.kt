@@ -912,6 +912,28 @@ interface StringResources {
     val aboutMinSdk: String
     val aboutArchitecture: String
     val aboutLicense: String
+
+    // ── Lens Advanced (镜头校正高级参数) ─────────────────────────────
+    val lensAdvanced: String
+    val lensOpticalCenterX: String
+    val lensOpticalCenterY: String
+    val lensFocalRatio: String
+
+    // ── RAW Decode (RAW 解码面板) ────────────────────────────────────
+    val rawDemosaicTitle: String
+    val rawDemosaicAlgorithm: String
+    val rawProcessingOptions: String
+    val rawHighlightReconstruction: String
+    val rawHighlightReconstructionDesc: String
+    val rawAutoBrightness: String
+    val rawAutoBrightnessDesc: String
+    val rawUseCameraMatrix: String
+    val rawUseCameraMatrixDesc: String
+    val rawSensorParameters: String
+    val rawBayerPattern: String
+    val rawWhiteLevel: String
+    val rawBlackLevel: String
+    val rawReset: String
 }
 
 /**

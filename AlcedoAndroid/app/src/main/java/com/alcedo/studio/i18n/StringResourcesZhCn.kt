@@ -906,6 +906,28 @@ class ChineseSimplifiedStrings : StringResources {
     override val aboutMinSdk = "最低 SDK"
     override val aboutArchitecture = "架构"
     override val aboutLicense = "许可证"
+
+    // Lens Advanced (镜头校正高级参数)
+    override val lensAdvanced = "高级参数"
+    override val lensOpticalCenterX = "光学中心 X"
+    override val lensOpticalCenterY = "光学中心 Y"
+    override val lensFocalRatio = "焦距比例"
+
+    // RAW Decode (RAW 解码面板)
+    override val rawDemosaicTitle = "RAW 解码"
+    override val rawDemosaicAlgorithm = "去马赛克算法"
+    override val rawProcessingOptions = "处理选项"
+    override val rawHighlightReconstruction = "高光重建"
+    override val rawHighlightReconstructionDesc = "通过邻近像素插值恢复过曝的高光细节"
+    override val rawAutoBrightness = "自动亮度"
+    override val rawAutoBrightnessDesc = "根据直方图自动调整 RAW 解码亮度范围"
+    override val rawUseCameraMatrix = "使用相机色彩矩阵"
+    override val rawUseCameraMatrixDesc = "使用相机原生色彩矩阵而非通用标准矩阵"
+    override val rawSensorParameters = "传感器参数"
+    override val rawBayerPattern = "拜耳阵列"
+    override val rawWhiteLevel = "白电平"
+    override val rawBlackLevel = "黑电平"
+    override val rawReset = "重置 RAW"
     override val privacyContent = """Alcedo Studio 隐私政策
 
 生效日期：2026年1月1日
