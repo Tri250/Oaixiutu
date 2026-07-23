@@ -23,14 +23,15 @@ class PipelineService {
     // ================================================================
 
     suspend fun applyPipeline(bitmap: Bitmap, params: PipelineParams): Bitmap = withContext(Dispatchers.Default) {
-        // 验证输入 Bitmap 有效性
+        // P3-3 修复: isRecycled 时返回一个新的 1x1 透明 bitmap 而非已回收的输入,
+        // 避免已回收 bitmap 流入 UI 层导致渲染崩溃
         if (bitmap.isRecycled) {
-            return@withContext bitmap
+            return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         }
         val width = bitmap.width
         val height = bitmap.height
         if (width <= 0 || height <= 0) {
-            return@withContext bitmap
+            return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         }
         val pixelCount = width * height
 

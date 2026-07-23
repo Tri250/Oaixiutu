@@ -431,7 +431,11 @@ class ExportService(private val context: Context) {
                 // For TIFF/EXR, write to temp file then copy to stream
                 val tempFile = File.createTempFile("alcedo_export_", ".tmp", context.cacheDir)
                 try {
-                    writeImage(bitmap, tempFile, settings)
+                    // P3-8 修复: 检查 writeImage 返回值,失败时抛出异常而非产出损坏文件
+                    val writeOk = writeImage(bitmap, tempFile, settings)
+                    if (!writeOk) {
+                        throw java.io.IOException("Failed to write ${settings.format.name} image data")
+                    }
                     tempFile.inputStream().use { it.copyTo(outputStream) }
                 } finally {
                     tempFile.delete()

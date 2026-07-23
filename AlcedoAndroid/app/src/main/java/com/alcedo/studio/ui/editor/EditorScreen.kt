@@ -178,7 +178,14 @@ fun EditorScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    // P3-4 修复: navigationIcon 必须与 BackHandler 一致,检查未保存修改
+                    IconButton(onClick = {
+                        if (viewModel.hasUnsavedChanges()) {
+                            showUnsavedDialog = true
+                        } else {
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = stringRes { back },

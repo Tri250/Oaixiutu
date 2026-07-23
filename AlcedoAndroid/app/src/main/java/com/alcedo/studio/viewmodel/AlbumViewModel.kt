@@ -64,6 +64,9 @@ class AlbumViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    // P3-6 修复: 导入互斥锁,防止并发导入互相覆盖状态
+    private val isImporting = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
@@ -276,6 +279,11 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun importFromSafDirectory(treeUri: Uri) {
+        // P3-6 修复: 并发导入互斥
+        if (!isImporting.compareAndSet(false, true)) {
+            _permissionRationale.value = "正在导入中，请等待当前导入完成"
+            return
+        }
         viewModelScope.launch {
             _isLoading.value = true
             _permissionRationale.value = null  // 清除前次错误消息,避免显示陈旧信息
@@ -309,7 +317,22 @@ class AlbumViewModel : ViewModel() {
                 val uris = imageFiles.map { it.uri }
                 _importProgress.value = ImportProgress(0, uris.size, "importing")
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
+
+                // P3-7 修复: 收集 ImportService 的细粒度进度,实时更新进度条
+                val progressJob = launch {
+                    importService.importProgress.collect { svcProgress ->
+                        if (svcProgress.totalFiles > 0) {
+                            _importProgress.value = ImportProgress(
+                                current = svcProgress.processedFiles,
+                                total = svcProgress.totalFiles,
+                                phase = "importing"
+                            )
+                        }
+                    }
+                }
+
                 val result = importService.importTwoPhase(uris)
+                progressJob.cancel()
                 if (result.successCount == 0) {
                     if (result.duplicateCount > 0 && result.errorCount == 0) {
                         _permissionRationale.value = "所选图片已存在于图库中"
@@ -348,6 +371,7 @@ class AlbumViewModel : ViewModel() {
                 _importProgress.value = null
             } finally {
                 _isLoading.value = false
+                isImporting.set(false) // P3-6 修复: 释放互斥锁
             }
         }
     }
@@ -357,6 +381,11 @@ class AlbumViewModel : ViewModel() {
     // ================================================================
 
     fun importFromPhotoPicker(uris: List<Uri>) {
+        // P3-6 修复: 并发导入互斥
+        if (!isImporting.compareAndSet(false, true)) {
+            _permissionRationale.value = "正在导入中，请等待当前导入完成"
+            return
+        }
         viewModelScope.launch {
             _isLoading.value = true
             _permissionRationale.value = null  // 清除前次错误消息,避免显示陈旧信息
@@ -379,7 +408,28 @@ class AlbumViewModel : ViewModel() {
                 // Use two-phase import for better UX (fast scan + background metadata)
                 _importProgress.value = ImportProgress(0, uris.size, "importing")
                 TaskNotificationHelper.notifyImportProgress(context, 0, uris.size)
+
+                // P3-7 修复: 收集 ImportService 的细粒度进度,实时更新进度条
+                val progressJob = launch {
+                    importService.importProgress.collect { svcProgress ->
+                        if (svcProgress.totalFiles > 0) {
+                            _importProgress.value = ImportProgress(
+                                current = svcProgress.processedFiles,
+                                total = svcProgress.totalFiles,
+                                phase = when (svcProgress.currentPhase) {
+                                    com.alcedo.studio.domain.service.ImportService.ImportPhase.PHASE_A_SCANNING,
+                                    com.alcedo.studio.domain.service.ImportService.ImportPhase.PHASE_A_CREATING -> "importing"
+                                    com.alcedo.studio.domain.service.ImportService.ImportPhase.PHASE_B_METADATA,
+                                    com.alcedo.studio.domain.service.ImportService.ImportPhase.PHASE_B_THUMBNAILS -> "importing"
+                                    else -> "importing"
+                                }
+                            )
+                        }
+                    }
+                }
+
                 val result = importService.importTwoPhase(uris)
+                progressJob.cancel()
                 if (result.successCount == 0) {
                     if (result.duplicateCount > 0 && result.errorCount == 0) {
                         _permissionRationale.value = "所选图片已存在于图库中"
@@ -418,6 +468,7 @@ class AlbumViewModel : ViewModel() {
                 _importProgress.value = null
             } finally {
                 _isLoading.value = false
+                isImporting.set(false) // P3-6 修复: 释放互斥锁
             }
         }
     }

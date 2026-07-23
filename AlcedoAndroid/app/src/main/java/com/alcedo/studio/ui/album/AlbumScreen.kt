@@ -466,6 +466,7 @@ fun AlbumScreen(
             onSelectFiles = {
                 showImport = false
                 // P-1 修复: 检测 Photo Picker 可用性，不可用时回退到 ACTION_GET_CONTENT
+                // P3-5 修复: 所有回退层级均需 try-catch 保护,避免 ActivityNotFoundException 崩溃
                 if (PhotoPickerHelper.isAvailable(context)) {
                     try {
                         photoPickerLauncher.launch(
@@ -476,14 +477,22 @@ fun AlbumScreen(
                         try {
                             fallbackFileLauncher.launch("image/*")
                         } catch (e2: Exception) {
-                            singleFileLauncher.launch("image/*")
+                            try {
+                                singleFileLauncher.launch("image/*")
+                            } catch (_: Exception) {
+                                viewModel.setPermissionError("设备不支持图片选择，请检查系统组件")
+                            }
                         }
                     }
                 } else {
                     try {
                         fallbackFileLauncher.launch("image/*")
                     } catch (e: Exception) {
-                        singleFileLauncher.launch("image/*")
+                        try {
+                            singleFileLauncher.launch("image/*")
+                        } catch (_: Exception) {
+                            viewModel.setPermissionError("设备不支持图片选择，请检查系统组件")
+                        }
                     }
                 }
             },

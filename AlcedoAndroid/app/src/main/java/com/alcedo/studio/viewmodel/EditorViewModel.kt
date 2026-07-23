@@ -476,12 +476,24 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 _imageLoadError.value = true
             }
 
-            _history.value = editHistoryRepository.getHistory(id.toUInt())
-                ?: EditHistory(boundImageId = id.toUInt())
-            _workingVersion.value = WorkingVersion(
-                boundImageId = id.toUInt(),
-                versionId = _history.value?.activeVersionId ?: ""
-            )
+            // P3-9 修复: 历史加载需要异常保护,数据库损坏/SQLCipher 异常时不应崩溃协程
+            try {
+                _history.value = editHistoryRepository.getHistory(id.toUInt())
+                    ?: EditHistory(boundImageId = id.toUInt())
+                _workingVersion.value = WorkingVersion(
+                    boundImageId = id.toUInt(),
+                    versionId = _history.value?.activeVersionId ?: ""
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.e(TAG, "Failed to load edit history", e)
+                _history.value = EditHistory(boundImageId = id.toUInt())
+                _workingVersion.value = WorkingVersion(
+                    boundImageId = id.toUInt(),
+                    versionId = ""
+                )
+            }
             // Load preset list
             loadPresets()
         }
@@ -1083,13 +1095,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             try {
                 // C8 修复: 使用降采样位图进行预览,避免大图 OOM
                 val source = previewSourceBitmap ?: _originalBitmap.value
-                if (source != null) {
+                if (source != null && !source.isRecycled) {
                     val oldPreview = _previewBitmap.value
-                    _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
-                    // Recycle the previous preview bitmap to free memory,
-                    // but only after the new one is assigned to avoid the UI
-                    // referencing a recycled bitmap.
-                    if (oldPreview != null && !oldPreview.isRecycled) {
+                    val newPreview = pipelineService.applyPipeline(source, _params.value)
+                    _previewBitmap.value = newPreview
+                    // P3-2 修复: 回收旧预览时必须排除 previewSourceBitmap 和 _originalBitmap,
+                    // 因为 downscaleForPreview 在小图时直接返回 source (同一对象),
+                    // 回收它们会导致 source 被 destroy,后续预览和导出全部崩溃。
+                    if (oldPreview != null && !oldPreview.isRecycled
+                        && oldPreview !== previewSourceBitmap
+                        && oldPreview !== _originalBitmap.value
+                        && oldPreview !== newPreview
+                    ) {
                         oldPreview.recycle()
                     }
                 }
