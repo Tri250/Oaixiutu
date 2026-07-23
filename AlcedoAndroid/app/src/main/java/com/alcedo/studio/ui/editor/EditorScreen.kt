@@ -546,6 +546,9 @@ fun EditorScreen(
                                                     ),
                                                     OperatorType.LUT
                                                 )
+                                            },
+                                            onApplyBuiltinPreset = { params ->
+                                                viewModel.applyPresetParams(params)
                                             }
                                         )
                                     }
@@ -1178,6 +1181,9 @@ private fun EditorPanelColumn(
                                 ),
                                 OperatorType.LUT
                             )
+                        },
+                        onApplyBuiltinPreset = { params ->
+                            viewModel.applyPresetParams(params)
                         }
                     )
                 }

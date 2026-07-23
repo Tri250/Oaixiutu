@@ -61,7 +61,7 @@ fun LensCorrectionPanel(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "自动检测到镜头",
+                            stringRes { inspectorAutoDetectedLens },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -76,7 +76,7 @@ fun LensCorrectionPanel(
                             profile.k1, profile.k2, profile.k3, profile.p1, profile.p2
                         )
                     }) {
-                        Text("应用")
+                        Text(stringRes { applyButton })
                     }
                 }
             }
@@ -108,18 +108,28 @@ fun LensCorrectionPanel(
                 }
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(label = stringRes { k1Distortion }, value = params.lensK1, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrectionK1Drag(it)
+                }, onValueChangeFinished = {
                     viewModel.updateLensCorrection(it, params.lensK2, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
                 AdjustmentSlider(label = stringRes { k2Distortion }, value = params.lensK2, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrectionK2Drag(it)
+                }, onValueChangeFinished = {
                     viewModel.updateLensCorrection(params.lensK1, it, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
                 AdjustmentSlider(label = stringRes { k3Distortion }, value = params.lensK3, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrectionK3Drag(it)
+                }, onValueChangeFinished = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, it, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
                 AdjustmentSlider(label = stringRes { p1Tangential }, value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
+                    viewModel.updateLensCorrectionP1Drag(it)
+                }, onValueChangeFinished = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, it, params.lensP2)
                 }, defaultValue = 0f)
                 AdjustmentSlider(label = stringRes { p2Tangential }, value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
+                    viewModel.updateLensCorrectionP2Drag(it)
+                }, onValueChangeFinished = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, params.lensP1, it)
                 }, defaultValue = 0f)
             }

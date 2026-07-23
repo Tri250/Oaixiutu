@@ -935,6 +935,64 @@ interface StringResources {
     val rawBlackLevel: String
     val rawReset: String
 
+    // ── Lens Vignette Strength ──────────────────────────────────────────
+    val lensVignetteStrength: String
+
+    // ── Inspector sections ─────────────────────────────────────────────
+    val inspectorFile: String
+    val inspectorSize: String
+    val inspectorDimensions: String
+    val inspectorFormat: String
+    val inspectorCamera: String
+    val inspectorLens: String
+    val inspectorCapture: String
+    val inspectorColorTime: String
+    val inspectorRawSection: String
+    val inspectorDjiFlight: String
+    val inspectorAiScene: String
+    val inspectorGpsSection: String
+    val inspectorLatitude: String
+    val inspectorLongitude: String
+    val inspectorAltitude: String
+    val inspectorMake: String
+    val inspectorModel: String
+    val inspectorFocalLengthMm: String
+    val inspector35mmEquiv: String
+    val inspectorMaxAperture: String
+    val inspectorShutter: String
+    val inspectorApertureLabel: String
+    val inspectorExposureEv: String
+    val inspectorColorSpaceLabel: String
+    val inspectorCaptureDate: String
+    val inspectorBitDepth: String
+    val inspectorWhiteBalanceLabel: String
+    val inspectorDemosaic: String
+    val inspectorDefaultDemosaic: String
+    val inspectorFlightHeight: String
+    val inspectorGpsMode: String
+    val inspectorGimbalPitch: String
+    val inspectorMultiFrame: String
+    val inspectorBitDepthValue: String // "{n}-bit"
+    val inspectorRawLabel: String // "(RAW)"
+    val inspectorAutoDetectedLens: String
+    val inspectorEditsCount: String // "{n} edits"
+    val inspectorStrokesCount: String // "{n} strokes"
+    val inspectorFileSizeGB: String // "{n} GB"
+    val inspectorFileSizeMB: String // "{n} MB"
+    val inspectorFileSizeKB: String // "{n} KB"
+    val inspectorFileSizeB: String // "{n} B"
+    val lmtBuiltInPresetsDesc: String
+
+    // LMT built-in preset names
+    val lmtPresetCinematicTeal: String
+    val lmtPresetVintageFilm: String
+    val lmtPresetBwContrast: String
+    val lmtPresetMoodyBlue: String
+    val lmtPresetWarmSunset: String
+    val lmtPresetDesaturated: String
+    val lmtPresetFilmGrain: String
+    val lmtPresetHdrNatural: String
+
     // ── Hardcoded string extraction ──────────────────────────────────────
     val editedImage: String
     val rotate90: String

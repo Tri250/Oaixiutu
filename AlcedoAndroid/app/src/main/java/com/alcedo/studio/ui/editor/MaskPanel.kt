@@ -571,7 +571,7 @@ private fun SubMaskRow(
                     }
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "${sub.params.brushStrokes.size} strokes",
+                        stringRes { inspectorStrokesCount }.format(sub.params.brushStrokes.size),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -1096,6 +1096,48 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    fun updateLensCorrection(
+        k1: Float, k2: Float, k3: Float,
+        p1: Float, p2: Float,
+        intermediate: Boolean = false
+    ) {
+        _params.value = _params.value.copy(
+            lensK1 = k1, lensK2 = k2, lensK3 = k3,
+            lensP1 = p1, lensP2 = p2
+        )
+        if (intermediate) {
+            regeneratePreview(isIntermediate = true)
+            return
+        }
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK1", k1)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK2", k2)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK3", k3)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensP1", p1)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensP2", p2)
+        regeneratePreview()
+    }
+
+    fun updateLensCorrectionK1Drag(value: Float) {
+        val p = _params.value
+        updateLensCorrection(value, p.lensK2, p.lensK3, p.lensP1, p.lensP2, intermediate = true)
+    }
+    fun updateLensCorrectionK2Drag(value: Float) {
+        val p = _params.value
+        updateLensCorrection(p.lensK1, value, p.lensK3, p.lensP1, p.lensP2, intermediate = true)
+    }
+    fun updateLensCorrectionK3Drag(value: Float) {
+        val p = _params.value
+        updateLensCorrection(p.lensK1, p.lensK2, value, p.lensP1, p.lensP2, intermediate = true)
+    }
+    fun updateLensCorrectionP1Drag(value: Float) {
+        val p = _params.value
+        updateLensCorrection(p.lensK1, p.lensK2, p.lensK3, value, p.lensP2, intermediate = true)
+    }
+    fun updateLensCorrectionP2Drag(value: Float) {
+        val p = _params.value
+        updateLensCorrection(p.lensK1, p.lensK2, p.lensK3, p.lensP1, value, intermediate = true)
+    }
+
     fun updateLensAdvanced(
         cx: Float? = null,
         cy: Float? = null,

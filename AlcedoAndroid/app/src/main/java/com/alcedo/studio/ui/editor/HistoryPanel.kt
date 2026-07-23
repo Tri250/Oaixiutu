@@ -274,7 +274,7 @@ fun HistoryPanel(
                     Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                     Text(
-                        text = "${version.transactions.size} edits",
+                        text = stringRes { inspectorEditsCount }.format(version.transactions.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
