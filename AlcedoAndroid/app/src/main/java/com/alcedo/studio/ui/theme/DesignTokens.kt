@@ -3,6 +3,7 @@ package com.alcedo.studio.ui.theme
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.ui.common.AlcedoEasing
 
 // ═══════════════════════════════════════════════════════════════════
 // 2026 Alcedo Design Tokens – 统一设计令牌系统

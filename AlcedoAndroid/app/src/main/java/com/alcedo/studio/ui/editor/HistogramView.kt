@@ -66,7 +66,7 @@ fun HistogramView(
     val safeHighlightThreshold = highlightClipThreshold.coerceIn(0, histogramData.luminance.size - 1)
     val safeShadowThreshold = shadowClipThreshold.coerceIn(0, histogramData.luminance.size - 1)
     val highlightClipped = totalLuminance > 0f && safeHighlightThreshold < histogramData.luminance.size &&
-            histogramData.luminance.sliceArray(safeHighlightThreshold..histogramData.luminance.size.lastIndex).sum() > totalLuminance * 0.02f
+            histogramData.luminance.sliceArray(safeHighlightThreshold..histogramData.luminance.lastIndex).sum() > totalLuminance * 0.02f
     val shadowClipped = totalLuminance > 0f && safeShadowThreshold > 0 &&
             histogramData.luminance.sliceArray(0 until safeShadowThreshold).sum() > totalLuminance * 0.02f
 

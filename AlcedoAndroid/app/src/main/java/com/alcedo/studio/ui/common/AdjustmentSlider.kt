@@ -191,7 +191,7 @@ fun AdjustmentSlider(
             },
             track = { sliderState ->
                 // 2026: 轨道 — 圆角矩形 + 渐变激活
-                val fraction = sliderState.valueFraction
+                val fraction = sliderState.coercedValueAsFraction
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
