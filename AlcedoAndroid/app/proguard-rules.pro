@@ -21,8 +21,18 @@
 # Keep all NDK bridge objects and their native methods
 -keep class com.alcedo.studio.ndk.AlcedoNdkBridge { *; }
 -keep class com.alcedo.studio.ndk.AiNdkBridge { *; }
+-keep class com.alcedo.studio.ndk.AlcedoNativeBridge { *; }
+-keep class com.alcedo.studio.ndk.NdkSafeCall { *; }
+# Legacy bridges (may still be referenced by native code)
 -keep class com.alcedo.studio.ndk.DecodeNdkBridge { *; }
 -keep class com.alcedo.studio.ndk.SleeveNdkBridge { *; }
+-keep class com.alcedo.studio.domain.service.NativePipelineBridge { *; }
+-keep class com.alcedo.studio.security.NativeSecurityChecker { *; }
+# JNI-constructed data classes (NewObject in native-lib.cpp)
+-keep class com.alcedo.studio.domain.service.NativeDecodeResult { *; }
+-keep class com.alcedo.studio.domain.service.NativeThumbnailResult { *; }
+-keep class com.alcedo.studio.domain.service.NativeRawInfoResult { *; }
+-keep class com.alcedo.studio.domain.service.DecodeService$RawImageInfo { *; }
 
 # Keep any class with native methods
 -keepclasseswithmembernames class * {

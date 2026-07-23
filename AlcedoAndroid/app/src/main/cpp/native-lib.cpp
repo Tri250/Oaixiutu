@@ -348,10 +348,10 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
     RawDecodeResult decResult;
     RawDecoder raw;
     bool ok = raw.decode(path, decResult, opts);
-    env->ReleaseStringUTFChars(rawPath, path);
 
     if (!ok || !decResult.success || decResult.rgb_data.empty()) {
         LOGE("Legacy RAW decode failed for: %s", path);
+        env->ReleaseStringUTFChars(rawPath, path);
         jintArray empty = env->NewIntArray(0);
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return empty ? empty : env->NewIntArray(0);
@@ -377,11 +377,10 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
         outPixels[i] = (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
     env->SetIntArrayRegion(result, 0, static_cast<jsize>(totalPixels), outPixels.data());
+    env->ReleaseStringUTFChars(rawPath, path);
     return result;
 }
 
-// ============================================================
-// Color Science Transforms
 // ============================================================
 
 JNIEXPORT jfloatArray JNICALL
@@ -2662,6 +2661,514 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateEdgeMask(
     }
     env->SetFloatArrayRegion(output, 0, width * height, edges.data());
     return output;
+}
+
+// ============================================================
+// AlcedoNativeBridge JNI proxies — delegate to existing
+// DecodeNdkBridge / NativePipelineBridge / SleeveNdkBridge
+// implementations so that AlcedoNativeBridge.external fun calls
+// in Kotlin resolve correctly at runtime.
+// ============================================================
+
+// ── Basic utility proxies (from AlcedoNdkBridge) ──
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_stringFromJNI(JNIEnv *env, jobject thiz) {
+    return Java_com_alcedo_studio_ndk_AlcedoNdkBridge_stringFromJNI(env, thiz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeInitialize(JNIEnv *env, jobject thiz) {
+    Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeInitialize(env, thiz);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateId(JNIEnv *env, jobject thiz) {
+    return Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGenerateId(env, thiz);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGetTimestampMillis(JNIEnv *env, jobject thiz) {
+    return Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMillis(env, thiz);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGetTimestampMicros(JNIEnv *env, jobject thiz) {
+    return Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeGetTimestampMicros(env, thiz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetLogLevel(JNIEnv *env, jobject thiz, jint level) {
+    Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeSetLogLevel(env, thiz, level);
+}
+
+// ── Pipeline proxies ──
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyPipelineFloat(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels, jfloatArray paramsArray) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFloat(
+        env, thiz, input, width, height, channels, paramsArray);
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyPipeline(
+        JNIEnv *env, jobject thiz,
+        jintArray input, jint width, jint height,
+        jfloat exposure, jfloat contrast, jfloat saturation,
+        jfloat highlights, jfloat shadows, jfloat temperature, jfloat tint, jfloat sharpen) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipeline(
+        env, thiz, input, width, height, exposure, contrast, saturation,
+        highlights, shadows, temperature, tint, sharpen);
+}
+
+// ── Decode proxies ──
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDetectFormat(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDetectFormat(env, thiz, filePath);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeIsRawFormat(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeIsRawFormat(env, thiz, filePath);
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeReadRawInfo(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReadRawInfo(env, thiz, filePath);
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDecodeRawFull(
+        JNIEnv *env, jobject thiz,
+        jstring filePath, jint demosaic, jboolean highlightReconstruction,
+        jboolean useCameraMatrix, jboolean halfResolution, jboolean outputFloat,
+        jboolean extractThumbnail, jboolean extractPreview, jint maxThumbnailDim,
+        jint wbIlluminant) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
+        env, thiz, filePath, demosaic, highlightReconstruction,
+        useCameraMatrix, halfResolution, outputFloat,
+        extractThumbnail, extractPreview, maxThumbnailDim, wbIlluminant);
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDecodeRawFromMemory(
+        JNIEnv *env, jobject thiz,
+        jbyteArray data, jint demosaic, jboolean highlightReconstruction,
+        jboolean useCameraMatrix, jboolean halfResolution, jboolean outputFloat) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
+        env, thiz, data, demosaic, highlightReconstruction,
+        useCameraMatrix, halfResolution, outputFloat);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDecodeRawFloat(
+        JNIEnv *env, jobject thiz,
+        jshortArray rawData, jint rawWidth, jint rawHeight,
+        jint bayerPattern, jint whiteLevel, jint blackLevel,
+        jboolean highlightReconstruction) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRawFloat(
+        env, thiz, rawData, rawWidth, rawHeight, bayerPattern, whiteLevel, blackLevel, highlightReconstruction);
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDecodeRawSimple(
+        JNIEnv *env, jobject thiz,
+        jstring rawPath, jint demosaic, jboolean highlightReconstruction) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
+        env, thiz, rawPath, demosaic, highlightReconstruction);
+}
+
+// ── Metadata proxies ──
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractMetadata(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractMetadata(env, thiz, filePath);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractMetadataFromMemory(
+        JNIEnv *env, jobject thiz, jbyteArray data) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractMetadataFromMemory(env, thiz, data);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractExif(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractExif(env, thiz, filePath);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractXmp(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractXmp(env, thiz, filePath);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractIccProfile(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractIccProfile(env, thiz, filePath);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractDngColor(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractDngColor(env, thiz, filePath);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractMetadataLegacy(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeExtractMetadata(env, thiz, filePath);
+}
+
+// ── Thumbnail proxies ──
+
+JNIEXPORT jobject JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateThumbnail(
+        JNIEnv *env, jobject thiz, jstring filePath, jint maxDimension, jboolean useEmbedded) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnail(env, thiz, filePath, maxDimension, useEmbedded);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateThumbnailFromRGB(
+        JNIEnv *env, jobject thiz, jfloatArray rgbData, jint width, jint height, jint maxDimension) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnailFromRGB(env, thiz, rgbData, width, height, maxDimension);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractEmbeddedThumbnail(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedThumbnail(env, thiz, filePath);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeExtractEmbeddedPreview(
+        JNIEnv *env, jobject thiz, jstring filePath) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedPreview(env, thiz, filePath);
+}
+
+// ── Demosaic proxies ──
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDemosaic(
+        JNIEnv *env, jobject thiz,
+        jshortArray rawCfaData, jint width, jint height,
+        jint bayerPattern, jint whiteLevel, jint blackLevel, jint demosaicMethod) {
+    return Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDemosaic(
+        env, thiz, rawCfaData, width, height, bayerPattern, whiteLevel, blackLevel, demosaicMethod);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDemosaicAHD(
+        JNIEnv *env, jobject thiz,
+        jshortArray rawData, jint width, jint height,
+        jint bayerPattern, jint whiteLevel, jint blackLevel) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
+        env, thiz, rawData, width, height, bayerPattern, whiteLevel, blackLevel);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDemosaicAMAZE(
+        JNIEnv *env, jobject thiz,
+        jshortArray rawData, jint width, jint height,
+        jint bayerPattern, jint whiteLevel, jint blackLevel) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
+        env, thiz, rawData, width, height, bayerPattern, whiteLevel, blackLevel);
+}
+
+// ── White balance / Color matrix / Highlight / Black level proxies ──
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyWhiteBalance(
+        JNIEnv *env, jobject thiz, jfloatArray rgbData, jint width, jint height,
+        jfloat rMultiplier, jfloat gMultiplier, jfloat bMultiplier) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeApplyWhiteBalance(
+        env, thiz, rgbData, width, height, rMultiplier, gMultiplier, bMultiplier);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyColorMatrix(
+        JNIEnv *env, jobject thiz, jfloatArray rgbData, jint width, jint height, jfloatArray matrix) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeApplyColorMatrix(env, thiz, rgbData, width, height, matrix);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeReconstructHighlights(
+        JNIEnv *env, jobject thiz, jfloatArray rgbData, jint width, jint height, jint whiteLevel, jint mode) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReconstructHighlights(env, thiz, rgbData, width, height, whiteLevel, mode);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSubtractBlackLevel(
+        JNIEnv *env, jobject thiz, jshortArray rawData, jint width, jint height,
+        jint blackLevelR, jint blackLevelG1, jint blackLevelG2, jint blackLevelB) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSubtractBlackLevel(
+        env, thiz, rawData, width, height, blackLevelR, blackLevelG1, blackLevelG2, blackLevelB);
+}
+
+// ── Cancellation & Scheduler proxies ──
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCancelDecode(
+        JNIEnv *env, jobject thiz, jlong jobId) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeCancelDecode(env, thiz, jobId);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCancelAllDecodes(
+        JNIEnv *env, jobject thiz) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeCancelAllDecodes(env, thiz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeInitScheduler(
+        JNIEnv *env, jobject thiz, jint threadCount) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeInitScheduler(env, thiz, threadCount);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeShutdownScheduler(
+        JNIEnv *env, jobject thiz) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeShutdownScheduler(env, thiz);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetProgressCallback(
+        JNIEnv *env, jobject thiz, jobject callback) {
+    Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(env, thiz, callback);
+}
+
+// ── Sleeve proxies ──
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeInitializeSleeve(
+        JNIEnv *env, jobject thiz) {
+    Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeInitializeSleeve(env, thiz);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCreateFolder(
+        JNIEnv *env, jobject thiz, jstring path, jstring name) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFolder(env, thiz, path, name);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCreateFile(
+        JNIEnv *env, jobject thiz, jstring path, jstring name) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFile(env, thiz, path, name);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeDeleteElement(
+        JNIEnv *env, jobject thiz, jstring path) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeDeleteElement(env, thiz, path);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeMoveElement(
+        JNIEnv *env, jobject thiz, jstring src, jstring dst) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeMoveElement(env, thiz, src, dst);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCopyElement(
+        JNIEnv *env, jobject thiz, jstring src, jstring dst) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCopyElement(env, thiz, src, dst);
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeListFolder(
+        JNIEnv *env, jobject thiz, jstring path) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(env, thiz, path);
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeResolvePath(
+        JNIEnv *env, jobject thiz, jstring path) {
+    return Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(env, thiz, path);
+}
+
+// ── Pipeline operator proxies (from NativePipelineBridge) ──
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyAcesTransform(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jfloat peakLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAcesTransform(env, thiz, input, width, height, peakLuminance);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyOpenDRTTransform(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jfloat peakLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyOpenDRTTransform(env, thiz, input, width, height, peakLuminance);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeConvertColorSpace(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint srcSpace, jint dstSpace) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeConvertColorSpace(env, thiz, input, width, height, srcSpace, dstSpace);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyEOTF(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint eotfType, jfloat peakLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyEOTF(env, thiz, input, width, height, eotfType, peakLuminance);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyLut(
+        JNIEnv *env, jobject thiz, jfloatArray pixels, jint width, jint height, jstring lutPath) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyLut(env, thiz, pixels, width, height, lutPath);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSrgbToOklab(
+        JNIEnv *env, jobject thiz, jfloat r, jfloat g, jfloat b) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSrgbToOklab(env, thiz, r, g, b);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeOklabToSrgb(
+        JNIEnv *env, jobject thiz, jfloat L, jfloat a, jfloat bb) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeOklabToSrgb(env, thiz, L, a, bb);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplySigmoidContrast(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jfloat contrast, jfloat pivot, jfloat shoulder) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplySigmoidContrast(env, thiz, input, width, height, contrast, pivot, shoulder);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyBlackOp(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat blackPoint) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyBlackOp(env, thiz, input, width, height, channels, blackPoint);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyWhiteOp(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat whitePoint) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyWhiteOp(env, thiz, input, width, height, channels, whitePoint);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyShadowOp(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat shadowAmount) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyShadowOp(env, thiz, input, width, height, channels, shadowAmount);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyHighlightOp(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat highlightAmount) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyHighlightOp(env, thiz, input, width, height, channels, highlightAmount);
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeComputeAutoExposure(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat targetPercentile, jfloat targetLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeComputeAutoExposure(env, thiz, input, width, height, channels, targetPercentile, targetLuminance);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyAutoExposure(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat targetPercentile, jfloat targetLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyAutoExposure(env, thiz, input, width, height, channels, targetPercentile, targetLuminance);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCreateSnapshot(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloatArray paramsArray) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeCreateSnapshot(env, thiz, input, width, height, channels, paramsArray);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeRenderSnapshot(
+        JNIEnv *env, jobject thiz, jlong snapshotHandle, jint width, jint height, jint channels) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeRenderSnapshot(env, thiz, snapshotHandle, width, height, channels);
+}
+
+JNIEXPORT void JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeReleaseSnapshot(
+        JNIEnv *env, jobject thiz, jlong snapshotHandle) {
+    Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeReleaseSnapshot(env, thiz, snapshotHandle);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativePlanckianWhiteBalance(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat temperature, jfloat tint) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativePlanckianWhiteBalance(env, thiz, input, width, height, channels, temperature, tint);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGetPlanckianMultipliers(
+        JNIEnv *env, jobject thiz, jfloat temperature) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeGetPlanckianMultipliers(env, thiz, temperature);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetColorTemp(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloat cct, jfloat tint, jint mode) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetColorTemp(env, thiz, input, width, height, channels, cct, tint, mode);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetCST(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint transformType, jstring inputSpace, jstring outputSpace) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetCST(env, thiz, input, width, height, channels, transformType, inputSpace, outputSpace);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetODT(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint method, jint outputSpace, jfloat peakLuminance) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetODT(env, thiz, input, width, height, channels, method, outputSpace, peakLuminance);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeLoadLMT(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jstring lutPath) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeLoadLMT(env, thiz, input, width, height, channels, lutPath);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetHLS(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint profileIndex, jfloat hueShift, jfloat lightness, jfloat saturation, jfloat hueRange) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetHLS(env, thiz, input, width, height, channels, profileIndex, hueShift, lightness, saturation, hueRange);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetCurve(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloatArray ctrlPts, jint count) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetCurve(env, thiz, input, width, height, channels, ctrlPts, count);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeSetRawDecode(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint demosaicMethod, jint inputSpace, jboolean useCameraWB, jboolean highlightRecovery) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetRawDecode(env, thiz, input, width, height, channels, demosaicMethod, inputSpace, useCameraWB, highlightRecovery);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyCrop(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint left, jint top, jint right, jint bottom) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyCrop(env, thiz, input, width, height, channels, left, top, right, bottom);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyRotate(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint angle) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyRotate(env, thiz, input, width, height, channels, angle);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyResize(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint dstWidth, jint dstHeight, jint method) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(env, thiz, input, width, height, channels, dstWidth, dstHeight, method);
 }
 
 } // extern "C"

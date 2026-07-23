@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ALCEDO_KEYSTORE_PATH: ${{ secrets.ALCEDO_KEYSTORE_PATH }}
       ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
       ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
       ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
+      ORG_GRADLE_PROJECT_org.gradle.configuration-cache: "false"
 
     steps:
       - name: Checkout
@@ -103,7 +103,7 @@ jobs:
           else
             echo "apksigner not found, skipping signature verification"
             # Basic check: APK must be > 1MB (unsigned stub APKs are tiny)
-            APK_SIZE=$(stat -f%z "$APK_PATH" 2>/dev/null || stat -c%s "$APK_PATH" 2>/dev/null || echo 0)
+            APK_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH" 2>/dev/null || echo 0)
             if [ "$APK_SIZE" -lt 1048576 ]; then
               echo "WARNING: APK is suspiciously small ($APK_SIZE bytes), may be unsigned"
             else
@@ -111,27 +111,38 @@ jobs:
             fi
           fi
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges 2>/dev/null || echo "")
+          else
+            CHANGELOG=$(git log -20 --pretty=format:"- %s" --no-merges 2>/dev/null || echo "")
+          fi
+          {
+            echo "## Alcedo Studio ${{ steps.apk.outputs.tag }}"
+            echo ""
+            echo "### Changes"
+            if [ -n "$CHANGELOG" ]; then
+              echo "$CHANGELOG"
+            else
+              echo "- See commit history for details"
+            fi
+            echo ""
+            echo "### Supported Formats"
+            echo "JPEG, PNG, WEBP, BMP, GIF, TIFF, HEIC, HEIF, EXR,"
+            echo "ARW, CR2, CR3, NEF, DNG, ORF, PEF, SRW, X3F, RAF, RW2, MOS"
+          } > release_notes.md
+          echo "notes_path=release_notes.md" >> $GITHUB_OUTPUT
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
           files: ${{ steps.apk.outputs.apk_path }}
           fail_on_unmatched_files: true
-          body: |
-            ## Alcedo Studio ${{ steps.apk.outputs.tag }}
-
-            ### What's New
-            - Fixed image import: HEIC/HEIF format detection (4-byte brand)
-            - Added RAW format support: ORF, PEF, SRW, X3F, RAF, RW2, MOS
-            - Enhanced WEBP detection (RIFF + brand verification)
-            - Fixed thumbnail thread pool (CallerRunsPolicy)
-            - Improved import error feedback
-            - Expanded SAF directory scanning for all RAW formats
-            - Fixed MediaStore RAW detection (added SRW)
-
-            ### Supported Formats
-            JPEG, PNG, WEBP, BMP, GIF, TIFF, HEIC, HEIF, EXR,
-            ARW, CR2, CR3, NEF, DNG, ORF, PEF, SRW, X3F, RAF, RW2, MOS
+          body_path: ${{ steps.notes.outputs.notes_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

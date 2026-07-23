@@ -28,23 +28,28 @@ object TaskNotificationHelper {
     private const val NOTIFICATION_ID_IMPORT = 2004
     private const val NOTIFICATION_ID_MODEL_DOWNLOAD = 2005
 
+    @Volatile
     private var channelCreated = false
+    private val channelLock = Any()
 
     private fun ensureChannel(context: Context) {
         if (channelCreated) return
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "显示导出、AI处理等后台任务的进度"
-                setShowBadge(false)
+        synchronized(channelLock) {
+            if (channelCreated) return
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "显示导出、AI处理等后台任务的进度"
+                    setShowBadge(false)
+                }
+                nm.createNotificationChannel(channel)
             }
-            nm.createNotificationChannel(channel)
+            channelCreated = true
         }
-        channelCreated = true
     }
 
     private fun buildNotification(

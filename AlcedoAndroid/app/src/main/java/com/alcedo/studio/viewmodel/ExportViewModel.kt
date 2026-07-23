@@ -143,7 +143,12 @@ class ExportViewModel : ViewModel() {
         get() = _settings.value.outputPath ?: ""
         set(value) { _settings.value = _settings.value.copy(outputPath = value) }
 
-    var showBatchExport: Boolean = false
+    private val _showBatchExport = MutableStateFlow(false)
+    val showBatchExport: StateFlow<Boolean> = _showBatchExport.asStateFlow()
+
+    fun setBatchExportVisible(visible: Boolean) {
+        _showBatchExport.value = visible
+    }
 
     val batchImageIds: List<String>
         get() = _batchItems.value.map { it.imageId.toString() }

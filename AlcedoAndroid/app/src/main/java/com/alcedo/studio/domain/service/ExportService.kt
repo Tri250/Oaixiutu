@@ -49,6 +49,7 @@ class ExportService(private val context: Context) {
     private val _exportProgress = MutableStateFlow(ExportProgress())
     val exportProgress: StateFlow<ExportProgress> = _exportProgress.asStateFlow()
 
+    @Volatile
     private var exportStartTime: Long = 0L
 
     data class ExportProgress(

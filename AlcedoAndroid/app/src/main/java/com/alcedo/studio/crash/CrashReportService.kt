@@ -81,7 +81,9 @@ object CrashReportService {
     private val events = ArrayList<String>()
     private val breadcrumbLock = Any()
 
+    @Volatile
     private var uploadEndpoint: String = DEFAULT_ENDPOINT
+    @Volatile
     private var lastUploadTimeMs: Long = 0L
 
     // Visible for testing / settings UI.

@@ -183,13 +183,17 @@ object PrivacyManager {
             val db = SleeveDatabase.getInstance(context)
             db.clearAllTables()
 
+            // 修复: 先撤销同意（因为下面会删除 shared_prefs 文件），
+            // 再执行文件删除操作，避免访问已删除的 prefs。
+            revokeAllConsent()
+
             // 修复: context.filesDir.parentFile 可能为 null (例如在某些受限环境中)
             // 安全处理: 如果 parentFile 为 null，跳过 shared_prefs 清理步骤
             val parentDir = context.filesDir.parentFile
             if (parentDir != null) {
                 val prefsDir = File(parentDir, "shared_prefs")
                 prefsDir.listFiles()?.forEach { file ->
-                    if (file.name.startsWith("alcedo_") && file.name != "$PREFS_NAME.xml") {
+                    if (file.name.startsWith("alcedo_")) {
                         file.delete()
                     }
                 }
@@ -216,9 +220,6 @@ object PrivacyManager {
             // Clear AI models
             val modelsDir = File(context.filesDir, "ai_models")
             modelsDir.deleteRecursively()
-
-            // Revoke all consent
-            revokeAllConsent()
 
             Log.i(TAG, "All user data deleted successfully")
             true

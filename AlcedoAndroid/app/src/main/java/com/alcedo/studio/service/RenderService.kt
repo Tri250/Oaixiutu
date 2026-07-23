@@ -24,6 +24,7 @@ data class RenderRequest(
 class RenderService {
     private val pendingRequests = ConcurrentHashMap<Long, Future<*>>()
     private val cancelFlags = ConcurrentHashMap<Long, AtomicBoolean>()
+    @Volatile
     private var isShutdown = false
     private val mainHandler = Handler(Looper.getMainLooper())
 

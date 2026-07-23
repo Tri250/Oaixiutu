@@ -2,6 +2,7 @@ package com.alcedo.studio.i18n
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +37,7 @@ object LanguageManager {
             // 用户显式选择过语言
             !followSystem && savedCode != null -> Language.fromCode(savedCode)
             // 跟随系统：识别系统 locale；未识别时回退到简体中文
-            followSystem -> Language.fromSystemLocale(context.resources.configuration.locales[0])
+            followSystem -> Language.fromSystemLocale(getSystemLocale(context))
             // 默认回退到简体中文
             else -> Language.CHINESE_SIMPLIFIED
         }
@@ -60,7 +61,7 @@ object LanguageManager {
 
     fun setFollowSystem(context: Context) {
         _followSystem.value = true
-        val systemLang = Language.fromSystemLocale(context.resources.configuration.locales[0])
+        val systemLang = Language.fromSystemLocale(getSystemLocale(context))
         _currentLanguage.value = systemLang
         Strings.update(getStringResources(systemLang))
         prefs?.edit()
@@ -73,9 +74,21 @@ object LanguageManager {
 
     fun onSystemLocaleChanged(context: Context) {
         if (_followSystem.value) {
-            val systemLang = Language.fromSystemLocale(context.resources.configuration.locales[0])
+            val systemLang = Language.fromSystemLocale(getSystemLocale(context))
             _currentLanguage.value = systemLang
             Strings.update(getStringResources(systemLang))
+        }
+    }
+
+    /**
+     * 安全获取系统首选 Locale，兼容 API 24+ 的 LocaleList 和更低版本的回退。
+     */
+    private fun getSystemLocale(context: Context): java.util.Locale {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            context.resources.configuration.locales[0]
+        } else {
+            @Suppress("DEPRECATION")
+            context.resources.configuration.locale
         }
     }
 

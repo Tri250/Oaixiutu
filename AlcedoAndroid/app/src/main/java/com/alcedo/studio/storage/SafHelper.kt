@@ -224,11 +224,15 @@ object SafHelper {
 
     fun sanitizeFileName(name: String): String {
         // Remove any path separators or dangerous characters
-        return name.replace("/", "_")
+        // 循环替换 ".." 直到不再出现，防止 "..." → "._" 而非 "_" 的情况
+        var sanitized = name
             .replace("\\", "_")
-            .replace("..", "_")
             .replace(":", "_")
             .replace("|", "_")
-            .trim()
+        while (sanitized.contains("..")) {
+            sanitized = sanitized.replace("..", "_")
+        }
+        sanitized = sanitized.replace("/", "_")
+        return sanitized.trim()
     }
 }

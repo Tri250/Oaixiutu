@@ -94,11 +94,18 @@ class ThumbnailDiskCache(
     // In-memory LRU cache
     // ================================================================
 
+    private val memoryCacheLock = Any()
     private val memoryCache = object : LruCache<String, Bitmap>(memoryCacheMaxEntries) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
         }
     }
+
+    private fun memoryCacheGet(key: String): Bitmap? = synchronized(memoryCacheLock) { memoryCache.get(key) }
+    private fun memoryCachePut(key: String, bitmap: Bitmap) = synchronized(memoryCacheLock) { memoryCache.put(key, bitmap) }
+    private fun memoryCacheRemove(key: String) = synchronized(memoryCacheLock) { memoryCache.remove(key) }
+    private fun memoryCacheEvictAll() = synchronized(memoryCacheLock) { memoryCache.evictAll() }
+    private fun memoryCacheSize(): Int = synchronized(memoryCacheLock) { memoryCache.size() }
 
     // ================================================================
     // Journal for eviction tracking
@@ -181,7 +188,7 @@ class ThumbnailDiskCache(
         val key = makeKey(imageId, tier, effectiveFormat)
 
         // Check memory cache
-        memoryCache.get(key)?.let {
+        memoryCacheGet(key)?.let {
             totalHits.incrementAndGet()
             touchJournal(key)
             return it
@@ -194,7 +201,7 @@ class ThumbnailDiskCache(
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                 if (bitmap != null) {
                     totalHits.incrementAndGet()
-                    memoryCache.put(key, bitmap)
+                    memoryCachePut(key, bitmap)
                     touchJournal(key)
                     return bitmap
                 }
@@ -239,7 +246,7 @@ class ThumbnailDiskCache(
         if (!config.get().enabled) return false
         val effectiveFormat = format ?: config.get().defaultFormat
         val key = makeKey(imageId, tier, effectiveFormat)
-        if (memoryCache.get(key) != null) return true
+        if (memoryCacheGet(key) != null) return true
         return getCacheFile(imageId, tier, effectiveFormat).exists()
     }
 
@@ -311,7 +318,7 @@ class ThumbnailDiskCache(
             currentEntryCount.incrementAndGet()
 
             // Update memory cache only after successful disk write
-            memoryCache.put(key, bitmap)
+            memoryCachePut(key, bitmap)
 
             // Update journal
             val entry = JournalEntry(
@@ -331,7 +338,7 @@ class ThumbnailDiskCache(
         } catch (e: Exception) {
             // Rollback: remove partial file and any stale memory cache entry
             file.delete()
-            memoryCache.remove(key)
+            memoryCacheRemove(key)
             journal.remove(key)
             android.util.Log.e("ThumbnailDiskCache", "put failed for $imageId, rolled back", e)
         }
@@ -373,7 +380,7 @@ class ThumbnailDiskCache(
         try {
             val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
             if (bitmap != null) {
-                memoryCache.put(key, bitmap)
+                memoryCachePut(key, bitmap)
             }
         } catch (_: Exception) {}
 
@@ -431,7 +438,7 @@ class ThumbnailDiskCache(
     }
 
     private fun evictByKey(key: String) {
-        memoryCache.remove(key)
+        memoryCacheRemove(key)
         val entry = journal[key] ?: return
         val file = getCacheFileFromKey(key)
         if (file.exists()) {
@@ -489,7 +496,7 @@ class ThumbnailDiskCache(
      * Clear entire cache (all namespaces, all formats).
      */
     fun clearAll() {
-        memoryCache.evictAll()
+        memoryCacheEvictAll()
         config.get().cacheRootDir.walkTopDown().forEach { file ->
             if (file.isFile && file.name.startsWith("thumb_")) {
                 file.delete()
@@ -648,7 +655,7 @@ class ThumbnailDiskCache(
             totalSizeBytes = sizeBytes,
             maxSizeBytes = maxCacheSizeBytes,
             averageEntrySizeBytes = if (entries > 0) sizeBytes / entries else 0L,
-            memoryEntries = memoryCache.size(),
+            memoryEntries = memoryCacheSize(),
             byNamespace = byNamespace,
             byFormat = byFormat
         )

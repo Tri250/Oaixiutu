@@ -385,11 +385,11 @@ fun ExportScreen(
             ) {
                 Text(stringRes { exportBatchExport }, style = MaterialTheme.typography.labelLarge)
                 Switch(
-                    checked = viewModel.showBatchExport,
-                    onCheckedChange = { viewModel.showBatchExport = it }
+                    checked = viewModel.showBatchExport.value,
+                    onCheckedChange = { viewModel.setBatchExportVisible(it) }
                 )
             }
-            if (viewModel.showBatchExport) {
+            if (viewModel.showBatchExport.value) {
                 Text(
                     stringRes { exportBatchSelectDesc },
                     style = MaterialTheme.typography.bodySmall,
@@ -537,7 +537,7 @@ fun ExportScreen(
             Button(
                 onClick = {
                 viewModel.resetState()
-                if (viewModel.showBatchExport && batchImageUris.isNotEmpty()) {
+                if (viewModel.showBatchExport.value && batchImageUris.isNotEmpty()) {
                     viewModel.exportBatchByIds(batchImageUris)
                 } else {
                     viewModel.exportSingleById(imageId)

@@ -29,8 +29,11 @@ class GpuPipelineService(private val context: Context) {
     }
 
     private var renderer: GpuPipelineRenderer? = null
+    @Volatile
     private var isGpuAvailable = false
+    @Volatile
     private var initializedWidth = 0
+    @Volatile
     private var initializedHeight = 0
 
     /**

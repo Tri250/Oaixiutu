@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 
 object AppModule {
     private var _appContext: Context? = null
+    @Volatile
     private var initialized = false
 
     val context: Context

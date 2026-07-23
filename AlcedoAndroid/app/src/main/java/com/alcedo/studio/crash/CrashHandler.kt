@@ -85,9 +85,8 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         try {
             val crashDir = File(context.filesDir, "crash_reports")
             if (!crashDir.exists()) crashDir.mkdirs()
-            val timestamp = java.text.SimpleDateFormat(
-                "yyyyMMdd_HHmmss", java.util.Locale.US
-            ).format(java.util.Date())
+            val timestamp = java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", java.util.Locale.US))
             val legacyFile = File(crashDir, "crash_${timestamp}.log")
             val stringWriter = StringWriter()
             PrintWriter(stringWriter).use { pw -> throwable.printStackTrace(pw) }

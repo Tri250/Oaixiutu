@@ -42,7 +42,7 @@ class AiRatingService(
 
     private val httpClient = SecureHttpClient.getClient(context)
 
-    private val activeJobs = mutableMapOf<UInt, Job>()
+    private val activeJobs = java.util.concurrent.ConcurrentHashMap<UInt, Job>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun moodPrompt(mood: RatingMood): String = when (mood) {

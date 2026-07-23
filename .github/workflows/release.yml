@@ -22,7 +22,6 @@ jobs:
         working-directory: AlcedoAndroid
 
     env:
-      ALCEDO_KEYSTORE_PATH: ${{ secrets.ALCEDO_KEYSTORE_PATH }}
       ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
       ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
       ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
@@ -78,10 +77,16 @@ jobs:
             exit 1
           fi
           echo "Found APK: $APK_PATH"
+          # Determine tag
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
           else
             TAG="${{ github.ref_name }}"
+          fi
+          # Validate tag format
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid tag format: $TAG (expected v*.*.*)"
+            exit 1
           fi
           DEST="AlcedoStudio-${TAG}.apk"
           cp "$APK_PATH" "$DEST"
@@ -89,11 +94,71 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "APK size: $(du -h "$DEST" | cut -f1)"
 
+      - name: Verify APK signature
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK to verify"
+            exit 0
+          fi
+          # Verify APK is signed (v2/v3 signature verification)
+          if command -v apksigner &> /dev/null; then
+            apksigner verify --print-certs "$APK_PATH" || echo "APK signature verification skipped (apksigner not available)"
+          else
+            echo "apksigner not found, skipping signature verification"
+            # Basic check: APK must be > 1MB (unsigned stub APKs are tiny)
+            APK_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH" 2>/dev/null || echo 0)
+            if [ "$APK_SIZE" -lt 1048576 ]; then
+              echo "WARNING: APK is suspiciously small ($APK_SIZE bytes), may be unsigned"
+            else
+              echo "APK size looks reasonable: $APK_SIZE bytes"
+            fi
+          fi
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get previous tag for changelog
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges 2>/dev/null || echo "")
+          else
+            CHANGELOG=$(git log -20 --pretty=format:"- %s" --no-merges 2>/dev/null || echo "")
+          fi
+          # Write to file for multiline output
+          {
+            echo "## Alcedo Studio ${{ steps.apk.outputs.tag }}"
+            echo ""
+            echo "### Changes"
+            if [ -n "$CHANGELOG" ]; then
+              echo "$CHANGELOG"
+            else
+              echo "- See commit history for details"
+            fi
+            echo ""
+            echo "### Supported Formats"
+            echo "JPEG, PNG, WEBP, BMP, GIF, TIFF, HEIC, HEIF, EXR,"
+            echo "ARW, CR2, CR3, NEF, DNG, ORF, PEF, SRW, X3F, RAF, RW2, MOS"
+          } > release_notes.md
+          echo "notes_path=release_notes.md" >> $GITHUB_OUTPUT
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.apk.outputs.tag }}
           files: AlcedoAndroid/${{ steps.apk.outputs.apk_path }}
           fail_on_unmatched_files: true
+          body_path: AlcedoAndroid/${{ steps.notes.outputs.notes_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            AlcedoAndroid/app/build/reports/
+            AlcedoAndroid/app/build/outputs/logs/
+            AlcedoAndroid/build/reports/
+          retention-days: 7

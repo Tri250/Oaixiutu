@@ -141,7 +141,7 @@ class AlbumBrowseService(
     private val _albumState = MutableStateFlow(AlbumState())
     val albumState: StateFlow<AlbumState> = _albumState.asStateFlow()
 
-    private var cachedElements = mutableMapOf<Long, List<AlbumElement>>()
+    private val cachedElements = java.util.concurrent.ConcurrentHashMap<Long, List<AlbumElement>>()
 
     // ================================================================
     // Folder Tree Navigation
