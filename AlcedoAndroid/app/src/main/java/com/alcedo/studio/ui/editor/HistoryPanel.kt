@@ -65,7 +65,7 @@ fun HistoryPanel(
     }
 
     // P2-6 撤销/重做可视化：获取当前工作版本的事务列表与游标位置
-    val workingVersion = viewModel.workingVersion.value
+    val workingVersion by viewModel.workingVersion.collectAsStateWithLifecycle()
     val transactions = workingVersion.transactions
     val currentIndex = workingVersion.cursor
 

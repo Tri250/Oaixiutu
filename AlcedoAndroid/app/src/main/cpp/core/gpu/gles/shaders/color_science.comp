@@ -53,9 +53,10 @@ vec3 aces_rrt(vec3 aces) {
     float minC = min(min(aces.r, aces.g), aces.b);
     float delta = maxC - minC;
     if (delta > 0.0001) {
-        if (maxC == aces.r) {
+        float eps = 0.001;
+        if (abs(maxC - aces.r) < eps) {
             hue = mod((aces.g - aces.b) / delta, 6.0);
-        } else if (maxC == aces.g) {
+        } else if (abs(maxC - aces.g) < eps) {
             hue = (aces.b - aces.r) / delta + 2.0;
         } else {
             hue = (aces.r - aces.g) / delta + 4.0;

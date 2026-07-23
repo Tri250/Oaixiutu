@@ -56,11 +56,11 @@ PipelineService& PipelineService::Instance() {
 // Helper: FilmGrainOperator (inline to avoid dependency issues)
 class FilmGrainOp {
 public:
-    static void apply(float* pixels, int width, int height, float intensity) {
+    static void apply(float* pixels, int width, int height, int channels, float intensity) {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::normal_distribution<float> dist(0.0f, intensity * 0.05f);
-        int total = width * height * 3;
+        int total = width * height * channels;
         for (int i = 0; i < total; ++i) {
             pixels[i] += dist(gen);
             pixels[i] = std::max(0.0f, std::min(1.0f, pixels[i]));
@@ -187,7 +187,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
     // Stage: Sigmoid contrast
     if (params.sigmoid_contrast != 0.0f) {
-        color_science::sigmoid_contrast_bulk(pixels, pixel_count, channels, params.sigmoid_contrast);
+        color_science::sigmoid_contrast_bulk(pixels, pixel_count, channels, params.sigmoid_contrast, params.sigmoid_pivot, params.sigmoid_shoulder);
         for (int i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)

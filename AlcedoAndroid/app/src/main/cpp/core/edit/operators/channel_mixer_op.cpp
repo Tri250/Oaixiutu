@@ -5,6 +5,7 @@ namespace alcedo {
 
 void ChannelMixerOperator::apply_rgb(float* pixels, int width, int height,
                                       const float matrix[9], bool monochrome) {
+    if (!pixels) return;
     size_t total = static_cast<size_t>(width) * height;
 
     for (size_t i = 0; i < total; ++i) {
@@ -18,21 +19,21 @@ void ChannelMixerOperator::apply_rgb(float* pixels, int width, int height,
         float b_out = r * matrix[6] + g * matrix[7] + b * matrix[8];
 
         if (monochrome) {
-            // Average the three channels for grayscale output
             float gray = r_out * 0.299f + g_out * 0.587f + b_out * 0.114f;
-            pixels[idx]     = gray;
-            pixels[idx + 1] = gray;
-            pixels[idx + 2] = gray;
+            pixels[idx]     = std::clamp(gray, 0.0f, 1.0f);
+            pixels[idx + 1] = std::clamp(gray, 0.0f, 1.0f);
+            pixels[idx + 2] = std::clamp(gray, 0.0f, 1.0f);
         } else {
-            pixels[idx]     = r_out;
-            pixels[idx + 1] = g_out;
-            pixels[idx + 2] = b_out;
+            pixels[idx]     = std::clamp(r_out, 0.0f, 1.0f);
+            pixels[idx + 1] = std::clamp(g_out, 0.0f, 1.0f);
+            pixels[idx + 2] = std::clamp(b_out, 0.0f, 1.0f);
         }
     }
 }
 
 void ChannelMixerOperator::apply_rgba(float* pixels, int width, int height,
                                        const float matrix[9], bool monochrome) {
+    if (!pixels) return;
     size_t total = static_cast<size_t>(width) * height;
 
     for (size_t i = 0; i < total; ++i) {
@@ -47,13 +48,13 @@ void ChannelMixerOperator::apply_rgba(float* pixels, int width, int height,
 
         if (monochrome) {
             float gray = r_out * 0.299f + g_out * 0.587f + b_out * 0.114f;
-            pixels[idx]     = gray;
-            pixels[idx + 1] = gray;
-            pixels[idx + 2] = gray;
+            pixels[idx]     = std::clamp(gray, 0.0f, 1.0f);
+            pixels[idx + 1] = std::clamp(gray, 0.0f, 1.0f);
+            pixels[idx + 2] = std::clamp(gray, 0.0f, 1.0f);
         } else {
-            pixels[idx]     = r_out;
-            pixels[idx + 1] = g_out;
-            pixels[idx + 2] = b_out;
+            pixels[idx]     = std::clamp(r_out, 0.0f, 1.0f);
+            pixels[idx + 1] = std::clamp(g_out, 0.0f, 1.0f);
+            pixels[idx + 2] = std::clamp(b_out, 0.0f, 1.0f);
         }
     }
 }

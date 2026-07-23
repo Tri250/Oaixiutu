@@ -124,6 +124,10 @@ fun ToneCurvePanel(
                             controlPoints = controlPoints,
                             onControlPointsChanged = { newPoints ->
                                 val count = newPoints.size
+                                // BUG FIX: Pass the actual control point count so the native
+                                // pipeline knows how many of the 16 array entries are valid.
+                                // Previously, the count was set to 16 (padded array size),
+                                // causing the curve to include (0,0) padding points.
                                 val newX = FloatArray(16) { if (it < count) newPoints[it].x else 0f }
                                 val newY = FloatArray(16) { if (it < count) newPoints[it].y else 0f }
                                 viewModel.updateToneCurve(newX, newY)

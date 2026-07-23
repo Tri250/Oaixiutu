@@ -127,7 +127,25 @@ fun BrushOverlay(
                     isDrawing = false
                 },
                 onDragCancel = {
-                    onBrushStateChanged(brushState.copy(currentStroke = null))
+                    // Save the in-progress stroke on cancel (e.g., notification intercepted touch)
+                    // rather than discarding it entirely
+                    if (isDrawing && currentPoints.isNotEmpty()) {
+                        val stroke = BrushStroke(
+                            points = currentPoints.map { screenToNormalized(it, imageRect) },
+                            size = brushState.brushSize,
+                            hardness = brushState.brushHardness,
+                            opacity = brushState.brushOpacity,
+                            isEraser = brushState.isEraser
+                        )
+                        onBrushStateChanged(
+                            brushState.copy(
+                                strokes = brushState.strokes + stroke,
+                                currentStroke = null
+                            )
+                        )
+                    } else {
+                        onBrushStateChanged(brushState.copy(currentStroke = null))
+                    }
                     currentPoints = emptyList()
                     isDrawing = false
                 }

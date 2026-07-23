@@ -85,7 +85,9 @@ void HalationOperator::apply_rgb(float* pixels, int width, int height,
 
         if (lum > threshold) {
             // Smooth transition above threshold
-            float t = (lum - threshold) / (1.0f - threshold + 0.001f);
+            float denom = 1.0f - threshold + 0.001f;
+            float t = (lum - threshold) / denom;
+            t = std::min(t, 1.0f); // Clamp to prevent overshoot
             highlight_mask[i] = t * t * lum;
         }
     }
@@ -113,6 +115,10 @@ void HalationOperator::apply_rgb(float* pixels, int width, int height,
         pixels[idx]     += blurred_highlights[idx] * blend;
         pixels[idx + 1] += blurred_highlights[idx + 1] * blend;
         pixels[idx + 2] += blurred_highlights[idx + 2] * blend;
+        // Clamp to valid range
+        pixels[idx]     = std::max(0.0f, std::min(1.0f, pixels[idx]));
+        pixels[idx + 1] = std::max(0.0f, std::min(1.0f, pixels[idx + 1]));
+        pixels[idx + 2] = std::max(0.0f, std::min(1.0f, pixels[idx + 2]));
     }
 }
 
@@ -162,6 +168,10 @@ void HalationOperator::apply_rgba(float* pixels, int width, int height,
         pixels[idx]     += blurred_highlights[src_idx] * blend;
         pixels[idx + 1] += blurred_highlights[src_idx + 1] * blend;
         pixels[idx + 2] += blurred_highlights[src_idx + 2] * blend;
+        // Clamp to valid range
+        pixels[idx]     = std::max(0.0f, std::min(1.0f, pixels[idx]));
+        pixels[idx + 1] = std::max(0.0f, std::min(1.0f, pixels[idx + 1]));
+        pixels[idx + 2] = std::max(0.0f, std::min(1.0f, pixels[idx + 2]));
     }
 }
 

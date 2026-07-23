@@ -17,13 +17,16 @@ namespace {
 void ShadowOperator::apply(float* pixels, int count, int channels, float shadow_amount) {
     if (!pixels || count <= 0 || channels <= 0 || shadow_amount == 0.0f) return;
 
+    // Only modify RGB channels (skip alpha if present)
+    int colorChannels = std::min(channels, 3);
+
     for (int i = 0; i < count; ++i) {
         float* pixel = pixels + i * channels;
         float lum = compute_luminance(pixel, channels);
         float inv_lum = 1.0f - lum;
         float shadow_boost = shadow_amount * inv_lum * inv_lum;
 
-        for (int c = 0; c < channels; ++c) {
+        for (int c = 0; c < colorChannels; ++c) {
             pixel[c] = std::max(0.0f, std::min(1.0f, pixel[c] + shadow_boost));
         }
     }

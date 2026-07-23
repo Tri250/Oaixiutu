@@ -906,10 +906,21 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateToneCurve(x: FloatArray, y: FloatArray) {
         _toneCurveX.value = x
         _toneCurveY.value = y
+        // BUG FIX: Count actual non-zero control points, not padded array size.
+        // The native pipeline uses toneCurvePoints to know how many valid
+        // entries to read from toneCurveX/toneCurveY. Using x.size (which
+        // may be 16 after padding) would cause the curve to include (0,0)
+        // padding points, producing a completely wrong curve shape.
+        val actualPoints = if (x.size <= 5) x.size else {
+            // Count trailing zeros to find the real point count
+            var count = x.size
+            while (count > 0 && x[count - 1] == 0f && y[count - 1] == 0f) count--
+            count.coerceAtLeast(2) // At least 2 endpoints
+        }
         _params.value = _params.value.copy(
             toneCurveX = x,
             toneCurveY = y,
-            toneCurvePoints = x.size
+            toneCurvePoints = actualPoints
         )
         // C3 修复: 记录全部曲线点,否则撤销只恢复点数,曲线形状丢失
         recordTransaction(OperatorType.TONE_CURVE, "toneCurvePoints", x.size.toFloat())

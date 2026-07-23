@@ -17,12 +17,15 @@ namespace {
 void HighlightOperator::apply(float* pixels, int count, int channels, float highlight_amount) {
     if (!pixels || count <= 0 || channels <= 0 || highlight_amount == 0.0f) return;
 
+    // Only modify RGB channels (skip alpha if present)
+    int colorChannels = std::min(channels, 3);
+
     for (int i = 0; i < count; ++i) {
         float* pixel = pixels + i * channels;
         float lum = compute_luminance(pixel, channels);
         float highlight_compress = -highlight_amount * lum * lum;
 
-        for (int c = 0; c < channels; ++c) {
+        for (int c = 0; c < colorChannels; ++c) {
             pixel[c] = std::max(0.0f, std::min(1.0f, pixel[c] + highlight_compress));
         }
     }

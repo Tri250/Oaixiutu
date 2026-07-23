@@ -67,8 +67,8 @@ void main() {
 
     vec4 color = imageLoad(inputImage, coord);
 
-    // Convert to 0-1 range
-    vec3 rgb = color.rgb / 255.0;
+    // rgba8 imageLoad returns values in [0,1], no /255 needed
+    vec3 rgb = color.rgb;
 
     // Apply parametric curve
     vec3 parametric = vec3(
@@ -90,7 +90,8 @@ void main() {
     // Blend with original based on curve strength
     result = mix(rgb, result, curveStrength);
 
-    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+    // rgba8 imageStore expects [0,1], clamp output
+    color.rgb = clamp(result, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

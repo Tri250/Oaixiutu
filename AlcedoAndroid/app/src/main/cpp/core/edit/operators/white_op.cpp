@@ -1,4 +1,5 @@
 #include "white_op.h"
+#include <algorithm>
 
 namespace alcedo {
 
@@ -6,20 +7,28 @@ void WhiteOperator::apply(float* pixels, int count, int channels, float white_po
     if (!pixels || count <= 0 || channels <= 0) return;
     if (white_point >= 1.0f) return;
     if (white_point <= 0.0f) {
-        for (int i = 0; i < count * channels; ++i) {
-            pixels[i] = 1.0f;
+        // Only set RGB channels to 1.0
+        int colorChannels = std::min(channels, 3);
+        for (int i = 0; i < count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < colorChannels; ++c) {
+                pixels[idx + c] = 1.0f;
+            }
         }
         return;
     }
 
     float scale = 1.0f / white_point;
-    int total = count * channels;
-    for (int i = 0; i < total; ++i) {
-        float v = pixels[i];
-        if (v >= white_point) {
-            pixels[i] = 1.0f;
-        } else {
-            pixels[i] = v * scale;
+    int colorChannels = std::min(channels, 3);
+    for (int i = 0; i < count; ++i) {
+        int idx = i * channels;
+        for (int c = 0; c < colorChannels; ++c) {
+            float v = pixels[idx + c];
+            if (v >= white_point) {
+                pixels[idx + c] = 1.0f;
+            } else {
+                pixels[idx + c] = std::clamp(v * scale, 0.0f, 1.0f);
+            }
         }
     }
 }

@@ -89,6 +89,7 @@ void HLSOp::SetHueRange(int profile, float range) {
 }
 
 void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
+    if (!pixels || channels < 3) return;
     int total = width * height;
 
     // Check if any adjustments are non-zero
@@ -102,6 +103,8 @@ void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
         }
     }
     if (!has_adjustments) return;
+
+    static constexpr float kPi = 3.14159265358979323846f;
 
     for (int i = 0; i < total; ++i) {
         int idx = i * channels;
@@ -117,7 +120,7 @@ void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
         OklabCvt::Oklab lab = OklabCvt::ACESRGB2Oklab(r, g, b);
 
         // Compute hue angle from a,b components (in degrees)
-        float hue = std::atan2(lab.b, lab.a) * 180.0f / M_PI;
+        float hue = std::atan2(lab.b, lab.a) * 180.0f / kPi;
         if (hue < 0.0f) hue += 360.0f;
 
         // Accumulate weighted adjustments across all profiles
@@ -154,7 +157,7 @@ void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
 
         // Apply hue shift
         if (total_hue_shift != 0.0f) {
-            float hue_rad = (hue + total_hue_shift) * M_PI / 180.0f;
+            float hue_rad = (hue + total_hue_shift) * kPi / 180.0f;
             float chroma = std::sqrt(lab.a * lab.a + lab.b * lab.b);
             lab.a = chroma * std::cos(hue_rad);
             lab.b = chroma * std::sin(hue_rad);
@@ -174,11 +177,11 @@ void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
             lab.b *= scale;
         }
 
-        // Convert back to RGB
+        // Convert back to RGB and clamp
         OklabCvt::Oklab2ACESRGB(lab, &r, &g, &b);
-        pixels[idx]     = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = std::clamp(r, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(g, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(b, 0.0f, 1.0f);
     }
 }
 

@@ -22,11 +22,20 @@ static void rgb_to_hsl(float r, float g, float b, float& h, float& s, float& l) 
         return;
     }
 
-    s = l > 0.5f ? delta / (2.0f - mx - mn) : delta / (mx + mn);
+    // Guard against division by zero in saturation calculation
+    float denom_lo = mx + mn;
+    float denom_hi = 2.0f - mx - mn;
+    if (l > 0.5f) {
+        s = (denom_hi > 1e-6f) ? delta / denom_hi : 0.0f;
+    } else {
+        s = (denom_lo > 1e-6f) ? delta / denom_lo : 0.0f;
+    }
 
-    if (mx == r) {
+    // Use epsilon comparison for floating point instead of exact equality
+    static constexpr float kEps = 1e-6f;
+    if (std::abs(mx - r) < kEps && mx - g > kEps) {
         h = (g - b) / delta + (g < b ? 6.0f : 0.0f);
-    } else if (mx == g) {
+    } else if (std::abs(mx - g) < kEps) {
         h = (b - r) / delta + 2.0f;
     } else {
         h = (r - g) / delta + 4.0f;
@@ -74,6 +83,7 @@ void HSLOperator::apply_rgb(float* pixels, int width, int height,
                              const float hue_shift[8],
                              const float saturation_scale[8],
                              const float luminance_scale[8]) {
+    if (!pixels) return;
     int total = width * height;
     float half_width = hue_width / 360.0f;
 
@@ -122,6 +132,7 @@ void HSLOperator::apply_rgba(float* pixels, int width, int height,
                               const float hue_shift[8],
                               const float saturation_scale[8],
                               const float luminance_scale[8]) {
+    if (!pixels) return;
     int total = width * height;
     float half_width = hue_width / 360.0f;
 

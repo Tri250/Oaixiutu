@@ -1,16 +1,15 @@
-// RCD (Ratio Corrected Demosaicing) compute shader
-// For Bayer-pattern RAW data demosaicing to RGB
-// GLSL ES 3.1
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(r32f, binding = 0) readonly restrict uniform image2D inputRaw;     // Single-channel Bayer RAW
+layout(rgba16f, binding = 1) writeonly restrict uniform image2D outputImage;
 
-layout(r32f, binding = 0) uniform readonly  image2D inputRaw;     // Single-channel Bayer RAW
-layout(rgba16f, binding = 1) uniform writeonly image2D outputImage;
+uniform vec2  uImageSize;
+uniform int   uBayerPattern;  // 0: RGGB, 1: BGGR, 2: GBRG, 3: GRBG
+uniform float uBlackLevel;
+uniform float uWhiteLevel;
 
-uniform vec2  imageSize;
-uniform int   bayerPattern;  // 0: RGGB, 1: BGGR, 2: GBRG, 3: GRBG
-uniform float blackLevel;
-uniform float whiteLevel;
+#include "common.glsl"
 
 // Get the color channel of a pixel in the Bayer pattern
 int get_channel(ivec2 coord, int pattern) {
@@ -34,43 +33,38 @@ int get_channel(ivec2 coord, int pattern) {
 }
 
 float sample_raw(ivec2 coord) {
-    coord = clamp(coord, ivec2(0), ivec2(imageSize) - 1);
+    coord = clamp(coord, ivec2(0), ivec2(uImageSize) - 1);
     return imageLoad(inputRaw, coord).r;
+}
+
+float normalize_raw(float raw_val) {
+    float range = max(uWhiteLevel - uBlackLevel, EPSILON);
+    return max(raw_val - uBlackLevel, 0.0) / range;
 }
 
 void main() {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+    if (coord.x >= int(uImageSize.x) || coord.y >= int(uImageSize.y)) return;
 
     // Skip border pixels
-    if (coord.x < 1 || coord.x >= int(imageSize.x) - 1 ||
-        coord.y < 1 || coord.y >= int(imageSize.y) - 1) {
+    if (coord.x < 1 || coord.x >= int(uImageSize.x) - 1 ||
+        coord.y < 1 || coord.y >= int(uImageSize.y) - 1) {
         imageStore(outputImage, coord, vec4(0.0));
         return;
     }
 
-    int channel = get_channel(coord, bayerPattern);
-    float center = sample_raw(coord) - blackLevel;
-    center = max(center, 0.0) / (whiteLevel - blackLevel);
+    int channel = get_channel(coord, uBayerPattern);
+    float center = normalize_raw(sample_raw(coord));
 
-    // Sample neighbors
-    float n  = sample_raw(coord + ivec2( 0, -1)) - blackLevel;
-    float s  = sample_raw(coord + ivec2( 0,  1)) - blackLevel;
-    float e  = sample_raw(coord + ivec2( 1,  0)) - blackLevel;
-    float w  = sample_raw(coord + ivec2(-1,  0)) - blackLevel;
-    float nw = sample_raw(coord + ivec2(-1, -1)) - blackLevel;
-    float ne = sample_raw(coord + ivec2( 1, -1)) - blackLevel;
-    float sw = sample_raw(coord + ivec2(-1,  1)) - blackLevel;
-    float se = sample_raw(coord + ivec2( 1,  1)) - blackLevel;
-
-    n  = max(n,  0.0) / (whiteLevel - blackLevel);
-    s  = max(s,  0.0) / (whiteLevel - blackLevel);
-    e  = max(e,  0.0) / (whiteLevel - blackLevel);
-    w  = max(w,  0.0) / (whiteLevel - blackLevel);
-    nw = max(nw, 0.0) / (whiteLevel - blackLevel);
-    ne = max(ne, 0.0) / (whiteLevel - blackLevel);
-    sw = max(sw, 0.0) / (whiteLevel - blackLevel);
-    se = max(se, 0.0) / (whiteLevel - blackLevel);
+    // Sample and normalize neighbors
+    float n  = normalize_raw(sample_raw(coord + ivec2( 0, -1)));
+    float s  = normalize_raw(sample_raw(coord + ivec2( 0,  1)));
+    float e  = normalize_raw(sample_raw(coord + ivec2( 1,  0)));
+    float w  = normalize_raw(sample_raw(coord + ivec2(-1,  0)));
+    float nw = normalize_raw(sample_raw(coord + ivec2(-1, -1)));
+    float ne = normalize_raw(sample_raw(coord + ivec2( 1, -1)));
+    float sw = normalize_raw(sample_raw(coord + ivec2(-1,  1)));
+    float se = normalize_raw(sample_raw(coord + ivec2( 1,  1)));
 
     vec3 rgb = vec3(0.0);
 

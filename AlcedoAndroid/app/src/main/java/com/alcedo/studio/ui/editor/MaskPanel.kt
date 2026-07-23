@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,10 +92,10 @@ fun MaskPanel(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier
 ) {
-    val containers by viewModel.maskContainers.collectAsState()
-    val maskPreview by viewModel.maskPreviewBitmap.collectAsState()
-    val original by viewModel.originalBitmap.collectAsState()
-    val isAnalyzing by viewModel.isAnalyzingMask.collectAsState()
+    val containers by viewModel.maskContainers.collectAsStateWithLifecycle()
+    val maskPreview by viewModel.maskPreviewBitmap.collectAsStateWithLifecycle()
+    val original by viewModel.originalBitmap.collectAsStateWithLifecycle()
+    val isAnalyzing by viewModel.isAnalyzingMask.collectAsStateWithLifecycle()
 
     var showNewMaskMenu by remember { mutableStateOf(false) }
     var expandedContainerId by remember { mutableStateOf<String?>(null) }
@@ -141,7 +142,8 @@ fun MaskPanel(
                                 },
                                 onClick = {
                                     viewModel.addMaskContainer(type)
-                                    expandedContainerId = viewModel.maskContainers.value.lastOrNull()?.id
+                                    // Use containers from the already-collected state
+                                    expandedContainerId = containers.lastOrNull()?.id
                                     showNewMaskMenu = false
                                 }
                             )

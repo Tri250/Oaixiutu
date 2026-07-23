@@ -40,7 +40,7 @@ void GeometryOperator::rotate_scale(float* dst, int dst_width, int dst_height,
                                      const float* src, int src_width, int src_height,
                                      int channels, float angle, float scale,
                                      float center_x, float center_y) {
-    float rad = angle * M_PI / 180.0f;
+    float rad = angle * static_cast<float>(M_PI) / 180.0f;
     float cos_a = std::cos(rad);
     float sin_a = std::sin(rad);
 
@@ -49,11 +49,13 @@ void GeometryOperator::rotate_scale(float* dst, int dst_width, int dst_height,
     float cx_dst = dst_width * 0.5f;
     float cy_dst = dst_height * 0.5f;
 
+    float safe_scale = (std::abs(scale) < 1e-6f) ? 1e-6f : scale;
+
     for (int y = 0; y < dst_height; ++y) {
         for (int x = 0; x < dst_width; ++x) {
             // Map destination pixel to source
-            float dx = (x - cx_dst) / scale;
-            float dy = (y - cy_dst) / scale;
+            float dx = (x - cx_dst) / safe_scale;
+            float dy = (y - cy_dst) / safe_scale;
 
             float sx = dx * cos_a + dy * sin_a + cx_src;
             float sy = -dx * sin_a + dy * cos_a + cy_src;
@@ -155,6 +157,11 @@ bool GeometryOperator::solve_perspective(const float src[8], const float dst[8],
 
 void GeometryOperator::transform_point(const float matrix[9], float x, float y, float& ox, float& oy) {
     float w = matrix[6] * x + matrix[7] * y + matrix[8];
+    if (std::abs(w) < 1e-10f) {
+        ox = x;
+        oy = y;
+        return;
+    }
     ox = (matrix[0] * x + matrix[1] * y + matrix[2]) / w;
     oy = (matrix[3] * x + matrix[4] * y + matrix[5]) / w;
 }
@@ -198,6 +205,7 @@ void GeometryOperator::dng_warp_rectilinear(float* dst, int dst_width, int dst_h
     float cx_px = cx * src_width;
     float cy_px = cy * src_height;
     float max_r = std::sqrt(cx_px * cx_px + cy_px * cy_px);
+    if (max_r < 1e-6f) max_r = 1e-6f;
 
     for (int y = 0; y < dst_height; ++y) {
         for (int x = 0; x < dst_width; ++x) {

@@ -1,16 +1,16 @@
-// Film grain compute shader
-// GLSL ES 3.1
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(rgba32f, binding = 0) readonly restrict uniform image2D imgInput;
+layout(rgba32f, binding = 1) writeonly restrict uniform image2D imgOutput;
 
-layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
-layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+uniform vec2  uImageSize;
+uniform float uAmount;        // 0.0 to 1.0
+uniform float uSize;          // grain size (1.0 to 10.0)
+uniform float uRoughness;     // 0.0 to 1.0
+uniform float uSeed;          // random seed
 
-uniform vec2  imageSize;
-uniform float amount;        // 0.0 to 1.0
-uniform float size;          // grain size (1.0 to 10.0)
-uniform float roughness;     // 0.0 to 1.0
-uniform float seed;          // random seed
+#include "common.glsl"
 
 // Hash function
 float hash(vec2 p) {
@@ -41,7 +41,7 @@ float fbm(vec2 p) {
     for (int i = 0; i < 4; i++) {
         value += amplitude * noise(p * frequency);
         frequency *= 2.0;
-        amplitude *= roughness;
+        amplitude *= uRoughness;
     }
 
     return value;
@@ -49,32 +49,29 @@ float fbm(vec2 p) {
 
 void main() {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+    if (coord.x >= int(uImageSize.x) || coord.y >= int(uImageSize.y)) return;
 
-    vec4 color = imageLoad(inputImage, coord);
+    vec4 color = imageLoad(imgInput, coord);
 
-    if (amount < 0.001) {
-        imageStore(outputImage, coord, color);
+    if (uAmount < 0.001) {
+        imageStore(imgOutput, coord, color);
         return;
     }
 
     // Generate grain noise
-    vec2 uv = vec2(coord) / max(size, 0.01);
-    vec2 uvOffset = vec2(seed, seed * 1.37);
+    vec2 uv = vec2(coord) / max(uSize, 0.01);
+    vec2 uvOffset = vec2(uSeed, uSeed * 1.37);
     float grain = fbm(uv + uvOffset) * 2.0 - 1.0;
 
-    // Apply grain - blend in linear space
-    vec3 linear = color.rgb / 255.0;
-    grain *= amount * 0.15;
+    // Apply grain - data is already in linear [0,1] float space
+    grain *= uAmount * 0.15;
 
     // Grain is applied differently based on luminance
-    float lum = dot(linear, vec3(0.2126, 0.7152, 0.0722));
+    float lum = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
     float grainStrength = grain * (1.0 - lum * 0.5); // less grain on bright areas
 
-    vec3 result = linear + grainStrength;
+    vec3 result = color.rgb + grainStrength;
+    result = clamp(result, 0.0, 1.0);
 
-    // Back to 8-bit
-    color.rgb = clamp(result * 255.0, 0.0, 255.0);
-
-    imageStore(outputImage, coord, color);
+    imageStore(imgOutput, coord, vec4(result, color.a));
 }

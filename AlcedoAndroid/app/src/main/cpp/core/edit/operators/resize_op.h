@@ -11,7 +11,7 @@ public:
         BILINEAR = 1
     };
 
-    static void resize(float* src, int src_w, int src_h,
+    static void resize(const float* src, int src_w, int src_h,
                        float* dst, int dst_w, int dst_h,
                        int channels, int method);
 };

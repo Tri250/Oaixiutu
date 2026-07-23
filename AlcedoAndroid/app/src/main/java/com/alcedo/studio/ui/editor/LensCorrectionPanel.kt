@@ -19,7 +19,7 @@ fun LensCorrectionPanel(
     viewModel: EditorViewModel,
     modifier: Modifier = Modifier
 ) {
-    val params by remember { viewModel.params }
+    val params by viewModel.params
     val image by viewModel.imageModel.collectAsState()
 
     // 自动检测镜头型号
@@ -32,7 +32,7 @@ fun LensCorrectionPanel(
         autoDetectedProfile = image?.let { img ->
             LensCorrectionDatabase.findProfile(
                 make = img.exifDisplay.cameraMake,
-                model = img.exifDisplay.lensModel ?: img.exifDisplay.cameraModel,
+                model = img.exifDisplay.lensModel?.ifBlank { img.exifDisplay.cameraModel } ?: img.exifDisplay.cameraModel,
                 focalLength = img.exifDisplay.focalLength.toFloatOrNull(),
                 aperture = img.exifDisplay.aperture.toFloatOrNull()
             )

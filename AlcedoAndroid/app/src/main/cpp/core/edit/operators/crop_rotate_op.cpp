@@ -86,7 +86,7 @@ void CropRotateOperator::apply_rotate(float* dst, const float* src, int src_widt
         }
     } else {
         // Arbitrary rotation using bilinear interpolation
-        float rad = static_cast<float>(angle) * M_PI / 180.0f;
+        float rad = static_cast<float>(angle) * static_cast<float>(M_PI) / 180.0f;
         float cos_a = std::cos(rad);
         float sin_a = std::sin(rad);
 

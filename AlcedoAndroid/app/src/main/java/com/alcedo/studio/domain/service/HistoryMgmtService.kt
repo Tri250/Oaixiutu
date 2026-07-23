@@ -300,6 +300,9 @@ class HistoryMgmtService(
         if (transactions.size < COMPRESS_WINDOW_SIMILAR * 2) return@withContext
 
         val compressed = mutableListOf<EditTransaction>()
+        // Track how many original transactions each compressed transaction covers
+        // This allows us to correctly map the cursor position
+        val compressedSpan = mutableListOf<Int>()
         var i = 0
         while (i < transactions.size) {
             val current = transactions[i]
@@ -322,13 +325,26 @@ class HistoryMgmtService(
             }
 
             compressed.add(merged)
+            compressedSpan.add(j - i) // Number of original transactions this merged transaction covers
             i = j
         }
 
-        val cursorAdjustment = transactions.size - compressed.size
+        // Correctly map the cursor: walk through compressed spans to find
+        // where the original cursor position maps to in the compressed list
+        var newCursor = 0
+        var originalPos = 0
+        for (k in compressedSpan.indices) {
+            originalPos += compressedSpan[k]
+            if (originalPos <= version.cursor) {
+                newCursor = k + 1
+            } else {
+                break
+            }
+        }
+
         version.transactions.clear()
         version.transactions.addAll(compressed)
-        version.cursor = (version.cursor - cursorAdjustment).coerceAtLeast(0)
+        version.cursor = newCursor.coerceAtMost(compressed.size)
 
         history.lastModifiedTime = Instant.now()
         persistHistory(history)

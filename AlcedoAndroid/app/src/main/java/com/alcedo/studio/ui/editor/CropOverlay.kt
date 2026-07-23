@@ -249,10 +249,10 @@ private fun updateCropState(
 
     // Enforce aspect ratio
     val targetRatio = aspectRatio.ratio
-    if (targetRatio != null) {
+    if (targetRatio != null && targetRatio > 0.001f) {
         val currentWidth = newCrop.right - newCrop.left
         val currentHeight = newCrop.bottom - newCrop.top
-        if (currentWidth > 0 && currentHeight > 0) {
+        if (currentWidth > 0.001f && currentHeight > 0.001f) {
             val currentRatio = currentWidth / currentHeight
             if (abs(currentRatio - targetRatio) > 0.001f) {
                 when (handle) {

@@ -10,7 +10,7 @@ static constexpr float kLumG = 0.7152f;
 static constexpr float kLumB = 0.0722f;
 
 void VibranceOperator::apply_rgb(float* pixels, int width, int height, float amount) {
-    if (amount == 0.0f) return;
+    if (!pixels || amount == 0.0f) return;
     int total = width * height;
 
     for (int i = 0; i < total; ++i) {
@@ -43,7 +43,7 @@ void VibranceOperator::apply_rgb(float* pixels, int width, int height, float amo
 }
 
 void VibranceOperator::apply_rgba(float* pixels, int width, int height, float amount) {
-    if (amount == 0.0f) return;
+    if (!pixels || amount == 0.0f) return;
     int total = width * height;
 
     for (int i = 0; i < total; ++i) {

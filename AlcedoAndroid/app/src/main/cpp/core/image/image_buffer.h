@@ -144,6 +144,8 @@ struct PipelineParams {
     float exposure = 0.0f;
     float contrast = 0.0f;
     float sigmoid_contrast = 0.0f;
+    float sigmoid_shoulder = 0.5f;
+    float sigmoid_pivot = 0.18f;
 
     // White balance
     float white_balance_temp = 6500.0f;

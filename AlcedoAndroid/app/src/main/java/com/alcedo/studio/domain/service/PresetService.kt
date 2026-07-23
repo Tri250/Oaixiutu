@@ -282,7 +282,12 @@ class PresetService(
                 createdTime = System.currentTimeMillis(),
                 isBuiltIn = false
             )
-            presetDao.insert(entity)
+            val insertedId = presetDao.insert(entity)
+            if (insertedId <= 0) {
+                Log.e(TAG, "Import preset failed: insert returned invalid id $insertedId")
+                return@withContext -1L
+            }
+            insertedId
         } catch (e: java.io.IOException) {
             Log.e(TAG, "Import preset failed: I/O error reading file", e)
             -1L
@@ -342,7 +347,7 @@ class PresetService(
             val params = PipelineParams(
                 lutEnabled = true,
                 lutPath = destFile.absolutePath,
-                lutIntensity = 100f
+                lutIntensity = 1f  // Use 0-1 range consistent with UI slider
             )
             val entity = PipelinePresetEntity(
                 name = cubeFile.nameWithoutExtension,
@@ -666,7 +671,7 @@ class PresetService(
                 halationSpread = f("halationSpread", 10f),
                 halationRedBias = f("halationRedBias", 0.7f),
                 lutEnabled = obj["lutEnabled"]?.jsonPrimitive?.content?.toBoolean() ?: false,
-                lutIntensity = f("lutIntensity", 100f),
+                lutIntensity = f("lutIntensity", 1f),
                 lutPath = obj["lutPath"]?.jsonPrimitive?.content ?: "",
                 geometryRotate = f("geometryRotate"),
                 geometryScale = f("geometryScale", 1f),

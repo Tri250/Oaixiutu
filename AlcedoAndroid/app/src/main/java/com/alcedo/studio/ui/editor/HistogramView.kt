@@ -63,10 +63,12 @@ fun HistogramView(
 
     // 检测是否有实际剪裁（超过总像素的2%）
     val totalLuminance = histogramData.luminance.sum()
-    val highlightClipped = totalLuminance > 0f &&
-            histogramData.luminance.sliceArray(highlightClipThreshold..255).sum() > totalLuminance * 0.02f
-    val shadowClipped = totalLuminance > 0f &&
-            histogramData.luminance.sliceArray(0 until shadowClipThreshold).sum() > totalLuminance * 0.02f
+    val safeHighlightThreshold = highlightClipThreshold.coerceIn(0, histogramData.luminance.size - 1)
+    val safeShadowThreshold = shadowClipThreshold.coerceIn(0, histogramData.luminance.size - 1)
+    val highlightClipped = totalLuminance > 0f && safeHighlightThreshold < histogramData.luminance.size &&
+            histogramData.luminance.sliceArray(safeHighlightThreshold..histogramData.luminance.size.lastIndex).sum() > totalLuminance * 0.02f
+    val shadowClipped = totalLuminance > 0f && safeShadowThreshold > 0 &&
+            histogramData.luminance.sliceArray(0 until safeShadowThreshold).sum() > totalLuminance * 0.02f
 
     // UX 修复: 背景色从主题派生,确保主题切换时一致
     val scopeBackground = MaterialTheme.colorScheme.surfaceContainerLowest

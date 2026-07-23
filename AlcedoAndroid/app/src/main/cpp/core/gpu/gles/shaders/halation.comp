@@ -1,15 +1,15 @@
-// Halation effect compute shader
-// GLSL ES 3.1
+#version 320 es
+layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(rgba32f, binding = 0) readonly restrict uniform image2D imgInput;
+layout(rgba32f, binding = 1) writeonly restrict uniform image2D imgOutput;
 
-layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
-layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+uniform vec2  uImageSize;
+uniform float uAmount;        // 0.0 to 1.0
+uniform float uSpread;        // spread radius
+uniform float uStrength;      // overall intensity
 
-uniform vec2  imageSize;
-uniform float amount;        // 0.0 to 1.0
-uniform float spread;        // spread radius
-uniform float strength;      // overall intensity
+#include "common.glsl"
 
 // Gaussian blur in one direction
 vec3 gaussian_blur_5(ivec2 coord, vec2 dir) {
@@ -18,8 +18,8 @@ vec3 gaussian_blur_5(ivec2 coord, vec2 dir) {
 
     for (int i = -2; i <= 2; i++) {
         ivec2 sampleCoord = coord + ivec2(int(dir.x * float(i)), int(dir.y * float(i)));
-        sampleCoord = clamp(sampleCoord, ivec2(0), ivec2(imageSize) - 1);
-        vec4 sample = imageLoad(inputImage, sampleCoord);
+        sampleCoord = clamp(sampleCoord, ivec2(0), ivec2(uImageSize) - 1);
+        vec4 sample = imageLoad(imgInput, sampleCoord);
         result += sample.rgb * weights[i + 2];
     }
 
@@ -28,24 +28,23 @@ vec3 gaussian_blur_5(ivec2 coord, vec2 dir) {
 
 void main() {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
+    if (coord.x >= int(uImageSize.x) || coord.y >= int(uImageSize.y)) return;
 
-    vec4 color = imageLoad(inputImage, coord);
+    vec4 color = imageLoad(imgInput, coord);
 
-    if (amount < 0.001) {
-        imageStore(outputImage, coord, color);
+    if (uAmount < 0.001) {
+        imageStore(imgOutput, coord, color);
         return;
     }
 
     // Blur horizontally and vertically
-    float radius = spread * 3.0 + 1.0;
+    float radius = uSpread * 3.0 + 1.0;
     vec3 blurredH = gaussian_blur_5(coord, vec2(radius, 0.0));
     vec3 blurredV = gaussian_blur_5(coord, vec2(0.0, radius));
     vec3 blurred = (blurredH + blurredV) * 0.5;
 
-    // Extract highlights (only bright areas halate)
-    vec3 linear = color.rgb / 255.0;
-    float lum = dot(linear, vec3(0.2126, 0.7152, 0.0722));
+    // Data is already in linear [0,1] float space
+    float lum = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
 
     // Threshold: only pixels above certain brightness contribute
     float highlightMask = smoothstep(0.5, 0.9, lum);
@@ -55,8 +54,8 @@ void main() {
     vec3 halation = blurredHighlights * vec3(1.0, 0.4, 0.2);
 
     // Blend
-    vec3 result = linear * (1.0 - amount) + (linear + halation * strength * 0.5) * amount;
+    vec3 result = color.rgb * (1.0 - uAmount) + (color.rgb + halation * uStrength * 0.5) * uAmount;
+    result = clamp(result, 0.0, 1.0);
 
-    color.rgb = clamp(result * 255.0, 0.0, 255.0);
-    imageStore(outputImage, coord, color);
+    imageStore(imgOutput, coord, vec4(result, color.a));
 }

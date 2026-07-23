@@ -70,7 +70,7 @@ void resize_bilinear(const float* src, int src_w, int src_h,
 
 } // anonymous namespace
 
-void ResizeOperator::resize(float* src, int src_w, int src_h,
+void ResizeOperator::resize(const float* src, int src_w, int src_h,
                             float* dst, int dst_w, int dst_h,
                             int channels, int method) {
     if (!src || !dst || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0 || channels <= 0) {

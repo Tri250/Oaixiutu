@@ -96,10 +96,7 @@ void CurveOp::ComputeTangents() {
             // Fritsch-Carlson: limit sum of normalized tangents to 3
             float sum = alpha + beta;
             if (sum > 3.0f) {
-                float scale = 3.0f / sum;
-                m_[i] *= scale * alpha / std::max(alpha, 1e-10f) * alpha;
-                m_[i + 1] *= scale * beta / std::max(beta, 1e-10f) * beta;
-                // Simpler approach: scale tangents proportionally
+                // Scale tangents proportionally to satisfy the constraint
                 m_[i] = delta * 3.0f * alpha / sum;
                 m_[i + 1] = delta * 3.0f * beta / sum;
             }
@@ -146,7 +143,7 @@ float CurveOp::Evaluate(float x) const {
 }
 
 void CurveOp::ApplyImpl(float* pixels, int width, int height, int channels) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     // If only 2 control points forming identity, skip
     if (ctrl_pts_.size() == 2 &&
@@ -165,8 +162,8 @@ void CurveOp::ApplyImpl(float* pixels, int width, int height, int channels) {
     // Influence factor: curve affects luminance with 0.65 influence
     static constexpr float kInfluence = 0.65f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

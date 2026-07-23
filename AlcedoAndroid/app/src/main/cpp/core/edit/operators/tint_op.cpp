@@ -33,6 +33,7 @@ void TintOperator::apply_rgb(float* pixels, int width, int height,
                               float highlight_hue, float highlight_strength,
                               float shadow_hue, float shadow_strength,
                               float balance) {
+    if (!pixels) return;
     if (highlight_strength == 0.0f && shadow_strength == 0.0f) return;
     int total = width * height;
 
@@ -82,6 +83,7 @@ void TintOperator::apply_rgba(float* pixels, int width, int height,
                                float highlight_hue, float highlight_strength,
                                float shadow_hue, float shadow_strength,
                                float balance) {
+    if (!pixels) return;
     if (highlight_strength == 0.0f && shadow_strength == 0.0f) return;
     int total = width * height;
 

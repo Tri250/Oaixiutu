@@ -238,6 +238,8 @@ void get_ap1_to_srgb_matrix(float m[9]) {
 // ============================================================
 
 float srgb_eotf(float linear) {
+    // Guard against negative input: std::pow(negative, non-integer) returns NaN
+    linear = std::max(0.0f, linear);
     if (linear <= 0.0031308f) {
         return 12.92f * linear;
     }
@@ -265,6 +267,8 @@ void srgb_inverse_eotf_rgb(float* r, float* g, float* b) {
 
 float pq_eotf(float linear, float peak_luminance) {
     // ST.2084 PQ EOTF
+    // Guard against invalid peak_luminance
+    if (peak_luminance <= 0.0f) return 0.0f;
     // Normalize to 0..1 range (1.0 = peak_luminance)
     float y = linear * (10000.0f / peak_luminance);
     y = std::max(0.0f, y);
@@ -324,6 +328,8 @@ void pq_eotf_decode_rgb(float* r, float* g, float* b, float peak_luminance) {
 float hlg_oetf(float linear) {
     // HLG OETF (BT.2100)
     // Linear input is scene-referred (0..1 = reference white)
+    // Guard against negative input: sqrt(negative) returns NaN
+    linear = std::max(0.0f, linear);
     const float a = 0.17883277f;
     const float b = 1.0f - 4.0f * a;
     const float c = 0.5f - a * std::log(4.0f * a);
@@ -341,6 +347,8 @@ void hlg_oetf_rgb(float* r, float* g, float* b) {
 }
 
 float hlg_inverse_oetf(float hlg) {
+    // Clamp input to valid [0,1] range
+    hlg = std::max(0.0f, std::min(1.0f, hlg));
     const float a = 0.17883277f;
     const float b = 1.0f - 4.0f * a;
     const float c = 0.5f - a * std::log(4.0f * a);
@@ -553,7 +561,8 @@ void opendrt_tone_map(float* r, float* g, float* b) {
     // Compute luminance
     float lum = *r * 0.2126f + *g * 0.7152f + *b * 0.0722f;
 
-    if (lum > 0.0f) {
+    // Guard against near-zero luminance to avoid division by extremely small values
+    if (lum > 1e-6f) {
         float mapped_lum = opendrt_tone_curve(lum);
         float scale = mapped_lum / lum;
         *r *= scale;
@@ -663,9 +672,11 @@ void linear_srgb_to_oklab(float r, float g, float b, float* L, float* a, float* 
     float s_ = 0.0883024619f * r + 0.2817188376f * g + 0.6299787005f * b;
 
     // Step 2: LMS → LMS' (cube root)
-    float l_p = std::cbrt(l_);
-    float m_p = std::cbrt(m_);
-    float s_p = std::cbrt(s_);
+    // std::cbrt handles negative values correctly (returns negative cube root),
+    // but guard against NaN from special float values
+    float l_p = std::isfinite(l_) ? std::cbrt(l_) : 0.0f;
+    float m_p = std::isfinite(m_) ? std::cbrt(m_) : 0.0f;
+    float s_p = std::isfinite(s_) ? std::cbrt(s_) : 0.0f;
 
     // Step 3: LMS' → OKLab
     *L = 0.2104542553f * l_p + 0.7936177850f * m_p - 0.0040720468f * s_p;
@@ -723,6 +734,8 @@ void srgb_to_okhsl(float r, float g, float b, float* h, float* s, float* l) {
 void apply_peak_luminance_scale(float* r, float* g, float* b, float peak_luminance, float reference_white) {
     // Scale display-referred linear values so that 1.0 = reference_white cd/m²
     // and peak_luminance maps to the maximum displayable value
+    // Guard against invalid peak_luminance
+    if (peak_luminance <= 0.0f) return;
     float scale = reference_white / peak_luminance;
     *r *= scale;
     *g *= scale;
@@ -730,6 +743,7 @@ void apply_peak_luminance_scale(float* r, float* g, float* b, float peak_luminan
 }
 
 void apply_peak_luminance_scale_bulk(float* pixels, int count, int channels, float peak_luminance, float reference_white) {
+    if (peak_luminance <= 0.0f) return;
     float scale = reference_white / peak_luminance;
     for (int i = 0; i < count; ++i) {
         int idx = i * channels;

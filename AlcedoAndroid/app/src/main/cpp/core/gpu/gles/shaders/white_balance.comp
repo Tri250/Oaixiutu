@@ -11,25 +11,26 @@ uniform float tint;         // magenta-green shift
 uniform vec2  imageSize;
 
 // Convert Kelvin temperature to RGB multipliers
+// Returns normalized [0,1] values for rgba8 image format
 vec3 temperature_to_rgb(float kelvin) {
     float temp = clamp(kelvin, 2000.0, 50000.0) / 100.0;
     vec3 rgb;
 
     if (temp <= 66.0) {
-        rgb.r = 255.0;
-        rgb.g = 99.4708025861 * log(temp) - 161.1195681661;
+        rgb.r = 1.0;
+        rgb.g = (99.4708025861 * log(temp) - 161.1195681661) / 255.0;
         if (temp <= 19.0) {
             rgb.b = 0.0;
         } else {
-            rgb.b = 138.5177312231 * log(temp - 10.0) - 305.0447927307;
+            rgb.b = (138.5177312231 * log(temp - 10.0) - 305.0447927307) / 255.0;
         }
     } else {
-        rgb.r = 329.698727446 * pow(temp - 60.0, -0.1332047592);
-        rgb.g = 288.1221695283 * pow(temp - 60.0, -0.0755148492);
-        rgb.b = 255.0;
+        rgb.r = 329.698727446 * pow(temp - 60.0, -0.1332047592) / 255.0;
+        rgb.g = 288.1221695283 * pow(temp - 60.0, -0.0755148492) / 255.0;
+        rgb.b = 1.0;
     }
 
-    return clamp(rgb / 255.0, 0.0, 1.0);
+    return clamp(rgb, 0.0, 1.0);
 }
 
 void main() {
@@ -53,7 +54,8 @@ void main() {
         wb /= lumScale;
     }
 
-    color.rgb = clamp(color.rgb * wb * 255.0, 0.0, 255.0);
+    // rgba8 imageLoad returns [0,1], apply multipliers and clamp
+    color.rgb = clamp(color.rgb * wb, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

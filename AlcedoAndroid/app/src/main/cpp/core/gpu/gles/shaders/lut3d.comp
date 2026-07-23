@@ -3,15 +3,15 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(rgba8, binding = 0) uniform readonly  image2D inputImage;
-layout(rgba8, binding = 1) uniform writeonly image2D outputImage;
+layout(rgba16f, binding = 0) uniform readonly  image2D inputImage;
+layout(rgba16f, binding = 1) uniform writeonly image2D outputImage;
 
 uniform sampler2D lutTexture;  // 3D LUT stored as 2D texture
 uniform vec2      imageSize;
 uniform int       lutSize;     // 16, 32, or 64
 uniform float     intensity;   // 0.0 to 1.0 (blend factor)
 
-// Tetrahedral interpolation for 3D LUT
+// Trilinear interpolation for 3D LUT
 vec3 sample_lut3d(vec3 rgb) {
     float coordScale = (float(lutSize) - 1.0) / float(lutSize);
     float coordOffset = 1.0 / (2.0 * float(lutSize));
@@ -19,20 +19,52 @@ vec3 sample_lut3d(vec3 rgb) {
     vec3 coord = rgb * coordScale + coordOffset;
     coord = clamp(coord, 0.0, 1.0);
 
-    float idx = coord.b * float(lutSize - 1);
-    int b0 = int(floor(idx));
+    // Compute fractional indices for R, G, B
+    float rIdx = coord.r * float(lutSize - 1);
+    float gIdx = coord.g * float(lutSize - 1);
+    float bIdx = coord.b * float(lutSize - 1);
+
+    int r0 = int(floor(rIdx));
+    int g0 = int(floor(gIdx));
+    int b0 = int(floor(bIdx));
+    int r1 = min(r0 + 1, lutSize - 1);
+    int g1 = min(g0 + 1, lutSize - 1);
     int b1 = min(b0 + 1, lutSize - 1);
-    float df = idx - float(b0);
 
-    float u = coord.r;
-    float v = coord.g;
-    float v0 = (float(b0) * float(lutSize) + v) / float(lutSize * lutSize);
-    float v1 = (float(b1) * float(lutSize) + v) / float(lutSize * lutSize);
+    float dr = rIdx - float(r0);
+    float dg = gIdx - float(g0);
+    float db = bIdx - float(b0);
 
-    vec3 c0 = textureLod(lutTexture, vec2(u, v0), 0.0).rgb;
-    vec3 c1 = textureLod(lutTexture, vec2(u, v1), 0.0).rgb;
+    // Helper to sample the 2D LUT texture at integer R/G/B indices
+    // LUT layout: B slices stacked vertically, R horizontal, G within each B slice
+    vec3 lutSample(int ri, int gi, int bi) {
+        float u = (float(ri) + 0.5) / float(lutSize);
+        float v = (float(bi) * float(lutSize) + float(gi) + 0.5) / (float(lutSize) * float(lutSize));
+        return textureLod(lutTexture, vec2(u, v), 0.0).rgb;
+    }
 
-    return mix(c0, c1, df);
+    // Trilinear interpolation: 8 corners of the R/G/B cube
+    vec3 c000 = lutSample(r0, g0, b0);
+    vec3 c001 = lutSample(r0, g0, b1);
+    vec3 c010 = lutSample(r0, g1, b0);
+    vec3 c011 = lutSample(r0, g1, b1);
+    vec3 c100 = lutSample(r1, g0, b0);
+    vec3 c101 = lutSample(r1, g0, b1);
+    vec3 c110 = lutSample(r1, g1, b0);
+    vec3 c111 = lutSample(r1, g1, b1);
+
+    // Interpolate along R
+    vec3 c00 = mix(c000, c100, dr);
+    vec3 c01 = mix(c001, c101, dr);
+    vec3 c10 = mix(c010, c110, dr);
+    vec3 c11 = mix(c011, c111, dr);
+
+    // Interpolate along G
+    vec3 c0 = mix(c00, c10, dg);
+    vec3 c1 = mix(c01, c11, dg);
+
+    // Interpolate along B
+    return mix(c0, c1, db);
 }
 
 void main() {
@@ -41,16 +73,16 @@ void main() {
 
     vec4 color = imageLoad(inputImage, coord);
 
-    // Convert to 0-1 range
-    vec3 rgb = color.rgb / 255.0;
+    // imageLoad from rgba16f returns normalized [0,1] values already
+    vec3 rgb = color.rgb;
 
     // Apply LUT
     vec3 lutResult = sample_lut3d(rgb);
 
-    // Blend with original
+    // Blend with original based on intensity
     vec3 result = mix(rgb, lutResult, intensity);
 
-    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+    color.rgb = clamp(result, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

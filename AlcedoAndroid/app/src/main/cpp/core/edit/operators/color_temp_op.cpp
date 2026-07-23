@@ -57,6 +57,8 @@ void ColorTempOp::ComputeTemperatureMatrix(float cct, float tint, float* out_3x3
 }
 
 void ColorTempOp::ApplyImpl(float* pixels, int width, int height, int channels) {
+    if (!pixels || channels < 3) return;
+
     float cct, tint;
     if (mode_ == Mode::AS_SHOT) {
         cct = as_shot_cct_;

@@ -65,6 +65,9 @@ static void hr_apply_impl(T* raw_data, int width, int height,
                           T clip_threshold,
                           T white_level,
                           T black_level) {
+    if (!raw_data || width <= 0 || height <= 0) return;
+    if (white_level <= black_level) return;
+
     auto info = HighlightReconstructionOperator::get_bayer_info(bayer_pattern);
 
     // The RawTherapee algorithm:
@@ -74,9 +77,6 @@ static void hr_apply_impl(T* raw_data, int width, int height,
 
     std::vector<T> result(width * height);
     std::copy(raw_data, raw_data + width * height, result.begin());
-
-    // Effective range
-    T effective_range = white_level - black_level;
 
     for (int y = 2; y < height - 2; ++y) {
         for (int x = 2; x < width - 2; ++x) {

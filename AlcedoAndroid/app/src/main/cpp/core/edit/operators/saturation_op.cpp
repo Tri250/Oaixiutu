@@ -3,11 +3,13 @@
 namespace alcedo {
 
 void SaturationOperator::apply_rgb(std::vector<float>& pixels, int width, int height, float saturation) {
-    float lumR = 0.299f, lumG = 0.587f, lumB = 0.114f;
-    float s = 1.0f + saturation;
-    float is = 1.0f - s;
+    if (pixels.empty()) return;
+    if (pixels.size() % 3 != 0) return;
 
-    for (size_t i = 0; i < pixels.size(); i += 3) {
+    float lumR = 0.299f, lumG = 0.587f, lumB = 0.114f;
+    float s = 1.0f + std::clamp(saturation, -1.0f, 1.0f);
+
+    for (size_t i = 0; i + 2 < pixels.size(); i += 3) {
         float r = pixels[i];
         float g = pixels[i + 1];
         float b = pixels[i + 2];

@@ -38,7 +38,20 @@ fun CompareView(
     overlayOpacity: Float = 0.5f,
     onOverlayOpacityChange: ((Float) -> Unit)? = null
 ) {
-    if (originalImage == null || editedImage == null) return
+    if (originalImage == null || editedImage == null) {
+        // Render a placeholder instead of empty layout
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                stringRes { compareOriginal },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
 
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
     var localOpacity by remember { mutableFloatStateOf(overlayOpacity) }
@@ -145,7 +158,7 @@ fun CompareView(
                     )
                 }
                 CompareMode.SIDE_BY_SIDE -> {
-                    // 并排模式：左右两张完整图
+                    // 并排模式：左右两张完整图，使用统一的尺寸避免变形
                     val halfWidth = imageWidth / 2f
                     clipRect(0f, 0f, halfWidth, imageHeight) {
                         drawImage(
@@ -156,7 +169,7 @@ fun CompareView(
                     clipRect(halfWidth, 0f, imageWidth, imageHeight) {
                         drawImage(
                             image = editedImage,
-                            srcSize = IntSize(originalImage.width, originalImage.height),
+                            srcSize = IntSize(editedImage.width, editedImage.height),
                             dstSize = IntSize(halfWidth.toInt(), imageHeight.toInt()),
                             dstOffset = androidx.compose.ui.unit.IntOffset(halfWidth.toInt(), 0)
                         )

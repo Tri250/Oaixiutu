@@ -221,6 +221,8 @@ fun ColorTempPanel(
 }
 
 private fun tempToColor(temp: Float): Color {
+    // Tanner Helland blackbody radiation approximation
+    // Uses natural logarithm (ln), not power function
     val t = temp / 100f
     val r: Float
     val g: Float
@@ -230,18 +232,18 @@ private fun tempToColor(temp: Float): Color {
         t <= 66f -> 1f
         else -> {
             val x = t - 60f
-            (329.698727446f * (floatPow(x.toFloat(), -0.1332047592f))).coerceIn(0f, 255f) / 255f
+            (329.698727446f * floatPow(x.toFloat(), -0.1332047592f)).coerceIn(0f, 255f) / 255f
         }
     }
 
     g = when {
         t <= 66f -> {
             val x = t
-            (99.4708025861f * floatPow(x.toFloat(), -0.1332047592f)).coerceIn(0f, 255f) / 255f
+            (99.4708025861f * ln(x) - 161.1195681661f).coerceIn(0f, 255f) / 255f
         }
         else -> {
             val x = t - 60f
-            (288.1221695283f * (floatPow(x.toFloat(), -0.0755148492f))).coerceIn(0f, 255f) / 255f
+            (288.1221695283f * floatPow(x.toFloat(), -0.0755148492f)).coerceIn(0f, 255f) / 255f
         }
     }
 
@@ -250,12 +252,14 @@ private fun tempToColor(temp: Float): Color {
         t <= 19f -> 0f
         else -> {
             val x = t - 10f
-            (138.5177312231f * (floatPow(x.toFloat(), -0.1332047592f))).coerceIn(0f, 255f) / 255f
+            (138.5177312231f * ln(x) - 305.0447927307f).coerceIn(0f, 255f) / 255f
         }
     }
 
-    return Color(r, g, b)
+    return Color(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f))
 }
+
+private fun ln(x: Float): Float = kotlin.math.ln(x.toDouble()).toFloat()
 
 private fun tintToColor(tint: Float): Color {
     val normalized = (tint + 150f) / 300f // 0=magenta, 0.5=neutral, 1=green

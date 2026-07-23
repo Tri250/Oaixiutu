@@ -594,6 +594,7 @@ private fun applyAspectRatioCrop(
     }
 
     val targetRatio = ratio.ratio ?: return
+    if (targetRatio < 0.001f) return
 
     // Current crop bounds in normalised coordinates
     val currentLeft = params.geometryCropLeft
@@ -603,6 +604,8 @@ private fun applyAspectRatioCrop(
 
     val cropW = currentRight - currentLeft
     val cropH = currentBottom - currentTop
+
+    if (cropW < 0.001f || cropH < 0.001f) return
 
     // We treat the normalised coordinate space as having an aspect ratio of 1:1
     // (square) since we don't have the real pixel dimensions here. This gives a

@@ -16,8 +16,12 @@ void main() {
     vec4 color = imageLoad(inputImage, coord);
 
     // Apply exposure: multiply by 2^stops
+    // rgba8 imageLoad returns values in [0,1], no /255 needed
     float scale = exp2(exposureStops);
     color.rgb *= scale;
+
+    // Clamp to avoid overflow in rgba8 output
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

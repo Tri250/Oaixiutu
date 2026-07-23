@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -210,8 +211,8 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
                 .let { Instant.ofEpochMilli(it) },
             defaultVersionId = cursor.getString(cursor.getColumnIndexOrThrow("default_version_id")) ?: "",
             activeVersionId = cursor.getString(cursor.getColumnIndexOrThrow("active_version_id")) ?: "",
-            importPipelineParams = importParamsStr?.let { JsonObject(emptyMap()) } ?: JsonObject(emptyMap()),
-            activePipelineParams = activeParamsStr?.let { JsonObject(emptyMap()) },
+            importPipelineParams = importParamsStr?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrDefault(JsonObject(emptyMap())) } ?: JsonObject(emptyMap()),
+            activePipelineParams = activeParamsStr?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() },
             versionOrder = versionOrder,
             versionStorage = versionStorage
         )
@@ -231,7 +232,7 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
                 .let { Instant.ofEpochMilli(it) },
             creationNonce = cursor.getLong(cursor.getColumnIndexOrThrow("creation_nonce")).toULong(),
             materializedParams = cursor.getString(cursor.getColumnIndexOrThrow("materialized_params_json"))
-                ?.let { JsonObject(emptyMap()) },
+                ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() },
             transactions = transactions.toMutableList(),
             cursor = cursor.getInt(cursor.getColumnIndexOrThrow("cursor")),
             versionHash = cursor.getString(cursor.getColumnIndexOrThrow("version_hash")) ?: ""
@@ -240,13 +241,22 @@ class EditHistoryRepositoryImpl(private val db: SleeveDatabase) : EditHistoryRep
 
     private fun cursorToTransaction(cursor: android.database.Cursor): EditTransaction {
         val paramsBefore = cursor.getString(cursor.getColumnIndexOrThrow("params_before_json"))
-            ?.let { JsonObject(emptyMap()) } ?: JsonObject(emptyMap())
+            ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrDefault(JsonObject(emptyMap())) }
+            ?: JsonObject(emptyMap())
         val paramsAfter = cursor.getString(cursor.getColumnIndexOrThrow("params_after_json"))
-            ?.let { JsonObject(emptyMap()) } ?: JsonObject(emptyMap())
+            ?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrDefault(JsonObject(emptyMap())) }
+            ?: JsonObject(emptyMap())
+
+        val opTypeOrdinal = cursor.getInt(cursor.getColumnIndexOrThrow("operator_type"))
+        val operatorType = if (opTypeOrdinal in OperatorType.entries.indices) {
+            OperatorType.entries[opTypeOrdinal]
+        } else {
+            OperatorType.entries.first() // Fallback for corrupted/out-of-range types
+        }
 
         return EditTransaction(
             transactionId = cursor.getInt(cursor.getColumnIndexOrThrow("transaction_id")).toUInt(),
-            operatorType = OperatorType.entries[cursor.getInt(cursor.getColumnIndexOrThrow("operator_type"))],
+            operatorType = operatorType,
             paramsBefore = paramsBefore,
             paramsAfter = paramsAfter,
             timestamp = cursor.getLong(cursor.getColumnIndexOrThrow("timestamp"))

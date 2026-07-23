@@ -73,7 +73,7 @@ fun LmtPanel(
                     OutlinedButton(
                         onClick = {
                             HapticFeedback.click(view)
-                            lutPickerLauncher.launch(arrayOf("*/*"))
+                            lutPickerLauncher.launch(arrayOf("application/octet-stream", "*/*"))
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -136,12 +136,17 @@ fun LmtPanel(
 }
 
 private fun copyLutToInternal(context: Context, uri: Uri): String? {
-    return try {
+    try {
         val lutsDir = File(context.filesDir, "luts")
         if (!lutsDir.exists()) lutsDir.mkdirs()
 
         val fileName = uri.lastPathSegment?.substringAfterLast('/')
             ?: "lut_${System.currentTimeMillis()}.cube"
+
+        // Validate file extension is .cube
+        if (!fileName.lowercase().endsWith(".cube")) {
+            return null
+        }
 
         val outFile = File(lutsDir, fileName)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -152,6 +157,8 @@ private fun copyLutToInternal(context: Context, uri: Uri): String? {
 
         outFile.absolutePath
     } catch (e: Exception) {
-        null
+        // Log error for debugging instead of silently swallowing
+        android.util.Log.e("LmtPanel", "Failed to copy LUT file: ${e.message}")
+        return null
     }
 }

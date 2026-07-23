@@ -12,7 +12,7 @@ public:
     LMTOp();
     explicit LMTOp(const char* lut_path);
 
-    void ApplyImpl(float* pixels, int width, int height, int channels);
+    void ApplyImpl(float* pixels, int width, int height, int channels, float intensity = 1.0f);
     OperatorType GetTypeImpl() const { return OperatorType::LMT; }
 
     bool LoadLUT(const char* path);

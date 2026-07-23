@@ -62,8 +62,8 @@ void main() {
 
     vec4 color = imageLoad(inputImage, coord);
 
-    // Convert to HSL
-    vec3 hsl = rgb_to_hsl(color.rgb / 255.0);
+    // rgba8 imageLoad returns values in [0,1], no /255 needed
+    vec3 hsl = rgb_to_hsl(color.rgb);
 
     // Apply hue shift (in degrees, convert to 0-1)
     hsl.x = fract(hsl.x + hueShift / 360.0);
@@ -77,7 +77,8 @@ void main() {
     // Convert back to RGB
     vec3 adjusted = hsl_to_rgb(hsl);
 
-    color.rgb = clamp(adjusted * 255.0, 0.0, 255.0);
+    // rgba8 imageStore expects [0,1], clamp output
+    color.rgb = clamp(adjusted, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

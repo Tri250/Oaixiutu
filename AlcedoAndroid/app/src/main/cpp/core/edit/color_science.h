@@ -323,13 +323,13 @@ inline void planckian_white_balance_bulk(float* pixels, int count, int channels,
                                           float temp_K, float tint) {
     float rm, gm, bm;
     planckian_locus_rgb(temp_K, &rm, &gm, &bm);
-    float g_offset = tint * 0.01f;
+    // Tint is multiplicative on green channel, consistent with the single-pixel version
+    float gm_with_tint = gm + tint * 0.01f;
 
     for (int i = 0; i < count; ++i) {
         int idx = i * channels;
         pixels[idx]     *= rm;
-        pixels[idx + 1] += g_offset;
-        pixels[idx + 1] *= gm;
+        pixels[idx + 1] *= gm_with_tint;
         pixels[idx + 2] *= bm;
     }
 }

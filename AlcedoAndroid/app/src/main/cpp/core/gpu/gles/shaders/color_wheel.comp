@@ -26,7 +26,8 @@ void main() {
     if (coord.x >= int(imageSize.x) || coord.y >= int(imageSize.y)) return;
 
     vec4 color = imageLoad(inputImage, coord);
-    vec3 rgb = color.rgb / 255.0;
+    // rgba8 imageLoad returns values in [0,1], no /255 needed
+    vec3 rgb = color.rgb;
 
     // Lift/Gamma/Gain
     vec3 corrected = (rgb * (gain - lift) + lift);
@@ -51,7 +52,8 @@ void main() {
     result += midtoneColor    * midtoneWeight;
     result += highlightColor  * highlightWeight;
 
-    color.rgb = clamp(result * 255.0, 0.0, 255.0);
+    // rgba8 imageStore expects [0,1], clamp output
+    color.rgb = clamp(result, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

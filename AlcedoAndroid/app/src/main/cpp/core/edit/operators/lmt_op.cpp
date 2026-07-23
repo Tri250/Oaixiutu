@@ -184,11 +184,14 @@ bool LMTOp::ParseCubeFile(const char* path) {
     return true;
 }
 
-void LMTOp::ApplyImpl(float* pixels, int width, int height, int channels) {
+void LMTOp::ApplyImpl(float* pixels, int width, int height, int channels, float intensity) {
     if (!lut_loaded_) {
         // Identity transform when no LUT is loaded
         return;
     }
+
+    // Clamp intensity to valid range
+    intensity = std::clamp(intensity, 0.0f, 1.0f);
 
     int total = width * height;
     for (int i = 0; i < total; ++i) {
@@ -200,9 +203,10 @@ void LMTOp::ApplyImpl(float* pixels, int width, int height, int channels) {
         float out_r, out_g, out_b;
         SampleLUT(r, g, b, &out_r, &out_g, &out_b);
 
-        pixels[idx]     = out_r;
-        pixels[idx + 1] = out_g;
-        pixels[idx + 2] = out_b;
+        // Blend original with LUT result based on intensity
+        pixels[idx]     = r + (out_r - r) * intensity;
+        pixels[idx + 1] = g + (out_g - g) * intensity;
+        pixels[idx + 2] = b + (out_b - b) * intensity;
     }
 }
 

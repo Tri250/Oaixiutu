@@ -16,19 +16,21 @@ void main() {
 
     vec4 color = imageLoad(inputImage, coord);
 
-    // Convert to linear space for contrast
-    vec3 linear = color.rgb / 255.0;
+    // rgba8 imageLoad returns values in [0,1], no /255 needed
+    vec3 linear = color.rgb;
 
     // Compute luminance
     float lum = dot(linear, luminanceWeights);
 
     // Apply contrast
     // contrast > 0: increase contrast, contrast < 0: decrease
-    float contrastFactor = tan((contrast + 1.0) * 0.785398); // tan((contrast+1)*PI/4)
+    // Clamp contrast factor to avoid tan() divergence near PI/2
+    float contrastAngle = clamp((contrast + 1.0) * 0.785398, 0.01, 1.54);
+    float contrastFactor = tan(contrastAngle);
     vec3 contrasted = lum + (linear - lum) * contrastFactor;
 
-    // Back to 8-bit
-    color.rgb = clamp(contrasted * 255.0, 0.0, 255.0);
+    // Clamp output to [0,1]
+    color.rgb = clamp(contrasted, 0.0, 1.0);
 
     imageStore(outputImage, coord, color);
 }

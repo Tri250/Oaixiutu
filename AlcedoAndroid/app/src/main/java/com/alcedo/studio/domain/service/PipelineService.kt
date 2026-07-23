@@ -449,7 +449,7 @@ class PipelineService {
         // 顺序必须与 native-lib.cpp 中 SAFE_PARAM 读取顺序严格一致。
         val list = mutableListOf<Float>()
 
-        // ── Basic adjustments (idx 0-17) ──
+        // ── Basic adjustments (idx 0-19) ──
         list += params.exposure
         list += params.contrast
         list += params.saturation
@@ -468,8 +468,13 @@ class PipelineService {
         list += params.halationSpread
         list += params.halationRedBias
         list += params.sigmoidContrast
+        // BUG FIX: sigmoidShoulder and sigmoidPivot were missing from the
+        // params array, causing the parametric tone curve adjustments to
+        // have no effect in the native pipeline.
+        list += params.sigmoidShoulder
+        list += params.sigmoidPivot
 
-        // ── Color wheels (idx 18-26) ──
+        // ── Color wheels (idx 20-28) ──
         list += params.colorWheelLiftR
         list += params.colorWheelLiftG
         list += params.colorWheelLiftB
@@ -480,30 +485,30 @@ class PipelineService {
         list += params.colorWheelGainG
         list += params.colorWheelGainB
 
-        // ── Tint (idx 27-31) ──
+        // ── Tint (idx 29-33) ──
         list += params.tintHighlightHue
         list += params.tintHighlightStrength
         list += params.tintShadowHue
         list += params.tintShadowStrength
         list += params.tintBalance
 
-        // ── Display transform (idx 32-35) ──
+        // ── Display transform (idx 34-37) ──
         list += params.displayTransform.colorScience.ordinal.toFloat()
         list += params.displayTransform.eotf.ordinal.toFloat()
         list += params.displayTransform.peakLuminance
         list += params.displayTransform.displayColorSpace.ordinal.toFloat()
 
-        // ── Tone region boundaries (idx 36-37) ──
+        // ── Tone region boundaries (idx 38-39) ──
         list += params.shadowBoundary
         list += params.highlightBoundary
 
-        // ── Auto exposure (idx 38-41) ──
+        // ── Auto exposure (idx 40-43) ──
         list += if (params.autoExposureEnabled) 1f else 0f
         list += params.autoExposureTargetPercentile
         list += params.autoExposureTargetLuminance
         list += params.autoExposureValue
 
-        // ── Tone curve (idx 42-75): points count + x[16] + y[16] ──
+        // ── Tone curve (idx 44-77): points count + x[16] + y[16] ──
         list += params.toneCurvePoints.toFloat()
         // Pad tone curve arrays to 16 entries (C++ struct fixed size)
         for (i in 0 until 16) {
@@ -513,7 +518,7 @@ class PipelineService {
             list += if (i < params.toneCurveY.size) params.toneCurveY[i] else 0f
         }
 
-        // ── HSL (idx 76-99): hue_shift[8] + sat_scale[8] + lum_scale[8] ──
+        // ── HSL (idx 78-101): hue_shift[8] + sat_scale[8] + lum_scale[8] ──
         for (i in 0 until 8) {
             list += if (i < params.hslHueShift.size) params.hslHueShift[i] else 0f
         }
@@ -524,29 +529,29 @@ class PipelineService {
             list += if (i < params.hslLuminanceScale.size) params.hslLuminanceScale[i] else 1f
         }
 
-        // ── Channel mixer (idx 100-109): matrix[9] + monochrome ──
+        // ── Channel mixer (idx 102-111): matrix[9] + monochrome ──
         for (i in 0 until 9) {
             list += if (i < params.channelMixerMatrix.size) params.channelMixerMatrix[i] else 0f
         }
         list += if (params.channelMixerMonochrome) 1f else 0f
 
-        // ── Crop (idx 110-113) ──
+        // ── Crop (idx 112-115) ──
         list += params.geometryCropLeft
         list += params.geometryCropTop
         list += params.geometryCropRight
         list += params.geometryCropBottom
 
-        // ── Lens correction (idx 114-118) ──
+        // ── Lens correction (idx 116-120) ──
         list += params.lensK1
         list += params.lensK2
         list += params.lensK3
         list += params.lensP1
         list += params.lensP2
 
-        // ── LUT enable flag (idx 119); lutPath is a string, applied via separate native call ──
+        // ── LUT enable flag (idx 121); lutPath is a string, applied via separate native call ──
         list += if (params.lutEnabled) 1f else 0f
 
-        // ── Denoise (idx 120-123) ──
+        // ── Denoise (idx 122-125) ──
         list += params.luminanceDenoiseStrength
         list += params.luminanceDenoiseDetail
         list += params.chromaDenoiseStrength
