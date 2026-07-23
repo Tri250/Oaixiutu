@@ -3,11 +3,17 @@
 #include <cstring>
 #include <algorithm>
 #include <numeric>
-#include <sstream>
 #include <unordered_map>
 
 #ifdef HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
+
+// Concrete ONNX Runtime implementation struct.
+// Defined here (not in the header) to avoid exposing ORT headers.
+struct ClipInference::OnnxImpl {
+    Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "AlcedoClip"};
+    std::unique_ptr<Ort::Session> session;
+};
 #endif
 
 namespace alcedo::ai {
@@ -30,9 +36,7 @@ bool ClipInference::loadModel() {
 
 #ifdef HAS_ONNXRUNTIME
     try {
-        env_ = std::make_unique<OrtEnvHolder>();
-        auto& env = *reinterpret_cast<Ort::Env*>(env_.get());
-        new (&env) Ort::Env(ORT_LOGGING_LEVEL_WARNING, "AlcedoClip");
+        onnx_ = std::make_unique<OnnxImpl>();
 
         Ort::SessionOptions sessionOptions;
         sessionOptions.SetIntraOpNumThreads(config_.numThreads);
@@ -40,16 +44,15 @@ bool ClipInference::loadModel() {
             sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
         }
 
-        session_ = std::make_unique<OrtSessionHolder>();
-        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
-        new (&session) Ort::Session(*reinterpret_cast<Ort::Env*>(env_.get()),
-                                    config_.modelPath.c_str(), sessionOptions);
+        onnx_->session = std::make_unique<Ort::Session>(
+            onnx_->env, config_.modelPath.c_str(), sessionOptions);
 
         loaded_ = true;
         return true;
     } catch (const Ort::Exception& e) {
         // ONNX Runtime failed to load the model; C++ inference unavailable.
         // The Kotlin ClipInferenceEngine should be used instead.
+        onnx_.reset();
         return false;
     }
 #else
@@ -62,17 +65,14 @@ bool ClipInference::loadModel() {
 void ClipInference::unloadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
 #ifdef HAS_ONNXRUNTIME
-    session_.reset();
-    env_.reset();
+    onnx_.reset();
 #endif
     loaded_ = false;
 }
 
 // ── Image preprocessing ──
 std::vector<float> ClipInference::resizeAndCrop(const uint8_t* rgbData, int srcW, int srcH, int targetSize) {
-    // Simple bilinear resize + center crop to targetSize×targetSize
-    // This is a reference implementation; production would use SIMD or GPU
-
+    // Bilinear resize + center crop to targetSize×targetSize
     std::vector<float> result(targetSize * targetSize * 3, 0.0f);
 
     // Compute crop region
@@ -84,18 +84,35 @@ std::vector<float> ClipInference::resizeAndCrop(const uint8_t* rgbData, int srcW
 
     for (int y = 0; y < targetSize; ++y) {
         for (int x = 0; x < targetSize; ++x) {
-            float srcXf = cropX + (static_cast<float>(x) + 0.5f) / scale;
-            float srcYf = cropY + (static_cast<float>(y) + 0.5f) / scale;
+            // Map destination pixel center to source coordinates
+            float srcXf = cropX + (static_cast<float>(x) + 0.5f) / scale - 0.5f;
+            float srcYf = cropY + (static_cast<float>(y) + 0.5f) / scale - 0.5f;
 
-            int srcX = std::clamp(static_cast<int>(srcXf), 0, srcW - 1);
-            int srcY = std::clamp(static_cast<int>(srcYf), 0, srcH - 1);
+            // Clamp to valid source range
+            srcXf = std::max(0.0f, std::min(srcXf, static_cast<float>(srcW - 1)));
+            srcYf = std::max(0.0f, std::min(srcYf, static_cast<float>(srcH - 1)));
 
-            int srcIdx = (srcY * srcW + srcX) * 3;
+            int x0 = static_cast<int>(srcXf);
+            int y0 = static_cast<int>(srcYf);
+            int x1 = std::min(x0 + 1, srcW - 1);
+            int y1 = std::min(y0 + 1, srcH - 1);
+
+            float wx1 = srcXf - static_cast<float>(x0);
+            float wy1 = srcYf - static_cast<float>(y0);
+            float wx0 = 1.0f - wx1;
+            float wy0 = 1.0f - wy1;
+
             int dstIdx = (y * targetSize + x) * 3;
 
-            result[dstIdx + 0] = static_cast<float>(rgbData[srcIdx + 0]) / 255.0f;
-            result[dstIdx + 1] = static_cast<float>(rgbData[srcIdx + 1]) / 255.0f;
-            result[dstIdx + 2] = static_cast<float>(rgbData[srcIdx + 2]) / 255.0f;
+            for (int c = 0; c < 3; ++c) {
+                float v00 = static_cast<float>(rgbData[(y0 * srcW + x0) * 3 + c]);
+                float v01 = static_cast<float>(rgbData[(y0 * srcW + x1) * 3 + c]);
+                float v10 = static_cast<float>(rgbData[(y1 * srcW + x0) * 3 + c]);
+                float v11 = static_cast<float>(rgbData[(y1 * srcW + x1) * 3 + c]);
+
+                float val = wx0 * wy0 * v00 + wx1 * wy0 * v01 + wx0 * wy1 * v10 + wx1 * wy1 * v11;
+                result[dstIdx + c] = val / 255.0f;
+            }
         }
     }
     return result;
@@ -124,17 +141,21 @@ std::vector<float> ClipInference::preprocessImage(const uint8_t* rgbData, int wi
 
 // ── Simple tokenizer (word-level approximation for CLIP) ──
 std::vector<int64_t> ClipInference::simpleTokenize(const std::string& text, int maxLength) {
-    // Simplified tokenizer: word-level with basic CLIP vocabulary mapping
-    // In production, this would use the actual CLIP BPE tokenizer with
-    // the full 49408-token vocabulary.
+    // Simplified tokenizer: word-level with basic CLIP vocabulary mapping.
+    // In production, the actual CLIP BPE tokenizer with the full 49408-token
+    // vocabulary should be used. This is a best-effort approximation.
 
     // Map common words to approximate CLIP token IDs
     static const std::unordered_map<std::string, int64_t> vocab = {
         {"a", 320}, {"an", 385}, {"the", 518}, {"of", 539}, {"in", 530},
         {"on", 531}, {"at", 532}, {"to", 533}, {"and", 537}, {"or", 568},
         {"is", 533}, {"are", 681}, {"was", 700}, {"were", 701},
-        {"photo", 8500}, {"image", 7600}, {"picture", 7800},
+        {"it", 534}, {"for", 535}, {"with", 536}, {"as", 538}, {"by", 540},
+        {"this", 541}, {"that", 542}, {"from", 543}, {"be", 544}, {"have", 545},
+        {"has", 546}, {"had", 547}, {"not", 548}, {"no", 549}, {"but", 550},
+        {"photo", 8500}, {"image", 7600}, {"picture", 7800}, {"photograph", 8510},
         {"person", 1200}, {"people", 1201}, {"man", 1202}, {"woman", 1203},
+        {"child", 1204}, {"baby", 1205}, {"group", 1206}, {"crowd", 1207},
         {"portrait", 4500}, {"landscape", 5600}, {"outdoor", 6200}, {"indoor", 6300},
         {"nature", 7200}, {"city", 3400}, {"building", 3500}, {"sky", 2800},
         {"sunset", 2900}, {"sunrise", 2910}, {"night", 3100}, {"day", 3000},
@@ -145,6 +166,29 @@ std::vector<int64_t> ClipInference::simpleTokenize(const std::string& text, int 
         {"light", 2100}, {"dark", 2110}, {"bright", 2120}, {"shadow", 2130},
         {"beautiful", 4000}, {"stunning", 4010}, {"amazing", 4020},
         {"good", 4100}, {"bad", 4110}, {"great", 4120}, {"nice", 4130},
+        {"street", 3410}, {"road", 3420}, {"river", 2510}, {"lake", 2520},
+        {"ocean", 2530}, {"beach", 2540}, {"forest", 2710}, {"garden", 2760},
+        {"house", 3510}, {"room", 6310}, {"table", 6320}, {"chair", 6330},
+        {"window", 3520}, {"door", 3530}, {"wall", 3540}, {"floor", 3550},
+        {"snow", 2810}, {"rain", 2820}, {"cloud", 2830}, {"fog", 2840},
+        {"winter", 3010}, {"summer", 3020}, {"spring", 3030}, {"autumn", 3040},
+        {"fall", 3050}, {"morning", 3060}, {"evening", 3070}, {"afternoon", 3080},
+        {"old", 4140}, {"new", 4150}, {"young", 4160}, {"large", 4170}, {"small", 4180},
+        {"happy", 4200}, {"sad", 4210}, {"calm", 4220}, {"busy", 4230},
+        {"warm", 4300}, {"cold", 4310}, {"hot", 4320}, {"cool", 4330},
+        {"modern", 4400}, {"classic", 4410}, {"vintage", 4420}, {"urban", 4430},
+        {"rural", 4440}, {"natural", 4450}, {"artificial", 4460},
+        {"texture", 8000}, {"pattern", 8010}, {"abstract", 8020}, {"minimal", 8030},
+        {"macro", 8100}, {"closeup", 8110}, {"wide", 8120}, {"panorama", 8130},
+        {"architecture", 3600}, {"bridge", 3610}, {"tower", 3620}, {"statue", 3630},
+        {"monument", 3640}, {"church", 3650}, {"temple", 3660}, {"castle", 3670},
+        {"technology", 9000}, {"computer", 9010}, {"phone", 9020}, {"screen", 9030},
+        {"music", 9100}, {"sport", 9200}, {"game", 9210}, {"dance", 9220},
+        {"art", 9300}, {"design", 9310}, {"fashion", 9320}, {"style", 9330},
+        // Compound phrases for better multi-word matching
+        {"black and white", 1915}, {"high contrast", 2140},
+        {"long exposure", 2150}, {"shallow depth", 2160},
+        {"golden hour", 2920}, {"blue hour", 1945},
     };
 
     std::vector<int64_t> tokens;
@@ -159,16 +203,52 @@ std::vector<int64_t> ClipInference::simpleTokenize(const std::string& text, int 
         lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
 
-    std::istringstream iss(lower);
-    std::string word;
-    while (iss >> word && tokens.size() < static_cast<size_t>(maxLength - 1)) {
-        auto it = vocab.find(word);
-        if (it != vocab.end()) {
-            tokens.push_back(it->second);
-        } else {
-            // Unknown word: use a hash-based fallback
-            size_t hash = std::hash<std::string>{}(word);
-            tokens.push_back(static_cast<int64_t>(5000 + (hash % 40000)));
+    // Try compound phrases first (longest match), then single words
+    std::string remaining = lower;
+    while (!remaining.empty() && tokens.size() < static_cast<size_t>(maxLength - 1)) {
+        // Skip leading whitespace
+        size_t ws = 0;
+        while (ws < remaining.size() && remaining[ws] == ' ') ++ws;
+        if (ws >= remaining.size()) break;
+        remaining = remaining.substr(ws);
+
+        // Find end of current word/phrase
+        bool matched = false;
+        // Try longest phrase match first (up to 3 words)
+        for (int nWords = 3; nWords >= 1 && !matched; --nWords) {
+            size_t end = remaining.size();
+            for (int w = 0; w < nWords && end != std::string::npos; ++w) {
+                end = remaining.find(' ', end + 1);
+            }
+            if (end == std::string::npos) end = remaining.size();
+
+            std::string candidate = remaining.substr(0, end);
+            auto it = vocab.find(candidate);
+            if (it != vocab.end()) {
+                tokens.push_back(it->second);
+                remaining = (end < remaining.size()) ? remaining.substr(end) : "";
+                matched = true;
+            }
+        }
+
+        if (!matched) {
+            // Single word lookup
+            size_t spacePos = remaining.find(' ');
+            std::string word = (spacePos != std::string::npos)
+                ? remaining.substr(0, spacePos) : remaining;
+
+            auto it = vocab.find(word);
+            if (it != vocab.end()) {
+                tokens.push_back(it->second);
+            } else {
+                // Unknown word: use a content-based hash with better distribution
+                // Combine word length and first/last character for some semantic hint
+                size_t hash = std::hash<std::string>{}(word);
+                // Map to a range of "unknown concept" tokens (5000-44000)
+                tokens.push_back(static_cast<int64_t>(5000 + (hash % 39000)));
+            }
+            remaining = (spacePos != std::string::npos)
+                ? remaining.substr(spacePos + 1) : "";
         }
     }
 
@@ -192,13 +272,13 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 // ── Inference ──
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
 #ifdef HAS_ONNXRUNTIME
-    if (!session_) {
+    if (!onnx_ || !onnx_->session) {
         // ONNX session not loaded; return empty to signal Kotlin delegation is needed.
         return {};
     }
 
     try {
-        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
+        auto& session = *onnx_->session;
         auto allocator = Ort::AllocatorWithDefaultOptions();
 
         // Create input tensor

@@ -95,11 +95,11 @@ private:
     static void normalizePixels(std::vector<float>& pixels, int size);
 
 #ifdef HAS_ONNXRUNTIME
-    // ONNX Runtime session (only available when built with ORT)
-    struct OrtSessionHolder;
-    std::unique_ptr<OrtSessionHolder> session_;
-    struct OrtEnvHolder;
-    std::unique_ptr<OrtEnvHolder> env_;
+    // PIMPL: actual ONNX Runtime objects (Ort::Env, Ort::Session) are
+    // stored behind an opaque pointer to avoid exposing ORT headers.
+    // The concrete OnnxImpl struct is defined in clip_inference.cpp.
+    struct OnnxImpl;
+    std::unique_ptr<OnnxImpl> onnx_;
 #endif
 };
 

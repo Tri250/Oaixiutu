@@ -1058,18 +1058,31 @@ class ExportService(private val context: Context) {
             // End of header
             headerBytes.write(0)
 
-            out.write(headerBytes.toByteArray())
+            val headerBytesArray = headerBytes.toByteArray()
+            out.write(headerBytesArray)
 
-            // Write scanline data (one line at a time, uncompressed)
+            // Calculate offset table position
+            // File layout: magic(4) + version(4) + header + null + offsetTable(height*8) + scanlineData
+            val headerSize = 4 + 4 + headerBytesArray.size
+            val offsetTableSize = height * 8L
+            val firstScanlineOffset = headerSize + offsetTableSize
+
+            // Write offset table (64-bit offsets to each scanline)
+            val lineDataSize = width * 6 // 3 channels * 2 bytes (half)
+            val offsetBuffer = ByteBuffer.allocate(8)
+            offsetBuffer.order(ByteOrder.LITTLE_ENDIAN)
+            for (y in 0 until height) {
+                val offset = firstScanlineOffset + y.toLong() * lineDataSize
+                offsetBuffer.clear()
+                offsetBuffer.putLong(offset)
+                out.write(offsetBuffer.array())
+            }
+
+            // Write scanline data (raw pixel data, no per-line metadata)
             val lineBuffer = ByteBuffer.allocate(width * 6) // 3 channels * 2 bytes (half)
             lineBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
             for (y in 0 until height) {
-                // Scanline offset table entry
-                // (would normally be an offset; we skip for this simplified writer)
-                // Direct scanline data: y coordinate, pixel data size, then data
-                writeExrInt(out, y) // y coordinate
-                writeExrInt(out, width * 6) // pixel data size
                 lineBuffer.clear()
                 for (x in 0 until width) {
                     val pixel = pixels[y * width + x]
@@ -1460,17 +1473,31 @@ class ExportService(private val context: Context) {
         val iccBytes = getIccProfileBytes(colorSpace) ?: return
         val jpegData = file.readBytes()
 
-        // Find position to insert APP2 (after SOI marker, before any other content)
-        // SOI is the first 2 bytes (0xFF 0xD8)
+        // Find position to insert APP2 (after SOI + existing APP0/APP1 markers)
         if (jpegData.size < 4) return
         if (jpegData[0] != 0xFF.toByte() || jpegData[1] != 0xD8.toByte()) return
+
+        // Skip past existing APP0 (JFIF) and APP1 (EXIF) markers to maintain
+        // compatibility with readers that expect them first.
+        var insertPos = 2 // After SOI
+        while (insertPos + 4 <= jpegData.size) {
+            if (jpegData[insertPos] != 0xFF.toByte()) break
+            val marker = jpegData[insertPos + 1].toInt() and 0xFF
+            if (marker == 0xE0 || marker == 0xE1) { // APP0 or APP1
+                val segLen = ((jpegData[insertPos + 2].toInt() and 0xFF) shl 8) or
+                              (jpegData[insertPos + 3].toInt() and 0xFF)
+                insertPos += 2 + segLen
+            } else {
+                break // Stop at first non-APP0/APP1 marker
+            }
+        }
 
         // Chunk the ICC profile into APP2 segments (max 65533 bytes per chunk)
         val chunks = chunkIccProfile(iccBytes)
 
         val result = ByteArrayOutputStream(jpegData.size + iccBytes.size + chunks.size * 20)
-        // Write SOI
-        result.write(jpegData, 0, 2)
+        // Write everything up to insertion point
+        result.write(jpegData, 0, insertPos)
 
         // Write ICC APP2 segments
         for ((index, chunk) in chunks.withIndex()) {
@@ -1483,8 +1510,8 @@ class ExportService(private val context: Context) {
             result.write(chunk)
         }
 
-        // Write rest of JPEG (after SOI)
-        result.write(jpegData, 2, jpegData.size - 2)
+        // Write rest of JPEG (after insertion point)
+        result.write(jpegData, insertPos, jpegData.size - insertPos)
 
         FileOutputStream(file).use { it.write(result.toByteArray()) }
     }

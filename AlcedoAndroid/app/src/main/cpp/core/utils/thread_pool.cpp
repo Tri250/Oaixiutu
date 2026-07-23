@@ -86,10 +86,12 @@ void ThreadPool::set_thread_count(size_t count) {
     }
     workers_.clear();
 
-    // Restart with the new count.
+    // Restart with the new count — re-acquire lock for consistency.
+    lock.lock();
     stop_ = false;
     started_ = true;
     tasks_ = std::move(saved_tasks);
+    lock.unlock();
     for (size_t i = 0; i < new_count; ++i) {
         workers_.emplace_back(&ThreadPool::worker_loop, this);
     }

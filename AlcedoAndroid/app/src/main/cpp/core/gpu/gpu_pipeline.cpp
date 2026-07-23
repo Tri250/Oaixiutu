@@ -208,22 +208,14 @@ bool GpuPipeline::executeChain(
         success = execute(operations[i].first, current, result, operations[i].second);
         if (!success) break;
 
-        // Swap buffers
+        // Swap buffers for next iteration (only when we wrote to the intermediate buffer)
         if (result == next) {
             std::swap(current, next);
         }
     }
 
-    // If we ended on the wrong buffer, copy to output
-    if (success && current != output) {
-        void* src = nullptr;
-        void* dst = nullptr;
-        if (current->lockRead(&src) && output->lockWrite(&dst)) {
-            memcpy(dst, src, output->totalBytes());
-            output->unlock();
-            current->unlock();
-        }
-    }
+    // The last operation wrote directly to output, so no copy is needed.
+    // If the chain failed mid-way, output is left in an undefined state.
 
     return success;
 }
@@ -488,9 +480,9 @@ void CpuFallbackOperator::executeWhiteBalance(float* pixels, int w, int h, const
 
     int count = w * h * 4;
     for (int i = 0; i < count; i += 4) {
-        pixels[i]     = std::clamp(pixels[i]     * r * 255.0f, 0.0f, 255.0f);
-        pixels[i + 1] = std::clamp(pixels[i + 1] * g * 255.0f, 0.0f, 255.0f);
-        pixels[i + 2] = std::clamp(pixels[i + 2] * b * 255.0f, 0.0f, 255.0f);
+        pixels[i]     = std::clamp(pixels[i]     * r, 0.0f, 255.0f);
+        pixels[i + 1] = std::clamp(pixels[i + 1] * g, 0.0f, 255.0f);
+        pixels[i + 2] = std::clamp(pixels[i + 2] * b, 0.0f, 255.0f);
     }
 }
 

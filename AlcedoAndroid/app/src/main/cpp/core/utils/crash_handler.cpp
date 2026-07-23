@@ -6,10 +6,58 @@
 #include <cstdlib>
 #include <mutex>
 
-#define ALOGE(tag, fmt, ...) __android_log_print(ANDROID_LOG_ERROR, tag, fmt, ##__VA_ARGS__)
-#define ALOGI(tag, fmt, ...) __android_log_print(ANDROID_LOG_INFO, tag, fmt, ##__VA_ARGS__)
+// Note: In signal handler context, most standard library functions
+// (including printf, malloc, snprintf) are NOT async-signal-safe.
+// We use write() for critical logging and __android_log_write for
+// Android logcat output. __android_log_write is simpler than
+// __android_log_print (no format string parsing) but still carries
+// a small deadlock risk on some Android versions. This is an
+// accepted trade-off for crash diagnostics.
 
 namespace alcedo {
+namespace {
+
+// Async-signal-safe write to stderr (fd 2)
+void safe_write(const char* msg) {
+    size_t len = 0;
+    while (msg[len] != '\0') ++len;
+    write(STDERR_FILENO, msg, len);
+    write(STDERR_FILENO, "\n", 1);
+}
+
+// Async-signal-safe integer to string conversion
+void safe_itoa(unsigned long long val, char* buf, int base = 10) {
+    if (val == 0) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return;
+    }
+    char tmp[32];
+    int i = 0;
+    while (val > 0) {
+        int digit = static_cast<int>(val % base);
+        tmp[i++] = (digit < 10) ? static_cast<char>('0' + digit)
+                                : static_cast<char>('a' + digit - 10);
+        val /= base;
+    }
+    int j = 0;
+    while (i > 0) buf[j++] = tmp[--i];
+    buf[j] = '\0';
+}
+
+// Async-signal-safe log to Android logcat (uses __android_log_write,
+// which is simpler than __android_log_print and less likely to deadlock)
+void safe_android_log(int prio, const char* tag, const char* msg) {
+    __android_log_write(prio, tag, msg);
+}
+
+// Signal-safe crash log helper
+void safe_log_crash(const char* msg) {
+    safe_write(msg);
+    safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", msg);
+}
+
+} // anonymous namespace
 
 struct sigaction CrashHandler::old_actions_[32];
 CrashHandler::CrashCallback CrashHandler::callback_ = nullptr;
@@ -44,14 +92,17 @@ void CrashHandler::Install() {
         for (int i = 0; i < kHandledSignalCount; ++i) {
             int sig = kHandledSignals[i];
             if (sigaction(sig, &sa, &old_actions_[sig]) != 0) {
-                ALOGE("AlcedoCrash", "Failed to install handler for %s", SignalName(sig));
+                __android_log_print(ANDROID_LOG_ERROR, "AlcedoCrash",
+                                    "Failed to install handler for %s", SignalName(sig));
             } else {
-                ALOGI("AlcedoCrash", "Installed handler for %s", SignalName(sig));
+                __android_log_print(ANDROID_LOG_INFO, "AlcedoCrash",
+                                    "Installed handler for %s", SignalName(sig));
             }
         }
 
         installed_ = true;
-        ALOGI("AlcedoCrash", "Crash handler installed successfully");
+        __android_log_print(ANDROID_LOG_INFO, "AlcedoCrash",
+                            "Crash handler installed successfully");
     });
 }
 
@@ -64,7 +115,7 @@ void CrashHandler::Uninstall() {
     }
 
     installed_ = false;
-    ALOGI("AlcedoCrash", "Crash handler uninstalled");
+    __android_log_print(ANDROID_LOG_INFO, "AlcedoCrash", "Crash handler uninstalled");
 }
 
 void CrashHandler::SetCrashCallback(CrashCallback callback) {
@@ -72,29 +123,41 @@ void CrashHandler::SetCrashCallback(CrashCallback callback) {
 }
 
 void CrashHandler::SignalHandler(int sig, siginfo_t* info, void* context) {
-    ALOGE("AlcedoCrash", "========== NATIVE CRASH DETECTED ==========");
+    // Use signal-safe logging in the signal handler path.
+    safe_log_crash("========== NATIVE CRASH DETECTED ==========");
 
     LogCrashInfo(sig, info, context);
     DumpCallstack();
 
-    // Build crash info string for callback
+    // Build crash info string for callback (use signal-safe helpers)
     if (callback_) {
         char crash_info[512];
-        snprintf(crash_info, sizeof(crash_info),
-                 "Signal: %s (%d), si_addr: %p, si_code: %d",
-                 SignalName(sig), sig, info->si_addr, info->si_code);
+        const char* name = SignalName(sig);
+        size_t pos = 0;
+        auto append = [&](const char* s) {
+            while (*s && pos < sizeof(crash_info) - 1) crash_info[pos++] = *s++;
+        };
+        append("Signal: ");
+        append(name);
+        append(" (");
+        safe_itoa(static_cast<unsigned long long>(sig), crash_info + pos);
+        while (crash_info[pos]) ++pos;
+        append("), si_addr: 0x");
+        safe_itoa(reinterpret_cast<unsigned long long>(info->si_addr), crash_info + pos, 16);
+        while (crash_info[pos]) ++pos;
+        append(", si_code: ");
+        safe_itoa(static_cast<unsigned long long>(info->si_code), crash_info + pos);
+        while (crash_info[pos]) ++pos;
+        crash_info[pos] = '\0';
         callback_(crash_info);
     }
 
-    ALOGE("AlcedoCrash", "========== END CRASH REPORT ==========");
+    safe_log_crash("========== END CRASH REPORT ==========");
 
     // Re-raise with the old/default handler to get proper tombstone/core dump
-    // Restore old action first to avoid recursion
     if (old_actions_[sig].sa_flags & SA_SIGINFO) {
-        // Old handler was a siginfo handler
         old_actions_[sig].sa_sigaction(sig, info, context);
     } else if (old_actions_[sig].sa_handler == SIG_DFL) {
-        // Default handler - restore and re-raise
         struct sigaction default_sa;
         memset(&default_sa, 0, sizeof(default_sa));
         default_sa.sa_handler = SIG_DFL;
@@ -103,51 +166,57 @@ void CrashHandler::SignalHandler(int sig, siginfo_t* info, void* context) {
     } else if (old_actions_[sig].sa_handler == SIG_IGN) {
         // Old handler was ignoring - do nothing
     } else {
-        // Old handler was a regular handler
         old_actions_[sig].sa_handler(sig);
     }
 }
 
 void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
-    ALOGE("AlcedoCrash", "Signal: %s (%d)", SignalName(sig), sig);
-    ALOGE("AlcedoCrash", "Fault address: %p", info->si_addr);
-    ALOGE("AlcedoCrash", "Signal code: %d", info->si_code);
+    // Use __android_log_write for signal-safety (no format string parsing)
+    safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", SignalName(sig));
+
+    // Log fault address as hex
+    {
+        char buf[64];
+        buf[0] = '0'; buf[1] = 'x';
+        safe_itoa(reinterpret_cast<unsigned long long>(info->si_addr), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+    }
 
     // Decode si_code for common signals
     if (sig == SIGSEGV) {
         switch (info->si_code) {
-            case SEGV_MAPERR:  ALOGE("AlcedoCrash", "Reason: Address not mapped to object"); break;
-            case SEGV_ACCERR:  ALOGE("AlcedoCrash", "Reason: Invalid permissions for mapped object"); break;
-            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+            case SEGV_MAPERR: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SEGV_MAPERR: Address not mapped"); break;
+            case SEGV_ACCERR: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SEGV_ACCERR: Invalid permissions"); break;
+            default:          safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SEGV: Unknown code"); break;
         }
     } else if (sig == SIGBUS) {
         switch (info->si_code) {
-            case BUS_ADRALN:   ALOGE("AlcedoCrash", "Reason: Invalid address alignment"); break;
-            case BUS_ADRERR:   ALOGE("AlcedoCrash", "Reason: Nonexistent physical address"); break;
-            case BUS_OBJERR:   ALOGE("AlcedoCrash", "Reason: Object-specific hardware error"); break;
-            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+            case BUS_ADRALN: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "BUS_ADRALN: Invalid alignment"); break;
+            case BUS_ADRERR: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "BUS_ADRERR: Nonexistent address"); break;
+            case BUS_OBJERR: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "BUS_OBJERR: Hardware error"); break;
+            default:         safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SIGBUS: Unknown code"); break;
         }
     } else if (sig == SIGFPE) {
         switch (info->si_code) {
-            case FPE_INTDIV:   ALOGE("AlcedoCrash", "Reason: Integer divide by zero"); break;
-            case FPE_INTOVF:   ALOGE("AlcedoCrash", "Reason: Integer overflow"); break;
-            case FPE_FLTDIV:   ALOGE("AlcedoCrash", "Reason: Floating point divide by zero"); break;
-            case FPE_FLTOVF:   ALOGE("AlcedoCrash", "Reason: Floating point overflow"); break;
-            case FPE_FLTUND:   ALOGE("AlcedoCrash", "Reason: Floating point underflow"); break;
-            case FPE_FLTRES:   ALOGE("AlcedoCrash", "Reason: Floating point inexact result"); break;
-            case FPE_FLTINV:   ALOGE("AlcedoCrash", "Reason: Floating point invalid operation"); break;
-            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+            case FPE_INTDIV: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_INTDIV: Integer divide by zero"); break;
+            case FPE_INTOVF: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_INTOVF: Integer overflow"); break;
+            case FPE_FLTDIV: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_FLTDIV: Float divide by zero"); break;
+            case FPE_FLTOVF: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_FLTOVF: Float overflow"); break;
+            case FPE_FLTUND: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_FLTUND: Float underflow"); break;
+            case FPE_FLTRES: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_FLTRES: Inexact result"); break;
+            case FPE_FLTINV: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "FPE_FLTINV: Invalid operation"); break;
+            default:         safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SIGFPE: Unknown code"); break;
         }
     } else if (sig == SIGILL) {
         switch (info->si_code) {
-            case ILL_ILLOPC:   ALOGE("AlcedoCrash", "Reason: Illegal opcode"); break;
-            case ILL_ILLOPN:   ALOGE("AlcedoCrash", "Reason: Illegal operand"); break;
-            case ILL_ILLADR:   ALOGE("AlcedoCrash", "Reason: Illegal addressing mode"); break;
-            case ILL_ILLTRP:   ALOGE("AlcedoCrash", "Reason: Illegal trap"); break;
-            case ILL_PRVOPC:   ALOGE("AlcedoCrash", "Reason: Privileged opcode"); break;
-            case ILL_PRVREG:   ALOGE("AlcedoCrash", "Reason: Privileged register"); break;
-            case ILL_COPROC:   ALOGE("AlcedoCrash", "Reason: Coprocessor error"); break;
-            default:           ALOGE("AlcedoCrash", "Reason: Unknown (si_code=%d)", info->si_code); break;
+            case ILL_ILLOPC: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_ILLOPC: Illegal opcode"); break;
+            case ILL_ILLOPN: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_ILLOPN: Illegal operand"); break;
+            case ILL_ILLADR: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_ILLADR: Illegal addressing"); break;
+            case ILL_ILLTRP: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_ILLTRP: Illegal trap"); break;
+            case ILL_PRVOPC: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_PRVOPC: Privileged opcode"); break;
+            case ILL_PRVREG: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_PRVREG: Privileged register"); break;
+            case ILL_COPROC: safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "ILL_COPROC: Coprocessor error"); break;
+            default:         safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "SIGILL: Unknown code"); break;
         }
     }
 
@@ -155,30 +224,46 @@ void CrashHandler::LogCrashInfo(int sig, siginfo_t* info, void* context) {
 #if defined(__arm__)
     if (context) {
         ucontext_t* uc = static_cast<ucontext_t*>(context);
-        ALOGE("AlcedoCrash", "PC: 0x%08x", uc->uc_mcontext.arm_pc);
-        ALOGE("AlcedoCrash", "LR: 0x%08x", uc->uc_mcontext.arm_lr);
-        ALOGE("AlcedoCrash", "SP: 0x%08x", uc->uc_mcontext.arm_sp);
-        ALOGE("AlcedoCrash", "Faulting PC: 0x%08x", uc->uc_mcontext.fault_address);
+        char buf[64];
+        buf[0] = '0'; buf[1] = 'x';
+        safe_itoa(uc->uc_mcontext.arm_pc, buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(uc->uc_mcontext.arm_lr, buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(uc->uc_mcontext.arm_sp, buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
     }
 #elif defined(__aarch64__)
     if (context) {
         ucontext_t* uc = static_cast<ucontext_t*>(context);
-        ALOGE("AlcedoCrash", "PC: 0x%016llx", (unsigned long long)uc->uc_mcontext.pc);
-        ALOGE("AlcedoCrash", "LR: 0x%016llx", (unsigned long long)uc->uc_mcontext.regs[30]);
-        ALOGE("AlcedoCrash", "SP: 0x%016llx", (unsigned long long)uc->uc_mcontext.sp);
-        ALOGE("AlcedoCrash", "Fault address: 0x%016llx", (unsigned long long)uc->uc_mcontext.fault_address);
+        char buf[64];
+        buf[0] = '0'; buf[1] = 'x';
+        safe_itoa(static_cast<unsigned long long>(uc->uc_mcontext.pc), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(static_cast<unsigned long long>(uc->uc_mcontext.regs[30]), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(static_cast<unsigned long long>(uc->uc_mcontext.sp), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
     }
 #elif defined(__i386__)
     if (context) {
         ucontext_t* uc = static_cast<ucontext_t*>(context);
-        ALOGE("AlcedoCrash", "EIP: 0x%08x", uc->uc_mcontext.gregs[REG_EIP]);
-        ALOGE("AlcedoCrash", "ESP: 0x%08x", uc->uc_mcontext.gregs[REG_ESP]);
+        char buf[64];
+        buf[0] = '0'; buf[1] = 'x';
+        safe_itoa(uc->uc_mcontext.gregs[REG_EIP], buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(uc->uc_mcontext.gregs[REG_ESP], buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
     }
 #elif defined(__x86_64__)
     if (context) {
         ucontext_t* uc = static_cast<ucontext_t*>(context);
-        ALOGE("AlcedoCrash", "RIP: 0x%016llx", (unsigned long long)uc->uc_mcontext.gregs[REG_RIP]);
-        ALOGE("AlcedoCrash", "RSP: 0x%016llx", (unsigned long long)uc->uc_mcontext.gregs[REG_RSP]);
+        char buf[64];
+        buf[0] = '0'; buf[1] = 'x';
+        safe_itoa(static_cast<unsigned long long>(uc->uc_mcontext.gregs[REG_RIP]), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
+        safe_itoa(static_cast<unsigned long long>(uc->uc_mcontext.gregs[REG_RSP]), buf + 2, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
     }
 #endif
 }
@@ -202,7 +287,7 @@ static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void
 }
 
 void CrashHandler::DumpCallstack() {
-    ALOGE("AlcedoCrash", "--- Callstack ---");
+    safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "--- Callstack ---");
 
     void* buffer[64];
     BacktraceState state = { buffer, buffer + 64 };
@@ -210,12 +295,22 @@ void CrashHandler::DumpCallstack() {
 
     int size = static_cast<int>(state.current - buffer);
     if (size <= 0) {
-        ALOGE("AlcedoCrash", "no frames");
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", "no frames");
         return;
     }
 
     for (int i = 0; i < size; ++i) {
-        ALOGE("AlcedoCrash", "  #%02d %p", i, buffer[i]);
+        char buf[64];
+        buf[0] = '#';
+        safe_itoa(static_cast<unsigned long long>(i), buf + 1);
+        // Append space and hex address
+        size_t pos = 0;
+        while (buf[pos]) ++pos;
+        buf[pos++] = ' ';
+        buf[pos++] = '0';
+        buf[pos++] = 'x';
+        safe_itoa(reinterpret_cast<unsigned long long>(buffer[i]), buf + pos, 16);
+        safe_android_log(ANDROID_LOG_ERROR, "AlcedoCrash", buf);
     }
 }
 
