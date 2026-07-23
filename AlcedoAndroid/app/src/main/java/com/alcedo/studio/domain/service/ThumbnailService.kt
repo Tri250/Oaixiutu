@@ -118,7 +118,8 @@ class ThumbnailService(
 
         // 3. Try legacy key format for backward compatibility (entries written by old ThumbnailService)
         try {
-            val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
+            val legacyStringKey = makeDiskCacheKey(imageId, size).toString()
+            val diskBitmap = diskCache.get(legacyStringKey, toResolutionTier(size))
             if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
                 // Migrate to new key format so future lookups hit directly
@@ -176,7 +177,8 @@ class ThumbnailService(
 
         // Try legacy key format for backward compatibility
         try {
-            val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
+            val legacyStringKey = makeDiskCacheKey(imageId, size).toString()
+            val diskBitmap = diskCache.get(legacyStringKey, toResolutionTier(size))
             if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
                 // Migrate to new key format so future lookups hit directly
@@ -444,7 +446,7 @@ class ThumbnailService(
         // Evict legacy disk cache keys for backward compatibility
         ThumbnailSize.entries.forEach { size ->
             try {
-                diskCache.evict(makeDiskCacheKey(imageId, size))
+                diskCache.evict(makeDiskCacheKey(imageId, size).toString(), toResolutionTier(size))
             } catch (_: Exception) {}
         }
     }
@@ -517,7 +519,7 @@ class ThumbnailService(
             } catch (_: Exception) {}
             // Evict legacy disk cache key
             try {
-                diskCache.evict(makeDiskCacheKey(imageId, size), toResolutionTier(size))
+                diskCache.evict(makeDiskCacheKey(imageId, size).toString(), toResolutionTier(size))
             } catch (_: Exception) {}
         }
     }
