@@ -815,6 +815,7 @@ private fun AlbumContent(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
+            val topBarBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
             Box {
                 // 普通模式顶栏
                 AnimatedVisibility(
@@ -928,7 +929,7 @@ private fun AlbumContent(
                             drawContent()
                             // 玻璃态底部边框
                             drawLine(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                                color = topBarBorderColor,
                                 start = Offset(0f, size.height),
                                 end = Offset(size.width, size.height),
                                 strokeWidth = AlcedoStroke.thin.toPx()
@@ -983,7 +984,7 @@ private fun AlbumContent(
                         modifier = Modifier.drawWithContent {
                             drawContent()
                             drawLine(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                                color = topBarBorderColor,
                                 start = Offset(0f, size.height),
                                 end = Offset(size.width, size.height),
                                 strokeWidth = AlcedoStroke.thin.toPx()

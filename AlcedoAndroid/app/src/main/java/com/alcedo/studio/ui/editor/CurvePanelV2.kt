@@ -178,6 +178,8 @@ private fun CurveV2Graph(
     }
 
     val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
 
     Canvas(
         modifier = modifier
@@ -270,12 +272,12 @@ private fun CurveV2Graph(
 
         // Background
         drawRect(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = surfaceContainerColor,
             topLeft = Offset(CV2_PADDING, CV2_PADDING),
             size = Size(graphW, graphH)
         )
         drawRect(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+            color = onSurfaceColor.copy(alpha = 0.1f),
             topLeft = Offset(CV2_PADDING, CV2_PADDING),
             size = Size(graphW, graphH),
             style = Stroke(width = 1f)
@@ -300,7 +302,7 @@ private fun CurveV2Graph(
 
         // Diagonal reference line
         drawLine(
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            onSurfaceColor.copy(alpha = 0.08f),
             Offset(CV2_PADDING, CV2_PADDING + graphH),
             Offset(CV2_PADDING + graphW, CV2_PADDING),
             strokeWidth = 1f
@@ -313,7 +315,7 @@ private fun CurveV2Graph(
             for (i in histogramData.indices) {
                 val barHeight = (histogramData[i] / maxCount) * graphH * 0.7f
                 drawRect(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                    color = onSurfaceColor.copy(alpha = 0.05f),
                     topLeft = Offset(
                         CV2_PADDING + i * barWidth,
                         CV2_PADDING + graphH - barHeight
@@ -357,13 +359,13 @@ private fun CurveV2Graph(
             val cy = CV2_PADDING + (1f - pt.y) * graphH
 
             drawLine(
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                onSurfaceColor.copy(alpha = 0.3f),
                 Offset(cx, CV2_PADDING),
                 Offset(cx, CV2_PADDING + graphH),
                 strokeWidth = 0.5f
             )
             drawLine(
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                onSurfaceColor.copy(alpha = 0.3f),
                 Offset(CV2_PADDING, cy),
                 Offset(CV2_PADDING + graphW, cy),
                 strokeWidth = 0.5f
@@ -392,7 +394,7 @@ private fun CurveV2Graph(
                     center = Offset(cx, cy)
                 )
                 drawCircle(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = onSurfaceColor,
                     radius = 8f,
                     center = Offset(cx, cy),
                     style = Stroke(width = 2f)
@@ -404,7 +406,7 @@ private fun CurveV2Graph(
                 )
             } else {
                 drawCircle(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = onSurfaceColor,
                     radius = 6f,
                     center = Offset(cx, cy),
                     style = Stroke(width = 1.5f)

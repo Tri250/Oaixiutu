@@ -1,7 +1,9 @@
 package com.alcedo.studio.ui.common
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.theme.AlcedoAnimation
@@ -47,6 +50,7 @@ import com.alcedo.studio.ui.theme.AlcedoSpacing
  * - 双击滑块重置为默认值
  * - 激活轨道微扩张(4dp→6dp),视觉反馈明确
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdjustmentSlider(
     label: String,
@@ -66,14 +70,14 @@ fun AdjustmentSlider(
     val thumbSize by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.thumbRadiusActive * 2
         else AlcedoSlider.thumbRadius * 2,
-        animationSpec = AlcedoAnimation.sliderThumbPop,
+        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
         label = "thumbSize"
     )
     // 轨道高度动画 — 拖动时微扩张
     val trackHeight by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.trackHeightActive
         else AlcedoSlider.trackHeight,
-        animationSpec = AlcedoAnimation.sliderThumbPop,
+        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
         label = "trackHeight"
     )
 
@@ -191,7 +195,7 @@ fun AdjustmentSlider(
             },
             track = { sliderState ->
                 // 2026: 轨道 — 圆角矩形 + 渐变激活
-                val fraction = sliderState.coercedValueAsFraction
+                val fraction = (sliderState.value - sliderState.valueRange.start) / (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

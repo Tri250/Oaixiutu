@@ -227,6 +227,7 @@ fun MainScreen(
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
                 // 干净的 Material3 底部导航栏 – surfaceContainer 暖色背景,贴合 Hasselblad Dark 旗舰观感
+                val navBarBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity),
                     tonalElevation = 0.dp,
@@ -234,7 +235,7 @@ fun MainScreen(
                         drawContent()
                         // 玻璃态顶部边框
                         drawLine(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                            color = navBarBorderColor,
                             start = Offset(0f, 0f),
                             end = Offset(size.width, 0f),
                             strokeWidth = AlcedoStroke.thin.toPx()

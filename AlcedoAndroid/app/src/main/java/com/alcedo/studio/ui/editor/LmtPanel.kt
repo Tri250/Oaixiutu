@@ -107,7 +107,7 @@ fun LmtPanel(
                     // Intensity slider
                     Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                     AdjustmentSlider(
-                        label = stringRes { lmtIntensity },
+                        label = stringRes { this.lmtIntensity },
                         value = lmtIntensity,
                         range = 0f..1f,
                         onValueChange = { onLmtChanged(lmtEnabled, lmtPath, it) },

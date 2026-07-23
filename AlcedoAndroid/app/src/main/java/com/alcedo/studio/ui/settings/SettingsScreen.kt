@@ -137,6 +137,7 @@ fun SettingsScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
+            val topBarBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
             TopAppBar(
                 title = {
                     Text(
@@ -169,7 +170,7 @@ fun SettingsScreen(navController: NavController) {
                 modifier = Modifier.drawWithContent {
                     drawContent()
                     drawLine(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                        color = topBarBorderColor,
                         start = Offset(0f, size.height),
                         end = Offset(size.width, size.height),
                         strokeWidth = AlcedoStroke.thin.toPx()

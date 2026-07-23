@@ -218,6 +218,8 @@ private fun HueRingIndicator(
     hueWidth: Float,
     modifier: Modifier = Modifier
 ) {
+    val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
     Canvas(modifier = modifier) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.width / 2f * 0.9f
@@ -241,7 +243,7 @@ private fun HueRingIndicator(
 
         // Clear inner circle
         drawCircle(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = surfaceContainerColor,
             radius = innerRadius,
             center = center
         )
@@ -262,20 +264,20 @@ private fun HueRingIndicator(
             size = Size(outerRadius * 2, outerRadius * 2)
         )
         drawCircle(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = surfaceContainerColor,
             radius = innerRadius,
             center = center
         )
 
         // Ring borders
         drawCircle(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+            color = onSurfaceColor.copy(alpha = 0.2f),
             radius = outerRadius,
             center = center,
             style = Stroke(width = 1f)
         )
         drawCircle(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+            color = onSurfaceColor.copy(alpha = 0.15f),
             radius = innerRadius,
             center = center,
             style = Stroke(width = 1f)
@@ -289,7 +291,7 @@ private fun HueRingIndicator(
             val markerY = center.y + midRadius * kotlin.math.sin(angle).toFloat()
 
             drawCircle(
-                color = if (i == selectedProfile) MaterialTheme.colorScheme.onSurface else HUE_PROFILE_COLORS[i],
+                color = if (i == selectedProfile) onSurfaceColor else HUE_PROFILE_COLORS[i],
                 radius = if (i == selectedProfile) 6f else 4f,
                 center = Offset(markerX, markerY),
                 style = if (i == selectedProfile) Stroke(width = 2f) else Stroke(width = 1f)

@@ -207,6 +207,7 @@ fun EditorScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(editorSnackbarHostState) },
         topBar = {
+            val topBarBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             TopAppBar(
                 title = {
                     Text(
@@ -317,7 +318,7 @@ fun EditorScreen(
                     Modifier.drawWithContent {
                         drawContent()
                         drawLine(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            color = topBarBorderColor,
                             start = Offset(0f, size.height),
                             end = Offset(size.width, size.height),
                             strokeWidth = 0.5.dp.toPx()
@@ -361,7 +362,7 @@ fun EditorScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 4.dp),
-                shape = AlcedoRadius.xs,
+                shape = RoundedCornerShape(AlcedoRadius.xs),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
             ) {
                 ColorSpaceIndicator(
