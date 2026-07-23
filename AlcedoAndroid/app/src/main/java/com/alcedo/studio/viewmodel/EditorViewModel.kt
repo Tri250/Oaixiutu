@@ -392,63 +392,98 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private fun loadImage() {
         viewModelScope.launch {
             _imageLoadError.value = false
-            val id = imageId.toLongOrNull() ?: return@launch
-            val img = imageRepository.getImage(id)
+            val id = imageId.toLongOrNull()
+            if (id == null) {
+                Log.e(TAG, "Invalid imageId: $imageId")
+                _imageLoadError.value = true
+                return@launch
+            }
+
+            // 方案 B-1: 包裹数据库查询的 try-catch
+            // Room/SQLCipher 在 WAL 模式异常、journal 损坏时可能直接抛异常
+            val img: ImageModel?
+            try {
+                img = imageRepository.getImage(id)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to query image from database", e)
+                _imageLoadError.value = true
+                return@launch
+            }
+
             _imageModel.value = img
-            img?.let {
-                try {
-                    // 在 IO 线程解码，避免主线程 ANR；采样避免大图 OOM
-                    val bitmap = withContext(Dispatchers.IO) {
-                        val (outWidth, outHeight) = BitmapDecoder.decodeJustBounds(AppModule.context, it.imagePath)
-                        if (outWidth <= 0 || outHeight <= 0) {
-                            null
-                        } else {
-                            val rawSampleSize = calculateSampleSize(outWidth, outHeight)
-                            val estimatedBytes = MemoryGuard.estimateBitmapBytes(
-                                outWidth / rawSampleSize, outHeight / rawSampleSize
+
+            // 方案 B-2: img 为 null 时设置错误状态（原代码用 ?.let 静默跳过）
+            if (img == null) {
+                Log.e(TAG, "No image found for id=$id")
+                _imageLoadError.value = true
+                return@launch
+            }
+
+            // 方案 B-3: imagePath 无效时设置错误状态
+            if (img.imagePath.isBlank()) {
+                Log.e(TAG, "Image path is empty for imageId=$id")
+                _imageLoadError.value = true
+                return@launch
+            }
+
+            try {
+                // 在 IO 线程解码，避免主线程 ANR；采样避免大图 OOM
+                val bitmap = withContext(Dispatchers.IO) {
+                    val (outWidth, outHeight) = BitmapDecoder.decodeJustBounds(AppModule.context, img.imagePath)
+                    if (outWidth <= 0 || outHeight <= 0) {
+                        null
+                    } else {
+                        val rawSampleSize = calculateSampleSize(outWidth, outHeight)
+                        val estimatedBytes = MemoryGuard.estimateBitmapBytes(
+                            outWidth / rawSampleSize, outHeight / rawSampleSize
+                        )
+                        val finalSampleSize = if (!MemoryGuard.canAllocateBitmap(estimatedBytes)) {
+                            MemoryGuard.calculateSafeSampleSize(
+                                outWidth, outHeight,
+                                MemoryGuard.availableHeapBytes() - 32L * 1024 * 1024
                             )
-                            val finalSampleSize = if (!MemoryGuard.canAllocateBitmap(estimatedBytes)) {
-                                MemoryGuard.calculateSafeSampleSize(
-                                    outWidth, outHeight,
-                                    MemoryGuard.availableHeapBytes() - 32L * 1024 * 1024
-                                )
-                            } else {
-                                rawSampleSize
-                            }
-                            val decodeOptions = BitmapFactory.Options().apply {
-                                inSampleSize = finalSampleSize
-                                inPreferredConfig = Bitmap.Config.ARGB_8888
-                            }
-                            BitmapDecoder.decodeBitmap(AppModule.context, it.imagePath, decodeOptions)
+                        } else {
+                            rawSampleSize
                         }
+                        val decodeOptions = BitmapFactory.Options().apply {
+                            inSampleSize = finalSampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        BitmapDecoder.decodeBitmap(AppModule.context, img.imagePath, decodeOptions)
                     }
-                    _originalBitmap.value = bitmap
-                    // C8 修复: 为预览生成降采样位图,避免实时处理大图 OOM
-                    previewSourceBitmap = bitmap?.let { downscaleForPreview(it) }
-                    _previewBitmap.value = previewSourceBitmap
-                } catch (e: OutOfMemoryError) {
-                    Log.e("EditorVM", "OOM loading image, attempting recovery", e)
-                    System.gc()
-                    _originalBitmap.value = null
-                    _previewBitmap.value = null
-                    _imageLoadError.value = true
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.e("EditorVM", "Failed to load image", e)
-                    _originalBitmap.value = null
-                    _previewBitmap.value = null
+                }
+                _originalBitmap.value = bitmap
+                // C8 修复: 为预览生成降采样位图,避免实时处理大图 OOM
+                previewSourceBitmap = bitmap?.let { downscaleForPreview(it) }
+                _previewBitmap.value = previewSourceBitmap
+
+                // 方案 B-4: bitmap 解码为 null（宽高无效等）时设置错误状态
+                if (bitmap == null) {
                     _imageLoadError.value = true
                 }
-                _history.value = editHistoryRepository.getHistory(id.toUInt())
-                    ?: EditHistory(boundImageId = id.toUInt())
-                _workingVersion.value = WorkingVersion(
-                    boundImageId = id.toUInt(),
-                    versionId = _history.value?.activeVersionId ?: ""
-                )
-                // Load preset list
-                loadPresets()
+            } catch (e: OutOfMemoryError) {
+                Log.e("EditorVM", "OOM loading image, attempting recovery", e)
+                System.gc()
+                _originalBitmap.value = null
+                _previewBitmap.value = null
+                _imageLoadError.value = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("EditorVM", "Failed to load image", e)
+                _originalBitmap.value = null
+                _previewBitmap.value = null
+                _imageLoadError.value = true
             }
+
+            _history.value = editHistoryRepository.getHistory(id.toUInt())
+                ?: EditHistory(boundImageId = id.toUInt())
+            _workingVersion.value = WorkingVersion(
+                boundImageId = id.toUInt(),
+                versionId = _history.value?.activeVersionId ?: ""
+            )
+            // Load preset list
+            loadPresets()
         }
     }
 
