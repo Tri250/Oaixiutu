@@ -934,6 +934,42 @@ interface StringResources {
     val rawWhiteLevel: String
     val rawBlackLevel: String
     val rawReset: String
+
+    // ── Hardcoded string extraction ──────────────────────────────────────
+    val editedImage: String
+    val rotate90: String
+    val flipHorizontal: String
+    val flipVertical: String
+    val resetButton: String
+    val k1Distortion: String
+    val k2Distortion: String
+    val k3Distortion: String
+    val p1Tangential: String
+    val p2Tangential: String
+    val cct: String
+    val batchAiTagTitle: String
+    val batchAiTagMessage: String
+    val storagePermissionRequired: String
+    val storagePermissionMessage: String
+    val requestAgain: String
+    val goToSettings: String
+    val permissionDeniedTitle: String
+    val hint: String
+    val confirmDeleteSingle: String
+    val confirmDeleteMultiple: String
+    val exportComplete: String
+    val favorites: String
+    val recentlyViewed: String
+    val pendingExport: String
+    val exportInProgressTitle: String
+    val exportInProgressMessage: String
+    val leave: String
+    val continueWaiting: String
+    val enterValue: String
+    val clearSearch: String
+    val semanticAnalysis: String
+    val curveResetButton: String
+    val applyButton: String
 }
 
 /**

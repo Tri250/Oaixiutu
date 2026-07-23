@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import com.alcedo.studio.data.model.PipelineParams
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.SectionHeader
 import com.alcedo.studio.ui.theme.AlcedoAnimation
 import com.alcedo.studio.ui.theme.AlcedoIconSize
@@ -132,7 +133,7 @@ fun CurvePanelV2(
                 modifier = Modifier.size(AlcedoIconSize.sm)
             )
             Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
-            Text("Reset Curve")
+            Text(stringRes { curveResetButton })
         }
 
         // Curve info

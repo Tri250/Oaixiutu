@@ -103,23 +103,23 @@ fun LensCorrectionPanel(
                         onClick = { viewModel.updateLensCorrection(0f, 0f, 0f, 0f, 0f) },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(AlcedoIconSize.sm), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Refresh, contentDescription = stringRes { resetButton }, modifier = Modifier.size(AlcedoIconSize.sm), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
-                AdjustmentSlider(label = "K1", value = params.lensK1, range = -0.2f..0.2f, onValueChange = {
+                AdjustmentSlider(label = stringRes { k1Distortion }, value = params.lensK1, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(it, params.lensK2, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                AdjustmentSlider(label = "K2", value = params.lensK2, range = -0.2f..0.2f, onValueChange = {
+                AdjustmentSlider(label = stringRes { k2Distortion }, value = params.lensK2, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, it, params.lensK3, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                AdjustmentSlider(label = "K3", value = params.lensK3, range = -0.2f..0.2f, onValueChange = {
+                AdjustmentSlider(label = stringRes { k3Distortion }, value = params.lensK3, range = -0.2f..0.2f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, it, params.lensP1, params.lensP2)
                 }, defaultValue = 0f)
-                AdjustmentSlider(label = "P1 (Tangential)", value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
+                AdjustmentSlider(label = stringRes { p1Tangential }, value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, it, params.lensP2)
                 }, defaultValue = 0f)
-                AdjustmentSlider(label = "P2 (Tangential)", value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
+                AdjustmentSlider(label = stringRes { p2Tangential }, value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
                     viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, params.lensP1, it)
                 }, defaultValue = 0f)
             }

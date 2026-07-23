@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import com.alcedo.studio.i18n.stringRes
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
@@ -197,7 +198,7 @@ fun ZoomableImageView(
             val heightDp = with(density) { fittedSize.height.toDp() }
             Image(
                 bitmap = imageBitmap,
-                contentDescription = "Edited image",
+                contentDescription = stringRes { editedImage },
                 modifier = Modifier
                     .size(widthDp, heightDp)
                     .onGloballyPositioned { /* 尺寸已由 dp 控制 */ }

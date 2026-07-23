@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.PipelineParams
+import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.SectionHeader
 
@@ -105,7 +106,7 @@ fun ColorTempPanel(
                 }
 
                 AdjustmentSlider(
-                    label = "CCT",
+                    label = stringRes { cct },
                     value = params.whiteBalanceTemp,
                     range = 2000f..15000f,
                     onValueChange = {
@@ -160,7 +161,7 @@ fun ColorTempPanel(
                 }
 
                 AdjustmentSlider(
-                    label = "Tint",
+                    label = stringRes { editorTint },
                     value = params.whiteBalanceTint,
                     range = -150f..150f,
                     onValueChange = {

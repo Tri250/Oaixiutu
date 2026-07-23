@@ -1067,7 +1067,7 @@ private fun ImagePreviewArea(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("重试")
+                        Text(stringRes { retry })
                     }
                 }
             } else {

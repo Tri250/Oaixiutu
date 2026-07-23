@@ -50,16 +50,16 @@ fun ExportScreen(
     if (showExitConfirm) {
         AlertDialog(
             onDismissRequest = { showExitConfirm = false },
-            title = { Text("导出进行中") },
-            text = { Text("图片正在导出中，离开页面不会中断导出，但您将无法看到导出进度。确定要离开吗？") },
+            title = { Text(stringRes { exportInProgressTitle }) },
+            text = { Text(stringRes { exportInProgressMessage }) },
             confirmButton = {
                 TextButton(onClick = {
                     showExitConfirm = false
                     navController.popBackStack()
-                }) { Text("离开") }
+                }) { Text(stringRes { leave }) }
             },
             dismissButton = {
-                TextButton(onClick = { showExitConfirm = false }) { Text("继续等待") }
+                TextButton(onClick = { showExitConfirm = false }) { Text(stringRes { continueWaiting }) }
             }
         )
     }

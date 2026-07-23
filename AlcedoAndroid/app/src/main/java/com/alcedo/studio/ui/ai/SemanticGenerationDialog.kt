@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.alcedo.studio.i18n.stringRes
 
 enum class PersistenceOption(val label: String, val description: String) {
     EMBEDDINGS("Embeddings", "Store vector embeddings for semantic search"),
@@ -36,7 +37,7 @@ fun SemanticGenerationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = modifier,
-        title = { Text("Semantic Analysis") },
+        title = { Text(stringRes { semanticAnalysis }) },
         icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
         text = {
             Column(
@@ -240,7 +241,7 @@ fun SemanticGenerationDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isGenerating) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isGenerating) { Text(stringRes { cancel }) }
         }
     )
 }

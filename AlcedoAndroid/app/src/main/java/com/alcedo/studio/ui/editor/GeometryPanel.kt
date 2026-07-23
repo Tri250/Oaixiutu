@@ -211,19 +211,19 @@ fun GeometryPanel(
                         val newRotation = ((params.cropRotation + 90) % 360)
                         viewModel.updateCropRotation(newRotation)
                     }) {
-                        Icon(Icons.Default.RotateRight, contentDescription = "Rotate 90°")
+                        Icon(Icons.Default.RotateRight, contentDescription = stringRes { rotate90 })
                     }
                     IconButton(onClick = {
                         viewModel.updateCropFlip(!params.cropFlipHorizontal, params.cropFlipVertical)
                     }) {
-                        Icon(Icons.Default.Flip, contentDescription = "Flip Horizontal")
+                        Icon(Icons.Default.Flip, contentDescription = stringRes { flipHorizontal })
                     }
                     IconButton(onClick = {
                         viewModel.updateCropFlip(params.cropFlipHorizontal, !params.cropFlipVertical)
                     }) {
                         Icon(
                             Icons.Default.Flip,
-                            contentDescription = "Flip Vertical",
+                            contentDescription = stringRes { flipVertical },
                             modifier = Modifier.graphicsLayer { scaleY = -1f }
                         )
                     }
@@ -231,7 +231,7 @@ fun GeometryPanel(
                         viewModel.resetCrop()
                         selectedCropAspectRatio = CropAspectRatio.FREE
                     }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset")
+                        Icon(Icons.Default.Refresh, contentDescription = stringRes { resetButton })
                     }
                 }
             }

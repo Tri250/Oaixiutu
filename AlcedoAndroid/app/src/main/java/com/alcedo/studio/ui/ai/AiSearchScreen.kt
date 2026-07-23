@@ -346,7 +346,7 @@ fun AiSearchScreen(
                             inputText = ""
                             albumViewModel.clearSearch()
                         }) {
-                            Text("清除搜索")
+                            Text(stringRes { clearSearch })
                         }
                     }
                 )
@@ -505,7 +505,7 @@ fun AiSearchScreen(
                     TextButton(onClick = {
                         previewImage = null
                         navController.navigate("editor/${image.imageId}")
-                    }) { Text("编辑") }
+                    }) { Text(stringRes { edit }) }
                 },
                 dismissButton = {
                     TextButton(onClick = { previewImage = null }) {

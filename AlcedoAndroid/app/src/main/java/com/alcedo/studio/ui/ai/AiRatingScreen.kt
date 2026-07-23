@@ -187,7 +187,7 @@ fun AiRatingScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         // 取消按钮
                         TextButton(onClick = { cancelAnalysis() }) {
-                            Text("取消")
+                            Text(stringRes { cancel })
                         }
                     }
                 }
@@ -221,7 +221,7 @@ fun AiRatingScreen(
                                 startAnalysis()
                             },
                             shape = RoundedCornerShape(14.dp)
-                        ) { Text("重试") }
+                        ) { Text(stringRes { retry }) }
                     }
                 }
             }

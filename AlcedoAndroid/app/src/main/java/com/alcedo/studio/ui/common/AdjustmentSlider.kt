@@ -260,7 +260,7 @@ fun AdjustmentSlider(
                 OutlinedTextField(
                     value = inputValue,
                     onValueChange = { inputValue = it },
-                    label = { Text("输入数值") },
+                    label = { Text(stringRes { enterValue }) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     shape = RoundedCornerShape(AlcedoRadius.sm)
@@ -282,7 +282,7 @@ fun AdjustmentSlider(
             },
             dismissButton = {
                 TextButton(onClick = { showInputDialog = false }) {
-                    Text("取消")
+                    Text(stringRes { cancel })
                 }
             }
         )
