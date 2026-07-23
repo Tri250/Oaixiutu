@@ -42,9 +42,9 @@ void ODTOp::ApplyImpl(float* pixels, int width, int height, int channels) {
             color_science::convert_color_space(&r, &g, &b, 0, 2);
         }
 
-        pixels[idx]     = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = std::clamp(r, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(g, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(b, 0.0f, 1.0f);
     }
 }
 

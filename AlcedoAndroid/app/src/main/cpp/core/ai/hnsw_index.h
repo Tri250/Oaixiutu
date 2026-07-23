@@ -88,6 +88,7 @@ private:
 
     std::unordered_map<uint64_t, std::unique_ptr<HnswNode>> nodes_;
     uint64_t entryPointId_ = 0;
+    bool hasEntry_ = false;  // True when an entry point has been set (separate from id==0)
     int maxLevel_ = -1;
 
     mutable std::mt19937 rng_;

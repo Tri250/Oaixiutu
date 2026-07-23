@@ -148,8 +148,8 @@ void AMAZEDemosaicOperator::amaze_interpolate(const float* src, int width, int h
                 g[idx] = best_green;
             }
 
-            // Clamp
-            g[idx] = std::max(0.0f, g[idx]);
+            // Clamp to [0, 1]
+            g[idx] = std::clamp(g[idx], 0.0f, 1.0f);
         }
     }
 
@@ -253,10 +253,10 @@ void AMAZEDemosaicOperator::amaze_interpolate(const float* src, int width, int h
         output_g[i] = g[i];
         output_b[i] = g[i] + diff_b[i];
 
-        // Clamp
-        output_r[i] = std::max(0.0f, output_r[i]);
-        output_g[i] = std::max(0.0f, output_g[i]);
-        output_b[i] = std::max(0.0f, output_b[i]);
+        // Clamp to [0, 1]
+        output_r[i] = std::clamp(output_r[i], 0.0f, 1.0f);
+        output_g[i] = std::clamp(output_g[i], 0.0f, 1.0f);
+        output_b[i] = std::clamp(output_b[i], 0.0f, 1.0f);
     }
 
     // ── Step 3: Median filter for zipper artifact removal ──
@@ -305,8 +305,8 @@ void AMAZEDemosaicOperator::amaze_interpolate(const float* src, int width, int h
         for (int x = 0; x < width; ++x) {
             int idx = y * width + x;
             if (y >= 1 && y < height - 1 && x >= 1 && x < width - 1) {
-                output_r[idx] = std::max(0.0f, filtered_r[idx]);
-                output_b[idx] = std::max(0.0f, filtered_b[idx]);
+                output_r[idx] = std::clamp(filtered_r[idx], 0.0f, 1.0f);
+                output_b[idx] = std::clamp(filtered_b[idx], 0.0f, 1.0f);
             }
         }
     }

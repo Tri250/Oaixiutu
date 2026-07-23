@@ -119,9 +119,9 @@ void LutOperator::apply_rgb(float* pixels, int width, int height,
                               clamp(b, 0.0f, 1.0f),
                               ro, go, bo);
 
-        pixels[idx]     = output_min + ro * output_range;
-        pixels[idx + 1] = output_min + go * output_range;
-        pixels[idx + 2] = output_min + bo * output_range;
+        pixels[idx]     = std::clamp(output_min + ro * output_range, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(output_min + go * output_range, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(output_min + bo * output_range, 0.0f, 1.0f);
     }
 }
 
@@ -148,9 +148,9 @@ void LutOperator::apply_rgba(float* pixels, int width, int height,
                               clamp(b, 0.0f, 1.0f),
                               ro, go, bo);
 
-        pixels[idx]     = output_min + ro * output_range;
-        pixels[idx + 1] = output_min + go * output_range;
-        pixels[idx + 2] = output_min + bo * output_range;
+        pixels[idx]     = std::clamp(output_min + ro * output_range, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(output_min + go * output_range, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(output_min + bo * output_range, 0.0f, 1.0f);
     }
 }
 

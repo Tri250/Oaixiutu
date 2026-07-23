@@ -1,9 +1,11 @@
 #include "sharpen_op.h"
 #include <cmath>
+#include <algorithm>
 
 namespace alcedo {
 
 void SharpenOperator::apply_rgb(std::vector<float>& pixels, int width, int height, float amount) {
+    if (pixels.empty() || width <= 0 || height <= 0 || amount == 0.0f) return;
     std::vector<float> copy = pixels;
     float kernel[9] = {
         0.0f, -1.0f, 0.0f,
@@ -23,7 +25,7 @@ void SharpenOperator::apply_rgb(std::vector<float>& pixels, int width, int heigh
                     }
                 }
                 int center = (y * width + x) * 3 + c;
-                pixels[center] = copy[center] + (sum - copy[center]) * scale;
+                pixels[center] = std::clamp(copy[center] + (sum - copy[center]) * scale, 0.0f, 1.0f);
             }
         }
     }

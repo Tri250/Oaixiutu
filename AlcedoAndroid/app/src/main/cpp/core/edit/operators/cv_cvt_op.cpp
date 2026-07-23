@@ -83,7 +83,8 @@ static void do_Lab2RGB(float L, float a, float lv, float& r, float& g, float& b)
 // ============================================================
 
 static void do_RGB2YCrCb(float r, float g, float b, float& Y, float& Cr, float& Cb) {
-    Y  = 0.299f * r + 0.587f * g + 0.114f * b;
+    // BT.709 luminance weights — consistent with all other operators
+    Y  = 0.2126f * r + 0.7152f * g + 0.0722f * b;
     Cr = (r - Y) * 0.713f + 0.5f;
     Cb = (b - Y) * 0.564f + 0.5f;
 }
@@ -167,9 +168,10 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
                 int idx = i * channels;
                 float r, g, b;
                 do_Lab2RGB(pixels[idx], pixels[idx + 1], pixels[idx + 2], r, g, b);
-                pixels[idx]     = r;
-                pixels[idx + 1] = g;
-                pixels[idx + 2] = b;
+                // Oklab → linear RGB can produce out-of-gamut values; clamp to valid range
+                pixels[idx]     = std::clamp(r, 0.0f, 1.0f);
+                pixels[idx + 1] = std::clamp(g, 0.0f, 1.0f);
+                pixels[idx + 2] = std::clamp(b, 0.0f, 1.0f);
             }
             break;
         }
@@ -199,11 +201,10 @@ void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels)
         }
 
         case RGB2GRAY: {
-            // Convert to grayscale, output 1 channel per pixel
-            // For simplicity, store gray value in R channel and zero out G/B
+            // Convert to grayscale using BT.709 luminance weights
             for (int i = 0; i < total; ++i) {
                 int idx = i * channels;
-                float gray = 0.299f * pixels[idx] + 0.587f * pixels[idx + 1] + 0.114f * pixels[idx + 2];
+                float gray = 0.2126f * pixels[idx] + 0.7152f * pixels[idx + 1] + 0.0722f * pixels[idx + 2];
                 pixels[idx]     = gray;
                 pixels[idx + 1] = gray;
                 pixels[idx + 2] = gray;

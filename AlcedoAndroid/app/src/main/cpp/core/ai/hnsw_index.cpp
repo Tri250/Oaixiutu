@@ -17,6 +17,7 @@ void HnswIndex::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     nodes_.clear();
     entryPointId_ = 0;
+    hasEntry_ = false;
     maxLevel_ = -1;
 }
 
@@ -152,20 +153,21 @@ void HnswIndex::connectNeighbors(uint64_t nodeId, int layer) {
         if (nit->second->neighbors[layer].size() < static_cast<size_t>(maxConn)) {
             nit->second->neighbors[layer].push_back(nodeId);
         } else {
-            // Prune: replace the farthest if this is closer
+            // Prune: replace the farthest neighbor if the new node is closer
+            // Distance should be from nId's perspective: distance(nId, neighbor)
             const float* nEmb = nit->second->embedding.data();
             auto& nNeighbors = nit->second->neighbors[layer];
 
             size_t worstIdx = 0;
-            float worstDist = distance(nodeEmb, nodes_[nNeighbors[0]]->embedding.data());
+            float worstDist = distance(nEmb, nodes_[nNeighbors[0]]->embedding.data());
             for (size_t j = 1; j < nNeighbors.size(); ++j) {
-                float d = distance(nodeEmb, nodes_[nNeighbors[j]]->embedding.data());
+                float d = distance(nEmb, nodes_[nNeighbors[j]]->embedding.data());
                 if (d > worstDist) {
                     worstDist = d;
                     worstIdx = j;
                 }
             }
-            float dToN = distance(nodeEmb, nEmb);
+            float dToN = distance(nEmb, nodeEmb);
             if (dToN < worstDist) {
                 nNeighbors[worstIdx] = nodeId;
             }
@@ -185,8 +187,9 @@ void HnswIndex::insert(uint64_t id, const float* embedding) {
     auto node = std::make_unique<HnswNode>(id, normalizedEmb.data(), embeddingDim_, level);
     nodes_[id] = std::move(node);
 
-    if (entryPointId_ == 0) {
+    if (!hasEntry_) {
         entryPointId_ = id;
+        hasEntry_ = true;
         maxLevel_ = level;
         return;
     }
@@ -250,7 +253,7 @@ std::vector<HnswIndex::SearchResult> HnswIndex::search(const float* queryEmbeddi
     std::vector<float> query(queryEmbedding, queryEmbedding + embeddingDim_);
     normalize(query);
 
-    if (entryPointId_ == 0) return {};
+    if (!hasEntry_) return {};
 
     uint64_t curId = entryPointId_;
     // Greedy descent from top
@@ -296,8 +299,14 @@ void HnswIndex::remove(uint64_t id) {
     nodes_.erase(it);
 
     if (id == entryPointId_) {
-        entryPointId_ = nodes_.empty() ? 0 : nodes_.begin()->first;
-        maxLevel_ = nodes_.empty() ? -1 : nodes_.begin()->second->level;
+        if (nodes_.empty()) {
+            entryPointId_ = 0;
+            hasEntry_ = false;
+            maxLevel_ = -1;
+        } else {
+            entryPointId_ = nodes_.begin()->first;
+            maxLevel_ = nodes_.begin()->second->level;
+        }
     }
 }
 
@@ -360,6 +369,7 @@ bool HnswIndex::deserialize(const std::vector<uint8_t>& data) {
     embeddingDim_ = dim;
     maxLevel_ = maxLvl;
     entryPointId_ = epId;
+    hasEntry_ = (nodeCount > 0);
 
     for (int32_t i = 0; i < nodeCount; ++i) {
         uint64_t id;
@@ -393,7 +403,7 @@ bool HnswIndex::deserialize(const std::vector<uint8_t>& data) {
 
 float HnswIndex::getEntryPointDistance(const float* query) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (entryPointId_ == 0) return std::numeric_limits<float>::max();
+    if (!hasEntry_) return std::numeric_limits<float>::max();
     auto it = nodes_.find(entryPointId_);
     if (it == nodes_.end()) return std::numeric_limits<float>::max();
     return distance(query, it->second->embedding.data());

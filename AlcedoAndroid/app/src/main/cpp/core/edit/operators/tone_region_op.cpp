@@ -65,9 +65,9 @@ void ToneRegionOperator::apply_rgb(float* pixels, int width, int height,
         float mg = g + midtone_offset;
         float mb = b + midtone_offset;
 
-        pixels[idx]     = sr * shadow_mask + mr * midtone_mask + hr * highlight_mask;
-        pixels[idx + 1] = sg * shadow_mask + mg * midtone_mask + hg * highlight_mask;
-        pixels[idx + 2] = sb * shadow_mask + mb * midtone_mask + hb * highlight_mask;
+        pixels[idx]     = std::clamp(sr * shadow_mask + mr * midtone_mask + hr * highlight_mask, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(sg * shadow_mask + mg * midtone_mask + hg * highlight_mask, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(sb * shadow_mask + mb * midtone_mask + hb * highlight_mask, 0.0f, 1.0f);
     }
 }
 
@@ -103,9 +103,9 @@ void ToneRegionOperator::apply_rgba(float* pixels, int width, int height,
 
         float midtone_offset = midtones * 0.2f;
 
-        pixels[idx]     = r * shadow_scale * shadow_mask + (r + midtone_offset) * midtone_mask + r * highlight_scale * highlight_mask;
-        pixels[idx + 1] = g * shadow_scale * shadow_mask + (g + midtone_offset) * midtone_mask + g * highlight_scale * highlight_mask;
-        pixels[idx + 2] = b * shadow_scale * shadow_mask + (b + midtone_offset) * midtone_mask + b * highlight_scale * highlight_mask;
+        pixels[idx]     = std::clamp(r * shadow_scale * shadow_mask + (r + midtone_offset) * midtone_mask + r * highlight_scale * highlight_mask, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(g * shadow_scale * shadow_mask + (g + midtone_offset) * midtone_mask + g * highlight_scale * highlight_mask, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(b * shadow_scale * shadow_mask + (b + midtone_offset) * midtone_mask + b * highlight_scale * highlight_mask, 0.0f, 1.0f);
     }
 }
 

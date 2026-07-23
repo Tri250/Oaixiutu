@@ -15,7 +15,7 @@ void ToneCurveOperator::apply(std::vector<float>& pixels, int width, int height,
     for (int i = 0; i < total; ++i) {
         int idx = i * channels;
         for (int c = 0; c < colorChannels; ++c) {
-            pixels[idx + c] = interpolate_curve(pixels[idx + c], curve_x, curve_y, num_points);
+            pixels[idx + c] = std::clamp(interpolate_curve(pixels[idx + c], curve_x, curve_y, num_points), 0.0f, 1.0f);
         }
     }
 }

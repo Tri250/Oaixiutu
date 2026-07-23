@@ -73,9 +73,9 @@ void TintOperator::apply_rgb(float* pixels, int width, int height,
         // Apply tint as a blend (preserve luminance)
         float total_tint = (highlight_weight * highlight_strength + shadow_weight * shadow_strength);
         float blend = total_tint * 0.5f;
-        pixels[idx]     = r * (1.0f - blend) + tint_r * lum * blend * 2.0f;
-        pixels[idx + 1] = g * (1.0f - blend) + tint_g * lum * blend * 2.0f;
-        pixels[idx + 2] = b * (1.0f - blend) + tint_b * lum * blend * 2.0f;
+        pixels[idx]     = std::clamp(r * (1.0f - blend) + tint_r * lum * blend * 2.0f, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(g * (1.0f - blend) + tint_g * lum * blend * 2.0f, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(b * (1.0f - blend) + tint_b * lum * blend * 2.0f, 0.0f, 1.0f);
     }
 }
 
@@ -117,9 +117,9 @@ void TintOperator::apply_rgba(float* pixels, int width, int height,
 
         float total_tint = (highlight_weight * highlight_strength + shadow_weight * shadow_strength);
         float blend = total_tint * 0.5f;
-        pixels[idx]     = r * (1.0f - blend) + tint_r * lum * blend * 2.0f;
-        pixels[idx + 1] = g * (1.0f - blend) + tint_g * lum * blend * 2.0f;
-        pixels[idx + 2] = b * (1.0f - blend) + tint_b * lum * blend * 2.0f;
+        pixels[idx]     = std::clamp(r * (1.0f - blend) + tint_r * lum * blend * 2.0f, 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(g * (1.0f - blend) + tint_g * lum * blend * 2.0f, 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(b * (1.0f - blend) + tint_b * lum * blend * 2.0f, 0.0f, 1.0f);
     }
 }
 

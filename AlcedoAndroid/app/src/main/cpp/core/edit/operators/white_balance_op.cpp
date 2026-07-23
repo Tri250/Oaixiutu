@@ -23,9 +23,9 @@ void WhiteBalanceOperator::apply(std::vector<float>& pixels, int width, int heig
     float g_offset = tint * 0.01f;
 
     for (size_t i = 0; i + 2 < pixels.size(); i += 3) {
-        pixels[i]     *= r_mult;
-        pixels[i + 1] += g_offset;
-        pixels[i + 2] *= b_mult;
+        pixels[i]     = std::clamp(pixels[i] * r_mult, 0.0f, 1.0f);
+        pixels[i + 1] = std::clamp(pixels[i + 1] + g_offset, 0.0f, 1.0f);
+        pixels[i + 2] = std::clamp(pixels[i + 2] * b_mult, 0.0f, 1.0f);
     }
 }
 

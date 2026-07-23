@@ -80,9 +80,9 @@ void ColorTempOp::ApplyImpl(float* pixels, int width, int height, int channels) 
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
 
-        pixels[idx]     = r * mat[0] + g * mat[1] + b * mat[2];
-        pixels[idx + 1] = r * mat[3] + g * mat[4] + b * mat[5];
-        pixels[idx + 2] = r * mat[6] + g * mat[7] + b * mat[8];
+        pixels[idx]     = std::clamp(r * mat[0] + g * mat[1] + b * mat[2], 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(r * mat[3] + g * mat[4] + b * mat[5], 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(r * mat[6] + g * mat[7] + b * mat[8], 0.0f, 1.0f);
     }
 }
 

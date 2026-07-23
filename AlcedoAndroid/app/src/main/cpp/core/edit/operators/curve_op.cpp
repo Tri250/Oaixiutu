@@ -179,9 +179,9 @@ void CurveOp::ApplyImpl(float* pixels, int width, int height, int channels) {
             float scale = curve_lum / lum;
             float blended_scale = 1.0f + (scale - 1.0f) * kInfluence;
 
-            pixels[idx]     = r * blended_scale;
-            pixels[idx + 1] = g * blended_scale;
-            pixels[idx + 2] = b * blended_scale;
+            pixels[idx]     = std::clamp(r * blended_scale, 0.0f, 1.0f);
+            pixels[idx + 1] = std::clamp(g * blended_scale, 0.0f, 1.0f);
+            pixels[idx + 2] = std::clamp(b * blended_scale, 0.0f, 1.0f);
         }
     }
 }

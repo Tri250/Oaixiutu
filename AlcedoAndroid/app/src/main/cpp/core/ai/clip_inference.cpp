@@ -273,7 +273,6 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
 #ifdef HAS_ONNXRUNTIME
     if (!onnx_ || !onnx_->session) {
-        // ONNX session not loaded; return empty to signal Kotlin delegation is needed.
         return {};
     }
 
@@ -281,7 +280,7 @@ std::vector<float> ClipInference::runInference(const std::vector<float>& input, 
         auto& session = *onnx_->session;
         auto allocator = Ort::AllocatorWithDefaultOptions();
 
-        // Create input tensor
+        // Create input tensor (float — used for image pixel_values)
         std::vector<int64_t> inputShape = {1, static_cast<int64_t>(input.size())};
         Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
             allocator, inputShape.data(), inputShape.size());
@@ -289,7 +288,6 @@ std::vector<float> ClipInference::runInference(const std::vector<float>& input, 
         float* tensorData = inputTensor.GetTensorMutableData<float>();
         std::copy(input.begin(), input.end(), tensorData);
 
-        // Run inference
         const char* inputNames[] = {inputName.c_str()};
         auto outputTensors = session.Run(
             Ort::RunOptions{nullptr}, inputNames, &inputTensor, 1, nullptr, 0);
@@ -298,7 +296,6 @@ std::vector<float> ClipInference::runInference(const std::vector<float>& input, 
             return {};
         }
 
-        // Extract output data
         const float* outputData = outputTensors[0].GetTensorData<float>();
         size_t outputLen = outputTensors[0].GetTensorTypeAndShapeInfo().GetElementCount();
 
@@ -306,12 +303,52 @@ std::vector<float> ClipInference::runInference(const std::vector<float>& input, 
         normalize(output);
         return output;
     } catch (const Ort::Exception&) {
-        // Inference failed; return empty to signal Kotlin delegation.
         return {};
     }
 #else
-    // ONNX Runtime not available; return empty vector to indicate
-    // the caller should delegate to the Kotlin ClipInferenceEngine.
+    (void)input;
+    (void)inputName;
+    return {};
+#endif
+}
+
+// Run ONNX inference with int64 input (for text token IDs)
+std::vector<float> ClipInference::runInferenceInt64(const std::vector<int64_t>& input, const std::string& inputName) const {
+#ifdef HAS_ONNXRUNTIME
+    if (!onnx_ || !onnx_->session) {
+        return {};
+    }
+
+    try {
+        auto& session = *onnx_->session;
+        auto allocator = Ort::AllocatorWithDefaultOptions();
+
+        // Create int64 input tensor — CLIP text models expect int64 input_ids
+        std::vector<int64_t> inputShape = {1, static_cast<int64_t>(input.size())};
+        Ort::Value inputTensor = Ort::Value::CreateTensor<int64_t>(
+            allocator, inputShape.data(), inputShape.size());
+
+        int64_t* tensorData = inputTensor.GetTensorMutableData<int64_t>();
+        std::copy(input.begin(), input.end(), tensorData);
+
+        const char* inputNames[] = {inputName.c_str()};
+        auto outputTensors = session.Run(
+            Ort::RunOptions{nullptr}, inputNames, &inputTensor, 1, nullptr, 0);
+
+        if (outputTensors.empty()) {
+            return {};
+        }
+
+        const float* outputData = outputTensors[0].GetTensorData<float>();
+        size_t outputLen = outputTensors[0].GetTensorTypeAndShapeInfo().GetElementCount();
+
+        std::vector<float> output(outputData, outputData + outputLen);
+        normalize(output);
+        return output;
+    } catch (const Ort::Exception&) {
+        return {};
+    }
+#else
     (void)input;
     (void)inputName;
     return {};
@@ -355,9 +392,8 @@ ClipInferenceResult ClipInference::encodeText(const std::string& text) {
 
     try {
         auto tokens = tokenize(text, config_.textMaxLength);
-        // Convert tokens to float input for ONNX
-        std::vector<float> tokenFloats(tokens.begin(), tokens.end());
-        result.textEmbedding = runInference(tokenFloats, "input_ids");
+        // CLIP text models expect int64 input_ids, not float
+        result.textEmbedding = runInferenceInt64(tokens, "input_ids");
         if (result.textEmbedding.empty()) {
             result.success = false;
             result.errorMessage = "ONNX Runtime unavailable; delegate to Kotlin engine";

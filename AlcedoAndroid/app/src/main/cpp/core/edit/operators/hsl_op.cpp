@@ -124,6 +124,10 @@ void HSLOperator::apply_rgb(float* pixels, int width, int height,
         float new_l = std::max(0.0f, std::min(1.0f, l * total_lum_scale));
 
         hsl_to_rgb(new_h, new_s, new_l, pixels[idx], pixels[idx + 1], pixels[idx + 2]);
+        // HSL → RGB can produce values slightly outside [0,1] due to floating-point; clamp
+        pixels[idx]     = std::clamp(pixels[idx], 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(pixels[idx + 1], 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(pixels[idx + 2], 0.0f, 1.0f);
     }
 }
 
@@ -172,6 +176,10 @@ void HSLOperator::apply_rgba(float* pixels, int width, int height,
         float new_l = std::max(0.0f, std::min(1.0f, l * total_lum_scale));
 
         hsl_to_rgb(new_h, new_s, new_l, pixels[idx], pixels[idx + 1], pixels[idx + 2]);
+        // HSL → RGB can produce values slightly outside [0,1] due to floating-point; clamp
+        pixels[idx]     = std::clamp(pixels[idx], 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(pixels[idx + 1], 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(pixels[idx + 2], 0.0f, 1.0f);
     }
 }
 

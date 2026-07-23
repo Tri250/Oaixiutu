@@ -71,7 +71,7 @@ void ClarityOperator::apply_rgb(float* pixels, int width, int height, float amou
     float scale = amount * 0.5f;
     for (int i = 0; i < size; ++i) {
         float detail = pixels[i] - blurred[i];
-        pixels[i] += detail * scale;
+        pixels[i] = std::clamp(pixels[i] + detail * scale, 0.0f, 1.0f);
     }
 }
 
@@ -88,7 +88,7 @@ void ClarityOperator::apply_rgba(float* pixels, int width, int height, float amo
     for (int i = 0; i < size; i += 4) {
         for (int c = 0; c < 3; ++c) {
             float detail = pixels[i + c] - blurred[i + c];
-            pixels[i + c] += detail * scale;
+            pixels[i + c] = std::clamp(pixels[i + c] + detail * scale, 0.0f, 1.0f);
         }
     }
 }

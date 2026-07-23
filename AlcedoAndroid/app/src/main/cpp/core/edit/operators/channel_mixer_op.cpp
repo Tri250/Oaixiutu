@@ -19,7 +19,8 @@ void ChannelMixerOperator::apply_rgb(float* pixels, int width, int height,
         float b_out = r * matrix[6] + g * matrix[7] + b * matrix[8];
 
         if (monochrome) {
-            float gray = r_out * 0.299f + g_out * 0.587f + b_out * 0.114f;
+            // BT.709 luminance weights — consistent with all other operators
+            float gray = r_out * 0.2126f + g_out * 0.7152f + b_out * 0.0722f;
             pixels[idx]     = std::clamp(gray, 0.0f, 1.0f);
             pixels[idx + 1] = std::clamp(gray, 0.0f, 1.0f);
             pixels[idx + 2] = std::clamp(gray, 0.0f, 1.0f);
@@ -47,7 +48,8 @@ void ChannelMixerOperator::apply_rgba(float* pixels, int width, int height,
         float b_out = r * matrix[6] + g * matrix[7] + b * matrix[8];
 
         if (monochrome) {
-            float gray = r_out * 0.299f + g_out * 0.587f + b_out * 0.114f;
+            // BT.709 luminance weights — consistent with all other operators
+            float gray = r_out * 0.2126f + g_out * 0.7152f + b_out * 0.0722f;
             pixels[idx]     = std::clamp(gray, 0.0f, 1.0f);
             pixels[idx + 1] = std::clamp(gray, 0.0f, 1.0f);
             pixels[idx + 2] = std::clamp(gray, 0.0f, 1.0f);

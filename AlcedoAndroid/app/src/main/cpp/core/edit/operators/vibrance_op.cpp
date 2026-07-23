@@ -35,10 +35,10 @@ void VibranceOperator::apply_rgb(float* pixels, int width, int height, float amo
 
         float scale = 1.0f + amount * mask;
 
-        // Apply saturation boost
-        pixels[idx]     = lum + dr * scale;
-        pixels[idx + 1] = lum + dg * scale;
-        pixels[idx + 2] = lum + db * scale;
+        // Apply saturation boost with clamping
+        pixels[idx]     = std::max(0.0f, std::min(1.0f, lum + dr * scale));
+        pixels[idx + 1] = std::max(0.0f, std::min(1.0f, lum + dg * scale));
+        pixels[idx + 2] = std::max(0.0f, std::min(1.0f, lum + db * scale));
     }
 }
 
@@ -65,9 +65,9 @@ void VibranceOperator::apply_rgba(float* pixels, int width, int height, float am
 
         float scale = 1.0f + amount * mask;
 
-        pixels[idx]     = lum + dr * scale;
-        pixels[idx + 1] = lum + dg * scale;
-        pixels[idx + 2] = lum + db * scale;
+        pixels[idx]     = std::max(0.0f, std::min(1.0f, lum + dr * scale));
+        pixels[idx + 1] = std::max(0.0f, std::min(1.0f, lum + dg * scale));
+        pixels[idx + 2] = std::max(0.0f, std::min(1.0f, lum + db * scale));
     }
 }
 

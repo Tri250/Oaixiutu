@@ -81,9 +81,13 @@ private:
     // Preprocess image: resize, center-crop, normalize to model input
     std::vector<float> preprocessImage(const uint8_t* rgbData, int width, int height) const;
 
-    // Run ONNX inference; returns empty vector if ONNX Runtime is unavailable
-    // (caller should treat empty output as a signal to delegate to the Kotlin engine)
+    // Run ONNX inference with float input (for image pixel_values)
+    // Returns empty vector if ONNX Runtime is unavailable
     std::vector<float> runInference(const std::vector<float>& input, const std::string& inputName) const;
+
+    // Run ONNX inference with int64 input (for text token IDs / input_ids)
+    // Returns empty vector if ONNX Runtime is unavailable
+    std::vector<float> runInferenceInt64(const std::vector<int64_t>& input, const std::string& inputName) const;
 
     // Simple tokenizer (word-level with CLIP vocab approximations)
     static std::vector<int64_t> simpleTokenize(const std::string& text, int maxLength);

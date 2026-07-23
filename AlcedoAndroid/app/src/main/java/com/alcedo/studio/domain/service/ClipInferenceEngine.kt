@@ -594,11 +594,8 @@ class ClipInferenceEngine(private val context: Context) {
     private fun closeOrtSession(session: OrtSession?) {
         if (session == null) return
         try {
-            val closeMethod = OrtSession::class.java.getMethod("close")
-            closeMethod.invoke(session)
-            Log.d(TAG, "OrtSession closed via reflection")
-        } catch (e: NoSuchMethodException) {
-            Log.d(TAG, "OrtSession.close() not available, relying on GC")
+            session.close()
+            Log.d(TAG, "OrtSession closed")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to close OrtSession: ${e.message}")
         }

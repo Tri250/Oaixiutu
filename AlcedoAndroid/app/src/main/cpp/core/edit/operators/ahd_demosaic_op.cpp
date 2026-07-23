@@ -289,11 +289,11 @@ void AHDDemosaicOperator::ahd_interpolate(const float* src, int width, int heigh
         }
     }
 
-    // Clamp output
+    // Clamp output to [0, 1]
     for (int i = 0; i < total; ++i) {
-        output_r[i] = std::max(0.0f, output_r[i]);
-        output_g[i] = std::max(0.0f, output_g[i]);
-        output_b[i] = std::max(0.0f, output_b[i]);
+        output_r[i] = std::clamp(output_r[i], 0.0f, 1.0f);
+        output_g[i] = std::clamp(output_g[i], 0.0f, 1.0f);
+        output_b[i] = std::clamp(output_b[i], 0.0f, 1.0f);
     }
 }
 

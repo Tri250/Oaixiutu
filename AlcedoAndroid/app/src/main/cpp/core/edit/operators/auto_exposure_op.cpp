@@ -111,7 +111,7 @@ void AutoExposureOperator::apply(float* pixels, int width, int height, int chann
     for (size_t i = 0; i < pixel_count; ++i) {
         size_t idx = i * channels;
         for (int c = 0; c < 3 && c < channels; ++c) {
-            pixels[idx + c] *= scale;
+            pixels[idx + c] = std::max(0.0f, std::min(1.0f, pixels[idx + c] * scale));
         }
     }
 

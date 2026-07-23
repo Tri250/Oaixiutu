@@ -55,9 +55,10 @@ void apply_matrix_3x3_bulk(const float m[9], float* pixels, int count, int chann
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
-        pixels[idx]     = r * m[0] + g * m[1] + b * m[2];
-        pixels[idx + 1] = r * m[3] + g * m[4] + b * m[5];
-        pixels[idx + 2] = r * m[6] + g * m[7] + b * m[8];
+        // Color space conversion matrices can produce slightly out-of-gamut values; clamp
+        pixels[idx]     = std::clamp(r * m[0] + g * m[1] + b * m[2], 0.0f, 1.0f);
+        pixels[idx + 1] = std::clamp(r * m[3] + g * m[4] + b * m[5], 0.0f, 1.0f);
+        pixels[idx + 2] = std::clamp(r * m[6] + g * m[7] + b * m[8], 0.0f, 1.0f);
     }
 }
 
@@ -482,9 +483,9 @@ void aces_rrt_bulk(float* pixels, int count, int channels, int pixel_stride) {
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         aces_rrt(&r, &g, &b);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 
@@ -516,9 +517,9 @@ void aces_output_transform_srgb_bulk(float* pixels, int count, int channels, flo
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         aces_output_transform_srgb(&r, &g, &b, peak_luminance);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 
@@ -583,9 +584,9 @@ void opendrt_tone_map_bulk(float* pixels, int count, int channels, int pixel_str
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         opendrt_tone_map(&r, &g, &b);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 
@@ -602,9 +603,9 @@ void opendrt_output_transform_bulk(float* pixels, int count, int channels, float
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         opendrt_output_transform(&r, &g, &b, peak_luminance);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 
@@ -652,9 +653,9 @@ void sigmoid_contrast_bulk(float* pixels, int count, int channels, float contras
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         sigmoid_contrast(&r, &g, &b, contrast, pivot, shoulder);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 
@@ -747,9 +748,9 @@ void apply_peak_luminance_scale_bulk(float* pixels, int count, int channels, flo
     float scale = reference_white / peak_luminance;
     for (int i = 0; i < count; ++i) {
         int idx = i * channels;
-        pixels[idx]     *= scale;
-        pixels[idx + 1] *= scale;
-        pixels[idx + 2] *= scale;
+        pixels[idx]     = clamp01(pixels[idx] * scale);
+        pixels[idx + 1] = clamp01(pixels[idx + 1] * scale);
+        pixels[idx + 2] = clamp01(pixels[idx + 2] * scale);
     }
 }
 
@@ -805,9 +806,9 @@ void convert_color_space_bulk(float* pixels, int count, int channels, int src_sp
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
         convert_color_space(&r, &g, &b, src_space, dst_space);
-        pixels[idx] = r;
-        pixels[idx + 1] = g;
-        pixels[idx + 2] = b;
+        pixels[idx]     = clamp01(r);
+        pixels[idx + 1] = clamp01(g);
+        pixels[idx + 2] = clamp01(b);
     }
 }
 

@@ -197,7 +197,7 @@ void LensCorrectionOperator::correct_vignette_rgb(float* pixels, int width, int 
 
             int idx = (y * width + x) * channels;
             for (int c = 0; c < channels; ++c) {
-                pixels[idx + c] *= correction;
+                pixels[idx + c] = std::clamp(pixels[idx + c] * correction, 0.0f, 1.0f);
             }
         }
     }
@@ -230,7 +230,7 @@ void LensCorrectionOperator::correct_vignette_rgba(float* pixels, int width, int
 
             int idx = (y * width + x) * channels;
             for (int c = 0; c < 3; ++c) {
-                pixels[idx + c] *= correction;
+                pixels[idx + c] = std::clamp(pixels[idx + c] * correction, 0.0f, 1.0f);
             }
         }
     }

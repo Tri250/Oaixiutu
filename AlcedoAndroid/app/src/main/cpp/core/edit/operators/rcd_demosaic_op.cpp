@@ -209,10 +209,10 @@ void RCDDemosaicOperator::interpolate_red_blue(const float* src, const float* g,
         }
     }
 
-    // Clamp values
+    // Clamp values to [0, 1]
     for (int i = 0; i < total; ++i) {
-        r[i] = std::max(0.0f, r[i]);
-        b[i] = std::max(0.0f, b[i]);
+        r[i] = std::clamp(r[i], 0.0f, 1.0f);
+        b[i] = std::clamp(b[i], 0.0f, 1.0f);
     }
 }
 

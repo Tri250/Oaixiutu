@@ -2121,33 +2121,50 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val pixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-            var avgR = 0.0
-            var avgG = 0.0
-            var avgB = 0.0
-            var count = 0
+            // 亮度加权重灰世界算法（Brightness-Weighted Gray World）
+            // 高亮度区域更可能是中性色（白色/灰色），给予更高权重
+            var weightedR = 0.0
+            var weightedG = 0.0
+            var weightedB = 0.0
+            var totalWeight = 0.0
 
-            for (i in pixels.indices step 4) {  // 采样每4个像素
+            val step = maxOf(1, pixels.size / 50000) // 采样约5万像素
+            var i = 0
+            while (i < pixels.size) {
                 val pixel = pixels[i]
-                avgR += ((pixel shr 16) and 0xFF) / 255.0
-                avgG += ((pixel shr 8) and 0xFF) / 255.0
-                avgB += (pixel and 0xFF) / 255.0
-                count++
+                val r = ((pixel shr 16) and 0xFF) / 255.0
+                val g = ((pixel shr 8) and 0xFF) / 255.0
+                val b = (pixel and 0xFF) / 255.0
+
+                // 亮度加权：高亮度像素权重更大（更可能是灰色/白色区域）
+                val lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                val weight = lum * lum // 二次加权，强调高光区域
+
+                // 排除极暗（<5%）和极亮（>98%，可能是过曝）像素
+                if (lum > 0.05 && lum < 0.98) {
+                    weightedR += r * weight
+                    weightedG += g * weight
+                    weightedB += b * weight
+                    totalWeight += weight
+                }
+
+                i += step
             }
 
-            if (count == 0) return@withContext Pair(6500f, 0f)
+            if (totalWeight < 1e-6) return@withContext Pair(6500f, 0f)
 
-            avgR /= count
-            avgG /= count
-            avgB /= count
+            val avgR = weightedR / totalWeight
+            val avgG = weightedG / totalWeight
+            val avgB = weightedB / totalWeight
 
-            // 灰世界假设: avgR ≈ avgG ≈ avgB
-            // 计算所需的色温偏移
+            // 基于加权重灰世界: 加权avgR ≈ avgG ≈ avgB
+            // R/G 比率 → 色温偏移（暖/冷），B/G 比率 → 色调偏移（绿/品红）
             val ratioR = avgG / avgR.coerceAtLeast(0.001)
             val ratioB = avgG / avgB.coerceAtLeast(0.001)
 
-            // 简化映射: R/G ratio → 色温偏移, B/G ratio → tint偏移
-            val tempOffset = ((ratioR - 1.0) * 3000f).toFloat().coerceIn(-2000f, 2000f)
-            val tintOffset = ((ratioB - 1.0) * 200f).toFloat().coerceIn(-50f, 50f)
+            // 非线性映射：色温变化对R/G比率的影响在极端色温下更大
+            val tempOffset = ((ratioR - 1.0) * 2500f).toFloat().coerceIn(-2000f, 2000f)
+            val tintOffset = ((ratioB - 1.0) * 150f).toFloat().coerceIn(-50f, 50f)
 
             Pair((6500f + tempOffset).coerceIn(2000f, 15000f), tintOffset)
         }
