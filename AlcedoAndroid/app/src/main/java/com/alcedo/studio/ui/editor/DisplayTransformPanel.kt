@@ -10,7 +10,7 @@ import com.alcedo.studio.data.model.*
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
-import com.alcedo.studio.ui.common.SectionHeader
+import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 enum class OdtMethod { ACES, OPENDRT }
@@ -54,8 +54,14 @@ fun DisplayTransformPanel(
         verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ODT Method
-        SectionHeader(title = stringRes { displayTransformOdtMethod }) {
-            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Text(
+                    stringRes { displayTransformOdtMethod },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                     OdtMethod.entries.forEach { method ->
                         FilterChip(
@@ -82,8 +88,14 @@ fun DisplayTransformPanel(
         }
 
         // Output Color Space
-        SectionHeader(title = stringRes { displayTransformOutputColorSpace }) {
-            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Text(
+                    stringRes { displayTransformOutputColorSpace },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                     OutputColorSpace.entries.forEach { cs ->
                         FilterChip(
@@ -111,27 +123,41 @@ fun DisplayTransformPanel(
         }
 
         // Peak Luminance
-        SectionHeader(title = stringRes { displayTransformPeakLuminance }) {
-            AdjustmentSlider(
-                label = stringRes { displayTransformPeakLuminance },
-                value = params.displayTransform.peakLuminance,
-                range = 50f..1000f,
-                onValueChange = {
-                    onParamsChanged(
-                        params.copy(
-                            displayTransform = params.displayTransform.copy(peakLuminance = it)
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Text(
+                    stringRes { displayTransformPeakLuminance },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
+                AdjustmentSlider(
+                    label = stringRes { displayTransformPeakLuminance },
+                    value = params.displayTransform.peakLuminance,
+                    range = 50f..1000f,
+                    onValueChange = {
+                        onParamsChanged(
+                            params.copy(
+                                displayTransform = params.displayTransform.copy(peakLuminance = it)
+                            )
                         )
-                    )
-                },
-                defaultValue = 100f,
-                valueDisplayTransform = { "${it.toInt()} nits" }
-            )
+                    },
+                    defaultValue = 100f,
+                    valueDisplayTransform = { "${it.toInt()} nits" }
+                )
+            }
         }
 
         // OpenDRT settings (only shown when ODT method is OpenDRT)
         if (odtMethod == OdtMethod.OPENDRT) {
-            SectionHeader(title = stringRes { displayTransformOpenDrtLook }) {
-                Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                    Text(
+                        stringRes { displayTransformOpenDrtLook },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
@@ -156,8 +182,14 @@ fun DisplayTransformPanel(
                 }
             }
 
-            SectionHeader(title = stringRes { displayTransformOpenDrtTonescale }) {
-                Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+            LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                    Text(
+                        stringRes { displayTransformOpenDrtTonescale },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
@@ -184,8 +216,14 @@ fun DisplayTransformPanel(
         }
 
         // Creative White Point
-        SectionHeader(title = stringRes { displayTransformCreativeWhitePoint }) {
-            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Text(
+                    stringRes { displayTransformCreativeWhitePoint },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)

@@ -74,6 +74,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlin.math.roundToInt
@@ -232,11 +233,11 @@ private fun MaskPreviewCard(
             if (isAnalyzing) {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(AlcedoRadius.lg))
                         .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = AlcedoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
@@ -279,7 +280,7 @@ private fun MaskContainerCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onToggleExpand, modifier = Modifier.size(AlcedoIconSize.xl)) {
                     Icon(
                         if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
@@ -467,14 +468,14 @@ private fun SubMaskRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(AlcedoRadius.sm))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
             .border(
                 1.dp,
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                RoundedCornerShape(10.dp)
+                RoundedCornerShape(AlcedoRadius.sm)
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = AlcedoSpacing.sm, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Drag handle (long-press to drag-reorder) + up/down buttons
@@ -498,11 +499,11 @@ private fun SubMaskRow(
             maskTypeIcon(sub.type),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(AlcedoIconSize.md)
         )
         Spacer(Modifier.width(6.dp))
 
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
             val typeLabel = maskTypeLabel(sub.type)
             val modeLabel = combineModeLabel(sub.combineMode)
             Text(
@@ -518,7 +519,7 @@ private fun SubMaskRow(
                         selected = sub.combineMode == mode,
                         onClick = { onUpdate(sub.copy(combineMode = mode)) },
                         label = { Text(combineModeLabel(mode), style = MaterialTheme.typography.labelSmall) },
-                        modifier = Modifier.padding(end = 4.dp)
+                        modifier = Modifier.padding(end = AlcedoSpacing.xs)
                     )
                 }
             }
@@ -526,7 +527,7 @@ private fun SubMaskRow(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 IconButton(
                     onClick = { onUpdate(sub.copy(inverted = !sub.inverted)) },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(AlcedoIconSize.xl)
                 ) {
                     Icon(Icons.Default.InvertColors,
                         contentDescription = stringRes { maskInvert },
@@ -650,7 +651,7 @@ private fun SubMaskRow(
                         IconButton(
                             onClick = { viewModel.undoLastBrushStroke() },
                             enabled = brushState.strokes.isNotEmpty(),
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(AlcedoIconSize.xl)
                         ) {
                             Icon(Icons.Default.Undo,
                                 contentDescription = stringRes { maskBrushUndo },
@@ -663,7 +664,7 @@ private fun SubMaskRow(
                         IconButton(
                             onClick = { viewModel.clearAllBrushStrokes() },
                             enabled = brushState.strokes.isNotEmpty(),
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(AlcedoIconSize.xl)
                         ) {
                             Icon(Icons.Default.Delete,
                                 contentDescription = stringRes { maskBrushClear },
@@ -712,14 +713,14 @@ private fun SubMaskRow(
 
         // Reorder buttons + delete
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = onMoveUp, enabled = !isFirst, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onMoveUp, enabled = !isFirst, modifier = Modifier.size(AlcedoIconSize.xl)) {
                 Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
             }
-            IconButton(onClick = onMoveDown, enabled = !isLast, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onMoveDown, enabled = !isLast, modifier = Modifier.size(AlcedoIconSize.xl)) {
                 Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
             }
         }
-        IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = onRemove, modifier = Modifier.size(AlcedoIconSize.xl)) {
             Icon(Icons.Default.Delete, contentDescription = stringRes { maskDeleteSubMask },
                 tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(AlcedoIconSize.sm))
         }

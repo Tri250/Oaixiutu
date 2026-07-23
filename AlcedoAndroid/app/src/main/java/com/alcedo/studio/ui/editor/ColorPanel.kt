@@ -95,7 +95,7 @@ private fun ColorWheelsSection(
                     HapticFeedback.heavyClick(view)
                     viewModel.resetColorWheels()
                 },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(AlcedoIconSize.xl)
             ) {
                 Icon(
                     Icons.Default.Refresh,
@@ -322,7 +322,7 @@ private fun HslSection(
                     HapticFeedback.heavyClick(view)
                     viewModel.resetHsl()
                 },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(AlcedoIconSize.xl)
             ) {
                 Icon(
                     Icons.Default.Refresh,
@@ -452,7 +452,7 @@ private fun ChannelMixerSection(
                         false
                     )
                 },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(AlcedoIconSize.xl)
             ) {
                 Icon(
                     Icons.Default.Refresh,

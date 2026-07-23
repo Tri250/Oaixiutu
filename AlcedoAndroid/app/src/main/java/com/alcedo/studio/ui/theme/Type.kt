@@ -77,26 +77,26 @@ val AlcedoTypography = Typography(
     ),
 
     // ── Title: Card titles, panel headers ───────────────────────────
-    // lineHeight = 1.3x fontSize – 紧凑标题行高，增强标题层级感
+    // lineHeight = 1.35x fontSize – 面板标题行高,中文呼吸感更好
     titleLarge = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 22.sp,
-        lineHeight = 29.sp,       // 1.3x – 紧凑标题行高
+        lineHeight = 30.sp,       // 1.36x – 中文标题呼吸感
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 18.sp,
-        lineHeight = 23.sp,       // 1.3x
+        lineHeight = 24.sp,       // 1.33x
         letterSpacing = 0.15.sp
     ),
     titleSmall = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 15.sp,
-        lineHeight = 20.sp,       // 1.3x
+        lineHeight = 21.sp,       // 1.4x – 面板标题,中文更舒适
         letterSpacing = 0.1.sp
     ),
 
@@ -126,6 +126,7 @@ val AlcedoTypography = Typography(
 
     // ── Label: Buttons, tags, chips, navigation items ───────────────
     // lineHeight = 1.5x – 宽松标签行高，适配按钮与芯片
+    // 国内摄影师暗色环境偏好: 标签字重稍粗,确保暗色下可读性
     labelLarge = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.SemiBold,

@@ -40,17 +40,18 @@ import com.alcedo.studio.ui.theme.LocalAlcedoColorScheme
 // ═══════════════════════════════════════════════════════════════════
 
 private object LiquidGlassDefaults {
-    const val SURFACE_BLUR = 12f
-    const val SURFACE_TINT_ALPHA = 0.08f
-    const val SURFACE_BORDER_ALPHA = 0.12f
+    // 2026 摄影师优化: 增强面板层次感,提升暗色主题下的可读性
+    const val SURFACE_BLUR = 14f       // 12→14: 更强的毛玻璃效果
+    const val SURFACE_TINT_ALPHA = 0.10f  // 0.08→0.10: 更明确的色调
+    const val SURFACE_BORDER_ALPHA = 0.14f // 0.12→0.14: 更清晰的面板边界
 
-    const val PANEL_BLUR = 22f
-    const val PANEL_TINT_ALPHA = 0.14f
-    const val PANEL_BORDER_ALPHA = 0.18f
+    const val PANEL_BLUR = 24f          // 22→24: 面板级更强的毛玻璃
+    const val PANEL_TINT_ALPHA = 0.16f  // 0.14→0.16: 面板色调更明确
+    const val PANEL_BORDER_ALPHA = 0.20f // 0.18→0.20: 面板边界更清晰
 
-    const val FLOATING_BLUR = 32f
-    const val FLOATING_TINT_ALPHA = 0.22f
-    const val FLOATING_BORDER_ALPHA = 0.25f
+    const val FLOATING_BLUR = 34f       // 32→34: 浮动层最强调
+    const val FLOATING_TINT_ALPHA = 0.24f // 0.22→0.24: 浮动层色调
+    const val FLOATING_BORDER_ALPHA = 0.28f // 0.25→0.28: 浮动层边界
 }
 
 @Composable
@@ -90,6 +91,7 @@ private fun Modifier.glassBlur(radius: Float): Modifier {
 
 /**
  * Animated glass appearance – fades in with a gentle scale animation.
+ * 2026 摄影师优化: 更快的进入动画(200ms), 更柔和的弹性
  */
 @Composable
 private fun Modifier.animatedGlassEntry(visible: Boolean = true): Modifier {
@@ -97,15 +99,15 @@ private fun Modifier.animatedGlassEntry(visible: Boolean = true): Modifier {
         targetValue = if (visible) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            stiffness = Spring.StiffnessMedium
         ),
         label = "glassAlpha"
     )
     val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0.96f,
+        targetValue = if (visible) 1f else 0.97f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
+            stiffness = Spring.StiffnessMedium
         ),
         label = "glassScale"
     )

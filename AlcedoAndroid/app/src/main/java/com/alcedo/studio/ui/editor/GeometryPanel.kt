@@ -56,7 +56,7 @@ fun GeometryPanel(
                             viewModel.updateGeometryFlipH(false)
                             viewModel.updateGeometryFlipV(false)
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AlcedoIconSize.xl)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
@@ -162,7 +162,7 @@ fun GeometryPanel(
                             viewModel.resetCrop()
                             selectedCropAspectRatio = CropAspectRatio.FREE
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AlcedoIconSize.xl)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
@@ -286,7 +286,7 @@ fun GeometryPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.resetPerspective()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AlcedoIconSize.xl)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
@@ -343,7 +343,7 @@ fun GeometryPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.resetLensCorrection()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AlcedoIconSize.xl)
                     ) {
                         Icon(
                             Icons.Default.Refresh,

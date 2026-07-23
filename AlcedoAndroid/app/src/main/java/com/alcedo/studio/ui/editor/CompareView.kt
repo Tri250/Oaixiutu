@@ -20,8 +20,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 enum class CompareMode(val label: String) {
     SPLIT("Split"),
@@ -61,7 +61,7 @@ fun CompareView(
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
     ) {
         // Labels
         Row(

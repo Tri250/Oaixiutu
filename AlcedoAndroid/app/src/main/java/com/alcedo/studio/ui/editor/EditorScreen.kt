@@ -55,6 +55,7 @@ import com.alcedo.studio.ui.common.LocalEditorEnabled
 import com.alcedo.studio.ui.common.AlcedoEasing
 import com.alcedo.studio.ui.editor.HlsProfilePanel
 import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoElevation
 import com.alcedo.studio.ui.theme.AlcedoGlass
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoRadius
@@ -361,7 +362,7 @@ fun EditorScreen(
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 4.dp),
+                    .padding(top = AlcedoSpacing.xs),
                 shape = RoundedCornerShape(AlcedoRadius.xs),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
             ) {
@@ -369,7 +370,7 @@ fun EditorScreen(
                     inputSpace = csInput,
                     workingSpace = csWorking,
                     outputSpace = csOutput,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.xs)
                 )
             }
 
@@ -652,10 +653,10 @@ private fun ScopeAnalyzerPanel(
         // UX 修复: 使用主题色而非硬编码深色,确保浅色主题下视觉一致
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
         shape = MaterialTheme.shapes.medium,
-        shadowElevation = 8.dp
+        shadowElevation = AlcedoElevation.level3.dp
     ) {
         Column(
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(AlcedoSpacing.sm)
         ) {
             // 头部示波器类型标签
             Row(
@@ -1424,7 +1425,7 @@ private fun EditorBottomToolbar(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity),
         tonalElevation = 3.dp,
-        shadowElevation = 8.dp
+        shadowElevation = AlcedoElevation.level3.dp
     ) {
         Row(
             modifier = Modifier

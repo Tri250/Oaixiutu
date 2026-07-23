@@ -70,13 +70,13 @@ fun AdjustmentSlider(
     val thumbSize by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.thumbRadiusActive * 2
         else AlcedoSlider.thumbRadius * 2,
-        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "thumbSize"
     )
     val trackHeight by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.trackHeightActive
         else AlcedoSlider.trackHeight,
-        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring<Dp>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "trackHeight"
     )
 
@@ -275,7 +275,7 @@ fun AdjustmentSlider(
                     showInputDialog = false
                 }) {
                     Text(
-                        "确定",
+                        stringRes { confirm },
                         color = MaterialTheme.colorScheme.primary
                     )
                 }

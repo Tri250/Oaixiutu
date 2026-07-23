@@ -29,6 +29,7 @@ import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
@@ -272,7 +273,7 @@ fun LmtPanel(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                         Text(stringRes { lmtImportLut })
                     }
 
@@ -288,7 +289,7 @@ fun LmtPanel(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                             Text(
                                 lmtPath.substringAfterLast('/'),
                                 style = MaterialTheme.typography.bodySmall,
@@ -359,9 +360,9 @@ private fun BuiltinPresetChip(
 ) {
     Surface(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(AlcedoRadius.sm))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(AlcedoRadius.sm),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 1.dp
     ) {
@@ -374,16 +375,16 @@ private fun BuiltinPresetChip(
             // Color swatch
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(AlcedoIconSize.xl + 12.dp)
+                    .clip(RoundedCornerShape(AlcedoRadius.xs))
                     .background(preset.color)
                     .border(
                         1.dp,
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                        RoundedCornerShape(8.dp)
+                        RoundedCornerShape(AlcedoRadius.xs)
                     )
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
             Text(
                 text = stringRes(preset.nameKey),
                 style = MaterialTheme.typography.labelSmall,

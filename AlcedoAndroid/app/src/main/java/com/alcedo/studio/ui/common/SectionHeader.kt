@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
@@ -15,6 +16,10 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
+import com.alcedo.studio.ui.theme.AlcedoElevation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 @Composable
 fun SectionHeader(
@@ -30,16 +35,16 @@ fun SectionHeader(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        tonalElevation = 1.dp,
+        shape = AlcedoRadius.md,
+        tonalElevation = AlcedoElevation.level1.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Column(modifier = Modifier.padding(vertical = AlcedoSpacing.xs)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = AlcedoSpacing.lg, vertical = AlcedoSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -50,16 +55,16 @@ fun SectionHeader(
                     fontWeight = FontWeight.SemiBold
                 )
                 Surface(
-                    shape = RoundedCornerShape(50),
+                    shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(AlcedoIconSize.xl)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.ExpandMore,
                             contentDescription = if (expanded) stringRes { sectionCollapse } else stringRes { sectionExpand },
                             modifier = Modifier
-                                .size(18.dp)
+                                .size(AlcedoIconSize.md)
                                 .rotate(rotation),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -68,7 +73,7 @@ fun SectionHeader(
             }
             AnimatedVisibility(visible = expanded) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = AlcedoSpacing.lg, vertical = AlcedoSpacing.sm),
                     content = content
                 )
             }

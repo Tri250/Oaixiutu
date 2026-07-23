@@ -34,6 +34,7 @@ import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.theme.AlcedoElevation
+import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlinx.coroutines.flow.catch
@@ -299,7 +300,7 @@ fun PresetPanel(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 32.dp),
+                        .padding(vertical = AlcedoSpacing.xxxl),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -309,7 +310,7 @@ fun PresetPanel(
                             modifier = Modifier.size(40.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                         Text(
                             stringRes { presetTitle },
                             style = MaterialTheme.typography.bodySmall,
@@ -511,12 +512,12 @@ private fun PresetCard(
                 onClick = onTap,
                 onLongClick = onLongPress
             ),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(AlcedoRadius.sm),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = AlcedoElevation.level1.dp
     ) {
         Column(
-            modifier = Modifier.padding(4.dp),
+            modifier = Modifier.padding(AlcedoSpacing.xs),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Thumbnail (REAL pipeline-rendered bitmap)
@@ -524,7 +525,7 @@ private fun PresetCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(AlcedoRadius.xs))
                     .background(MaterialTheme.colorScheme.surfaceContainerLowest),
                 contentAlignment = Alignment.Center
             ) {
@@ -560,7 +561,7 @@ private fun PresetCard(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
             // Preset name
             Text(
                 text = preset.name,
@@ -654,7 +655,7 @@ private fun ContextMenuRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = AlcedoSpacing.xs),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TextButton(
@@ -696,7 +697,7 @@ private fun PresetNameCategoryDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },

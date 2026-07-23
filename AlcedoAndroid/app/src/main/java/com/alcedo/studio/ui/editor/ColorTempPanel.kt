@@ -13,6 +13,7 @@ import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.SectionHeader
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 enum class WhiteBalanceMode(val label: String) {
     AS_SHOT("As Shot"),
@@ -37,11 +38,11 @@ fun ColorTempPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // Mode selector
         SectionHeader(title = "Mode") {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                 WhiteBalanceMode.entries.forEach { mode ->
                     FilterChip(
                         selected = wbMode == mode,
@@ -64,12 +65,12 @@ fun ColorTempPanel(
 
         // CCT Slider with visual gradient track
         SectionHeader(title = "Color Temperature") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                 // Visual gradient track
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(12.dp),
+                        .height(AlcedoSpacing.md),
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -121,12 +122,12 @@ fun ColorTempPanel(
 
         // Tint Slider with green-magenta gradient
         SectionHeader(title = "Tint") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                 // Green-magenta gradient track
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(12.dp),
+                        .height(AlcedoSpacing.md),
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -179,7 +180,7 @@ fun ColorTempPanel(
 
         // Preset white balance buttons
         SectionHeader(title = "Presets") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                 WhiteBalancePreset.entries.forEach { preset ->
                     val isSelected = wbMode == WhiteBalanceMode.CUSTOM &&
                         params.whiteBalanceTemp == preset.temp &&

@@ -60,7 +60,7 @@ fun RawDecodePanel(
                                 com.alcedo.studio.data.model.OperatorType.RAW_DECODE
                             )
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(AlcedoIconSize.xl)
                     ) {
                         Icon(
                             Icons.Default.Refresh,

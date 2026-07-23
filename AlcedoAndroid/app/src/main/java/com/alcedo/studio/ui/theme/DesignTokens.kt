@@ -75,16 +75,18 @@ object AlcedoGradient {
 
 // ── Glass Morphism Tokens ─────────────────────────────────────────
 // 2026 玻璃态设计: 模糊+半透明+微边框
+// 国内摄影师偏好: 深色沉浸式体验,面板轻微透光但不分散注意力
 object AlcedoGlass {
     const val blurRadius = 24f        // 背景模糊强度(dp)
-    const val panelOpacity = 0.85f    // 面板基础不透明度
-    const val toolbarOpacity = 0.92f  // 工具栏不透明度
-    const val borderAlpha = 0.08f     // 玻璃边框透明度
+    const val panelOpacity = 0.88f    // 面板基础不透明度(0.85→0.88,增加可读性)
+    const val toolbarOpacity = 0.94f  // 工具栏不透明度(0.92→0.94,更稳定)
+    const val borderAlpha = 0.10f     // 玻璃边框透明度(0.08→0.10,更清晰的面板边界)
     const val highlightAlpha = 0.06f  // 玻璃高光透明度
 }
 
 // ── Motion Duration Tokens ────────────────────────────────────────
 // 2026 动效哲学: 快进慢出,微交互 < 200ms, 面板切换 < 350ms
+// 国内摄影师偏好: 响应快速不拖沓,过渡流畅有质感
 object AlcedoMotion {
     const val instant = 60     // 瞬时反馈 (颜色变化)
     const val micro = 120      // 微交互 (按钮按下、开关)
@@ -228,11 +230,12 @@ object AlcedoOpacity {
 
 // ── Slider Dimensions ──────────────────────────────────────────────
 // 滑块尺寸统一，适合摄影师精确操作
+// 国内摄影师操作习惯: 偏好较大触控区域,手指粗细适中
 object AlcedoSlider {
     val trackHeight = 4.dp           // 轨道高度
-    val trackHeightActive = 6.dp     // 激活轨道高度 (2026: 微扩张)
-    val thumbRadius = 10.dp          // 拇指半径（适合手指操作）
-    val thumbRadiusActive = 14.dp    // 激活时拇指半径
+    val trackHeightActive = 6.dp     // 激活轨道高度 (2026: 微扩张,视觉反馈明确)
+    val thumbRadius = 11.dp          // 拇指半径（10→11dp,适合中国摄影师手指操作）
+    val thumbRadiusActive = 15.dp    // 激活时拇指半径（14→15dp,拖拽时更清晰）
     val thumbShadowElevation = 3.dp  // 拇指阴影高度
     val labelSpacing = 8.dp          // 标签与滑块间距
     val valueLabelWidth = 48.dp      // 数值标签宽度

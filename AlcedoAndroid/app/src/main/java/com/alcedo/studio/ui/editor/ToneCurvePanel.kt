@@ -13,6 +13,9 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -34,11 +37,11 @@ fun ToneCurvePanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ── Channel & Mode Selector ────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,23 +57,23 @@ fun ToneCurvePanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.resetToneCurve()
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(AlcedoIconSize.lg)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { toneCurveReset },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoRadius.md),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 // Mode selector
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                 ) {
                     ToneCurveMode.entries.forEach { mode ->
                         FilterChip(
@@ -84,12 +87,12 @@ fun ToneCurvePanel(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 // Channel selector
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                 ) {
                     CurveChannel.entries.forEach { ch ->
                         val isSelected = selectedChannel == ch
@@ -115,7 +118,7 @@ fun ToneCurvePanel(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 when (curveMode) {
                     ToneCurveMode.POINT -> {
@@ -135,12 +138,12 @@ fun ToneCurvePanel(
                             channel = selectedChannel,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                                .padding(vertical = AlcedoSpacing.sm)
                         )
                     }
                     ToneCurveMode.PARAMETRIC -> {
                         // Parametric curve sliders
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                             AdjustmentSlider(
                                 label = stringRes { toneCurveHighlights },
                                 value = params.highlights,
@@ -194,8 +197,8 @@ fun ToneCurvePanel(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
+            Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
             Text(stringRes { toneCurveReset })
         }
     }
