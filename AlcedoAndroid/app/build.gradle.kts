@@ -16,8 +16,23 @@ android {
         applicationId = "com.alcedo.studio"
         minSdk = 28
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.2.9"
+        // versionCode/versionName 支持从 git tag 动态读取（CI 环境），
+        // 本地开发回退到硬编码值
+        val gitTag = runCatching {
+            ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+                .directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .start()
+                .inputStream.bufferedReader().readText().trim()
+                .removePrefix("v")
+        }.getOrNull()
+        val parts = gitTag?.split(".")?.mapNotNull { it.toIntOrNull() }
+        versionCode = if (parts != null && parts.size >= 3) {
+            parts[0] * 10000 + parts[1] * 100 + parts[2]
+        } else {
+            19
+        }
+        versionName = gitTag?.ifBlank { null } ?: "1.2.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -52,7 +67,7 @@ android {
             val ksAlias = props.getProperty("keyAlias") ?: System.getenv("ALCEDO_KEY_ALIAS")
             val ksKeyPass = props.getProperty("keyPassword") ?: System.getenv("ALCEDO_KEY_PASSWORD")
 
-            if (!ksPath.isNullOrBlank() && !ksPass.isNullOrBlank() && !ksAlias.isNullOrBlank()) {
+            if (!ksPath.isNullOrBlank() && !ksPass.isNullOrBlank() && !ksAlias.isNullOrBlank() && !ksKeyPass.isNullOrBlank()) {
                 storeFile = file(ksPath)
                 storePassword = ksPass
                 this.keyAlias = ksAlias
@@ -96,6 +111,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
+            // 保留 isProfileable 以支持生产环境性能分析（Android 16+ baseline profile 兼容）
             isProfileable = true
 
             // 如果 release 签名未配置，回退到 debug 签名（避免 CI 构建失败）
