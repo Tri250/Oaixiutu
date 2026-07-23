@@ -25,7 +25,6 @@ import com.alcedo.studio.ui.theme.AlcedoAnimation
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
-import java.io.File
 
 @Composable
 fun EffectsPanel(
@@ -82,7 +81,7 @@ fun EffectsPanel(
                         IconButton(
                             onClick = {
                                 HapticFeedback.heavyClick(view)
-                                viewModel.updateParams(params.copy(luminanceDenoiseStrength = 0f, luminanceDenoiseDetail = 0.5f))
+                                viewModel.updateLuminanceDenoise(0f, 0.5f)
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
@@ -99,14 +98,14 @@ fun EffectsPanel(
                         label = stringRes { editorStrength },
                         value = params.luminanceDenoiseStrength,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateParams(params.copy(luminanceDenoiseStrength = it)) },
+                        onValueChange = { viewModel.updateLuminanceDenoise(it, params.luminanceDenoiseDetail) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorDetailPreserve },
                         value = params.luminanceDenoiseDetail,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateParams(params.copy(luminanceDenoiseDetail = it)) },
+                        onValueChange = { viewModel.updateLuminanceDenoise(params.luminanceDenoiseStrength, it) },
                         defaultValue = 0.5f
                     )
                 }
@@ -130,7 +129,7 @@ fun EffectsPanel(
                         IconButton(
                             onClick = {
                                 HapticFeedback.heavyClick(view)
-                                viewModel.updateParams(params.copy(chromaDenoiseStrength = 0f, chromaDenoiseThreshold = 0.5f))
+                                viewModel.updateChromaDenoise(0f, 0.5f)
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
@@ -147,14 +146,14 @@ fun EffectsPanel(
                         label = stringRes { editorStrength },
                         value = params.chromaDenoiseStrength,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateParams(params.copy(chromaDenoiseStrength = it)) },
+                        onValueChange = { viewModel.updateChromaDenoise(it, params.chromaDenoiseThreshold) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(
                         label = stringRes { editorColorThreshold },
                         value = params.chromaDenoiseThreshold,
                         range = 0f..1f,
-                        onValueChange = { viewModel.updateParams(params.copy(chromaDenoiseThreshold = it)) },
+                        onValueChange = { viewModel.updateChromaDenoise(params.chromaDenoiseStrength, it) },
                         defaultValue = 0.5f
                     )
                 }
@@ -420,7 +419,7 @@ fun EffectsPanel(
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(params.copy(lensVignetteStrength = 0f))
+                            viewModel.updateVignette(0f)
                         },
                         modifier = Modifier.size(32.dp)
                     ) {
@@ -438,7 +437,7 @@ fun EffectsPanel(
                     value = params.lensVignetteStrength,
                     range = 0f..1f,
                     onValueChange = {
-                        viewModel.updateParams(params.copy(lensVignetteStrength = it))
+                        viewModel.updateVignette(it)
                     },
                     defaultValue = 0f
                 )
@@ -513,24 +512,5 @@ fun EffectsPanel(
  * Copy a LUT file from a content URI to the app's internal storage and return
  * the absolute path. Returns null if the copy fails.
  */
-private fun copyLutToInternalStorage(context: Context, uri: Uri): String? {
-    return try {
-        val lutsDir = File(context.filesDir, "luts")
-        if (!lutsDir.exists()) lutsDir.mkdirs()
-
-        // Derive a file name from the URI or use a timestamp-based name
-        val fileName = uri.lastPathSegment?.substringAfterLast('/')
-            ?: "lut_${System.currentTimeMillis()}.cube"
-
-        val outFile = File(lutsDir, fileName)
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            outFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        } ?: return null
-
-        outFile.absolutePath
-    } catch (e: Exception) {
-        null
-    }
-}
+private fun copyLutToInternalStorage(context: Context, uri: Uri): String? =
+    copyLutToInternal(context, uri)

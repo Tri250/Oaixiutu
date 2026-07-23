@@ -704,6 +704,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    fun updateGeometryScale(value: Float) {
+        _params.value = _params.value.copy(geometryScale = value)
+        recordTransaction(OperatorType.GEOMETRY, "geometryScale", value)
+        regeneratePreview()
+    }
+
     fun updateGeometryFlipH(flip: Boolean) {
         _params.value = _params.value.copy(geometryFlipH = flip)
         recordTransaction(OperatorType.GEOMETRY, "geometryFlipH", if (flip) 1f else 0f)
@@ -736,7 +742,183 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     fun updateVignette(strength: Float) {
         _params.value = _params.value.copy(lensVignetteStrength = strength)
-        recordTransaction(OperatorType.GEOMETRY, "lensVignetteStrength", strength)
+        recordTransaction(OperatorType.VIGNETTE, "lensVignetteStrength", strength)
+        regeneratePreview()
+    }
+
+    // ── Denoise (luminance + chroma) ──
+
+    fun updateLuminanceDenoise(strength: Float, detail: Float = 0.5f) {
+        _params.value = _params.value.copy(luminanceDenoiseStrength = strength, luminanceDenoiseDetail = detail)
+        recordTransaction(OperatorType.DENOISE, "luminanceDenoiseStrength", strength)
+        recordTransaction(OperatorType.DENOISE, "luminanceDenoiseDetail", detail)
+        regeneratePreview()
+    }
+
+    fun updateChromaDenoise(strength: Float, threshold: Float = 0.5f) {
+        _params.value = _params.value.copy(chromaDenoiseStrength = strength, chromaDenoiseThreshold = threshold)
+        recordTransaction(OperatorType.DENOISE, "chromaDenoiseStrength", strength)
+        recordTransaction(OperatorType.DENOISE, "chromaDenoiseThreshold", threshold)
+        regeneratePreview()
+    }
+
+    // ── Enhanced perspective transform ──
+
+    fun updatePerspectiveDistortion(value: Float) {
+        _params.value = _params.value.copy(perspectiveDistortion = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveDistortion", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveVertical(value: Float) {
+        _params.value = _params.value.copy(perspectiveVertical = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveVertical", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveHorizontal(value: Float) {
+        _params.value = _params.value.copy(perspectiveHorizontal = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveHorizontal", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveRotation(value: Float) {
+        _params.value = _params.value.copy(perspectiveRotation = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveRotation", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveAspect(value: Float) {
+        _params.value = _params.value.copy(perspectiveAspect = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveAspect", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveScale(value: Float) {
+        _params.value = _params.value.copy(perspectiveScale = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveScale", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveXOffset(value: Float) {
+        _params.value = _params.value.copy(perspectiveXOffset = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveXOffset", value)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveYOffset(value: Float) {
+        _params.value = _params.value.copy(perspectiveYOffset = value)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveYOffset", value)
+        regeneratePreview()
+    }
+
+    fun resetPerspective() {
+        _params.value = _params.value.copy(
+            perspectiveDistortion = 0f,
+            perspectiveVertical = 0f,
+            perspectiveHorizontal = 0f,
+            perspectiveRotation = 0f,
+            perspectiveAspect = 0f,
+            perspectiveScale = 0f,
+            perspectiveXOffset = 0f,
+            perspectiveYOffset = 0f
+        )
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveDistortion", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveVertical", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveHorizontal", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveRotation", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveAspect", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveScale", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveXOffset", 0f)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveYOffset", 0f)
+        regeneratePreview()
+    }
+
+    // ── Lens correction toggles and amounts ──
+
+    fun updateLensAutoDetect(enabled: Boolean) {
+        _params.value = _params.value.copy(lensAutoDetect = enabled)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensAutoDetect", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateLensCorrectDistortion(enabled: Boolean) {
+        _params.value = _params.value.copy(lensCorrectDistortion = enabled)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectDistortion", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateLensCorrectVignette(enabled: Boolean) {
+        _params.value = _params.value.copy(lensCorrectVignette = enabled)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectVignette", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateLensCorrectTca(enabled: Boolean) {
+        _params.value = _params.value.copy(lensCorrectTca = enabled)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectTca", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateLensDistortionAmount(value: Float) {
+        _params.value = _params.value.copy(lensDistortionAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensDistortionAmount", value)
+        regeneratePreview()
+    }
+
+    fun updateLensVignetteAmount(value: Float) {
+        _params.value = _params.value.copy(lensVignetteAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteAmount", value)
+        regeneratePreview()
+    }
+
+    fun updateLensTcaAmount(value: Float) {
+        _params.value = _params.value.copy(lensTcaAmount = value)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensTcaAmount", value)
+        regeneratePreview()
+    }
+
+    fun updateLensMaker(maker: String) {
+        _params.value = _params.value.copy(lensMaker = maker)
+        // lensMaker 是文本字段，暂不入历史记录（history 仅支持 Float 值）
+        regeneratePreview()
+    }
+
+    fun updateLensModel(model: String) {
+        _params.value = _params.value.copy(lensModel = model)
+        // lensModel 是文本字段，暂不入历史记录（history 仅支持 Float 值）
+        regeneratePreview()
+    }
+
+    fun resetLensCorrection() {
+        _params.value = _params.value.copy(
+            lensK1 = 0f,
+            lensK2 = 0f,
+            lensK3 = 0f,
+            lensP1 = 0f,
+            lensP2 = 0f,
+            lensAutoDetect = false,
+            lensMaker = "",
+            lensModel = "",
+            lensCorrectDistortion = false,
+            lensCorrectVignette = false,
+            lensCorrectTca = false,
+            lensDistortionAmount = 0f,
+            lensVignetteAmount = 0f,
+            lensTcaAmount = 0f
+        )
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK1", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK2", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensK3", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensP1", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensP2", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensAutoDetect", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectDistortion", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectVignette", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensCorrectTca", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensDistortionAmount", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteAmount", 0f)
+        recordTransaction(OperatorType.LENS_CORRECTION, "lensTcaAmount", 0f)
         regeneratePreview()
     }
 
@@ -747,8 +929,6 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateCropAspectRatio(ratio: CropAspectRatio) {
         val currentParams = _params.value
         // 根据比例更新 geometryCropLeft/Top/Right/Bottom
-        val currentWidth = 1f - currentParams.geometryCropLeft - (1f - currentParams.geometryCropRight)
-        val currentHeight = 1f - currentParams.geometryCropTop - (1f - currentParams.geometryCropBottom)
         val cropWidth = currentParams.geometryCropRight - currentParams.geometryCropLeft
         val cropHeight = currentParams.geometryCropBottom - currentParams.geometryCropTop
 
@@ -776,16 +956,25 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 }
             }
         }
+        // C3 修复: 记录裁剪参数变更以使撤销/重做可追踪
+        val newParams = _params.value
+        recordTransaction(OperatorType.CROP, "geometryCropLeft", newParams.geometryCropLeft)
+        recordTransaction(OperatorType.CROP, "geometryCropTop", newParams.geometryCropTop)
+        recordTransaction(OperatorType.CROP, "geometryCropRight", newParams.geometryCropRight)
+        recordTransaction(OperatorType.CROP, "geometryCropBottom", newParams.geometryCropBottom)
         regeneratePreview()
     }
 
     fun updateCropRotation(degrees: Int) {
         _params.value = _params.value.copy(cropRotation = degrees)
+        recordTransaction(OperatorType.CROP, "cropRotation", degrees.toFloat())
         regeneratePreview()
     }
 
     fun updateCropFlip(flipH: Boolean, flipV: Boolean) {
         _params.value = _params.value.copy(cropFlipHorizontal = flipH, cropFlipVertical = flipV)
+        recordTransaction(OperatorType.CROP, "cropFlipHorizontal", if (flipH) 1f else 0f)
+        recordTransaction(OperatorType.CROP, "cropFlipVertical", if (flipV) 1f else 0f)
         regeneratePreview()
     }
 
@@ -795,6 +984,25 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             geometryCropLeft = 0f, geometryCropTop = 0f, geometryCropRight = 1f, geometryCropBottom = 1f,
             cropRotation = 0, cropFlipHorizontal = false, cropFlipVertical = false
         )
+        recordTransaction(OperatorType.CROP, "geometryCropLeft", 0f)
+        recordTransaction(OperatorType.CROP, "geometryCropTop", 0f)
+        recordTransaction(OperatorType.CROP, "geometryCropRight", 1f)
+        recordTransaction(OperatorType.CROP, "geometryCropBottom", 1f)
+        recordTransaction(OperatorType.CROP, "cropRotation", 0f)
+        recordTransaction(OperatorType.CROP, "cropFlipHorizontal", 0f)
+        recordTransaction(OperatorType.CROP, "cropFlipVertical", 0f)
+        regeneratePreview()
+    }
+
+    fun updateGeometryCrop(left: Float, top: Float, right: Float, bottom: Float) {
+        _params.value = _params.value.copy(
+            geometryCropLeft = left, geometryCropTop = top,
+            geometryCropRight = right, geometryCropBottom = bottom
+        )
+        recordTransaction(OperatorType.CROP, "geometryCropLeft", left)
+        recordTransaction(OperatorType.CROP, "geometryCropTop", top)
+        recordTransaction(OperatorType.CROP, "geometryCropRight", right)
+        recordTransaction(OperatorType.CROP, "geometryCropBottom", bottom)
         regeneratePreview()
     }
 
@@ -847,8 +1055,38 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         if (old.clarityAmount != newParams.clarityAmount) recordTransaction(operatorType, "clarityAmount", newParams.clarityAmount)
         if (old.sharpenAmount != newParams.sharpenAmount) recordTransaction(operatorType, "sharpenAmount", newParams.sharpenAmount)
         if (old.filmGrainIntensity != newParams.filmGrainIntensity) recordTransaction(operatorType, "filmGrainIntensity", newParams.filmGrainIntensity)
+        if (old.halationIntensity != newParams.halationIntensity) recordTransaction(operatorType, "halationIntensity", newParams.halationIntensity)
+        if (old.halationThreshold != newParams.halationThreshold) recordTransaction(operatorType, "halationThreshold", newParams.halationThreshold)
+        if (old.halationSpread != newParams.halationSpread) recordTransaction(operatorType, "halationSpread", newParams.halationSpread)
+        if (old.halationRedBias != newParams.halationRedBias) recordTransaction(operatorType, "halationRedBias", newParams.halationRedBias)
+        if (old.lensVignetteStrength != newParams.lensVignetteStrength) recordTransaction(operatorType, "lensVignetteStrength", newParams.lensVignetteStrength)
         if (old.lutIntensity != newParams.lutIntensity) recordTransaction(operatorType, "lutIntensity", newParams.lutIntensity)
         if (old.lutEnabled != newParams.lutEnabled) recordTransaction(operatorType, "lutEnabled", if (newParams.lutEnabled) 1f else 0f)
+
+        // ── Denoise 字段对比 ──
+        if (old.luminanceDenoiseStrength != newParams.luminanceDenoiseStrength) recordTransaction(operatorType, "luminanceDenoiseStrength", newParams.luminanceDenoiseStrength)
+        if (old.luminanceDenoiseDetail != newParams.luminanceDenoiseDetail) recordTransaction(operatorType, "luminanceDenoiseDetail", newParams.luminanceDenoiseDetail)
+        if (old.chromaDenoiseStrength != newParams.chromaDenoiseStrength) recordTransaction(operatorType, "chromaDenoiseStrength", newParams.chromaDenoiseStrength)
+        if (old.chromaDenoiseThreshold != newParams.chromaDenoiseThreshold) recordTransaction(operatorType, "chromaDenoiseThreshold", newParams.chromaDenoiseThreshold)
+
+        // ── Perspective 字段对比 ──
+        if (old.perspectiveDistortion != newParams.perspectiveDistortion) recordTransaction(operatorType, "perspectiveDistortion", newParams.perspectiveDistortion)
+        if (old.perspectiveVertical != newParams.perspectiveVertical) recordTransaction(operatorType, "perspectiveVertical", newParams.perspectiveVertical)
+        if (old.perspectiveHorizontal != newParams.perspectiveHorizontal) recordTransaction(operatorType, "perspectiveHorizontal", newParams.perspectiveHorizontal)
+        if (old.perspectiveRotation != newParams.perspectiveRotation) recordTransaction(operatorType, "perspectiveRotation", newParams.perspectiveRotation)
+        if (old.perspectiveAspect != newParams.perspectiveAspect) recordTransaction(operatorType, "perspectiveAspect", newParams.perspectiveAspect)
+        if (old.perspectiveScale != newParams.perspectiveScale) recordTransaction(operatorType, "perspectiveScale", newParams.perspectiveScale)
+        if (old.perspectiveXOffset != newParams.perspectiveXOffset) recordTransaction(operatorType, "perspectiveXOffset", newParams.perspectiveXOffset)
+        if (old.perspectiveYOffset != newParams.perspectiveYOffset) recordTransaction(operatorType, "perspectiveYOffset", newParams.perspectiveYOffset)
+
+        // ── Lens correction 字段对比 ──
+        if (old.lensAutoDetect != newParams.lensAutoDetect) recordTransaction(operatorType, "lensAutoDetect", if (newParams.lensAutoDetect) 1f else 0f)
+        if (old.lensCorrectDistortion != newParams.lensCorrectDistortion) recordTransaction(operatorType, "lensCorrectDistortion", if (newParams.lensCorrectDistortion) 1f else 0f)
+        if (old.lensCorrectVignette != newParams.lensCorrectVignette) recordTransaction(operatorType, "lensCorrectVignette", if (newParams.lensCorrectVignette) 1f else 0f)
+        if (old.lensCorrectTca != newParams.lensCorrectTca) recordTransaction(operatorType, "lensCorrectTca", if (newParams.lensCorrectTca) 1f else 0f)
+        if (old.lensDistortionAmount != newParams.lensDistortionAmount) recordTransaction(operatorType, "lensDistortionAmount", newParams.lensDistortionAmount)
+        if (old.lensVignetteAmount != newParams.lensVignetteAmount) recordTransaction(operatorType, "lensVignetteAmount", newParams.lensVignetteAmount)
+        if (old.lensTcaAmount != newParams.lensTcaAmount) recordTransaction(operatorType, "lensTcaAmount", newParams.lensTcaAmount)
 
         // ── DisplayTransform 子字段对比 (H2) ──
         if (old.displayTransform.colorScience != newParams.displayTransform.colorScience)
@@ -1165,7 +1403,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     autoExposureValue = ev,
                     exposure = ev
                 )
-                recordTransaction(OperatorType.EXPOSURE, "autoExposureValue", ev)
+                recordTransaction(OperatorType.EXPOSURE, "exposure", ev)
                 regeneratePreview()
             } catch (e: CancellationException) {
                 throw e
@@ -1218,7 +1456,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 )
 
                 // 记录到历史
-                recordTransaction(OperatorType.EXPOSURE, "autoEnhance", autoExposure)
+                recordTransaction(OperatorType.EXPOSURE, "exposure", autoExposure)
+                recordTransaction(OperatorType.CONTRAST, "contrast", autoContrast)
+                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", autoWB.first)
+                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", autoWB.second)
+                recordTransaction(OperatorType.HIGHLIGHTS, "highlights", autoHighlights)
+                recordTransaction(OperatorType.SHADOWS, "shadows", autoShadows)
+                recordTransaction(OperatorType.SATURATION, "saturation", autoSaturation)
+                recordTransaction(OperatorType.SATURATION, "vibrance", autoVibrance)
+                recordTransaction(OperatorType.CLARITY, "clarityAmount", autoClarity)
                 saveVersion()
                 regeneratePreview()
             } catch (e: CancellationException) {
@@ -1429,6 +1675,36 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "lensP1" -> lensP1
                 "lensP2" -> lensP2
                 "lensVignetteStrength" -> lensVignetteStrength
+                // Denoise params
+                "luminanceDenoiseStrength" -> luminanceDenoiseStrength
+                "luminanceDenoiseDetail" -> luminanceDenoiseDetail
+                "chromaDenoiseStrength" -> chromaDenoiseStrength
+                "chromaDenoiseThreshold" -> chromaDenoiseThreshold
+                // Perspective transform params
+                "perspectiveDistortion" -> perspectiveDistortion
+                "perspectiveVertical" -> perspectiveVertical
+                "perspectiveHorizontal" -> perspectiveHorizontal
+                "perspectiveRotation" -> perspectiveRotation
+                "perspectiveAspect" -> perspectiveAspect
+                "perspectiveScale" -> perspectiveScale
+                "perspectiveXOffset" -> perspectiveXOffset
+                "perspectiveYOffset" -> perspectiveYOffset
+                // Crop params
+                "cropRotation" -> cropRotation.toFloat()
+                "cropFlipHorizontal" -> if (cropFlipHorizontal) 1f else 0f
+                "cropFlipVertical" -> if (cropFlipVertical) 1f else 0f
+                "geometryCropLeft" -> geometryCropLeft
+                "geometryCropTop" -> geometryCropTop
+                "geometryCropRight" -> geometryCropRight
+                "geometryCropBottom" -> geometryCropBottom
+                // Lens correction toggles and amounts
+                "lensAutoDetect" -> if (lensAutoDetect) 1f else 0f
+                "lensCorrectDistortion" -> if (lensCorrectDistortion) 1f else 0f
+                "lensCorrectVignette" -> if (lensCorrectVignette) 1f else 0f
+                "lensCorrectTca" -> if (lensCorrectTca) 1f else 0f
+                "lensDistortionAmount" -> lensDistortionAmount
+                "lensVignetteAmount" -> lensVignetteAmount
+                "lensTcaAmount" -> lensTcaAmount
                 "lutIntensity" -> lutIntensity
                 "lutEnabled" -> if (lutEnabled) 1f else 0f
                 "tintHighlightHue" -> tintHighlightHue
@@ -1598,6 +1874,32 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "lensP1" -> reconstructed.copy(lensP1 = floatValue)
                     "lensP2" -> reconstructed.copy(lensP2 = floatValue)
                     "lensVignetteStrength" -> reconstructed.copy(lensVignetteStrength = floatValue)
+                    "luminanceDenoiseStrength" -> reconstructed.copy(luminanceDenoiseStrength = floatValue)
+                    "luminanceDenoiseDetail" -> reconstructed.copy(luminanceDenoiseDetail = floatValue)
+                    "chromaDenoiseStrength" -> reconstructed.copy(chromaDenoiseStrength = floatValue)
+                    "chromaDenoiseThreshold" -> reconstructed.copy(chromaDenoiseThreshold = floatValue)
+                    "perspectiveDistortion" -> reconstructed.copy(perspectiveDistortion = floatValue)
+                    "perspectiveVertical" -> reconstructed.copy(perspectiveVertical = floatValue)
+                    "perspectiveHorizontal" -> reconstructed.copy(perspectiveHorizontal = floatValue)
+                    "perspectiveRotation" -> reconstructed.copy(perspectiveRotation = floatValue)
+                    "perspectiveAspect" -> reconstructed.copy(perspectiveAspect = floatValue)
+                    "perspectiveScale" -> reconstructed.copy(perspectiveScale = floatValue)
+                    "perspectiveXOffset" -> reconstructed.copy(perspectiveXOffset = floatValue)
+                    "perspectiveYOffset" -> reconstructed.copy(perspectiveYOffset = floatValue)
+                    "cropRotation" -> reconstructed.copy(cropRotation = floatValue.toInt())
+                    "cropFlipHorizontal" -> reconstructed.copy(cropFlipHorizontal = floatValue != 0f)
+                    "cropFlipVertical" -> reconstructed.copy(cropFlipVertical = floatValue != 0f)
+                    "geometryCropLeft" -> reconstructed.copy(geometryCropLeft = floatValue)
+                    "geometryCropTop" -> reconstructed.copy(geometryCropTop = floatValue)
+                    "geometryCropRight" -> reconstructed.copy(geometryCropRight = floatValue)
+                    "geometryCropBottom" -> reconstructed.copy(geometryCropBottom = floatValue)
+                    "lensAutoDetect" -> reconstructed.copy(lensAutoDetect = floatValue != 0f)
+                    "lensCorrectDistortion" -> reconstructed.copy(lensCorrectDistortion = floatValue != 0f)
+                    "lensCorrectVignette" -> reconstructed.copy(lensCorrectVignette = floatValue != 0f)
+                    "lensCorrectTca" -> reconstructed.copy(lensCorrectTca = floatValue != 0f)
+                    "lensDistortionAmount" -> reconstructed.copy(lensDistortionAmount = floatValue)
+                    "lensVignetteAmount" -> reconstructed.copy(lensVignetteAmount = floatValue)
+                    "lensTcaAmount" -> reconstructed.copy(lensTcaAmount = floatValue)
                     "lutIntensity" -> reconstructed.copy(lutIntensity = floatValue)
                     "lutEnabled" -> reconstructed.copy(lutEnabled = floatValue != 0f)
                     "tintHighlightHue" -> reconstructed.copy(tintHighlightHue = floatValue)
@@ -1863,6 +2165,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         map["halationThreshold"] = JsonPrimitive(p.halationThreshold)
         map["halationSpread"] = JsonPrimitive(p.halationSpread)
         map["halationRedBias"] = JsonPrimitive(p.halationRedBias)
+        map["luminanceDenoiseStrength"] = JsonPrimitive(p.luminanceDenoiseStrength)
+        map["luminanceDenoiseDetail"] = JsonPrimitive(p.luminanceDenoiseDetail)
+        map["chromaDenoiseStrength"] = JsonPrimitive(p.chromaDenoiseStrength)
+        map["chromaDenoiseThreshold"] = JsonPrimitive(p.chromaDenoiseThreshold)
         map["lutEnabled"] = JsonPrimitive(p.lutEnabled)
         map["lutIntensity"] = JsonPrimitive(p.lutIntensity)
         map["lutPath"] = JsonPrimitive(p.lutPath)

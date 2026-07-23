@@ -51,14 +51,10 @@ fun GeometryPanel(
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(
-                                    geometryRotate = 0f,
-                                    geometryScale = 1f,
-                                    geometryFlipH = false,
-                                    geometryFlipV = false
-                                )
-                            )
+                            viewModel.updateGeometryRotate(0f)
+                            viewModel.updateGeometryScale(1f)
+                            viewModel.updateGeometryFlipH(false)
+                            viewModel.updateGeometryFlipV(false)
                         },
                         modifier = Modifier.size(32.dp)
                     ) {
@@ -77,7 +73,7 @@ fun GeometryPanel(
                     value = params.geometryRotate,
                     range = -45f..45f,
                     onValueChange = {
-                        viewModel.updateParams(params.copy(geometryRotate = it))
+                        viewModel.updateGeometryRotate(it)
                     },
                     defaultValue = 0f,
                     valueDisplayTransform = { "%.1f°".format(it) }
@@ -90,9 +86,7 @@ fun GeometryPanel(
                     OutlinedButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(geometryFlipH = !params.geometryFlipH)
-                            )
+                            viewModel.updateGeometryFlipH(!params.geometryFlipH)
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -112,9 +106,7 @@ fun GeometryPanel(
                     OutlinedButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(geometryFlipV = !params.geometryFlipV)
-                            )
+                            viewModel.updateGeometryFlipV(!params.geometryFlipV)
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -136,7 +128,7 @@ fun GeometryPanel(
                 OutlinedButton(
                     onClick = {
                         HapticFeedback.heavyClick(view)
-                        viewModel.updateParams(params.copy(geometryRotate = 0f))
+                        viewModel.updateGeometryRotate(0f)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -292,18 +284,7 @@ fun GeometryPanel(
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(
-                                    perspectiveDistortion = 0f,
-                                    perspectiveVertical = 0f,
-                                    perspectiveHorizontal = 0f,
-                                    perspectiveRotation = 0f,
-                                    perspectiveAspect = 0f,
-                                    perspectiveScale = 0f,
-                                    perspectiveXOffset = 0f,
-                                    perspectiveYOffset = 0f
-                                )
-                            )
+                            viewModel.resetPerspective()
                         },
                         modifier = Modifier.size(32.dp)
                     ) {
@@ -318,28 +299,28 @@ fun GeometryPanel(
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 PerspectiveTransformSlider(stringRes { cropDistortion }, params.perspectiveDistortion) {
-                    viewModel.updateParams(params.copy(perspectiveDistortion = it))
+                    viewModel.updatePerspectiveDistortion(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropVerticalPerspective }, params.perspectiveVertical) {
-                    viewModel.updateParams(params.copy(perspectiveVertical = it))
+                    viewModel.updatePerspectiveVertical(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropHorizontalPerspective }, params.perspectiveHorizontal) {
-                    viewModel.updateParams(params.copy(perspectiveHorizontal = it))
+                    viewModel.updatePerspectiveHorizontal(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropRotationFine }, params.perspectiveRotation) {
-                    viewModel.updateParams(params.copy(perspectiveRotation = it))
+                    viewModel.updatePerspectiveRotation(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropAspect }, params.perspectiveAspect) {
-                    viewModel.updateParams(params.copy(perspectiveAspect = it))
+                    viewModel.updatePerspectiveAspect(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropScale }, params.perspectiveScale) {
-                    viewModel.updateParams(params.copy(perspectiveScale = it))
+                    viewModel.updatePerspectiveScale(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropXOffset }, params.perspectiveXOffset) {
-                    viewModel.updateParams(params.copy(perspectiveXOffset = it))
+                    viewModel.updatePerspectiveXOffset(it)
                 }
                 PerspectiveTransformSlider(stringRes { cropYOffset }, params.perspectiveYOffset) {
-                    viewModel.updateParams(params.copy(perspectiveYOffset = it))
+                    viewModel.updatePerspectiveYOffset(it)
                 }
             }
         }
@@ -360,24 +341,7 @@ fun GeometryPanel(
                     IconButton(
                         onClick = {
                             HapticFeedback.heavyClick(view)
-                            viewModel.updateParams(
-                                params.copy(
-                                    lensK1 = 0f,
-                                    lensK2 = 0f,
-                                    lensK3 = 0f,
-                                    lensP1 = 0f,
-                                    lensP2 = 0f,
-                                    lensAutoDetect = false,
-                                    lensMaker = "",
-                                    lensModel = "",
-                                    lensCorrectDistortion = false,
-                                    lensCorrectVignette = false,
-                                    lensCorrectTca = false,
-                                    lensDistortionAmount = 0f,
-                                    lensVignetteAmount = 0f,
-                                    lensTcaAmount = 0f
-                                )
-                            )
+                            viewModel.resetLensCorrection()
                         },
                         modifier = Modifier.size(32.dp)
                     ) {
@@ -406,7 +370,7 @@ fun GeometryPanel(
                         checked = params.lensAutoDetect,
                         onCheckedChange = {
                             HapticFeedback.click(view)
-                            viewModel.updateParams(params.copy(lensAutoDetect = it))
+                            viewModel.updateLensAutoDetect(it)
                         }
                     )
                 }
@@ -415,7 +379,7 @@ fun GeometryPanel(
                 // Manual lens fields
                 OutlinedTextField(
                     value = params.lensMaker,
-                    onValueChange = { viewModel.updateParams(params.copy(lensMaker = it)) },
+                    onValueChange = { viewModel.updateLensMaker(it) },
                     label = { Text(stringRes { cropLensMaker }, style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -424,7 +388,7 @@ fun GeometryPanel(
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 OutlinedTextField(
                     value = params.lensModel,
-                    onValueChange = { viewModel.updateParams(params.copy(lensModel = it)) },
+                    onValueChange = { viewModel.updateLensModel(it) },
                     label = { Text(stringRes { cropLensModel }, style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -447,7 +411,7 @@ fun GeometryPanel(
                         checked = params.lensCorrectDistortion,
                         onCheckedChange = {
                             HapticFeedback.click(view)
-                            viewModel.updateParams(params.copy(lensCorrectDistortion = it))
+                            viewModel.updateLensCorrectDistortion(it)
                         }
                     )
                 }
@@ -457,7 +421,7 @@ fun GeometryPanel(
                         value = params.lensDistortionAmount,
                         range = 0f..100f,
                         onValueChange = {
-                            viewModel.updateParams(params.copy(lensDistortionAmount = it))
+                            viewModel.updateLensDistortionAmount(it)
                         },
                         defaultValue = 0f,
                         valueDisplayTransform = { "%.0f%%".format(it) }
@@ -478,7 +442,7 @@ fun GeometryPanel(
                         checked = params.lensCorrectVignette,
                         onCheckedChange = {
                             HapticFeedback.click(view)
-                            viewModel.updateParams(params.copy(lensCorrectVignette = it))
+                            viewModel.updateLensCorrectVignette(it)
                         }
                     )
                 }
@@ -488,7 +452,7 @@ fun GeometryPanel(
                         value = params.lensVignetteAmount,
                         range = 0f..100f,
                         onValueChange = {
-                            viewModel.updateParams(params.copy(lensVignetteAmount = it))
+                            viewModel.updateLensVignetteAmount(it)
                         },
                         defaultValue = 0f,
                         valueDisplayTransform = { "%.0f%%".format(it) }
@@ -509,7 +473,7 @@ fun GeometryPanel(
                         checked = params.lensCorrectTca,
                         onCheckedChange = {
                             HapticFeedback.click(view)
-                            viewModel.updateParams(params.copy(lensCorrectTca = it))
+                            viewModel.updateLensCorrectTca(it)
                         }
                     )
                 }
@@ -519,7 +483,7 @@ fun GeometryPanel(
                         value = params.lensTcaAmount,
                         range = 0f..100f,
                         onValueChange = {
-                            viewModel.updateParams(params.copy(lensTcaAmount = it))
+                            viewModel.updateLensTcaAmount(it)
                         },
                         defaultValue = 0f,
                         valueDisplayTransform = { "%.0f%%".format(it) }
@@ -582,14 +546,7 @@ private fun applyAspectRatioCrop(
 ) {
     if (ratio == AspectRatio.FREE) {
         // FREE — just reset to full image
-        viewModel.updateParams(
-            params.copy(
-                geometryCropLeft = 0f,
-                geometryCropTop = 0f,
-                geometryCropRight = 1f,
-                geometryCropBottom = 1f
-            )
-        )
+        viewModel.resetCrop()
         return
     }
 
@@ -619,17 +576,13 @@ private fun applyAspectRatioCrop(
         val centerX = (currentLeft + currentRight) / 2f
         val newLeft = (centerX - newW / 2f).coerceIn(0f, 1f)
         val newRight = (centerX + newW / 2f).coerceIn(0f, 1f)
-        viewModel.updateParams(
-            params.copy(geometryCropLeft = newLeft, geometryCropRight = newRight)
-        )
+        viewModel.updateGeometryCrop(newLeft, currentTop, newRight, currentBottom)
     } else {
         // Too tall — shrink height, center vertically
         val newH = cropW / targetRatio
         val centerY = (currentTop + currentBottom) / 2f
         val newTop = (centerY - newH / 2f).coerceIn(0f, 1f)
         val newBottom = (centerY + newH / 2f).coerceIn(0f, 1f)
-        viewModel.updateParams(
-            params.copy(geometryCropTop = newTop, geometryCropBottom = newBottom)
-        )
+        viewModel.updateGeometryCrop(currentLeft, newTop, currentRight, newBottom)
     }
 }

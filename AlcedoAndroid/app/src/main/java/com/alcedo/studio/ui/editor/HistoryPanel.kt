@@ -68,7 +68,7 @@ fun HistoryPanel(
     }
 
     // P2-6 撤销/重做可视化：获取当前工作版本的事务列表与游标位置
-    val workingVersion by viewModel.workingVersion.collectAsStateWithLifecycle()
+    val workingVersion by viewModel.workingVersion
     val transactions = workingVersion.transactions
     val currentIndex = workingVersion.cursor
 
@@ -410,6 +410,10 @@ private fun getOperatorIcon(type: OperatorType) = when (type) {
     OperatorType.TINT -> Icons.Default.WaterDrop
     OperatorType.TONE_REGION -> Icons.Default.Equalizer
     OperatorType.PRESET -> Icons.Default.Bookmark
+    OperatorType.DENOISE -> Icons.Default.BlurOn
+    OperatorType.VIGNETTE -> Icons.Default.Vignette
+    OperatorType.PERSPECTIVE -> Icons.Default.Transform
+    OperatorType.LENS_CORRECTION -> Icons.Default.CameraAlt
 }
 
 /**

@@ -20,7 +20,6 @@ import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
-import java.io.File
 
 @Composable
 fun LmtPanel(
@@ -108,7 +107,7 @@ fun LmtPanel(
                     // Intensity slider
                     Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                     AdjustmentSlider(
-                        label = stringRes { this.lmtIntensity },
+                        label = stringRes { lmtIntensity },
                         value = lmtIntensity,
                         range = 0f..1f,
                         onValueChange = { onLmtChanged(lmtEnabled, lmtPath, it) },
@@ -134,33 +133,5 @@ fun LmtPanel(
                 )
             }
         }
-    }
-}
-
-private fun copyLutToInternal(context: Context, uri: Uri): String? {
-    try {
-        val lutsDir = File(context.filesDir, "luts")
-        if (!lutsDir.exists()) lutsDir.mkdirs()
-
-        val fileName = uri.lastPathSegment?.substringAfterLast('/')
-            ?: "lut_${System.currentTimeMillis()}.cube"
-
-        // Validate file extension is .cube
-        if (!fileName.lowercase().endsWith(".cube")) {
-            return null
-        }
-
-        val outFile = File(lutsDir, fileName)
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            outFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        } ?: return null
-
-        outFile.absolutePath
-    } catch (e: Exception) {
-        // Log error for debugging instead of silently swallowing
-        android.util.Log.e("LmtPanel", "Failed to copy LUT file: ${e.message}")
-        return null
     }
 }

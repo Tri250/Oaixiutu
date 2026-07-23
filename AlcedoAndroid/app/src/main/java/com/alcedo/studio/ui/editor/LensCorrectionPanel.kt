@@ -68,13 +68,9 @@ fun LensCorrectionPanel(
                         )
                     }
                     Button(onClick = {
-                        viewModel.updateParams(params.copy(
-                            lensK1 = profile.k1,
-                            lensK2 = profile.k2,
-                            lensK3 = profile.k3,
-                            lensP1 = profile.p1,
-                            lensP2 = profile.p2
-                        ))
+                        viewModel.updateLensCorrection(
+                            profile.k1, profile.k2, profile.k3, profile.p1, profile.p2
+                        )
                     }) {
                         Text("应用")
                     }
@@ -100,22 +96,32 @@ fun LensCorrectionPanel(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
-                        onClick = { viewModel.updateParams(params.copy(lensK1 = 0f, lensK2 = 0f, lensK3 = 0f, lensP1 = 0f, lensP2 = 0f)) },
+                        onClick = { viewModel.updateLensCorrection(0f, 0f, 0f, 0f, 0f) },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(AlcedoIconSize.sm), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
-                AdjustmentSlider(label = "K1", value = params.lensK1, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK1 = it)) }, defaultValue = 0f)
+                AdjustmentSlider(label = "K1", value = params.lensK1, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrection(it, params.lensK2, params.lensK3, params.lensP1, params.lensP2)
+                }, defaultValue = 0f)
                 Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "K2", value = params.lensK2, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK2 = it)) }, defaultValue = 0f)
+                AdjustmentSlider(label = "K2", value = params.lensK2, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrection(params.lensK1, it, params.lensK3, params.lensP1, params.lensP2)
+                }, defaultValue = 0f)
                 Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "K3", value = params.lensK3, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK3 = it)) }, defaultValue = 0f)
+                AdjustmentSlider(label = "K3", value = params.lensK3, range = -0.2f..0.2f, onValueChange = {
+                    viewModel.updateLensCorrection(params.lensK1, params.lensK2, it, params.lensP1, params.lensP2)
+                }, defaultValue = 0f)
                 Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "P1", value = params.lensP1, range = -0.1f..0.1f, onValueChange = { viewModel.updateParams(params.copy(lensP1 = it)) }, defaultValue = 0f)
+                AdjustmentSlider(label = "P1", value = params.lensP1, range = -0.1f..0.1f, onValueChange = {
+                    viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, it, params.lensP2)
+                }, defaultValue = 0f)
                 Spacer(modifier = Modifier.height(AlcedoSpacing.md))
-                AdjustmentSlider(label = "P2", value = params.lensP2, range = -0.1f..0.1f, onValueChange = { viewModel.updateParams(params.copy(lensP2 = it)) }, defaultValue = 0f)
+                AdjustmentSlider(label = "P2", value = params.lensP2, range = -0.1f..0.1f, onValueChange = {
+                    viewModel.updateLensCorrection(params.lensK1, params.lensK2, params.lensK3, params.lensP1, it)
+                }, defaultValue = 0f)
             }
         }
     }
