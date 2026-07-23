@@ -13,6 +13,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.SectionHeader
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 enum class OdtMethod { ACES, OPENDRT }
 
@@ -53,12 +54,12 @@ fun DisplayTransformPanel(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ODT Method
         SectionHeader(title = stringRes { displayTransformOdtMethod }) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                     OdtMethod.entries.forEach { method ->
                         FilterChip(
                             selected = odtMethod == method,
@@ -85,8 +86,8 @@ fun DisplayTransformPanel(
 
         // Output Color Space
         SectionHeader(title = stringRes { displayTransformOutputColorSpace }) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                     OutputColorSpace.entries.forEach { cs ->
                         FilterChip(
                             selected = outputColorSpace == cs,
@@ -133,10 +134,10 @@ fun DisplayTransformPanel(
         // OpenDRT settings (only shown when ODT method is OpenDRT)
         if (odtMethod == OdtMethod.OPENDRT) {
             SectionHeader(title = stringRes { displayTransformOpenDrtLook }) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                     ) {
                         com.alcedo.studio.data.model.OpenDrtLook.entries.forEach { look ->
                             FilterChip(
@@ -159,10 +160,10 @@ fun DisplayTransformPanel(
             }
 
             SectionHeader(title = stringRes { displayTransformOpenDrtTonescale }) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                     ) {
                         com.alcedo.studio.data.model.OpenDrtTonescale.entries.forEach { ts ->
                             FilterChip(
@@ -187,10 +188,10 @@ fun DisplayTransformPanel(
 
         // Creative White Point
         SectionHeader(title = stringRes { displayTransformCreativeWhitePoint }) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                 ) {
                     CreativeWhitePoint.entries.forEach { wp ->
                         FilterChip(

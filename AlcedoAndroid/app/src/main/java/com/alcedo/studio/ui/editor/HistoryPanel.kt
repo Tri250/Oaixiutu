@@ -36,6 +36,9 @@ import com.alcedo.studio.data.model.Version
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import java.time.format.DateTimeFormatter
 
@@ -71,11 +74,11 @@ fun HistoryPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
     ) {
         // ── Header with Undo/Redo ──────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -83,7 +86,7 @@ fun HistoryPanel(
                 ) {
                     Text(
                         "${stringRes { historyVersions }} (${orderedVersions.size})",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Row {
@@ -128,7 +131,7 @@ fun HistoryPanel(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 Button(
                     onClick = {
@@ -137,8 +140,8 @@ fun HistoryPanel(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
+                    Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                     Text(stringRes { historyNewVersion })
                 }
             }
@@ -147,15 +150,18 @@ fun HistoryPanel(
         // ── P2-6 可视化事务列表（点击跳转、高亮当前位置） ────────
         if (transactions.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         text = "${stringRes { historyRecentEdits }} (${transactions.size})",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = AlcedoSpacing.xs)
                     )
 
-                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
+                    ) {
                         itemsIndexed(transactions) { index, tx ->
                             val isCurrent = index < currentIndex
                             val isCursor = index == currentIndex - 1
@@ -178,7 +184,7 @@ fun HistoryPanel(
         orderedVersions.forEach { version ->
             val isActive = version.versionId == activeVersionId
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -193,9 +199,9 @@ fun HistoryPanel(
                                     Icons.Default.CheckCircle,
                                     contentDescription = stringRes { active },
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(AlcedoIconSize.sm)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                             }
                             if (renamingVersionId == version.versionId) {
                                 OutlinedTextField(
@@ -221,22 +227,22 @@ fun HistoryPanel(
                                     viewModel.renameVersion(version.versionId, renameText)
                                     renamingVersionId = null
                                 },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Check,
                                     contentDescription = stringRes { confirm },
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(AlcedoIconSize.sm)
                                 )
                             }
                             IconButton(
                                 onClick = { renamingVersionId = null },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Close,
                                     contentDescription = stringRes { historyCancel },
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(AlcedoIconSize.sm)
                                 )
                             }
                         } else {
@@ -245,29 +251,29 @@ fun HistoryPanel(
                                     renameText = version.displayName
                                     renamingVersionId = version.versionId
                                 },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
                                     contentDescription = stringRes { historyRename },
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(AlcedoIconSize.sm)
                                 )
                             }
                             IconButton(
                                 onClick = { deleteConfirmId = version.versionId },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Delete,
                                     contentDescription = stringRes { historyDelete },
-                                    modifier = Modifier.size(14.dp),
+                                    modifier = Modifier.size(AlcedoIconSize.sm),
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                     Text(
                         text = "${version.transactions.size} edits",
@@ -276,9 +282,9 @@ fun HistoryPanel(
                     )
 
                     if (isActive && version.transactions.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                         Text(
                             stringRes { historyRecentEdits },
                             style = MaterialTheme.typography.labelSmall,
@@ -295,14 +301,14 @@ fun HistoryPanel(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(start = 8.dp, top = 2.dp)
+                                modifier = Modifier.padding(start = AlcedoSpacing.sm, top = AlcedoSpacing.xs)
                             )
                         }
                     }
 
                     // Switch version button for non-active versions
                     if (!isActive) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                         OutlinedButton(
                             onClick = { viewModel.switchVersion(version.versionId) },
                             modifier = Modifier.fillMaxWidth()
@@ -434,7 +440,7 @@ private fun HistoryItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(AlcedoSpacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 操作类型图标
@@ -443,10 +449,10 @@ private fun HistoryItem(
                 contentDescription = null,
                 tint = if (isCurrent || isCursorAt) MaterialTheme.colorScheme.primary
                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(AlcedoIconSize.md)
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
 
             // 操作名称
             Text(
@@ -469,7 +475,7 @@ private fun HistoryItem(
             )
 
             if (isCursorAt) {
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                 Box(
                     modifier = Modifier
                         .size(6.dp)

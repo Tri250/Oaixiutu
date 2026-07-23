@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -13,12 +14,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.SectionHeader
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 private val HUE_PROFILE_COLORS = listOf(
     Color(0xFFE53935), // Red
@@ -55,14 +58,14 @@ fun HlsProfilePanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // Hue ring indicator
         SectionHeader(title = stringRes { hlsProfileTitle }) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
             ) {
                 // Visual hue ring
                 HueRingIndicator(
@@ -79,7 +82,7 @@ fun HlsProfilePanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                 ) {
                     profileNames.forEachIndexed { index, name ->
                         val isSelected = selectedProfile == index
@@ -92,9 +95,9 @@ fun HlsProfilePanel(
                             label = {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                                 ) {
-                                    Canvas(modifier = Modifier.size(8.dp)) {
+                                    Canvas(modifier = Modifier.size(AlcedoIconSize.xs)) {
                                         drawCircle(color = HUE_PROFILE_COLORS[index])
                                     }
                                     Text(
@@ -115,7 +118,7 @@ fun HlsProfilePanel(
 
         // Per-profile adjustments
         SectionHeader(title = profileNames[selectedProfile]) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                 // Hue shift
                 AdjustmentSlider(
                     label = stringRes { hlsHueShift },
@@ -160,7 +163,7 @@ fun HlsProfilePanel(
 
         // Hue range per profile
         SectionHeader(title = stringRes { hlsHueRange }) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
                 AdjustmentSlider(
                     label = stringRes { hlsHueRange },
                     value = params.hslHueWidth,
@@ -183,9 +186,9 @@ fun HlsProfilePanel(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                         ) {
-                            Canvas(modifier = Modifier.size(8.dp)) {
+                            Canvas(modifier = Modifier.size(AlcedoIconSize.xs)) {
                                 drawCircle(color = HUE_PROFILE_COLORS[index])
                             }
                             Text(
@@ -238,7 +241,7 @@ private fun HueRingIndicator(
 
         // Clear inner circle
         drawCircle(
-            color = Color(0xFF1E1E1E),
+            color = MaterialTheme.colorScheme.surfaceContainer,
             radius = innerRadius,
             center = center
         )
@@ -259,20 +262,20 @@ private fun HueRingIndicator(
             size = Size(outerRadius * 2, outerRadius * 2)
         )
         drawCircle(
-            color = Color(0xFF1E1E1E),
+            color = MaterialTheme.colorScheme.surfaceContainer,
             radius = innerRadius,
             center = center
         )
 
         // Ring borders
         drawCircle(
-            color = Color.White.copy(alpha = 0.2f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
             radius = outerRadius,
             center = center,
             style = Stroke(width = 1f)
         )
         drawCircle(
-            color = Color.White.copy(alpha = 0.15f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
             radius = innerRadius,
             center = center,
             style = Stroke(width = 1f)
@@ -286,7 +289,7 @@ private fun HueRingIndicator(
             val markerY = center.y + midRadius * kotlin.math.sin(angle).toFloat()
 
             drawCircle(
-                color = if (i == selectedProfile) Color.White else HUE_PROFILE_COLORS[i],
+                color = if (i == selectedProfile) MaterialTheme.colorScheme.onSurface else HUE_PROFILE_COLORS[i],
                 radius = if (i == selectedProfile) 6f else 4f,
                 center = Offset(markerX, markerY),
                 style = if (i == selectedProfile) Stroke(width = 2f) else Stroke(width = 1f)

@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -14,9 +15,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.ui.common.SectionHeader
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import kotlin.math.*
 
 data class CurveControlPoint(val x: Float, val y: Float)
@@ -52,20 +55,20 @@ fun CurvePanelV2(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
     ) {
         // Channel tabs
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
         ) {
             CurveV2Channel.entries.forEach { ch ->
                 val isSelected = selectedChannel == ch
                 val color = when (ch) {
                     CurveV2Channel.RGB -> MaterialTheme.colorScheme.primary
-                    CurveV2Channel.R -> Color.Red
-                    CurveV2Channel.G -> Color(0xFF4CAF50)
-                    CurveV2Channel.B -> Color(0xFF4488FF)
+                    CurveV2Channel.R -> MaterialTheme.colorScheme.error
+                    CurveV2Channel.G -> Color(0xFF66BB6A)
+                    CurveV2Channel.B -> Color(0xFF42A5F5)
                 }
                 FilterChip(
                     selected = isSelected,
@@ -107,7 +110,7 @@ fun CurvePanelV2(
             onIsDraggingChanged = { isDragging = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(vertical = AlcedoSpacing.md)
         )
 
         // Reset button
@@ -126,15 +129,15 @@ fun CurvePanelV2(
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(AlcedoIconSize.sm)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
             Text("Reset Curve")
         }
 
         // Curve info
         SectionHeader(title = "Curve Info") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                 Text(
                     "Points: ${controlPoints.size} / $MAX_V2_CONTROL_POINTS",
                     style = MaterialTheme.typography.bodySmall,
@@ -168,13 +171,13 @@ private fun CurveV2Graph(
     modifier: Modifier = Modifier
 ) {
     val curveColor = when (channel) {
-        CurveV2Channel.RGB -> Color.White
-        CurveV2Channel.R -> Color.Red
-        CurveV2Channel.G -> Color.Green
-        CurveV2Channel.B -> Color(0xFF4488FF)
+        CurveV2Channel.RGB -> MaterialTheme.colorScheme.onSurface
+        CurveV2Channel.R -> MaterialTheme.colorScheme.error
+        CurveV2Channel.G -> Color(0xFF66BB6A)
+        CurveV2Channel.B -> Color(0xFF42A5F5)
     }
 
-    val gridColor = Color.Gray.copy(alpha = 0.3f)
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
 
     Canvas(
         modifier = modifier
@@ -267,12 +270,12 @@ private fun CurveV2Graph(
 
         // Background
         drawRect(
-            color = Color(0xFF1E1E1E),
+            color = MaterialTheme.colorScheme.surfaceContainer,
             topLeft = Offset(CV2_PADDING, CV2_PADDING),
             size = Size(graphW, graphH)
         )
         drawRect(
-            color = Color.White.copy(alpha = 0.1f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
             topLeft = Offset(CV2_PADDING, CV2_PADDING),
             size = Size(graphW, graphH),
             style = Stroke(width = 1f)
@@ -297,7 +300,7 @@ private fun CurveV2Graph(
 
         // Diagonal reference line
         drawLine(
-            Color.White.copy(alpha = 0.08f),
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
             Offset(CV2_PADDING, CV2_PADDING + graphH),
             Offset(CV2_PADDING + graphW, CV2_PADDING),
             strokeWidth = 1f
@@ -310,7 +313,7 @@ private fun CurveV2Graph(
             for (i in histogramData.indices) {
                 val barHeight = (histogramData[i] / maxCount) * graphH * 0.7f
                 drawRect(
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
                     topLeft = Offset(
                         CV2_PADDING + i * barWidth,
                         CV2_PADDING + graphH - barHeight
@@ -354,13 +357,13 @@ private fun CurveV2Graph(
             val cy = CV2_PADDING + (1f - pt.y) * graphH
 
             drawLine(
-                Color.White.copy(alpha = 0.3f),
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                 Offset(cx, CV2_PADDING),
                 Offset(cx, CV2_PADDING + graphH),
                 strokeWidth = 0.5f
             )
             drawLine(
-                Color.White.copy(alpha = 0.3f),
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                 Offset(CV2_PADDING, cy),
                 Offset(CV2_PADDING + graphW, cy),
                 strokeWidth = 0.5f
@@ -389,7 +392,7 @@ private fun CurveV2Graph(
                     center = Offset(cx, cy)
                 )
                 drawCircle(
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     radius = 8f,
                     center = Offset(cx, cy),
                     style = Stroke(width = 2f)
@@ -401,7 +404,7 @@ private fun CurveV2Graph(
                 )
             } else {
                 drawCircle(
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     radius = 6f,
                     center = Offset(cx, cy),
                     style = Stroke(width = 1.5f)

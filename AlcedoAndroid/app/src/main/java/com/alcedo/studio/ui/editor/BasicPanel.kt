@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -11,6 +12,9 @@ import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -32,14 +36,14 @@ fun BasicPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         FocusSectionChips(focusMode = focusMode, sections = focusSections)
 
         // ── Light ──────────────────────────────────────────────────
         if (focusMode.shouldShowSection("basic.light")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -47,7 +51,7 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionLight },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
@@ -60,17 +64,17 @@ fun BasicPanel(
                                 viewModel.updateSigmoidShoulder(0.5f)
                                 viewModel.updateShadowBoundary(0.25f)
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetLight },
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorExposure },
                         value = params.exposure,
@@ -129,7 +133,7 @@ fun BasicPanel(
         // ── White Balance ──────────────────────────────────────────
         if (focusMode.shouldShowSection("basic.wb")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -137,24 +141,24 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionWhiteBalance },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
                             onClick = {
                                 viewModel.updateWhiteBalance(6500f, 0f)
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetWb },
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorTemperature },
                         value = params.whiteBalanceTemp,
@@ -177,7 +181,7 @@ fun BasicPanel(
         // ── Presence ───────────────────────────────────────────────
         if (focusMode.shouldShowSection("basic.presence")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -185,7 +189,7 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorPresence },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
@@ -194,17 +198,17 @@ fun BasicPanel(
                                 viewModel.updateVibrance(0f)
                                 viewModel.updateSaturation(0f)
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetPresence },
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorSectionClarity },
                         value = params.clarityAmount,
@@ -233,7 +237,7 @@ fun BasicPanel(
         // ── Split Toning ──────────────────────────────────────────
         if (focusMode.shouldShowSection("basic.split_tone")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -241,24 +245,24 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionSplitToning },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
                             onClick = {
                                 viewModel.updateTint(0f, 0f, 0f, 0f, 0f)
                             },
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetSplitTone },
-                                modifier = Modifier.size(24.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorHighlightHue },
                         value = params.tintHighlightHue,

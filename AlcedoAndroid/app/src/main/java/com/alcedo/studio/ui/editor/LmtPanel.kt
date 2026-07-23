@@ -18,6 +18,8 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import java.io.File
 
 @Composable
@@ -43,10 +45,10 @@ fun LmtPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,7 +56,7 @@ fun LmtPanel(
                 ) {
                     Text(
                         stringRes { lmtTitle },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Switch(
@@ -67,7 +69,7 @@ fun LmtPanel(
                 }
 
                 if (lmtEnabled) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                     // Import LUT button
                     OutlinedButton(
@@ -77,14 +79,14 @@ fun LmtPanel(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(stringRes { lmtImportLut })
                     }
 
                     // Active LUT path display
                     if (lmtPath.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -104,7 +106,7 @@ fun LmtPanel(
                     }
 
                     // Intensity slider
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                     AdjustmentSlider(
                         label = stringRes { this.lmtIntensity },
                         value = lmtIntensity,
@@ -118,13 +120,13 @@ fun LmtPanel(
 
         // Built-in presets
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { lmtBuiltInPresets },
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Text(
                     stringRes { lmtImportLut },
                     style = MaterialTheme.typography.bodySmall,

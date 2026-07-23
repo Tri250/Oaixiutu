@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,12 +12,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -36,7 +40,7 @@ fun ColorPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         FocusSectionChips(focusMode = focusMode, sections = focusSections)
 
@@ -75,7 +79,7 @@ private fun ColorWheelsSection(
     var selectedWheel by remember { mutableStateOf(ColorWheelType.LIFT) }
     val view = LocalView.current
 
-    Column(modifier = Modifier.padding(12.dp)) {
+    Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -83,7 +87,7 @@ private fun ColorWheelsSection(
         ) {
             Text(
                 stringRes { editorColorWheels },
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
@@ -91,25 +95,25 @@ private fun ColorWheelsSection(
                     HapticFeedback.heavyClick(view)
                     viewModel.resetColorWheels()
                 },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetWheels },
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(AlcedoIconSize.sm),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
         // Wheel type selector
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
         ) {
             ColorWheelType.entries.forEach { type ->
                 FilterChip(
@@ -123,7 +127,7 @@ private fun ColorWheelsSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
         // CDL Color Wheel for selected type
         val (r, g, b) = when (selectedWheel) {
@@ -164,7 +168,7 @@ private fun ColorWheelsSection(
                 wheelSizeDp = 200.dp
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
             // RGB value readout
             Row(
@@ -173,8 +177,8 @@ private fun ColorWheelsSection(
             ) {
                 listOf(
                     "R" to r to Color.Red,
-                    "G" to g to Color(0xFF4CAF50),
-                    "B" to b to Color(0xFF4488FF)
+                    "G" to g to Color(0xFF66BB6A),
+                    "B" to b to Color(0xFF42A5F5)
                 ).forEach { (pair, color) ->
                     val (label, value) = pair
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -193,7 +197,7 @@ private fun ColorWheelsSection(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
             // Fine-tune sliders for RGB
             val valueRange = when (selectedWheel) {
@@ -204,12 +208,12 @@ private fun ColorWheelsSection(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
             ) {
                 listOf(
                     "R" to r to Color.Red,
-                    "G" to g to Color(0xFF4CAF50),
-                    "B" to b to Color(0xFF4488FF)
+                    "G" to g to Color(0xFF66BB6A),
+                    "B" to b to Color(0xFF42A5F5)
                 ).forEach { (pair, color) ->
                     val (label, value) = pair
                     Column(modifier = Modifier.weight(1f)) {
@@ -257,7 +261,7 @@ private fun ColorWheelsSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
         // Reset button for current wheel
         OutlinedButton(
@@ -271,8 +275,8 @@ private fun ColorWheelsSection(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
+            Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
             Text(stringRes { editorReset }.format(selectedWheel.label()))
         }
     }
@@ -302,7 +306,7 @@ private fun HslSection(
 
     var expandedChannel by remember { mutableStateOf(-1) }
 
-    Column(modifier = Modifier.padding(12.dp)) {
+    Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -310,7 +314,7 @@ private fun HslSection(
         ) {
             Text(
                 stringRes { editorHsl },
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
@@ -318,18 +322,18 @@ private fun HslSection(
                     HapticFeedback.heavyClick(view)
                     viewModel.resetHsl()
                 },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetHsl },
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(AlcedoIconSize.sm),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
         val hueColors = listOf(
             Color(0xFFE53935),
@@ -342,7 +346,7 @@ private fun HslSection(
             Color(0xFFE91E63)
         )
 
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
             hslChannelNames.forEachIndexed { idx, name ->
                 val index = hslChannelIndices[idx]
                 val isExpanded = expandedChannel == index
@@ -359,15 +363,15 @@ private fun HslSection(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(AlcedoSpacing.md),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            androidx.compose.foundation.Canvas(modifier = Modifier.size(12.dp)) {
+                            androidx.compose.foundation.Canvas(modifier = Modifier.size(AlcedoIconSize.xs)) {
                                 drawCircle(color = hueColors[index])
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                             Text(name, style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
@@ -380,8 +384,8 @@ private fun HslSection(
                     }
                     if (isExpanded) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.padding(horizontal = AlcedoSpacing.md, vertical = AlcedoSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                         ) {
                             AdjustmentSlider(
                                 label = stringRes { editorHue },
@@ -429,7 +433,7 @@ private fun ChannelMixerSection(
         stringRes { editorOutputB }
     )
 
-    Column(modifier = Modifier.padding(12.dp)) {
+    Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -437,7 +441,7 @@ private fun ChannelMixerSection(
         ) {
             Text(
                 stringRes { editorChannelMixer },
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
             IconButton(
@@ -448,18 +452,18 @@ private fun ChannelMixerSection(
                         false
                     )
                 },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(32.dp)
             ) {
                 Icon(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetMixer },
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(AlcedoIconSize.sm),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
@@ -482,7 +486,7 @@ private fun ChannelMixerSection(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
             ) {
                 labels.forEachIndexed { col, colLabel ->
                     Column(modifier = Modifier.weight(1f)) {

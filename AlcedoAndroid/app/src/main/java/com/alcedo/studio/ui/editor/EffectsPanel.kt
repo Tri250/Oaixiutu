@@ -2,6 +2,7 @@ package com.alcedo.studio.ui.editor
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -20,6 +21,9 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import java.io.File
 
@@ -57,14 +61,14 @@ fun EffectsPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         FocusSectionChips(focusMode = focusMode, sections = focusSections)
 
         // ── Luminance Denoise ──
         if (focusMode.shouldShowSection("effects.luma_denoise")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -72,7 +76,7 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionLuminanceDenoise },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
@@ -80,17 +84,17 @@ fun EffectsPanel(
                                 HapticFeedback.heavyClick(view)
                                 viewModel.updateParams(params.copy(luminanceDenoiseStrength = 0f, luminanceDenoiseDetail = 0.5f))
                             },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetLumaDenoise },
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorStrength },
                         value = params.luminanceDenoiseStrength,
@@ -112,7 +116,7 @@ fun EffectsPanel(
         // ── Chroma Denoise ──
         if (focusMode.shouldShowSection("effects.chroma_denoise")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -120,7 +124,7 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionChromaDenoise },
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         IconButton(
@@ -128,17 +132,17 @@ fun EffectsPanel(
                                 HapticFeedback.heavyClick(view)
                                 viewModel.updateParams(params.copy(chromaDenoiseStrength = 0f, chromaDenoiseThreshold = 0.5f))
                             },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetChromaDenoise },
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     AdjustmentSlider(
                         label = stringRes { editorStrength },
                         value = params.chromaDenoiseStrength,
@@ -160,7 +164,7 @@ fun EffectsPanel(
         // ── Film Grain ─────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.grain")) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -168,25 +172,25 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionFilmGrain },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = {
-                            HapticFeedback.heavyClick(view)
-                            viewModel.updateFilmGrain(0f)
-                        },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringRes { effectsResetGrain },
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        IconButton(
+                            onClick = {
+                                HapticFeedback.heavyClick(view)
+                                viewModel.updateFilmGrain(0f)
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringRes { effectsResetGrain },
+                                modifier = Modifier.size(AlcedoIconSize.sm),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { editorIntensity },
                     value = params.filmGrainIntensity,
@@ -201,7 +205,7 @@ fun EffectsPanel(
         // ── Halation ──────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.halation")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -209,7 +213,7 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionHalation },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -217,17 +221,17 @@ fun EffectsPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.updateHalation(0f, 0.8f, 10f, 0.7f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetHalation },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { editorIntensity },
                     value = params.halationIntensity,
@@ -284,7 +288,7 @@ fun EffectsPanel(
         // ── Sharpen ───────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.sharpen")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -292,7 +296,7 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionSharpen },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -300,17 +304,17 @@ fun EffectsPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.updateSharpen(0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetSharpen },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { editorAmount },
                     value = params.sharpenAmount,
@@ -327,7 +331,7 @@ fun EffectsPanel(
                             HapticFeedback.click(view)
                             viewModel.setShowSharpeningMask(!showSharpeningMask)
                         }
-                        .padding(top = 4.dp),
+                        .padding(top = AlcedoSpacing.xs),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -336,9 +340,9 @@ fun EffectsPanel(
                         contentDescription = stringRes { effectsShowSharpeningMask },
                         tint = if (showSharpeningMask) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(AlcedoIconSize.md)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                     Text(
                         text = stringRes { effectsShowSharpeningMask },
                         style = MaterialTheme.typography.labelSmall,
@@ -353,7 +357,7 @@ fun EffectsPanel(
         // ── Clarity ───────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.clarity")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -361,7 +365,7 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionClarity },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -369,17 +373,17 @@ fun EffectsPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.updateClarity(0f)
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetClarity },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { editorAmount },
                     value = params.clarityAmount,
@@ -402,7 +406,7 @@ fun EffectsPanel(
         // ── Vignette ──────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.vignette")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -410,7 +414,7 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionVignette },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -418,17 +422,17 @@ fun EffectsPanel(
                             HapticFeedback.heavyClick(view)
                             viewModel.updateParams(params.copy(lensVignetteStrength = 0f))
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetVignette },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { effectsStrength },
                     value = params.lensVignetteStrength,
@@ -445,7 +449,7 @@ fun EffectsPanel(
         // ── LUT ───────────────────────────────────────────────────
         if (focusMode.shouldShowSection("effects.lut")) {
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -453,7 +457,7 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionLut },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -462,15 +466,16 @@ fun EffectsPanel(
                                 HapticFeedback.heavyClick(view)
                                 viewModel.updateLut(false, "")
                             },
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetLut },
-                                modifier = Modifier.size(14.dp),
+                                modifier = Modifier.size(AlcedoIconSize.sm),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         Switch(
                             checked = params.lutEnabled,
                             onCheckedChange = {
@@ -480,7 +485,7 @@ fun EffectsPanel(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 if (params.lutEnabled) {
                     OutlinedButton(
                         onClick = {
@@ -490,8 +495,8 @@ fun EffectsPanel(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                         Text(
                             if (params.lutPath.isEmpty()) stringRes { editorSelectLut }
                             else params.lutPath.substringAfterLast('/')

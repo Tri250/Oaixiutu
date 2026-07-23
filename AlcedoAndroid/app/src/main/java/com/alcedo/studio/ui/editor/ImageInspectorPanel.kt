@@ -10,11 +10,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.ImageModel
 import com.alcedo.studio.data.model.ImageType
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 @Composable
 fun ImageInspectorPanel(
@@ -57,17 +60,17 @@ fun ImageInspectorPanel(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ── File Info ──────────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { inspectorFileInfo },
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 if (image.imageName.isNotEmpty()) {
                     InspectorRow("File", image.imageName)
                 }
@@ -90,13 +93,13 @@ fun ImageInspectorPanel(
         val cameraEntries = buildCameraEntries(exif)
         if (cameraEntries.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "Camera",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     cameraEntries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
@@ -108,13 +111,13 @@ fun ImageInspectorPanel(
         val lensEntries = buildLensEntries(exif)
         if (lensEntries.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "Lens",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     lensEntries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
@@ -126,13 +129,13 @@ fun ImageInspectorPanel(
         val captureEntries = buildCaptureEntries(exif)
         if (captureEntries.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "Capture",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     captureEntries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
@@ -144,13 +147,13 @@ fun ImageInspectorPanel(
         val colorTimeEntries = buildColorTimeEntries(exif)
         if (colorTimeEntries.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "Color & Time",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     colorTimeEntries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
@@ -163,13 +166,13 @@ fun ImageInspectorPanel(
             val rawEntries = buildRawEntries(exif)
             if (rawEntries.isNotEmpty()) {
                 LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                         Text(
                             "RAW",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                         rawEntries.forEach { (key, value) ->
                             InspectorRow(key, value)
                         }
@@ -183,13 +186,13 @@ fun ImageInspectorPanel(
             val djiEntries = buildDjiEntries(exif)
             if (djiEntries.isNotEmpty()) {
                 LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                         Text(
                             "DJI Flight",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                         djiEntries.forEach { (key, value) ->
                             InspectorRow(key, value)
                         }
@@ -202,13 +205,13 @@ fun ImageInspectorPanel(
         val aiEntries = buildAiEntries(exif)
         if (aiEntries.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "AI Scene",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     aiEntries.forEach { (key, value) ->
                         InspectorRow(key, value)
                     }
@@ -219,13 +222,13 @@ fun ImageInspectorPanel(
         // ── GPS ────────────────────────────────────────────────────
         if (exif.gpsLatitude.isNotEmpty() || exif.gpsLongitude.isNotEmpty()) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         "GPS",
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     if (exif.gpsLatitude.isNotEmpty()) {
                         InspectorRow("Latitude", exif.gpsLatitude)
                     }
@@ -241,7 +244,7 @@ fun ImageInspectorPanel(
 
         // ── EXIF Data (raw view + edit) ────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -249,20 +252,20 @@ fun ImageInspectorPanel(
                 ) {
                     Text(
                         stringRes { inspectorExifData },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (image.imagePath.isNotEmpty()) {
                         FilledTonalButton(
                             onClick = { showExifEditor = true },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = AlcedoSpacing.md, vertical = AlcedoSpacing.xs)
                         ) {
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(AlcedoIconSize.sm)
                             )
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(AlcedoSpacing.sm))
                             Text(
                                 stringRes { exifEditTitle },
                                 style = MaterialTheme.typography.labelMedium
@@ -270,7 +273,7 @@ fun ImageInspectorPanel(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 val entries = buildExifEntries(exif)
                 if (entries.isEmpty()) {
                     Text(
@@ -290,15 +293,15 @@ fun ImageInspectorPanel(
         val rating = exif.rating.coerceIn(0, 5)
         if (rating > 0) {
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         stringRes { inspectorRating },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         (1..5).forEach { star ->
@@ -307,7 +310,7 @@ fun ImageInspectorPanel(
                                 contentDescription = null,
                                 tint = if (star <= rating) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(AlcedoIconSize.md)
                             )
                         }
                     }
@@ -436,7 +439,7 @@ private fun InspectorRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = AlcedoSpacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(

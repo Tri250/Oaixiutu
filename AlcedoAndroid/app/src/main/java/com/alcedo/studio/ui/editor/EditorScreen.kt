@@ -49,7 +49,11 @@ import com.alcedo.studio.viewmodel.EditorViewModel
 import com.alcedo.studio.viewmodel.ScopeType
 import com.alcedo.studio.ui.common.LoadingOverlay
 import com.alcedo.studio.ui.common.LocalEditorEnabled
+import com.alcedo.studio.ui.common.AlcedoEasing
 import com.alcedo.studio.ui.editor.HlsProfilePanel
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -200,7 +204,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Undo,
                             contentDescription = stringRes { editorUndo },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (canUndo) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         )
@@ -209,7 +213,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Redo,
                             contentDescription = stringRes { editorRedo },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (canRedo) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                         )
@@ -218,7 +222,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Compare,
                             contentDescription = stringRes { editorCompare },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (isCompareMode) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -228,7 +232,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.BarChart,
                             contentDescription = stringRes { editorScopeAnalyzer },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (showScope) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -238,7 +242,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Warning,
                             contentDescription = stringRes { editorClippingWarning },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (showClippingWarning) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -248,7 +252,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.CenterFocusStrong,
                             contentDescription = stringRes { editorFocusMode },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = if (focusMode.enabled) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface
                         )
@@ -257,7 +261,7 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Save,
                             contentDescription = stringRes { editorSave },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -265,13 +269,13 @@ fun EditorScreen(
                         Icon(
                             Icons.Default.Share,
                             contentDescription = stringRes { editorExport },
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(AlcedoIconSize.lg),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
@@ -311,8 +315,8 @@ fun EditorScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 4.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                shape = AlcedoRadius.xs,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
             ) {
                 ColorSpaceIndicator(
                     inputSpace = csInput,
@@ -395,13 +399,15 @@ fun EditorScreen(
 
                     ScrollableTabRow(
                         selectedTabIndex = pagerState.currentPage,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize(),
                         edgePadding = 12.dp,
                         containerColor = MaterialTheme.colorScheme.surfaceContainer,
                         contentColor = MaterialTheme.colorScheme.primary,
                         divider = {
                             HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                                 thickness = 0.5.dp
                             )
                         }
@@ -445,62 +451,70 @@ fun EditorScreen(
                         pageSpacing = 8.dp
                     ) { pageIndex ->
                         val panel = EditorPanel.entries[pageIndex]
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            when (panel) {
-                                EditorPanel.BASIC -> BasicPanel(viewModel = viewModel, focusMode = focusMode)
-                                EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
-                                EditorPanel.COLOR -> ColorPanel(viewModel = viewModel, focusMode = focusMode)
-                                EditorPanel.HSL -> {
-                                    val params by remember { viewModel.params }
-                                    HlsProfilePanel(
-                                        params = params,
-                                        onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.HSL) }
+                        AnimatedContent(
+                            targetState = panel,
+                            transitionSpec = {
+                                (slideInHorizontally { it } + fadeIn(tween(280, easing = AlcedoEasing.EmphasizedDecelerate))) togetherWith
+                                (slideOutHorizontally { -it } + fadeOut(tween(200, easing = AlcedoEasing.EmphasizedAccelerate)))
+                            }
+                        ) { currentPanel ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                when (currentPanel) {
+                                    EditorPanel.BASIC -> BasicPanel(viewModel = viewModel, focusMode = focusMode)
+                                    EditorPanel.TONE_CURVE -> ToneCurvePanel(viewModel = viewModel)
+                                    EditorPanel.COLOR -> ColorPanel(viewModel = viewModel, focusMode = focusMode)
+                                    EditorPanel.HSL -> {
+                                        val params by remember { viewModel.params }
+                                        HlsProfilePanel(
+                                            params = params,
+                                            onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.HSL) }
+                                        )
+                                    }
+                                    EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
+                                    EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel, focusMode = focusMode)
+                                    EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
+                                    EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
+                                    EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
+                                        params = viewModel.params.value,
+                                        onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.DISPLAY_TRANSFORM) }
+                                    )
+                                    EditorPanel.LMT -> {
+                                        val lmtParams = viewModel.params.value
+                                        LmtPanel(
+                                            lmtEnabled = lmtParams.lutEnabled,
+                                            lmtPath = lmtParams.lutPath,
+                                            lmtIntensity = lmtParams.lutIntensity,
+                                            onLmtChanged = { enabled, path, intensity ->
+                                                viewModel.updateParamsWithHistory(
+                                                    lmtParams.copy(
+                                                        lutEnabled = enabled,
+                                                        lutPath = path,
+                                                        lutIntensity = intensity
+                                                    ),
+                                                    OperatorType.LUT
+                                                )
+                                            }
+                                        )
+                                    }
+                                    EditorPanel.INSPECTOR -> ImageInspectorPanel(
+                                        image = viewModel.imageModel.value
+                                    )
+                                    EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
+                                    EditorPanel.MASKS -> MaskPanel(
+                                        viewModel = viewModel,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    EditorPanel.PRESETS -> PresetPanel(
+                                        viewModel = viewModel,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
-                                EditorPanel.GEOMETRY -> GeometryPanel(viewModel = viewModel)
-                                EditorPanel.EFFECTS -> EffectsPanel(viewModel = viewModel, focusMode = focusMode)
-                                EditorPanel.RAW -> RawDecodePanel(viewModel = viewModel)
-                                EditorPanel.HISTORY -> HistoryPanel(viewModel = viewModel)
-                                EditorPanel.DISPLAY_TRANSFORM -> DisplayTransformPanel(
-                                    params = viewModel.params.value,
-                                    onParamsChanged = { viewModel.updateParamsWithHistory(it, OperatorType.DISPLAY_TRANSFORM) }
-                                )
-                                EditorPanel.LMT -> {
-                                    val lmtParams = viewModel.params.value
-                                    LmtPanel(
-                                        lmtEnabled = lmtParams.lutEnabled,
-                                        lmtPath = lmtParams.lutPath,
-                                        lmtIntensity = lmtParams.lutIntensity,
-                                        onLmtChanged = { enabled, path, intensity ->
-                                            viewModel.updateParamsWithHistory(
-                                                lmtParams.copy(
-                                                    lutEnabled = enabled,
-                                                    lutPath = path,
-                                                    lutIntensity = intensity
-                                                ),
-                                                OperatorType.LUT
-                                            )
-                                        }
-                                    )
-                                }
-                                EditorPanel.INSPECTOR -> ImageInspectorPanel(
-                                    image = viewModel.imageModel.value
-                                )
-                                EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
-                                EditorPanel.MASKS -> MaskPanel(
-                                    viewModel = viewModel,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                EditorPanel.PRESETS -> PresetPanel(
-                                    viewModel = viewModel,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
                             }
                         }
                     }
@@ -618,7 +632,7 @@ private fun ScopeAnalyzerPanel(
                     Icon(
                         Icons.Default.Close,
                         contentDescription = stringRes { close },
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(AlcedoIconSize.lg),
                         // UX 修复: 使用主题色而非硬编码白色
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -650,11 +664,11 @@ private fun ScopeAnalyzerPanel(
                     ) {
                         HistogramChannel.entries.forEach { ch ->
                             val color = when (ch) {
-                                HistogramChannel.RGB -> Color.White
+                                HistogramChannel.RGB -> MaterialTheme.colorScheme.onSurface
                                 HistogramChannel.RED -> Color.Red
                                 HistogramChannel.GREEN -> Color.Green
-                                HistogramChannel.BLUE -> Color(0xFF4488FF)
-                                HistogramChannel.LUMINANCE -> Color.White
+                                HistogramChannel.BLUE -> Color(0xFF42A5F5)
+                                HistogramChannel.LUMINANCE -> MaterialTheme.colorScheme.onSurface
                             }
                             FilterChip(
                                 selected = histogramChannel == ch,
@@ -664,12 +678,12 @@ private fun ScopeAnalyzerPanel(
                                         ch.label,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (histogramChannel == ch) color
-                                        else Color.Gray
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
                                 modifier = Modifier.height(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         }
                     }
                     // 剪裁预警切换行
@@ -706,7 +720,7 @@ private fun ScopeAnalyzerPanel(
                                 },
                                 modifier = Modifier.height(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         }
                     }
                 }
@@ -732,7 +746,7 @@ private fun ScopeAnalyzerPanel(
                                 },
                                 modifier = Modifier.height(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         }
                     }
                 }
@@ -754,10 +768,10 @@ private fun ScopeAnalyzerPanel(
                     ) {
                         GamutOverlay.entries.forEach { g ->
                             val color = when (g) {
-                                GamutOverlay.SRGB -> Color.White
+                                GamutOverlay.SRGB -> MaterialTheme.colorScheme.onSurface
                                 GamutOverlay.P3 -> Color(0xFF4FC3F7)
-                                GamutOverlay.REC2020 -> Color(0xFFFFB74D)
-                                GamutOverlay.ACES -> Color(0xFFCE93D8)
+                                GamutOverlay.REC2020 -> Color(0xFFFFA726)
+                                GamutOverlay.ACES -> Color(0xFFAB47BC)
                             }
                             FilterChip(
                                 selected = g in gamutOverlay,
@@ -771,12 +785,12 @@ private fun ScopeAnalyzerPanel(
                                     Text(
                                         g.label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (g in gamutOverlay) color else Color.Gray
+                                        color = if (g in gamutOverlay) color else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
                                 modifier = Modifier.height(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(2.dp))
+                            Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         }
                     }
                 }
@@ -912,7 +926,7 @@ private fun ImagePreviewArea(
                                         )
                                     },
                                     modifier = Modifier
-                                        .padding(horizontal = 2.dp)
+                                        .padding(horizontal = AlcedoSpacing.xs)
                                 )
                             }
                         }
@@ -980,19 +994,19 @@ private fun ImagePreviewArea(
                         Icons.Default.ErrorOutline,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
-                        tint = Color.White.copy(alpha = 0.6f)
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         stringRes { editorNoImage },
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedButton(
                         onClick = onRetryLoad,
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = Color.White
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     ) {
                         Icon(
@@ -1010,12 +1024,12 @@ private fun ImagePreviewArea(
                         Icons.Default.Image,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
-                        tint = Color.White.copy(alpha = 0.3f)
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         stringRes { editorNoImage },
-                        color = Color.White.copy(alpha = 0.3f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -1039,13 +1053,15 @@ private fun EditorPanelColumn(
     ) {
         ScrollableTabRow(
             selectedTabIndex = selectedPanel.ordinal,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(),
             edgePadding = 12.dp,
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             contentColor = MaterialTheme.colorScheme.primary,
             divider = {
                 HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                     thickness = 0.5.dp
                 )
             }
@@ -1136,9 +1152,9 @@ private fun RawDecodePanel(
 ) {
     val params by remember { viewModel.params }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringRes { editorDemosaicAlgorithm }, style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)) {
+        Text(stringRes { editorDemosaicAlgorithm }, style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
             DemosaicAlgorithm.entries.forEach { algo ->
                 FilterChip(
                     selected = params.rawDecodeParams.demosaicAlgorithm == algo,
@@ -1355,7 +1371,7 @@ private fun EditorBottomToolbar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.sm),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1432,12 +1448,12 @@ private fun EditorToolbarButton(
             .clip(RoundedCornerShape(12.dp))
             .background(backgroundColor)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = AlcedoSpacing.sm, vertical = AlcedoSpacing.sm)
     ) {
         Icon(
             icon,
             contentDescription = label,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(AlcedoIconSize.lg),
             tint = iconColor
         )
         Spacer(modifier = Modifier.height(4.dp))

@@ -75,6 +75,8 @@ import com.alcedo.studio.data.model.SubMask
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlin.math.roundToInt
 
@@ -104,20 +106,20 @@ fun MaskPanel(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ── Header: title + New Mask ──
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(AlcedoSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     stringRes { maskTitle },
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -126,7 +128,7 @@ fun MaskPanel(
                         selected = false,
                         onClick = { showNewMaskMenu = true },
                         leadingIcon = {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                         },
                         label = { Text(stringRes { maskNewMask }) }
                     )
@@ -138,7 +140,7 @@ fun MaskPanel(
                             DropdownMenuItem(
                                 text = { Text(maskTypeLabel(type)) },
                                 leadingIcon = {
-                                    Icon(maskTypeIcon(type), contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Icon(maskTypeIcon(type), contentDescription = null, modifier = Modifier.size(AlcedoIconSize.md))
                                 },
                                 onClick = {
                                     viewModel.addMaskContainer(type)
@@ -168,7 +170,7 @@ fun MaskPanel(
                     stringRes { maskNewMask },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(AlcedoSpacing.xl),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -209,7 +211,7 @@ private fun MaskPreviewCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(160.dp)
-                .padding(6.dp)
+                .padding(AlcedoSpacing.sm)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
@@ -275,12 +277,12 @@ private fun MaskContainerCard(
     var newSubMode by remember { mutableStateOf(MaskCombineMode.ADDITIVE) }
 
     LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(AlcedoSpacing.md), verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onToggleExpand, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onToggleExpand, modifier = Modifier.size(32.dp)) {
                     Icon(
                         if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
@@ -318,13 +320,13 @@ private fun MaskContainerCard(
                     onClick = { onUpdate(container.copy(inverted = !container.inverted)) },
                     label = { Text(stringRes { maskInvert }) },
                     leadingIcon = {
-                        Icon(Icons.Default.InvertColors, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.InvertColors, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                     },
                     colors = if (container.inverted) AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer
                     ) else AssistChipDefaults.assistChipColors()
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(AlcedoSpacing.sm))
                 AdjustmentSlider(
                     label = stringRes { maskOpacity },
                     value = container.opacity,
@@ -358,7 +360,7 @@ private fun MaskContainerCard(
                             selected = false,
                             onClick = { showSubMaskMenu = true },
                             leadingIcon = {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             },
                             label = { Text(stringRes { maskNewMask }) }
                         )
@@ -379,7 +381,7 @@ private fun MaskContainerCard(
                                 DropdownMenuItem(
                                     text = { Text(maskTypeLabel(type)) },
                                     leadingIcon = {
-                                        Icon(maskTypeIcon(type), contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Icon(maskTypeIcon(type), contentDescription = null, modifier = Modifier.size(AlcedoIconSize.md))
                                     },
                                     onClick = {
                                         onAddSubMask(type, newSubMode)
@@ -389,7 +391,7 @@ private fun MaskContainerCard(
                             }
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AlcedoSpacing.sm))
                     Text(
                         combineModeLabel(newSubMode),
                         style = MaterialTheme.typography.labelSmall,
@@ -414,7 +416,7 @@ private fun SubMaskList(
     onUpdate: (SubMask) -> Unit,
     onRemove: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
         subMasks.forEachIndexed { index, sub ->
             var dragOffset by remember(sub.id) { mutableStateOf(0f) }
             SubMaskRow(
@@ -529,12 +531,11 @@ private fun SubMaskRow(
                     onClick = { onUpdate(sub.copy(inverted = !sub.inverted)) },
                     modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(
-                        Icons.Default.InvertColors,
+                    Icon(Icons.Default.InvertColors,
                         contentDescription = stringRes { maskInvert },
                         tint = if (sub.inverted) MaterialTheme.colorScheme.secondary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(AlcedoIconSize.sm)
                     )
                 }
                 AdjustmentSlider(
@@ -558,7 +559,7 @@ private fun SubMaskRow(
                             onClick = { viewModel.clearActiveBrushSubMask() },
                             label = { Text(stringRes { maskBrushDone }, style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
                         )
                     } else {
@@ -567,7 +568,7 @@ private fun SubMaskRow(
                             onClick = { viewModel.setActiveBrushSubMask(containerId, subMaskIndex) },
                             label = { Text(stringRes { maskBrushEdit }, style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
-                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
                         )
                     }
@@ -619,7 +620,7 @@ private fun SubMaskRow(
                             },
                             label = { Text(stringRes { maskBrushDraw }, style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
-                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
                         )
                         Spacer(Modifier.width(6.dp))
@@ -631,7 +632,7 @@ private fun SubMaskRow(
                             },
                             label = { Text(stringRes { maskBrushEraser }, style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
-                                Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
                         )
                         Spacer(Modifier.width(6.dp))
@@ -640,7 +641,7 @@ private fun SubMaskRow(
                             onClick = { viewModel.setBrushDrawingMode(false) },
                             label = { Text(stringRes { maskBrushNavigate }, style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = {
-                                Icon(Icons.Default.PanTool, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.PanTool, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
                         )
                     }
@@ -654,13 +655,12 @@ private fun SubMaskRow(
                             enabled = brushState.strokes.isNotEmpty(),
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Undo,
+                            Icon(Icons.Default.Undo,
                                 contentDescription = stringRes { maskBrushUndo },
                                 tint = if (brushState.strokes.isNotEmpty())
                                     MaterialTheme.colorScheme.onSurface
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(AlcedoIconSize.sm)
                             )
                         }
                         IconButton(
@@ -668,13 +668,12 @@ private fun SubMaskRow(
                             enabled = brushState.strokes.isNotEmpty(),
                             modifier = Modifier.size(32.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Delete,
+                            Icon(Icons.Default.Delete,
                                 contentDescription = stringRes { maskBrushClear },
                                 tint = if (brushState.strokes.isNotEmpty())
                                     MaterialTheme.colorScheme.error
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(AlcedoIconSize.sm)
                             )
                         }
                     }
@@ -716,16 +715,16 @@ private fun SubMaskRow(
 
         // Reorder buttons + delete
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = onMoveUp, enabled = !isFirst, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onMoveUp, enabled = !isFirst, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
             }
-            IconButton(onClick = onMoveDown, enabled = !isLast, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(18.dp))
+            IconButton(onClick = onMoveDown, enabled = !isLast, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
             }
         }
         IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Default.Delete, contentDescription = stringRes { maskDeleteSubMask },
-                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(AlcedoIconSize.sm))
         }
     }
 }

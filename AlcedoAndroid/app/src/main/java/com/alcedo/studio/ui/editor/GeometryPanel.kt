@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -15,6 +16,9 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -29,11 +33,11 @@ fun GeometryPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ── Transform ──────────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -41,7 +45,7 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { editorSectionTransform },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -56,17 +60,17 @@ fun GeometryPanel(
                                 )
                             )
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetTransform },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 AdjustmentSlider(
                     label = stringRes { editorRotate },
@@ -81,7 +85,7 @@ fun GeometryPanel(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                 ) {
                     OutlinedButton(
                         onClick = {
@@ -100,9 +104,9 @@ fun GeometryPanel(
                         Icon(
                             Icons.Default.SwapHoriz,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(AlcedoIconSize.sm)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         Text(stringRes { editorFlipH })
                     }
                     OutlinedButton(
@@ -122,9 +126,9 @@ fun GeometryPanel(
                         Icon(
                             Icons.Default.SwapVert,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(AlcedoIconSize.sm)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                         Text(stringRes { editorFlipV })
                     }
                 }
@@ -139,9 +143,9 @@ fun GeometryPanel(
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(AlcedoIconSize.sm)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                     Text(stringRes { geometryResetRotation })
                 }
             }
@@ -149,7 +153,7 @@ fun GeometryPanel(
 
         // ── Crop ───────────────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -157,7 +161,7 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { editorSectionCrop },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -166,22 +170,22 @@ fun GeometryPanel(
                             viewModel.resetCrop()
                             selectedCropAspectRatio = CropAspectRatio.FREE
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetCrop },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 // 裁剪比例选择 — 使用 CropAspectRatio
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                 ) {
                     CropAspectRatio.entries.forEach { ratio ->
                         FilterChip(
@@ -200,16 +204,16 @@ fun GeometryPanel(
 
         // ── Rotate / Flip ────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { editorSectionTransform },
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                 ) {
                     IconButton(onClick = {
                         val newRotation = ((params.cropRotation + 90) % 360)
@@ -243,13 +247,13 @@ fun GeometryPanel(
 
         // ── Composition Guide ─────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { cropCompositionGuide },
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 CompositionOverlaySelector(
                     selected = selectedOverlay,
                     onSelect = {
@@ -257,12 +261,12 @@ fun GeometryPanel(
                         selectedOverlay = it
                     }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     CompositionOverlay(
                         overlayType = selectedOverlay,
@@ -274,7 +278,7 @@ fun GeometryPanel(
 
         // ── Perspective Transform ─────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,7 +286,7 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropPerspectiveTransform },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -301,17 +305,17 @@ fun GeometryPanel(
                                 )
                             )
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetPerspective },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 PerspectiveTransformSlider(stringRes { cropDistortion }, params.perspectiveDistortion) {
                     viewModel.updateParams(params.copy(perspectiveDistortion = it))
@@ -342,7 +346,7 @@ fun GeometryPanel(
 
         // ── Lens Correction ────────────────────────────────────────
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -350,7 +354,7 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropLensCorrection },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
@@ -375,17 +379,17 @@ fun GeometryPanel(
                                 )
                             )
                         },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetLens },
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AlcedoIconSize.sm),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 // Auto-detect toggle
                 Row(
@@ -403,11 +407,10 @@ fun GeometryPanel(
                         onCheckedChange = {
                             HapticFeedback.click(view)
                             viewModel.updateParams(params.copy(lensAutoDetect = it))
-                        },
-                        modifier = Modifier.height(24.dp)
+                        }
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
 
                 // Manual lens fields
                 OutlinedTextField(
@@ -418,7 +421,7 @@ fun GeometryPanel(
                     singleLine = true,
                     enabled = !params.lensAutoDetect
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 OutlinedTextField(
                     value = params.lensModel,
                     onValueChange = { viewModel.updateParams(params.copy(lensModel = it)) },
@@ -427,7 +430,7 @@ fun GeometryPanel(
                     singleLine = true,
                     enabled = !params.lensAutoDetect
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 // Correction toggles + amounts
                 Row(
@@ -445,8 +448,7 @@ fun GeometryPanel(
                         onCheckedChange = {
                             HapticFeedback.click(view)
                             viewModel.updateParams(params.copy(lensCorrectDistortion = it))
-                        },
-                        modifier = Modifier.height(24.dp)
+                        }
                     )
                 }
                 if (params.lensCorrectDistortion) {
@@ -477,8 +479,7 @@ fun GeometryPanel(
                         onCheckedChange = {
                             HapticFeedback.click(view)
                             viewModel.updateParams(params.copy(lensCorrectVignette = it))
-                        },
-                        modifier = Modifier.height(24.dp)
+                        }
                     )
                 }
                 if (params.lensCorrectVignette) {
@@ -509,8 +510,7 @@ fun GeometryPanel(
                         onCheckedChange = {
                             HapticFeedback.click(view)
                             viewModel.updateParams(params.copy(lensCorrectTca = it))
-                        },
-                        modifier = Modifier.height(24.dp)
+                        }
                     )
                 }
                 if (params.lensCorrectTca) {
@@ -527,7 +527,7 @@ fun GeometryPanel(
                 }
 
                 // Legacy manual K1/K2 sliders (always visible for advanced use)
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(
                     label = stringRes { geometryDistortionK1 },
                     value = params.lensK1,

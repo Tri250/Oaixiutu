@@ -12,6 +12,9 @@ import com.alcedo.studio.domain.service.LensCorrectionDatabase
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoIconSize
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -42,13 +45,13 @@ fun LensCorrectionPanel(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // 自动检测结果
         autoDetectedProfile?.let { profile ->
             LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(AlcedoSpacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -85,7 +88,7 @@ fun LensCorrectionPanel(
 
         // 手动调整
         LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -93,21 +96,25 @@ fun LensCorrectionPanel(
                 ) {
                     Text(
                         stringRes { editorSectionLensCorrection },
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(
                         onClick = { viewModel.updateParams(params.copy(lensK1 = 0f, lensK2 = 0f, lensK3 = 0f, lensP1 = 0f, lensP2 = 0f)) },
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(AlcedoIconSize.sm), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 AdjustmentSlider(label = "K1", value = params.lensK1, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK1 = it)) }, defaultValue = 0f)
+                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "K2", value = params.lensK2, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK2 = it)) }, defaultValue = 0f)
+                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "K3", value = params.lensK3, range = -0.2f..0.2f, onValueChange = { viewModel.updateParams(params.copy(lensK3 = it)) }, defaultValue = 0f)
+                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "P1", value = params.lensP1, range = -0.1f..0.1f, onValueChange = { viewModel.updateParams(params.copy(lensP1 = it)) }, defaultValue = 0f)
+                Spacer(modifier = Modifier.height(AlcedoSpacing.md))
                 AdjustmentSlider(label = "P2", value = params.lensP2, range = -0.1f..0.1f, onValueChange = { viewModel.updateParams(params.copy(lensP2 = it)) }, defaultValue = 0f)
             }
         }

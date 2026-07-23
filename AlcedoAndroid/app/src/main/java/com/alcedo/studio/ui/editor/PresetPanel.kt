@@ -34,6 +34,8 @@ import com.alcedo.studio.domain.service.PresetWithThumbnail
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
+import com.alcedo.studio.ui.theme.AlcedoElevation
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlinx.coroutines.launch
 
@@ -205,12 +207,12 @@ fun PresetPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
         ) {
             // ── Top action bar ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
             ) {
                 // "Save current as preset"
                 Button(
@@ -276,7 +278,7 @@ fun PresetPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
             ) {
                 PresetFilter.entries.forEach { filter ->
                     FilterChip(
@@ -320,7 +322,7 @@ fun PresetPanel(
                 rows.forEach { rowPresets ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
                     ) {
                         rowPresets.forEach { preset ->
                             PresetCard(
@@ -352,7 +354,7 @@ fun PresetPanel(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f)),
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -511,7 +513,7 @@ private fun PresetCard(
             ),
         shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = 1.dp
+        tonalElevation = AlcedoElevation.level1.dp
     ) {
         Column(
             modifier = Modifier.padding(4.dp),
@@ -523,7 +525,7 @@ private fun PresetCard(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF101010)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest),
                 contentAlignment = Alignment.Center
             ) {
                 val thumb = preset.thumbnail
@@ -544,7 +546,7 @@ private fun PresetCard(
                             .align(Alignment.TopStart)
                             .padding(3.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.55f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f),
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 4.dp, vertical = 1.dp)
@@ -553,7 +555,7 @@ private fun PresetCard(
                             stringRes { presetCategoryBuiltin },
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = TextUnit(9f, TextUnitType.Sp),
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

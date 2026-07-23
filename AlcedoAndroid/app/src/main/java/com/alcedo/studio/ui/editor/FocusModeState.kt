@@ -14,7 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 
 /**
  * Holds the Focus Mode state for the editor.
@@ -76,7 +76,7 @@ fun FocusSectionChips(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         sections.forEach { (id, label) ->
             FilterChip(
