@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -36,6 +37,9 @@ fun ToneCurveView(
     showGrid: Boolean = true
 ) {
     val gridColor = Color.Gray.copy(alpha = 0.3f)
+    // UX 修复: 背景色从主题派生,确保主题切换时一致
+    val scopeBackground = MaterialTheme.colorScheme.surfaceContainerLowest
+    val onScopeSurface = MaterialTheme.colorScheme.onSurface
     val curveColor = when (channel) {
         CurveChannel.RGB -> Color.White
         CurveChannel.RED -> Color.Red
@@ -170,12 +174,12 @@ fun ToneCurveView(
 
         // Background
         drawRect(
-            color = Color(0xFF1E1E1E),
+            color = scopeBackground,
             topLeft = Offset(PADDING, PADDING),
             size = Size(graphW, graphH)
         )
         drawRect(
-            color = Color.White.copy(alpha = 0.1f),
+            color = onScopeSurface.copy(alpha = 0.1f),
             topLeft = Offset(PADDING, PADDING),
             size = Size(graphW, graphH),
             style = Stroke(width = 1f)
@@ -203,7 +207,7 @@ fun ToneCurveView(
 
         // Diagonal reference line
         drawLine(
-            Color.White.copy(alpha = 0.08f),
+            onScopeSurface.copy(alpha = 0.08f),
             Offset(PADDING, PADDING + graphH),
             Offset(PADDING + graphW, PADDING),
             strokeWidth = 1f
@@ -216,7 +220,7 @@ fun ToneCurveView(
             for (i in histogramData.indices) {
                 val barHeight = (histogramData[i] / maxCount) * graphH * 0.8f
                 drawRect(
-                    color = Color.White.copy(alpha = 0.06f),
+                    color = onScopeSurface.copy(alpha = 0.06f),
                     topLeft = Offset(PADDING + i * barWidth, PADDING + graphH - barHeight),
                     size = Size(barWidth, barHeight)
                 )
@@ -258,14 +262,14 @@ fun ToneCurveView(
 
             // Vertical line
             drawLine(
-                Color.White.copy(alpha = 0.3f),
+                onScopeSurface.copy(alpha = 0.3f),
                 Offset(cx, PADDING),
                 Offset(cx, PADDING + graphH),
                 strokeWidth = 0.5f
             )
             // Horizontal line
             drawLine(
-                Color.White.copy(alpha = 0.3f),
+                onScopeSurface.copy(alpha = 0.3f),
                 Offset(PADDING, cy),
                 Offset(PADDING + graphW, cy),
                 strokeWidth = 0.5f

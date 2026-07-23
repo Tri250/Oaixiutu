@@ -843,7 +843,8 @@ private fun AlbumContent(
                                         if (searchQuery.isNotEmpty()) {
                                             IconButton(
                                                 onClick = { onSearchQueryChange("") },
-                                                modifier = Modifier.size(28.dp)
+                                                // UX 修复: 点击目标 ≥ 48dp (原 28dp 违反无障碍标准)
+                                                modifier = Modifier.size(48.dp)
                                             ) {
                                                 Icon(
                                                     Icons.Default.Close,

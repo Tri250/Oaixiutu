@@ -184,7 +184,8 @@ fun BackgroundTaskBar(
                         Icons.Default.CheckCircle,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
-                        tint = Color(0xFF4CAF50)
+                        // UX 修复: 使用主题色而非硬编码绿色
+                        tint = MaterialTheme.colorScheme.tertiary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -291,7 +292,8 @@ private fun CompletedTaskItem(
             if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = if (isSuccess) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+            // UX 修复: 使用主题色而非硬编码绿色
+            tint = if (isSuccess) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(

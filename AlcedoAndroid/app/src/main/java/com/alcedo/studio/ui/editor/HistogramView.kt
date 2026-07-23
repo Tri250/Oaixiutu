@@ -68,6 +68,10 @@ fun HistogramView(
     val shadowClipped = totalLuminance > 0f &&
             histogramData.luminance.sliceArray(0 until shadowClipThreshold).sum() > totalLuminance * 0.02f
 
+    // UX 修复: 背景色从主题派生,确保主题切换时一致
+    val scopeBackground = MaterialTheme.colorScheme.surfaceContainerLowest
+    val onScopeSurface = MaterialTheme.colorScheme.onSurface
+
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
             modifier = Modifier
@@ -82,7 +86,7 @@ fun HistogramView(
 
             // Background
             drawRect(
-                color = Color(0xFF1A1A1A),
+                color = scopeBackground,
                 topLeft = Offset(padding, padding),
                 size = Size(graphW, graphH)
             )
@@ -209,7 +213,7 @@ fun HistogramView(
 
             // Border
             drawRect(
-                color = Color.White.copy(alpha = 0.2f),
+                color = onScopeSurface.copy(alpha = 0.2f),
                 topLeft = Offset(padding, padding),
                 size = Size(graphW, graphH),
                 style = Stroke(width = 1f)

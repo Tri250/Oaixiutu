@@ -148,7 +148,9 @@ fun EditorScreen(
     val focusMode = remember { FocusModeState() }
 
     // 位图变化时计算示波器数据 — 在后台线程执行，避免阻塞 UI
-    LaunchedEffect(preview) {
+    // UX 修复: 仅在示波器面板可见时计算,避免拖动滑块时全量重算导致卡顿
+    LaunchedEffect(preview, showScope) {
+        if (!showScope) return@LaunchedEffect
         preview?.let { bitmap ->
             isScopeComputing = true
             withContext(Dispatchers.Default) {
@@ -583,7 +585,8 @@ private fun ScopeAnalyzerPanel(
 ) {
     Surface(
         modifier = modifier,
-        color = Color(0xE0121212),
+        // UX 修复: 使用主题色而非硬编码深色,确保浅色主题下视觉一致
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
         shape = MaterialTheme.shapes.medium,
         shadowElevation = 8.dp
     ) {
@@ -605,8 +608,7 @@ private fun ScopeAnalyzerPanel(
                                 stringRes(scopeType.labelKey),
                                 style = MaterialTheme.typography.labelSmall
                             )
-                        },
-                        modifier = Modifier.height(28.dp)
+                        }
                     )
                 }
                 IconButton(
@@ -617,7 +619,8 @@ private fun ScopeAnalyzerPanel(
                         Icons.Default.Close,
                         contentDescription = stringRes { close },
                         modifier = Modifier.size(24.dp),
-                        tint = Color.White.copy(alpha = 0.6f)
+                        // UX 修复: 使用主题色而非硬编码白色
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -854,7 +857,8 @@ private fun ImagePreviewArea(
 
     Box(
         modifier = modifier
-            .background(Color(0xFF0D0D0D))
+            // UX 修复: 使用主题色而非硬编码深色,照片查看器背景随主题切换
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             .onSizeChanged { size -> containerSize = size }
             .pointerInput(isCompareMode) {
                 // 对比模式下由 CompareView 负责交互，不拦截长按
@@ -884,7 +888,8 @@ private fun ImagePreviewArea(
         ) { state ->
             when (state) {
                 "loading" -> {
-                    CircularProgressIndicator(color = Color.White)
+                    // UX 修复: 使用主题色而非硬编码白色,确保浅色主题下可见
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
                 "compare" -> {
                     Column(modifier = Modifier.fillMaxSize()) {
@@ -907,7 +912,6 @@ private fun ImagePreviewArea(
                                         )
                                     },
                                     modifier = Modifier
-                                        .height(28.dp)
                                         .padding(horizontal = 2.dp)
                                 )
                             }

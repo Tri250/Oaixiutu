@@ -2,6 +2,7 @@ package com.alcedo.studio.ui.export
 
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,28 @@ fun ExportScreen(
     val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val showWatermarkPanel by viewModel.showWatermarkPanel.collectAsStateWithLifecycle()
     val isExporting = progress.status == ExportService.ExportStatus.EXPORTING
+
+    // UX 修复: 导出进行中时拦截返回,提示用户导出仍在进行
+    var showExitConfirm by remember { mutableStateOf(false) }
+    BackHandler(enabled = isExporting) {
+        showExitConfirm = true
+    }
+    if (showExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirm = false },
+            title = { Text("导出进行中") },
+            text = { Text("图片正在导出中，离开页面不会中断导出，但您将无法看到导出进度。确定要离开吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitConfirm = false
+                    navController.popBackStack()
+                }) { Text("离开") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirm = false }) { Text("继续等待") }
+            }
+        )
+    }
 
     // Initialize Hasselblad watermark default based on theme variant
     val themeVariant by ThemeManager.themeVariant.collectAsStateWithLifecycle()

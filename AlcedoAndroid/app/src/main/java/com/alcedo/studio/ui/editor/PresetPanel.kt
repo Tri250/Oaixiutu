@@ -262,8 +262,8 @@ fun PresetPanel(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                         }
                     }
                 },
@@ -287,8 +287,7 @@ fun PresetPanel(
                                 stringRes(filter.labelKey),
                                 style = MaterialTheme.typography.labelSmall
                             )
-                        },
-                        modifier = Modifier.height(28.dp)
+                        }
                     )
                 }
             }

@@ -26,8 +26,15 @@ fun ChromaticityView(
     modifier: Modifier = Modifier,
     showGamut: Set<GamutOverlay> = setOf(GamutOverlay.SRGB),
     showSpectralLocus: Boolean = true,
-    backgroundColor: Color = Color(0xFF1A1A1A)
+    backgroundColor: Color = Color.Unspecified
 ) {
+    // UX 修复: 背景色从主题派生,确保主题切换时一致
+    val effectiveBg = if (backgroundColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    } else {
+        backgroundColor
+    }
+    val onScopeSurface = MaterialTheme.colorScheme.onSurface
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -46,7 +53,7 @@ fun ChromaticityView(
             val plotSize = displaySize - 2 * padding
 
             // Background
-            drawRect(color = backgroundColor, size = size)
+            drawRect(color = effectiveBg, size = size)
 
             // CIE xy diagram area: x ∈ [0, 0.8], y ∈ [0, 0.9]
             val xMin = 0f; val xMax = 0.8f
@@ -120,14 +127,14 @@ fun ChromaticityView(
                     // Faint fill inside the locus
                     drawPath(
                         path = locusPath,
-                        color = Color.White.copy(alpha = 0.04f)
+                        color = onScopeSurface.copy(alpha = 0.04f)
                     )
                 }
             }
 
             // Draw gamut triangles
             val gamutColors = mapOf(
-                GamutOverlay.SRGB to Color.White.copy(alpha = 0.7f),
+                GamutOverlay.SRGB to onScopeSurface.copy(alpha = 0.7f),
                 GamutOverlay.P3 to Color(0xFF4FC3F7).copy(alpha = 0.7f),
                 GamutOverlay.REC2020 to Color(0xFFFFB74D).copy(alpha = 0.7f),
                 GamutOverlay.ACES to Color(0xFFCE93D8).copy(alpha = 0.7f)
@@ -197,7 +204,7 @@ fun ChromaticityView(
 
             // Draw axis border
             drawRect(
-                color = Color.White.copy(alpha = 0.1f),
+                color = onScopeSurface.copy(alpha = 0.1f),
                 topLeft = Offset(offsetX + padding, offsetY + padding),
                 size = Size(plotSize, plotSize),
                 style = Stroke(width = 0.5f)
@@ -212,7 +219,7 @@ fun ChromaticityView(
             Text(
                 text = "CIE xy Chromaticity",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))

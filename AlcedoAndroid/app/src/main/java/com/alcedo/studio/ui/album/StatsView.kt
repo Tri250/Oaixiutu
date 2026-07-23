@@ -32,23 +32,47 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// Chart color palette
-private val ChartColors = listOf(
-    Color(0xFF6750A4),  // Primary
-    Color(0xFF625B71),  // Secondary
-    Color(0xFF7D5260),  // Tertiary
-    Color(0xFFB3261E),  // Error
-    Color(0xFF006C4C),  // Green
-    Color(0xFF0061A4),  // Blue
-    Color(0xFF7C5800),  // Amber
-    Color(0xFF6B4FA2),  // Purple
-)
+// Chart color palette — UX 修复: 从主题色派生而非硬编码,确保主题切换时一致
+@Composable
+private fun getChartColors(): List<Color> {
+    val cs = MaterialTheme.colorScheme
+    return listOf(
+        cs.primary,
+        cs.secondary,
+        cs.tertiary,
+        cs.error,
+        cs.tertiary.copy(alpha = 0.7f),
+        cs.primary.copy(alpha = 0.7f),
+        cs.secondary.copy(alpha = 0.7f),
+        cs.primary.copy(alpha = 0.5f),
+    )
+}
 
-private val BarGradientPrimary = listOf(Color(0xFF6750A4), Color(0xFF9A82DB))
-private val BarGradientSecondary = listOf(Color(0xFF625B71), Color(0xFF908A9E))
-private val BarGradientTertiary = listOf(Color(0xFF7D5260), Color(0xFFB08897))
-private val BarGradientGold = listOf(Color(0xFFFFD700), Color(0xFFFFEB99))
-private val BarGradientGreen = listOf(Color(0xFF006C4C), Color(0xFF4DA882))
+@Composable
+private fun getBarGradientPrimary() = listOf(
+    MaterialTheme.colorScheme.primary,
+    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+)
+@Composable
+private fun getBarGradientSecondary() = listOf(
+    MaterialTheme.colorScheme.secondary,
+    MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)
+)
+@Composable
+private fun getBarGradientTertiary() = listOf(
+    MaterialTheme.colorScheme.tertiary,
+    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+)
+@Composable
+private fun getBarGradientGold() = listOf(
+    MaterialTheme.colorScheme.tertiary,
+    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f)
+)
+@Composable
+private fun getBarGradientGreen() = listOf(
+    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
+    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -266,7 +290,7 @@ private fun DateDistributionChart(
                         )
                         AnimatedHorizontalBar(
                             fraction = fraction,
-                            gradientColors = BarGradientPrimary,
+                            gradientColors = getBarGradientPrimary(),
                             barHeight = 16.dp,
                             modifier = Modifier.weight(1f)
                         )
@@ -319,9 +343,9 @@ private fun CameraDistributionChart(
                     val percentage = if (total > 0) (facet.count * 100f / total) else 0f
                     val label = "${facet.make} ${facet.model}".trim()
                     val gradient = when (index % 3) {
-                        0 -> BarGradientSecondary
-                        1 -> BarGradientPrimary
-                        else -> BarGradientGreen
+                        0 -> getBarGradientSecondary()
+                        1 -> getBarGradientPrimary()
+                        else -> getBarGradientGreen()
                     }
 
                     val matchingCameraImages = allMetadata.filter { meta ->
@@ -399,9 +423,9 @@ private fun LensDistributionChart(
                     val fraction = facet.count.toFloat() / maxCount
                     val percentage = if (total > 0) (facet.count * 100f / total) else 0f
                     val gradient = when (index % 3) {
-                        0 -> BarGradientTertiary
-                        1 -> BarGradientPrimary
-                        else -> BarGradientGreen
+                        0 -> getBarGradientTertiary()
+                        1 -> getBarGradientPrimary()
+                        else -> getBarGradientGreen()
                     }
 
                     val matchingLensImages = allMetadata.filter { meta ->
@@ -464,7 +488,7 @@ private fun FocalLengthDistributionChart(
     ChartCard(
         title = "焦段分布",
         icon = Icons.Default.Camera,
-        iconTint = ChartColors[3 % ChartColors.size]
+        iconTint = getChartColors()[3 % getChartColors().size]
     ) {
         // 从镜头型号中提取焦段（如 "24-70mm" 或 "50mm"）
         val focalLengths = lensDistribution
@@ -515,7 +539,7 @@ private fun FocalLengthDistributionChart(
                     )
                     AnimatedHorizontalBar(
                         fraction = fraction,
-                        gradientColors = BarGradientSecondary,
+                        gradientColors = getBarGradientSecondary(),
                         barHeight = 14.dp,
                         modifier = Modifier.weight(1f)
                     )
@@ -554,7 +578,8 @@ private fun RatingDistributionChart(
     ChartCard(
         title = stringRes { statsRatingDistribution },
         icon = Icons.Default.Star,
-        iconTint = Color(0xFFFFD700)
+        // UX 修复: 使用主题色而非硬编码金色
+        iconTint = MaterialTheme.colorScheme.tertiary
     ) {
         if (ratingDistribution.isEmpty()) {
             EmptyChartMessage(stringRes { statsNoRatingData })
@@ -586,7 +611,8 @@ private fun RatingDistributionChart(
                                         Icons.Default.Star,
                                         contentDescription = null,
                                         modifier = Modifier.size(11.dp),
-                                        tint = Color(0xFFFFD700)
+                                        // UX 修复: 使用主题色而非硬编码金色
+                                        tint = MaterialTheme.colorScheme.tertiary
                                     )
                                 }
                             }
@@ -603,7 +629,7 @@ private fun RatingDistributionChart(
                     // Animated bar
                     AnimatedHorizontalBar(
                         fraction = fraction,
-                        gradientColors = BarGradientGold,
+                        gradientColors = getBarGradientGold(),
                         barHeight = 14.dp,
                         modifier = Modifier.weight(1f)
                     )
@@ -665,7 +691,8 @@ private fun TagCloudChart(
                     .forEachIndexed { index, tag ->
                         val ratio = tag.count.toFloat() / maxCount
                         val fontSize = (11 + (ratio * 7).toInt()).sp
-                        val color = ChartColors[index % ChartColors.size]
+                        val chartColors = getChartColors()
+                        val color = chartColors[index % chartColors.size]
                         val alpha = 0.12f + ratio * 0.25f
 
                         Surface(

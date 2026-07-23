@@ -19,8 +19,15 @@ fun VectorscopeView(
     modifier: Modifier = Modifier,
     showSkinToneLine: Boolean = true,
     showTargets: Boolean = true,
-    backgroundColor: Color = Color(0xFF1A1A1A)
+    backgroundColor: Color = Color.Unspecified
 ) {
+    // UX 修复: 背景色从主题派生,确保主题切换时一致
+    val effectiveBg = if (backgroundColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    } else {
+        backgroundColor
+    }
+    val onScopeSurface = MaterialTheme.colorScheme.onSurface
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -37,7 +44,7 @@ fun VectorscopeView(
             val offsetY = (h - displaySize) / 2f
 
             // Background
-            drawRect(color = backgroundColor, size = size)
+            drawRect(color = effectiveBg, size = size)
 
             val cx = offsetX + displaySize / 2f
             val cy = offsetY + displaySize / 2f
@@ -47,7 +54,7 @@ fun VectorscopeView(
             for (i in 1..3) {
                 val r = radius * i / 3f
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.08f),
+                    color = onScopeSurface.copy(alpha = 0.08f),
                     radius = r,
                     center = Offset(cx, cy),
                     style = Stroke(width = 0.5f)
@@ -56,13 +63,13 @@ fun VectorscopeView(
 
             // Crosshair at center
             drawLine(
-                Color.White.copy(alpha = 0.1f),
+                onScopeSurface.copy(alpha = 0.1f),
                 start = Offset(cx - radius, cy),
                 end = Offset(cx + radius, cy),
                 strokeWidth = 0.5f
             )
             drawLine(
-                Color.White.copy(alpha = 0.1f),
+                onScopeSurface.copy(alpha = 0.1f),
                 start = Offset(cx, cy - radius),
                 end = Offset(cx, cy + radius),
                 strokeWidth = 0.5f
@@ -118,14 +125,14 @@ fun VectorscopeView(
                     val tx = cx + (cbCr.first - 0.5f) * radius * 2f
                     val ty = cy + (cbCr.second - 0.5f) * radius * 2f
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = onScopeSurface.copy(alpha = 0.6f),
                         radius = 3f,
                         center = Offset(tx, ty),
                         style = Stroke(width = 1f)
                     )
                     // Draw target lines from center
                     drawLine(
-                        Color.White.copy(alpha = 0.15f),
+                        onScopeSurface.copy(alpha = 0.15f),
                         start = Offset(cx, cy),
                         end = Offset(tx, ty),
                         strokeWidth = 0.5f
@@ -135,7 +142,7 @@ fun VectorscopeView(
 
             // Outer circle border
             drawCircle(
-                color = Color.White.copy(alpha = 0.25f),
+                color = onScopeSurface.copy(alpha = 0.25f),
                 radius = radius,
                 center = Offset(cx, cy),
                 style = Stroke(width = 1f)
@@ -149,7 +156,7 @@ fun VectorscopeView(
             Text(
                 text = "Vectorscope",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }

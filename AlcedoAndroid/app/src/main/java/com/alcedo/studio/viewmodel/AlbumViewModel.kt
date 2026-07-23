@@ -86,6 +86,9 @@ class AlbumViewModel : ViewModel() {
     // ── Search ──
 
     private val _searchQuery = MutableStateFlow("")
+
+    // UX 修复: 搜索防抖 Job,取消前一次搜索避免竞态
+    private var searchJob: kotlinx.coroutines.Job? = null
     val searchQuery: StateFlow<String> = _searchQuery
 
     private val _showSearch = MutableStateFlow(false)
@@ -813,6 +816,7 @@ class AlbumViewModel : ViewModel() {
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
         if (query.isBlank()) {
+            searchJob?.cancel()
             _searchResults.value = emptyList()
             applyCurrentSortAndFilter(_images.value)
             return
@@ -821,7 +825,10 @@ class AlbumViewModel : ViewModel() {
     }
 
     private fun performSearch(query: String) {
-        viewModelScope.launch {
+        // UX 修复: 取消前一次搜索,添加 300ms 防抖,避免快速输入时的竞态和性能浪费
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300) // debounce
             _isSearching.value = true
             try {
                 val results = searchService.combinedSearch(
@@ -835,7 +842,11 @@ class AlbumViewModel : ViewModel() {
                 val allImages = imageRepository.getAllImages()
                 val matchedImages = allImages.filter { it.imageId in resultImageIds }
                 _filteredImages.value = matchedImages
-            } catch (_: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // UX 修复: 搜索失败时记录日志并回退到名称搜索
+                android.util.Log.e("AlbumVM", "组合搜索失败,回退到名称搜索", e)
                 // Fallback to name-based search
                 try {
                     val allImages = imageRepository.getAllImages()
@@ -845,6 +856,7 @@ class AlbumViewModel : ViewModel() {
                     }
                 } catch (_: Exception) {
                     _filteredImages.value = emptyList()
+                    showSnackbar("搜索失败，请稍后重试")
                 }
             } finally {
                 _isSearching.value = false
@@ -861,8 +873,23 @@ class AlbumViewModel : ViewModel() {
                 val imageIds = searchResults.map { it.imageId.toLong() }.toSet()
                 val allImages = imageRepository.getAllImages()
                 _filteredImages.value = allImages.filter { it.imageId in imageIds }
-            } catch (_: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // UX 修复: 语义搜索失败时给用户反馈,而非静默清空列表
+                android.util.Log.e("AlbumVM", "语义搜索失败,回退到名称搜索", e)
                 _filteredImages.value = emptyList()
+                showSnackbar("语义搜索失败，已切换为名称匹配")
+                // 回退到名称匹配,避免用户看到空白结果却不知原因
+                try {
+                    val allImages = imageRepository.getAllImages()
+                    _filteredImages.value = allImages.filter {
+                        it.imageName.contains(query, ignoreCase = true) ||
+                        it.imagePath.contains(query, ignoreCase = true)
+                    }
+                } catch (_: Exception) {
+                    // 名称匹配也失败,保留空列表(已通过 Snackbar 告知用户)
+                }
             } finally {
                 _isSearching.value = false
             }

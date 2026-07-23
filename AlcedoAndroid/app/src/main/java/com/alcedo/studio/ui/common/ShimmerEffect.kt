@@ -27,9 +27,10 @@ fun Modifier.shimmer(
             it.copy(alpha = 0.4f)
         )
     } ?: listOf(
-        Color.LightGray.copy(alpha = 0.4f),
-        Color.LightGray.copy(alpha = 0.8f),
-        Color.LightGray.copy(alpha = 0.4f)
+        // UX 修复: 使用主题色而非硬编码 LightGray,深色主题下不再刺眼
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")

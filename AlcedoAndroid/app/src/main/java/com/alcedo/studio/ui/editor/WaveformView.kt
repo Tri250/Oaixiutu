@@ -25,8 +25,14 @@ fun WaveformView(
     waveformData: WaveformData,
     modifier: Modifier = Modifier,
     mode: WaveformMode = WaveformMode.RGB_PARADE,
-    backgroundColor: Color = Color(0xFF1A1A1A)
+    backgroundColor: Color = Color.Unspecified
 ) {
+    // UX 修复: 背景色从主题派生,确保主题切换时一致
+    val effectiveBg = if (backgroundColor == Color.Unspecified) {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    } else {
+        backgroundColor
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
             modifier = Modifier
@@ -38,7 +44,7 @@ fun WaveformView(
             val padding = 4f
 
             // Background
-            drawRect(color = backgroundColor, size = size)
+            drawRect(color = effectiveBg, size = size)
 
             when (mode) {
                 WaveformMode.RGB_PARADE -> {
