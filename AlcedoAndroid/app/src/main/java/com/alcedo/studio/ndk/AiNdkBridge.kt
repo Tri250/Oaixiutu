@@ -17,6 +17,9 @@ object AiNdkBridge {
     private var clipEngine: ClipInferenceEngine? = null
 
     // 简单的内存向量索引（HNSW 替代实现，按相似度暴力检索）
+    // TODO: 当前使用暴力检索（O(n)），当索引规模增大时性能将成为瓶颈。
+    //  未来应替换为真正的 HNSW（Hierarchical Navigable Small World）图索引实现，
+    //  以支持 O(log n) 的近似最近邻搜索。可考虑集成 hnswlib 或自行实现。
     private val indexLock = Any()
     private val indexEntries = mutableListOf<IndexEntry>()
 

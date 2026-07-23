@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Monochrome icon for Android 13+ themed icons: single-color silhouette -->
+
+    <!-- Outer aperture ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,18C34.1,18 18,34.1 18,54C18,73.9 34.1,90 54,90C73.9,90 90,73.9 90,54C90,34.1 73.9,18 54,18ZM54,84C37.4,84 24,70.6 24,54C24,37.4 37.4,24 54,24C70.6,24 84,37.4 84,54C84,70.6 70.6,84 54,84Z" />
+
+    <!-- Aperture blades (solid silhouette) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28L44.9,41.6L54,36Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M63.1,41.6L70.5,41.2L63.8,47.1Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70.5,41.2L74,54L66.4,47.6Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M74,54L70.5,66.8L66.4,60.4Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70.5,66.8L54,80L63.1,66.4Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,80L37.5,66.8L44.9,66.4Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M37.5,66.8L34,54L41.6,60.4Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,54L37.5,41.2L41.6,47.6Z" />
+
+    <!-- Inner lens circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,36C44.1,36 36,44.1 36,54C36,63.9 44.1,72 54,72C63.9,72 72,63.9 72,54C72,44.1 63.9,36 54,36Z" />
+
+</vector>

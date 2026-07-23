@@ -115,12 +115,22 @@ class ModelDownloadService(private val context: Context) {
         for (default in defaultModels) {
             val localFile = getModelFile(default.modelId)
             if (localFile.exists()) {
-                // Model exists on disk, update status
-                existingModels[default.modelId] = default.copy(
-                    localPath = localFile.absolutePath,
-                    downloadStatus = ModelDownloadStatus.DOWNLOADED,
-                    downloadProgress = 1.0f
-                )
+                if (localFile.length() == 0L) {
+                    // File exists but is empty → corrupt, mark for re-download
+                    Log.w(TAG, "Model ${default.modelId} file exists but is empty (0 bytes), marking as CORRUPT")
+                    localFile.delete()
+                    existingModels[default.modelId] = default.copy(
+                        downloadStatus = ModelDownloadStatus.CORRUPT,
+                        downloadProgress = 0f
+                    )
+                } else {
+                    // Model exists on disk, update status
+                    existingModels[default.modelId] = default.copy(
+                        localPath = localFile.absolutePath,
+                        downloadStatus = ModelDownloadStatus.DOWNLOADED,
+                        downloadProgress = 1.0f
+                    )
+                }
             } else {
                 existingModels.putIfAbsent(default.modelId, default)
             }
@@ -271,6 +281,22 @@ class ModelDownloadService(private val context: Context) {
                 // Move temp to final
                 tempFile.renameTo(destFile)
 
+                // ── Post-download integrity check: verify file exists and size > 0 ──
+                if (!destFile.exists() || destFile.length() == 0L) {
+                    destFile.delete()
+                    updateModel(modelId, model.copy(
+                        downloadStatus = ModelDownloadStatus.FAILED,
+                        downloadProgress = 0f
+                    ))
+                    TaskNotificationHelper.notifyModelDownloadFailed(context, modelId, "Downloaded file is missing or empty")
+                    _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                        remove(modelId)
+                    }
+                    Log.e(TAG, "Integrity check failed for model $modelId: file missing or zero-length after rename")
+                    return@launch
+                }
+                Log.i(TAG, "Integrity check passed for model $modelId: file size=${destFile.length()} bytes")
+
                 // Verify checksum if provided
                 if (model.checksum.isNotEmpty()) {
                     val actualChecksum = computeSha256(destFile)
@@ -296,7 +322,8 @@ class ModelDownloadService(private val context: Context) {
                     updateModel(modelId, model.copy(
                         downloadStatus = ModelDownloadStatus.DOWNLOADED,
                         downloadProgress = 1.0f,
-                        localPath = destFile.absolutePath
+                        localPath = destFile.absolutePath,
+                        downloadedVersion = model.version
                     ))
                 }
 
@@ -393,6 +420,24 @@ class ModelDownloadService(private val context: Context) {
 
     fun getActiveModel(): ModelAsset? {
         return _models.value.find { it.isActive }
+    }
+
+    /**
+     * Mark a model as corrupt so it will be re-downloaded on next attempt.
+     * Called when a downloaded model file fails to load at inference time.
+     */
+    fun markCorrupt(modelId: String) {
+        val model = _models.value.find { it.modelId == modelId } ?: return
+        val file = getModelFile(modelId)
+        if (file.exists()) {
+            file.delete()
+            Log.w(TAG, "Deleted corrupt model file for $modelId")
+        }
+        updateModel(modelId, model.copy(
+            downloadStatus = ModelDownloadStatus.CORRUPT,
+            downloadProgress = 0f,
+            localPath = ""
+        ))
     }
 
     // ── Storage Management ──

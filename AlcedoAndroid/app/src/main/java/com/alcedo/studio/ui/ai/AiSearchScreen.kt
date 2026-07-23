@@ -1,6 +1,7 @@
 package com.alcedo.studio.ui.ai
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -41,6 +42,7 @@ import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
 import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoGradient
 import com.alcedo.studio.ui.theme.AlcedoStroke
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
@@ -131,41 +133,66 @@ fun AiSearchScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ── Search input bar ──────────────────────────────────
-            SearchBar(
-                query = inputText,
-                onQueryChange = { inputText = it },
-                onSearch = {
-                    if (inputText.isNotBlank()) {
-                        albumViewModel.onSearchQueryChange(inputText)
-                        searchHistory = saveSearchHistory(searchHistory, inputText)
-                    }
-                },
-                active = false,
-                onActiveChange = {},
+            // ── 大搜索框 – 深空黑+青墨绿现代风格 ──────────────
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = {
-                    Text(
-                        if (semanticEnabled) "输入语义描述搜索..." else "输入文件名或关键词...",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                },
-                leadingIcon = {
+                    .padding(horizontal = AlcedoSpacing.lg, vertical = AlcedoSpacing.sm),
+                shape = RoundedCornerShape(AlcedoRadius.lg),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                border = androidx.compose.foundation.BorderStroke(
+                    AlcedoStroke.thin,
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AlcedoSpacing.lg, vertical = AlcedoSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
                         Icons.Default.Search,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
                     )
-                },
-                trailingIcon = {
+                    Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = {
+                            Text(
+                                "搜索你的照片...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(AlcedoRadius.md),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent,
+                            cursorColor = MaterialTheme.colorScheme.primary
+                        ),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                     if (inputText.isNotEmpty()) {
                         IconButton(onClick = {
                             inputText = ""
                             albumViewModel.clearSearch()
                         }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Clear",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     FilterChip(
@@ -188,7 +215,7 @@ fun AiSearchScreen(
                         modifier = Modifier.padding(start = AlcedoSpacing.xs)
                     )
                 }
-            ) {}
+            }
 
             // AI 快捷入口
             LazyRow(
@@ -270,14 +297,19 @@ fun AiSearchScreen(
                     }
                 }
             } else if (searchQuery.isNotBlank() && images.isNotEmpty()) {
-                // Search results
-                Text(
-                    "找到 ${images.size} 个结果",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
+                // 搜索结果 – 含淡入动画
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(250))
+                ) {
+                    Text(
+                        "找到 ${images.size} 个结果",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -551,14 +583,21 @@ private fun SearchResultCard(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 玻璃态卡片 – 深空黑+青墨绿风格
     Card(
         modifier = modifier.combinedClickable(
             onClick = onClick,
             onLongClick = onLongClick
         ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 6.dp)
+        shape = RoundedCornerShape(AlcedoRadius.md),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 4.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            AlcedoStroke.thin,
+            MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
+        )
     ) {
         Box {
             Box(
@@ -671,15 +710,20 @@ private fun AiQuickActionCard(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    // 玻璃态快捷入口卡片 – 深空黑+青墨绿
     Card(
         modifier = Modifier
             .width(140.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(AlcedoRadius.md),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 3.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            AlcedoStroke.thin,
+            MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

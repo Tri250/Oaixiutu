@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculateZoom
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoGradient
 import com.alcedo.studio.ui.theme.AlcedoStroke
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
@@ -817,7 +819,7 @@ private fun AlbumContent(
         topBar = {
             val topBarBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
             Box {
-                // 普通模式顶栏
+                // 普通模式顶栏 – 深空黑+青墨绿风格
                 AnimatedVisibility(
                     visible = selectedImages.isEmpty(),
                     enter = fadeIn(),
@@ -845,11 +847,9 @@ private fun AlbumContent(
                                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
                                     },
                                     trailingIcon = {
-                                        // G-1 修复: 清除按钮必须可点击 (原 bare Icon 不可交互)
                                         if (searchQuery.isNotEmpty()) {
                                             IconButton(
                                                 onClick = { onSearchQueryChange("") },
-                                                // UX 修复: 点击目标 ≥ 48dp (原 28dp 违反无障碍标准)
                                                 modifier = Modifier.size(48.dp)
                                             ) {
                                                 Icon(
@@ -864,19 +864,22 @@ private fun AlbumContent(
                                 )
                             } else {
                                 Text(
-                                    "Alcedo Studio",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold
+                                    "Alcedo",
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Light,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         },
                         actions = {
+                            // 搜索按钮 – 轻量图标
                             IconButton(onClick = onToggleSearch) {
                                 Icon(
                                     if (showSearch) Icons.Default.Close else Icons.Default.Search,
                                     contentDescription = stringRes { search },
                                     tint = if (showSearch) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                             if (showSearch) {
@@ -900,6 +903,7 @@ private fun AlbumContent(
                                     modifier = Modifier.padding(end = AlcedoSpacing.xs)
                                 )
                             }
+                            // 筛选按钮
                             IconButton(onClick = onOpenFilter) {
                                 Icon(
                                     Icons.Default.FilterList,
@@ -907,17 +911,11 @@ private fun AlbumContent(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
-                            IconButton(onClick = onOpenFolderSidebar) {
+                            // 导入按钮 – 青墨绿主色调
+                            IconButton(onClick = onImport) {
                                 Icon(
-                                    Icons.Default.Folder,
-                                    contentDescription = stringRes { albumFolders },
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            IconButton(onClick = onSettings) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = stringRes { settings },
+                                    Icons.Default.AddPhotoAlternate,
+                                    contentDescription = stringRes { importText },
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -926,6 +924,13 @@ private fun AlbumContent(
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
                         ),
                         modifier = Modifier.drawWithContent {
+                            // 玻璃态顶部高光
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = com.alcedo.studio.ui.theme.AlcedoGradient.glassHighlightVertical
+                                ),
+                                size = size
+                            )
                             drawContent()
                             // 玻璃态底部边框
                             drawLine(
@@ -1408,15 +1413,33 @@ private fun PhotoGridSection(
                 // 折叠时跳过照片项
                 if (group.dateKey !in collapsedDateGroups.value) {
                     items(group.images, key = { "img-${it.imageId}" }) { image ->
-                        ThumbnailCard(
-                            image = image,
-                            isSelected = image.imageId in selectedImages,
-                            thumbnailBitmap = onGetThumbnail(image.imageId),
-                            onClick = { onImageClick(image) },
-                            onLongClick = { onImageLongClick(image) },
-                            onLoadThumbnail = { onLoadThumbnail(image.imageId) },
-                            modifier = Modifier.animateItemPlacement()
-                        )
+                        // 交错淡入动画 – staggered fade-in
+                        val index = group.images.indexOf(image)
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(
+                                animationSpec = tween(
+                                    durationMillis = 300,
+                                    delayMillis = (index % 12) * 30
+                                )
+                            ) + expandIn(
+                                animationSpec = tween(
+                                    durationMillis = 250,
+                                    delayMillis = (index % 12) * 30
+                                ),
+                                initialSize = { androidx.compose.ui.unit.IntSize(1, 1) }
+                            ),
+                        ) {
+                            ThumbnailCard(
+                                image = image,
+                                isSelected = image.imageId in selectedImages,
+                                thumbnailBitmap = onGetThumbnail(image.imageId),
+                                onClick = { onImageClick(image) },
+                                onLongClick = { onImageLongClick(image) },
+                                onLoadThumbnail = { onLoadThumbnail(image.imageId) },
+                                modifier = Modifier.animateItemPlacement()
+                            )
+                        }
                     }
                 }
             }
@@ -1722,16 +1745,23 @@ private fun ThumbnailCard(
     LaunchedEffect(image.imageId) {
         if (thumbnailBitmap == null) onLoadThumbnail()
     }
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 0.94f else 1f,
+    // 按压缩放效果 – 通过 interactionSource 感知按下状态
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = when {
+            isSelected -> 0.94f
+            isPressed -> 0.96f
+            else -> 1f
+        },
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
-        label = "selectScale"
+        label = "thumbnailScale"
     )
     val elevation by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 2.dp,
+        targetValue = if (isSelected) 8.dp else if (isPressed) 4.dp else 2.dp,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -1741,8 +1771,10 @@ private fun ThumbnailCard(
 
     Card(
         modifier = modifier
-            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .graphicsLayer(scaleX = pressScale, scaleY = pressScale)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick
             ),

@@ -29,6 +29,9 @@ import kotlin.math.sqrt
  */
 class ClipInferenceEngine(private val context: Context) {
 
+    /** Optional callback invoked when a model file fails to load (corrupt detection). */
+    var onModelCorrupt: ((modelId: String) -> Unit)? = null
+
     companion object {
         private const val TAG = "ClipInferenceEngine"
 
@@ -170,6 +173,17 @@ class ClipInferenceEngine(private val context: Context) {
             Log.e(TAG, "Failed to load model $modelId: ${e.message}", e)
             status = ModelStatus.FAILED
             cleanupSessions()
+
+            // Detect corrupt model: if the file exists on disk but fails to load,
+            // notify the caller so it can be marked for re-download.
+            val modelsDir = File(context.filesDir, "ai_models")
+            val singleModelFile = File(modelsDir, "$modelId.onnx")
+            val visionFile = File(modelsDir, "${modelId}_vision_encoder.onnx")
+            if (singleModelFile.exists() || visionFile.exists()) {
+                Log.w(TAG, "Model $modelId file exists but failed to load — marking as corrupt")
+                onModelCorrupt?.invoke(modelId)
+            }
+
             false
         }
     }

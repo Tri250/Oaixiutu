@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -158,11 +156,11 @@ fun HistoryPanel(
                         modifier = Modifier.padding(bottom = AlcedoSpacing.xs)
                     )
 
-                    LazyColumn(
+                    Column(
                         modifier = Modifier.heightIn(max = 300.dp),
                         verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
                     ) {
-                        itemsIndexed(transactions) { index, tx ->
+                        transactions.forEachIndexed { index, tx ->
                             val isCurrent = index < currentIndex
                             val isCursor = index == currentIndex - 1
                             HistoryItem(

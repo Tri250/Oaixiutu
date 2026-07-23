@@ -1042,14 +1042,16 @@ class AlbumViewModel : ViewModel() {
     // Thumbnail loading
     // ================================================================
 
-    fun loadThumbnail(imageId: Long) {
+    fun loadThumbnail(imageId: Long, imagePath: String? = null) {
         if (thumbnailLruCache.get(imageId) != null) return
         if (_thumbnailsLoading.contains(imageId)) return
 
         _thumbnailsLoading.add(imageId)
         viewModelScope.launch {
             try {
-                val result = thumbnailService.loadThumbnail(imageId)
+                // Look up imagePath from the image list if not provided
+                val path = imagePath ?: _images.value.find { it.imageId == imageId }?.imagePath
+                val result = thumbnailService.loadThumbnail(imageId, imagePath = path)
                 if (result is ThumbnailService.ThumbnailResult.Success) {
                     thumbnailLruCache.put(imageId, result.bitmap)
                     // 通知 UI 缩略图已更新（bitmap 通过 getThumbnail 直接访问）
@@ -1238,7 +1240,7 @@ class AlbumViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val image = imageRepository.getImage(imageId) ?: return@launch
-                val result = thumbnailService.loadThumbnail(imageId)
+                val result = thumbnailService.loadThumbnail(imageId, imagePath = image.imagePath)
                 // 通过 AiSidecarRuntimeService 检查 AI 运行时状态
                 val runtimeReady = try {
                     aiSidecarRuntimeService.isReady()
@@ -1262,7 +1264,7 @@ class AlbumViewModel : ViewModel() {
                 for ((index, imageId) in ids.withIndex()) {
                     TaskNotificationHelper.notifyAiTaggingProgress(context, index + 1, ids.size)
                     val image = imageRepository.getImage(imageId) ?: continue
-                    val result = thumbnailService.loadThumbnail(imageId)
+                    val result = thumbnailService.loadThumbnail(imageId, imagePath = image.imagePath)
                     if (result is ThumbnailService.ThumbnailResult.Success) {
                         aiService.generateLabels(imageId.toUInt(), result.bitmap)
                     }

@@ -83,7 +83,8 @@ class ThumbnailService(
 
     suspend fun loadThumbnail(
         imageId: Long,
-        size: ThumbnailSize = ThumbnailSize.MEDIUM
+        size: ThumbnailSize = ThumbnailSize.MEDIUM,
+        imagePath: String? = null
     ): ThumbnailResult = withContext(Dispatchers.IO) {
         val cacheKey = makeCacheKey(imageId, size)
 
@@ -100,9 +101,9 @@ class ThumbnailService(
             }
         }
 
-        // 2. Check disk cache
+        // 2. Check disk cache with primary key (imageId, matching ImportService's write format)
         try {
-            val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
+            val diskBitmap = diskCache.get(imageId, toResolutionTier(size))
             if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
                 synchronized(memoryCacheLock) {
@@ -115,7 +116,31 @@ class ThumbnailService(
             // Disk cache miss
         }
 
-        // 3. Generate placeholder
+        // 3. Try legacy key format for backward compatibility (entries written by old ThumbnailService)
+        try {
+            val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
+            if (diskBitmap != null && !diskBitmap.isRecycled) {
+                diskHits.incrementAndGet()
+                // Migrate to new key format so future lookups hit directly
+                try {
+                    diskCache.put(imageId, diskBitmap, toResolutionTier(size))
+                } catch (_: Exception) {}
+                synchronized(memoryCacheLock) {
+                    memoryCache[cacheKey] = diskBitmap
+                }
+                loadingStates[cacheKey] = LoadingState.LOADED
+                return@withContext ThumbnailResult.Success(diskBitmap, ThumbnailSource.DISK)
+            }
+        } catch (_: Exception) {
+            // Legacy cache miss
+        }
+
+        // 4. If path is available, fall back to regenerating from source file
+        if (!imagePath.isNullOrBlank()) {
+            return@withContext loadThumbnailFromPath(imagePath, imageId, size)
+        }
+
+        // 5. Generate placeholder
         return@withContext ThumbnailResult.Placeholder(generatePlaceholder(size.pixels))
     }
 
@@ -138,11 +163,26 @@ class ThumbnailService(
             }
         }
 
-        // Check disk cache
+        // Check disk cache with primary key (imageId, matching ImportService's write format)
+        try {
+            val diskBitmap = diskCache.get(imageId, toResolutionTier(size))
+            if (diskBitmap != null && !diskBitmap.isRecycled) {
+                diskHits.incrementAndGet()
+                synchronized(memoryCacheLock) { memoryCache[cacheKey] = diskBitmap }
+                loadingStates[cacheKey] = LoadingState.LOADED
+                return@withContext ThumbnailResult.Success(diskBitmap, ThumbnailSource.DISK)
+            }
+        } catch (_: Exception) {}
+
+        // Try legacy key format for backward compatibility
         try {
             val diskBitmap = diskCache.get(makeDiskCacheKey(imageId, size))
             if (diskBitmap != null && !diskBitmap.isRecycled) {
                 diskHits.incrementAndGet()
+                // Migrate to new key format so future lookups hit directly
+                try {
+                    diskCache.put(imageId, diskBitmap, toResolutionTier(size))
+                } catch (_: Exception) {}
                 synchronized(memoryCacheLock) { memoryCache[cacheKey] = diskBitmap }
                 loadingStates[cacheKey] = LoadingState.LOADED
                 return@withContext ThumbnailResult.Success(diskBitmap, ThumbnailSource.DISK)
@@ -156,7 +196,7 @@ class ThumbnailService(
             val sourceLastModified = File(imagePath).lastModified()
             try {
                 diskCache.put(
-                    makeDiskCacheKey(imageId, size).toString(),
+                    imageId.toString(),
                     bitmap,
                     toResolutionTier(size),
                     THUMBNAIL_QUALITY,
@@ -218,12 +258,11 @@ class ThumbnailService(
         size: ThumbnailSize = ThumbnailSize.MEDIUM
     ) = withContext(Dispatchers.IO) {
         for ((imageId, path) in imagePaths) {
-            val diskKey = makeDiskCacheKey(imageId, size)
-            if (!diskCache.contains(diskKey)) {
+            if (!diskCache.contains(imageId, toResolutionTier(size))) {
                 try {
                     val bitmap = generateThumbnailFromPath(path, size.pixels)
                     if (bitmap != null) {
-                        diskCache.put(diskKey, bitmap, toResolutionTier(size))
+                        diskCache.put(imageId, bitmap, toResolutionTier(size))
                         generatedCount.incrementAndGet()
                     }
                 } catch (_: Exception) {
@@ -397,6 +436,13 @@ class ThumbnailService(
                 memoryCache.remove(cacheKey)?.recycle()
             }
             loadingStates.remove(cacheKey)
+        }
+        // Evict primary disk cache key (matching ImportService's write format)
+        try {
+            diskCache.evict(imageId)
+        } catch (_: Exception) {}
+        // Evict legacy disk cache keys for backward compatibility
+        ThumbnailSize.entries.forEach { size ->
             try {
                 diskCache.evict(makeDiskCacheKey(imageId, size))
             } catch (_: Exception) {}
@@ -465,6 +511,11 @@ class ThumbnailService(
                 memoryCache.remove(cacheKey)?.recycle()
             }
             loadingStates.remove(cacheKey)
+            // Evict primary disk cache key (matching ImportService's write format)
+            try {
+                diskCache.evict(imageId, toResolutionTier(size))
+            } catch (_: Exception) {}
+            // Evict legacy disk cache key
             try {
                 diskCache.evict(makeDiskCacheKey(imageId, size), toResolutionTier(size))
             } catch (_: Exception) {}

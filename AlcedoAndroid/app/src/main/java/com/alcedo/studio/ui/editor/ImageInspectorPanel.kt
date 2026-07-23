@@ -1,8 +1,6 @@
 package com.alcedo.studio.ui.editor
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -58,8 +56,7 @@ fun ImageInspectorPanel(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+            .fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
     ) {
         // ── File Info ──────────────────────────────────────────────

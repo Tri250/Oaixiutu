@@ -77,57 +77,60 @@ val AlcedoTypography = Typography(
     ),
 
     // ── Title: Card titles, panel headers ───────────────────────────
+    // lineHeight = 1.3x fontSize – 紧凑标题行高，增强标题层级感
     titleLarge = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 22.sp,
-        lineHeight = 30.sp,       // 1.36x
+        lineHeight = 29.sp,       // 1.3x – 紧凑标题行高
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 18.sp,
-        lineHeight = 26.sp,       // 1.44x
+        lineHeight = 23.sp,       // 1.3x
         letterSpacing = 0.15.sp
     ),
     titleSmall = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 15.sp,
-        lineHeight = 22.sp,       // 1.47x
+        lineHeight = 20.sp,       // 1.3x
         letterSpacing = 0.1.sp
     ),
 
     // ── Body: Primary reading content ───────────────────────────────
+    // fontSize +1sp 改善中文可读性, lineHeight = 1.4x 优化中文行距呼吸感
     bodyLarge = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 26.sp,       // 1.625x – generous for readability
+        fontSize = 17.sp,
+        lineHeight = 24.sp,       // 1.4x – 优化中文行距
         letterSpacing = 0.5.sp
     ),
     bodyMedium = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 22.sp,       // 1.57x
+        fontSize = 15.sp,
+        lineHeight = 21.sp,       // 1.4x
         letterSpacing = 0.25.sp
     ),
     bodySmall = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 18.sp,       // 1.5x
+        fontSize = 13.sp,
+        lineHeight = 18.sp,       // 1.4x
         letterSpacing = 0.4.sp
     ),
 
     // ── Label: Buttons, tags, chips, navigation items ───────────────
+    // lineHeight = 1.5x – 宽松标签行高，适配按钮与芯片
     labelLarge = TextStyle(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
-        lineHeight = 20.sp,       // 1.43x
+        lineHeight = 21.sp,       // 1.5x
         letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
@@ -141,7 +144,7 @@ val AlcedoTypography = Typography(
         fontFamily = AlcedoFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
-        lineHeight = 16.sp,       // 1.45x
+        lineHeight = 17.sp,       // 1.5x
         letterSpacing = 0.5.sp
     )
 )

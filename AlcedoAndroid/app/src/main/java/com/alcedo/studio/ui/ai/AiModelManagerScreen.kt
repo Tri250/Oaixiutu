@@ -240,6 +240,10 @@ private fun ModelAsset.toModelInfo(): AiModelInfo =
         isDownloaded = downloadStatus == ModelDownloadStatus.DOWNLOADED
                 || downloadStatus == ModelDownloadStatus.VERIFIED
                 || downloadStatus == ModelDownloadStatus.ACTIVATED,
+        isCorrupt = downloadStatus == ModelDownloadStatus.CORRUPT,
+        isFailed = downloadStatus == ModelDownloadStatus.FAILED,
+        version = version,
+        downloadedVersion = downloadedVersion,
         isRequired = modelType == AiModelType.CLIP
     )
 
@@ -249,6 +253,10 @@ data class AiModelInfo(
     val description: String,
     val sizeMB: Int,
     val isDownloaded: Boolean,
+    val isCorrupt: Boolean = false,
+    val isFailed: Boolean = false,
+    val version: String = "1.0.0",
+    val downloadedVersion: String = "",
     val isRequired: Boolean = false
 )
 
@@ -271,18 +279,34 @@ private fun ModelCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Model icon
+            val iconColor = when {
+                model.isCorrupt -> MaterialTheme.colorScheme.error
+                model.isFailed -> MaterialTheme.colorScheme.error
+                model.isDownloaded -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val iconBackground = when {
+                model.isCorrupt -> MaterialTheme.colorScheme.errorContainer
+                model.isFailed -> MaterialTheme.colorScheme.errorContainer
+                model.isDownloaded -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val icon = when {
+                model.isCorrupt -> Icons.Default.Warning
+                model.isFailed -> Icons.Default.ErrorOutline
+                model.isDownloaded -> Icons.Default.CheckCircle
+                else -> Icons.Default.Download
+            }
             Surface(
                 shape = MaterialTheme.shapes.medium,
-                color = if (model.isDownloaded) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant,
+                color = iconBackground,
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        if (model.isDownloaded) Icons.Default.CheckCircle else Icons.Default.Download,
+                        icon,
                         contentDescription = null,
-                        tint = if (model.isDownloaded) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = iconColor,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -306,6 +330,14 @@ private fun ModelCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (model.version.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "v${model.version}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (model.isRequired) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
@@ -321,7 +353,25 @@ private fun ModelCard(
                         }
                     }
                 }
-                // 下载中显示进度条 + 取消按钮
+
+                // Error / corrupt state message
+                if (model.isCorrupt) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "模型文件已损坏，需要重新下载",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else if (model.isFailed) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "下载失败，请重试",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                // Download progress + cancel button
                 if (isDownloading) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val progress = downloadProgress
@@ -350,7 +400,7 @@ private fun ModelCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Action button / 下载进度
+            // Action button
             val progress = downloadProgress
             if (model.isDownloaded) {
                 IconButton(
@@ -365,10 +415,21 @@ private fun ModelCard(
                     )
                 }
             } else if (isDownloading) {
-                // 已在信息区显示进度+取消按钮，此处不重复显示
                 Spacer(modifier = Modifier.width(0.dp))
+            } else if (model.isCorrupt || model.isFailed) {
+                // Retry button for corrupt or failed models
+                FilledTonalButton(
+                    onClick = onDownload,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("重试", style = MaterialTheme.typography.labelMedium)
+                }
             } else if (progress != null) {
-                // 兼容性兜底：显示下载进度条
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.width(72.dp).padding(vertical = 4.dp)

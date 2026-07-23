@@ -103,40 +103,19 @@ class PipelineService {
             floatPixels[base + 3] = ((pixel shr 24) and 0xFF) / 255.0f
         }
 
-        // ── 尝试 GPU 加速路径 ──
-        // S2 修复: 使用局部变量捕获 GPU 服务,避免 !! 竞态和重复空检查
+        // ── 始终使用 CPU 原生管线 ──
+        // GPU 管线仅处理 12 个基础参数，缺少色调曲线/Sigmoid/Color Wheels/
+        // Tint/HSL/Channel Mixer/Film Grain/Halation/LUT/镜头校正/几何/暗角
+        // 以及关键的 Display Transform（色彩科学/EOTF/输出色彩空间），
+        // 导致 GPU 返回非 null 时跳过 CPU 完整管线，线性数据直接显示→花屏。
+        // 修复：禁用 GPU 路径，始终走 CPU 原生管线（126 参数完整管线）。
         var result: FloatArray? = null
-        val gpu = gpuPipelineService
-
-        if (gpu != null && gpu.checkGpuSupport()) {
-            try {
-                gpu.initialize(width, height)
-                result = gpu.processOnGpu(floatPixels, width, height, params)
-
-                // 若锐化量非零，追加 GPU 锐化 pass
-                if (result != null && params.sharpenAmount != 0f) {
-                    val sharpened = gpu.sharpenOnGpu(
-                        params.sharpenAmount.coerceAtLeast(0f),
-                        5f // 默认锐化半径 5px
-                    )
-                    if (sharpened != null) {
-                        result = sharpened
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.w(TAG, "GPU path failed, fallback to CPU", e)
-                result = null
-            }
-        }
-
-        // ── 回退到 CPU 原生管线 ──
-        if (result == null) {
-            try {
-                val paramsArray = buildParamsArray(params)
-                result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "CPU pipeline failed", e)
-            }
+        // val gpu = gpuPipelineService  // 保留字段供未来 GPU 管线补全后重新启用
+        try {
+            val paramsArray = buildParamsArray(params)
+            result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "CPU pipeline failed", e)
         }
 
         // 修复: 原生管线可能返回 null (例如 NDK 不可用)，需要安全回退

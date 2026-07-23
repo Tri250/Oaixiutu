@@ -12,10 +12,10 @@ import com.alcedo.studio.domain.service.LensCorrectionDatabase
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoAnimation
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun LensCorrectionPanel(
@@ -23,7 +23,7 @@ fun LensCorrectionPanel(
     modifier: Modifier = Modifier
 ) {
     val params by viewModel.params
-    val image by viewModel.imageModel.collectAsState()
+    val image by viewModel.imageModel.collectAsStateWithLifecycle()
 
     // 自动检测镜头型号
     var autoDetectedProfile by remember { mutableStateOf<LensCorrectionDatabase.LensProfile?>(null) }
@@ -32,13 +32,17 @@ fun LensCorrectionPanel(
     // 从 EXIF 自动检测
     LaunchedEffect(image) {
         isAutoDetecting = true
-        autoDetectedProfile = image?.let { img ->
-            LensCorrectionDatabase.findProfile(
-                make = img.exifDisplay.cameraMake,
-                model = img.exifDisplay.lensModel?.ifBlank { img.exifDisplay.cameraModel } ?: img.exifDisplay.cameraModel,
-                focalLength = img.exifDisplay.focalLength.toFloatOrNull(),
-                aperture = img.exifDisplay.aperture.toFloatOrNull()
-            )
+        autoDetectedProfile = try {
+            image?.let { img ->
+                LensCorrectionDatabase.findProfile(
+                    make = img.exifDisplay.cameraMake,
+                    model = img.exifDisplay.lensModel.ifBlank { img.exifDisplay.cameraModel },
+                    focalLength = img.exifDisplay.focalLength.toFloatOrNull(),
+                    aperture = img.exifDisplay.aperture.toFloatOrNull()
+                )
+            }
+        } catch (_: Exception) {
+            null
         }
         isAutoDetecting = false
     }

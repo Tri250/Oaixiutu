@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -35,6 +36,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.common.ConfirmDialog
 import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoGradient
 import com.alcedo.studio.ui.theme.AlcedoStroke
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
@@ -168,6 +170,13 @@ fun SettingsScreen(navController: NavController) {
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
                 ),
                 modifier = Modifier.drawWithContent {
+                    // 玻璃态顶部高光
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = AlcedoGradient.glassHighlightVertical
+                        ),
+                        size = size
+                    )
                     drawContent()
                     drawLine(
                         color = topBarBorderColor,
@@ -661,21 +670,26 @@ private fun SettingsSectionHeader(title: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = AlcedoSpacing.xl, vertical = AlcedoSpacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 青墨绿竖线指示器
         Box(
             modifier = Modifier
                 .width(3.dp)
                 .height(16.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.primary)
+                .background(
+                    Brush.verticalGradient(
+                        colors = AlcedoGradient.primaryWarm
+                    )
+                )
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -804,7 +818,7 @@ private fun SwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedThumbColor = Color.White,
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                 uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -904,29 +918,42 @@ private fun SettingsUserCard(appVersion: String) {
     SettingsCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = AlcedoSpacing.lg, vertical = AlcedoSpacing.md)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(AlcedoSpacing.xxl),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 头像占位 – 青墨绿渐变背景
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                modifier = Modifier.size(72.dp)
+                modifier = Modifier.size(72.dp),
+                color = Color.Transparent
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(
+                            Brush.linearGradient(
+                                colors = AlcedoGradient.primaryWarm,
+                                start = Offset(0f, 0f),
+                                end = Offset.Infinite
+                            ),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        imageVector = Icons.Default.PhotoCamera,
+                        imageVector = Icons.Default.Person,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color.White,
                         modifier = Modifier.size(36.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(AlcedoSpacing.xl))
             Column {
                 Text(
                     text = "Alcedo Studio",
@@ -934,7 +961,7 @@ private fun SettingsUserCard(appVersion: String) {
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Text(
                     text = "v$appVersion",
                     style = MaterialTheme.typography.bodyMedium,

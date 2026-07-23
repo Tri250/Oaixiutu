@@ -1,0 +1,99 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Adaptive icon foreground: 108x108 canvas, safe zone 72x72 centered at (54,54) -->
+
+    <!-- Outer aperture ring (thick donut) -->
+    <path
+        android:fillColor="#00D4AA"
+        android:pathData="M54,18C34.1,18 18,34.1 18,54C18,73.9 34.1,90 54,90C73.9,90 90,73.9 90,54C90,34.1 73.9,18 54,18ZM54,84C37.4,84 24,70.6 24,54C24,37.4 37.4,24 54,24C70.6,24 84,37.4 84,54C84,70.6 70.6,84 54,84Z" />
+
+    <!-- Aperture blade 1 - top -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.7"
+        android:pathData="M54,28L44.9,41.6L54,36Z" />
+    <!-- Aperture blade 2 - top-right -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.55"
+        android:pathData="M63.1,41.6L70.5,41.2L63.8,47.1Z" />
+    <!-- Aperture blade 3 - right -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.7"
+        android:pathData="M70.5,41.2L74,54L66.4,47.6Z" />
+    <!-- Aperture blade 4 - bottom-right -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.55"
+        android:pathData="M74,54L70.5,66.8L66.4,60.4Z" />
+    <!-- Aperture blade 5 - bottom -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.7"
+        android:pathData="M70.5,66.8L54,80L63.1,66.4Z" />
+    <!-- Aperture blade 6 - bottom-left -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.55"
+        android:pathData="M54,80L37.5,66.8L44.9,66.4Z" />
+    <!-- Aperture blade 7 - left -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.7"
+        android:pathData="M37.5,66.8L34,54L41.6,60.4Z" />
+    <!-- Aperture blade 8 - top-left -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.55"
+        android:pathData="M34,54L37.5,41.2L41.6,47.6Z" />
+
+    <!-- Inner lens circle fill -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.2"
+        android:pathData="M54,36C44.1,36 36,44.1 36,54C36,63.9 44.1,72 54,72C63.9,72 72,63.9 72,54C72,44.1 63.9,36 54,36Z" />
+
+    <!-- Inner lens ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00D4AA"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.8"
+        android:pathData="M54,36C44.1,36 36,44.1 36,54C36,63.9 44.1,72 54,72C63.9,72 72,63.9 72,54C72,44.1 63.9,36 54,36Z" />
+
+    <!-- Lens specular highlight (crescent) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M47,42.5C43.6,42.5 41,45.1 41,48.5C41,51.9 43.6,54.5 47,54.5C50.4,54.5 53,51.9 53,48.5C53,45.1 50.4,42.5 47,42.5Z" />
+
+    <!-- Small specular dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7"
+        android:pathData="M49,45C48,45 47.2,45.8 47.2,46.8C47.2,47.8 48,48.6 49,48.6C50,48.6 50.8,47.8 50.8,46.8C50.8,45.8 50,45 49,45Z" />
+
+    <!-- Tick marks on outer ring (aperture scale markers) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M54,19L53.2,22L54.8,22Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M54,89L53.2,86L54.8,86Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M19,54L22,53.2L22,54.8Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.4"
+        android:pathData="M89,54L86,53.2L86,54.8Z" />
+
+</vector>

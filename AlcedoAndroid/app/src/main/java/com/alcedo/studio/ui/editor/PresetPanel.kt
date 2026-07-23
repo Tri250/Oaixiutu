@@ -9,8 +9,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,6 +35,7 @@ import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.theme.AlcedoElevation
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 /**
@@ -100,6 +99,7 @@ fun PresetPanel(
     val presetService = remember { viewModel.presetService }
 
     val presets by presetService.getAllPresets()
+        .catch { emit(emptyList()) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val currentPreview by viewModel.previewBitmap.collectAsStateWithLifecycle()
 
@@ -205,8 +205,7 @@ fun PresetPanel(
         // LazyVerticalGrid inside the editor's vertically scrolling panel.
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
         ) {
             // ── Top action bar ──

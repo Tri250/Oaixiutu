@@ -30,6 +30,8 @@ import com.alcedo.studio.utils.MemoryGuard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1448,6 +1450,22 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // Auto Enhance (智能优化)
     // ================================================================
 
+    /** Scene classification result used to modulate auto-enhance adjustments. */
+    private enum class SceneType {
+        NORMAL, LOW_LIGHT, HIGH_KEY, HIGH_CONTRAST,
+        LOW_SATURATION, HIGH_SATURATION, BACKLIT
+    }
+
+    /** Computed image statistics used by scene classification and analyze functions. */
+    private data class ImageStats(
+        val avgBrightness: Float,
+        val stddev: Float,
+        val avgSaturation: Float,
+        val highlightRatio: Float,   // fraction of pixels above 230
+        val shadowRatio: Float,      // fraction of pixels below 25
+        val midtoneRatio: Float       // fraction of pixels in [64, 192]
+    )
+
     fun autoEnhance() {
         // 智能优化 — 自动分析图像并应用最佳调整
         viewModelScope.launch {
@@ -1455,56 +1473,231 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 val currentParams = _params.value
                 val previewBitmap = previewSourceBitmap ?: _previewBitmap.value ?: return@launch
 
-                // 1. 自动曝光 — 基于直方图分析
-                val autoExposure = analyzeExposure()
+                // Emit loading state
+                _isProcessing.value = true
 
-                // 2. 自动白平衡 — 基于灰世界假设
-                val autoWB = analyzeWhiteBalance(previewBitmap)
+                // Parallel analysis
+                val results = coroutineScope {
+                    val statsDeferred = async(Dispatchers.Default) { computeImageStats(previewBitmap) }
+                    val exposureDeferred = async(Dispatchers.Default) { analyzeExposure(previewBitmap) }
+                    val wbDeferred = async(Dispatchers.Default) { analyzeWhiteBalance(previewBitmap) }
+                    val contrastDeferred = async(Dispatchers.Default) { analyzeContrast(previewBitmap) }
+                    val hsDeferred = async(Dispatchers.Default) { analyzeHighlightsShadows(previewBitmap) }
+                    val satDeferred = async(Dispatchers.Default) { analyzeSaturation(previewBitmap) }
+                    val vibDeferred = async(Dispatchers.Default) { analyzeVibrance(previewBitmap) }
+                    val clarityDeferred = async(Dispatchers.Default) { analyzeClarity(previewBitmap) }
 
-                // 3. 自动对比度
-                val autoContrast = analyzeContrast()
+                    Octuple(
+                        statsDeferred.await(),
+                        exposureDeferred.await(),
+                        wbDeferred.await(),
+                        contrastDeferred.await(),
+                        hsDeferred.await(),
+                        satDeferred.await(),
+                        vibDeferred.await(),
+                        clarityDeferred.await()
+                    )
+                }
+                val stats = results.a
+                val autoExposure = results.b
+                val autoWB = results.c
+                val autoContrast = results.d
+                val autoHS = results.e
+                val autoSaturation = results.f
+                val autoVibrance = results.g
+                val autoClarity = results.h
 
-                // 4. 自动高光/阴影恢复
-                val (autoHighlights, autoShadows) = analyzeHighlightsShadows(previewBitmap)
+                // Scene-aware parameter modulation
+                val scene = classifyScene(stats)
+                var exposure = autoExposure
+                var contrast = autoContrast
+                var highlights = autoHS.first
+                var shadows = autoHS.second
+                var saturation = autoSaturation
+                var vibrance = autoVibrance
+                var clarity = autoClarity
 
-                // 5. 自动饱和度/自然饱和度
-                val autoSaturation = analyzeSaturation()
-                val autoVibrance = analyzeVibrance(previewBitmap)
+                when (scene) {
+                    SceneType.LOW_LIGHT -> {
+                        exposure = (exposure + 0.3f).coerceIn(-2f, 2f)
+                        contrast = (contrast - 0.1f).coerceIn(-0.5f, 0.5f)
+                        clarity = (clarity + 0.15f).coerceIn(-1f, 1f)
+                    }
+                    SceneType.HIGH_KEY -> {
+                        exposure = (exposure - 0.15f).coerceIn(-2f, 2f)
+                        contrast = (contrast + 0.12f).coerceIn(-0.5f, 0.5f)
+                    }
+                    SceneType.HIGH_CONTRAST -> {
+                        shadows = (shadows + 0.2f).coerceIn(-1f, 1f)
+                        highlights = (highlights - 0.15f).coerceIn(-1f, 1f)
+                    }
+                    SceneType.LOW_SATURATION -> {
+                        saturation = (saturation + 0.1f).coerceIn(-0.5f, 0.5f)
+                        vibrance = (vibrance + 0.1f).coerceIn(-0.5f, 0.5f)
+                    }
+                    SceneType.HIGH_SATURATION -> {
+                        saturation = (saturation - 0.08f).coerceIn(-0.5f, 0.5f)
+                        // Only boost vibrance to protect skin tones
+                        vibrance = (vibrance + 0.05f).coerceIn(-0.5f, 0.5f)
+                    }
+                    SceneType.BACKLIT -> {
+                        shadows = (shadows + 0.3f).coerceIn(-1f, 1f)
+                        highlights = (highlights - 0.2f).coerceIn(-1f, 1f)
+                        contrast = (contrast + 0.1f).coerceIn(-0.5f, 0.5f)
+                    }
+                    SceneType.NORMAL -> { /* no modulation */ }
+                }
 
-                // 6. 自动清晰度
-                val autoClarity = analyzeClarity(previewBitmap)
+                // Final clamp — ensure every value is within PipelineParams valid ranges
+                exposure = exposure.coerceIn(-2f, 2f)
+                contrast = contrast.coerceIn(-0.5f, 0.5f)
+                highlights = highlights.coerceIn(-1f, 1f)
+                shadows = shadows.coerceIn(-1f, 1f)
+                saturation = saturation.coerceIn(-0.5f, 0.5f)
+                vibrance = vibrance.coerceIn(-0.5f, 0.5f)
+                clarity = clarity.coerceIn(-1f, 1f)
+                val wbTemp = autoWB.first.coerceIn(2000f, 15000f)
+                val wbTint = autoWB.second.coerceIn(-50f, 50f)
 
                 _params.value = currentParams.copy(
-                    exposure = autoExposure,
-                    contrast = autoContrast,
-                    whiteBalanceTemp = autoWB.first,
-                    whiteBalanceTint = autoWB.second,
-                    highlights = autoHighlights,
-                    shadows = autoShadows,
-                    saturation = autoSaturation,
-                    vibrance = autoVibrance,
-                    clarityAmount = autoClarity
+                    exposure = exposure,
+                    contrast = contrast,
+                    whiteBalanceTemp = wbTemp,
+                    whiteBalanceTint = wbTint,
+                    highlights = highlights,
+                    shadows = shadows,
+                    saturation = saturation,
+                    vibrance = vibrance,
+                    clarityAmount = clarity
                 )
 
                 // 记录到历史
-                recordTransaction(OperatorType.EXPOSURE, "exposure", autoExposure)
-                recordTransaction(OperatorType.CONTRAST, "contrast", autoContrast)
-                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", autoWB.first)
-                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", autoWB.second)
-                recordTransaction(OperatorType.HIGHLIGHTS, "highlights", autoHighlights)
-                recordTransaction(OperatorType.SHADOWS, "shadows", autoShadows)
-                recordTransaction(OperatorType.SATURATION, "saturation", autoSaturation)
-                recordTransaction(OperatorType.SATURATION, "vibrance", autoVibrance)
-                recordTransaction(OperatorType.CLARITY, "clarityAmount", autoClarity)
+                recordTransaction(OperatorType.EXPOSURE, "exposure", exposure)
+                recordTransaction(OperatorType.CONTRAST, "contrast", contrast)
+                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTemp", wbTemp)
+                recordTransaction(OperatorType.WHITE_BALANCE, "whiteBalanceTint", wbTint)
+                recordTransaction(OperatorType.HIGHLIGHTS, "highlights", highlights)
+                recordTransaction(OperatorType.SHADOWS, "shadows", shadows)
+                recordTransaction(OperatorType.SATURATION, "saturation", saturation)
+                recordTransaction(OperatorType.SATURATION, "vibrance", vibrance)
+                recordTransaction(OperatorType.CLARITY, "clarityAmount", clarity)
                 saveVersion()
                 regeneratePreview()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 android.util.Log.e("EditorVM", "autoEnhance failed", e)
+            } finally {
+                _isProcessing.value = false
             }
         }
     }
+
+    /** Simple 8-element tuple for parallel analysis results. */
+    private class Octuple<A, B, C, D, E, F, G, H>(
+        val a: A, val b: B, val c: C, val d: D,
+        val e: E, val f: F, val g: G, val h: H
+    )
+
+    // ── Scene classification ──────────────────────────────────────────────
+
+    private fun classifyScene(stats: ImageStats): SceneType {
+        // Backlit: very high highlight ratio + high shadow ratio (bimodal)
+        if (stats.highlightRatio > 0.15f && stats.shadowRatio > 0.12f) {
+            return SceneType.BACKLIT
+        }
+        // Low-light: overall dark
+        if (stats.avgBrightness < 0.25f) {
+            return SceneType.LOW_LIGHT
+        }
+        // High-key: overall bright with compressed tonal range
+        if (stats.avgBrightness > 0.7f && stats.stddev < 0.18f) {
+            return SceneType.HIGH_KEY
+        }
+        // High-contrast: wide tonal range
+        if (stats.stddev > 0.32f) {
+            return SceneType.HIGH_CONTRAST
+        }
+        // Low-saturation
+        if (stats.avgSaturation < 0.2f) {
+            return SceneType.LOW_SATURATION
+        }
+        // High-saturation
+        if (stats.avgSaturation > 0.55f) {
+            return SceneType.HIGH_SATURATION
+        }
+        return SceneType.NORMAL
+    }
+
+    // ── Image statistics computation ──────────────────────────────────────
+
+    private fun computeImageStats(bitmap: Bitmap): ImageStats {
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        var sumLum = 0.0
+        var sumSat = 0.0
+        var highlightCount = 0
+        var shadowCount = 0
+        var midtoneCount = 0
+        val step = maxOf(1, pixels.size / 50000) // sample ~50k pixels max
+
+        var sampled = 0
+        var i = 0
+        while (i < pixels.size) {
+            val pixel = pixels[i]
+            val rv = ((pixel shr 16) and 0xFF) / 255.0
+            val gv = ((pixel shr 8) and 0xFF) / 255.0
+            val bv = (pixel and 0xFF) / 255.0
+            val lum = 0.299 * rv + 0.587 * gv + 0.114 * bv
+
+            sumLum += lum
+
+            // Per-pixel saturation (HSV-style)
+            val maxC = maxOf(rv, gv, bv)
+            val minC = minOf(rv, gv, bv)
+            val sat = if (maxC > 0.001) (maxC - minC) / maxC else 0.0
+            sumSat += sat
+
+            // Bucket
+            val lumByte = (lum * 255.0).coerceIn(0.0, 255.0).toInt()
+            if (lumByte > 230) highlightCount++
+            if (lumByte < 25) shadowCount++
+            if (lumByte in 64..192) midtoneCount++
+
+            sampled++
+            i += step
+        }
+
+        if (sampled == 0) return ImageStats(0.5f, 0.2f, 0.3f, 0f, 0f, 0.5f)
+
+        val avgBrightness = (sumLum / sampled).toFloat()
+        val avgSaturation = (sumSat / sampled).toFloat()
+        val highlightRatio = highlightCount.toFloat() / sampled
+        val shadowRatio = shadowCount.toFloat() / sampled
+        val midtoneRatio = midtoneCount.toFloat() / sampled
+
+        // Compute stddev from a second pass (still using sampled pixels)
+        var variance = 0.0
+        i = 0
+        while (i < pixels.size) {
+            val pixel = pixels[i]
+            val rv = ((pixel shr 16) and 0xFF) / 255.0
+            val gv = ((pixel shr 8) and 0xFF) / 255.0
+            val bv = (pixel and 0xFF) / 255.0
+            val lum = 0.299 * rv + 0.587 * gv + 0.114 * bv
+            val diff = lum - (sumLum / sampled)
+            variance += diff * diff
+            i += step
+        }
+        val stddev = kotlin.math.sqrt(variance / sampled).toFloat()
+
+        return ImageStats(avgBrightness, stddev, avgSaturation, highlightRatio, shadowRatio, midtoneRatio)
+    }
+
+    // ── Analyze functions ─────────────────────────────────────────────────
 
     private suspend fun analyzeWhiteBalance(bitmap: Bitmap): Pair<Float, Float> {
         return withContext(Dispatchers.Default) {
@@ -1548,21 +1741,36 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             val histogram = ScopeAnalyzer.computeHistogram(bitmap)
             val lum = histogram.luminance
 
-            // 检查高光溢出（亮度>240的像素占比）
-            var highlightClipped = 0f
-            var shadowClipped = 0f
             var total = 0f
-            for (i in lum.indices) {
-                total += lum[i]
-                if (i > 240) highlightClipped += lum[i]
-                if (i < 15) shadowClipped += lum[i]
+            for (v in lum) total += v
+            if (total <= 0f) return@withContext Pair(0f, 0f)
+
+            // ── Highlights: nuanced, not just clipping ──
+            // Accumulate weighted mass in the upper tonal range (200..255)
+            // Stronger weight the closer to 255
+            var highlightWeighted = 0f
+            for (i in 200..255) {
+                val weight = (i - 200) / 55f  // 0..1 ramp
+                highlightWeighted += lum[i] * weight
             }
+            val highlightMass = highlightWeighted / total
+            // Soft S-curve: small mass → small recovery, large mass → strong recovery
+            val autoHighlights = if (highlightMass > 0.02f) {
+                -((-1f + 1f / (1f + highlightMass * 6f)) * 2f).coerceIn(-1f, 0f)
+            } else 0f
 
-            val highlightRatio = if (total > 0) highlightClipped / total else 0f
-            val shadowRatio = if (total > 0) shadowClipped / total else 0f
-
-            val autoHighlights = if (highlightRatio > 0.05f) -(highlightRatio * 2f).coerceIn(-1f, 0f) else 0f
-            val autoShadows = if (shadowRatio > 0.05f) (shadowRatio * 1.5f).coerceIn(0f, 1f) else 0f
+            // ── Shadows: nuanced ──
+            // Accumulate weighted mass in the lower tonal range (0..55)
+            var shadowWeighted = 0f
+            for (i in 0..55) {
+                val weight = (55 - i) / 55f  // 1..0 ramp
+                shadowWeighted += lum[i] * weight
+            }
+            val shadowMass = shadowWeighted / total
+            val autoShadows = if (shadowMass > 0.02f) {
+                ((1f / (1f + shadowMass * 4f) - 1f / (1f + 0.02f * 4f)) * 3f)
+                    .coerceIn(0f, 1f)
+            } else 0f
 
             Pair(autoHighlights, autoShadows)
         }
@@ -1570,35 +1778,120 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private suspend fun analyzeVibrance(bitmap: Bitmap): Float {
         return withContext(Dispatchers.Default) {
-            // 基于饱和度分布分析，低饱和度图像增加自然饱和度
-            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
-            val lum = histogram.luminance
-            var total = 0f
-            var weighted = 0f
-            for (i in lum.indices) {
-                total += lum[i]
-                weighted += lum[i] * (i / 255f)
-            }
-            val avgBrightness = if (total > 0) weighted / total else 0.5f
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
 
-            // 中间调图像增加自然饱和度
-            if (avgBrightness in 0.3f..0.7f) 0.15f else 0f
+            // Compute per-pixel saturation to find low-saturation regions
+            var sumSat = 0.0
+            var lowSatCount = 0
+            var sampled = 0
+            val step = maxOf(1, pixels.size / 30000)
+
+            var i = 0
+            while (i < pixels.size) {
+                val pixel = pixels[i]
+                val rv = ((pixel shr 16) and 0xFF) / 255.0
+                val gv = ((pixel shr 8) and 0xFF) / 255.0
+                val bv = (pixel and 0xFF) / 255.0
+
+                val maxC = maxOf(rv, gv, bv)
+                val minC = minOf(rv, gv, bv)
+                val sat = if (maxC > 0.001) (maxC - minC) / maxC else 0.0
+                sumSat += sat
+                if (sat < 0.25) lowSatCount++
+                sampled++
+                i += step
+            }
+
+            if (sampled == 0) return@withContext 0f
+
+            val avgSat = sumSat / sampled
+            val lowSatFraction = lowSatCount.toFloat() / sampled
+
+            // Vibrance boosts low-saturation pixels preferentially.
+            // If a large fraction of pixels are desaturated, boost vibrance.
+            if (lowSatFraction > 0.3f) {
+                (0.1f + lowSatFraction * 0.15f).coerceIn(0f, 0.5f)
+            } else if (avgSat < 0.3) {
+                (0.08f + (0.3 - avgSat).toFloat() * 0.3f).coerceIn(0f, 0.5f)
+            } else {
+                0f
+            }
         }
     }
 
     private suspend fun analyzeClarity(bitmap: Bitmap): Float {
         return withContext(Dispatchers.Default) {
-            // 基于对比度分析，低对比度图像增加清晰度
-            val autoContrast = analyzeContrast()
-            if (autoContrast < 0f) 0.1f else 0f
+            // Estimate sharpness/detail level using pixel variance in luminance channel.
+            // High local variance = detailed/sharp image → less clarity needed.
+            // Low local variance = soft/flat image → more clarity needed.
+            val w = bitmap.width
+            val h = bitmap.height
+            if (w < 4 || h < 4) return@withContext 0f
+
+            val pixels = IntArray(w * h)
+            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+            // Compute luminance array
+            val lum = FloatArray(w * h)
+            for (idx in pixels.indices) {
+                val pixel = pixels[idx]
+                val rv = ((pixel shr 16) and 0xFF) / 255f
+                val gv = ((pixel shr 8) and 0xFF) / 255f
+                val bv = (pixel and 0xFF) / 255f
+                lum[idx] = 0.299f * rv + 0.587f * gv + 0.114f * bv
+            }
+
+            // Compute average local variance using 3×3 blocks
+            // Sample a grid of blocks to keep it fast
+            val blockStep = maxOf(2, minOf(w, h) / 100)
+            var totalVariance = 0f
+            var blockCount = 0
+
+            var y = 1
+            while (y < h - 1) {
+                var x = 1
+                while (x < w - 1) {
+                    val center = lum[y * w + x]
+                    var localVar = 0f
+                    for (dy in -1..1) {
+                        for (dx in -1..1) {
+                            val diff = lum[(y + dy) * w + (x + dx)] - center
+                            localVar += diff * diff
+                        }
+                    }
+                    localVar /= 9f
+                    totalVariance += localVar
+                    blockCount++
+                    x += blockStep
+                }
+                y += blockStep
+            }
+
+            if (blockCount == 0) return@withContext 0f
+
+            val avgLocalVariance = totalVariance / blockCount
+
+            // Typical range: 0.0 (flat) to ~0.05 (very detailed)
+            // Low variance → soft image → needs clarity boost
+            // High variance → already sharp → minimal clarity
+            val varianceTarget = 0.008f  // "pleasant" local detail level
+            val clarity = if (avgLocalVariance < varianceTarget) {
+                // Boost clarity proportional to how far below target
+                ((varianceTarget - avgLocalVariance) / varianceTarget * 0.4f).coerceIn(0f, 0.6f)
+            } else {
+                // Already sharp; apply a small touch or none
+                ((varianceTarget - avgLocalVariance) / 0.03f * 0.05f).coerceIn(-0.1f, 0.05f)
+            }
+
+            clarity
         }
     }
 
-    private suspend fun analyzeExposure(): Float {
+    private suspend fun analyzeExposure(bitmap: Bitmap): Float {
         return withContext(Dispatchers.Default) {
             // 基于预览位图分析直方图，计算最佳曝光补偿
-            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
-            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
             val lum = histogram.luminance
             var total = 0f
             var weighted = 0f
@@ -1612,10 +1905,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
-    private suspend fun analyzeContrast(): Float {
+    private suspend fun analyzeContrast(bitmap: Bitmap): Float {
         return withContext(Dispatchers.Default) {
-            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
-            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
             val lum = histogram.luminance
             var total = 0f
             var weighted = 0f
@@ -1635,10 +1927,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
 
-    private suspend fun analyzeSaturation(): Float {
+    private suspend fun analyzeSaturation(bitmap: Bitmap): Float {
         return withContext(Dispatchers.Default) {
-            val previewBitmap = _previewBitmap.value ?: return@withContext 0f
-            val histogram = ScopeAnalyzer.computeHistogram(previewBitmap)
+            val histogram = ScopeAnalyzer.computeHistogram(bitmap)
             val r = histogram.r
             val g = histogram.g
             val b = histogram.b

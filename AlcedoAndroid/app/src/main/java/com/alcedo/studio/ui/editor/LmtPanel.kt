@@ -108,10 +108,11 @@ fun LmtPanel(
                     Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                     AdjustmentSlider(
                         label = stringRes { this.lmtIntensity },
-                        value = lmtIntensity,
-                        range = 0f..1f,
+                        value = lmtIntensity.coerceIn(0f, 100f),
+                        range = 0f..100f,
                         onValueChange = { onLmtChanged(lmtEnabled, lmtPath, it) },
-                        defaultValue = 1f
+                        defaultValue = 100f,
+                        valueDisplayTransform = { "${it.toInt()}%" }
                     )
                 }
             }

@@ -258,36 +258,36 @@ val MistLightColors = AlcedoColorScheme(
 )
 
 // ═══════════════════════════════════════════════════════════════════
-// DeepSpace – Deep space black with pure white text
-// Pure professional photography aesthetic, inspired by flagship cameras
-// Ultra-deep #000000 black, bright white #FFFFFF text, blue accent
+// DeepSpace – 深空黑+青墨绿 (Deep Space Black + Cyan-Ink Green)
+// 纯深黑底 + 中国砚墨青绿色调，如砚台浸润的古雅气质
+// Ultra-deep #000000 black, bright white #FFFFFF text, cyan-ink green accent
 // ═══════════════════════════════════════════════════════════════════
 val DeepSpaceDarkColors = AlcedoColorScheme(
-    bgDeep = Color(0xFF000000), bgBase = Color(0xFF050508), bgPanel = Color(0xFF0C0C12), bgCanvas = Color(0xFF030306),
-    primary = Color(0xFFA8C8FF), onPrimary = Color(0xFF003062), primaryContainer = Color(0xFF142438), onPrimaryContainer = Color(0xFFA8C8FF),
-    secondary = Color(0xFFB0B8C8), onSecondary = Color(0xFF1A1E28), secondaryContainer = Color(0xFF242830), onSecondaryContainer = Color(0xFFD8E0F0),
-    tertiary = Color(0xFFC8B8E8), onTertiary = Color(0xFF2A1840), tertiaryContainer = Color(0xFF382850), onTertiaryContainer = Color(0xFFE0D0F8),
-    surface = Color(0xFF050508), onSurface = Color(0xFFFFFFFF), surfaceVariant = Color(0xFF181820), onSurfaceVariant = Color(0xFFC8C8D4),
-    surfaceContainerLowest = Color(0xFF000000), surfaceContainerLow = Color(0xFF0A0A10), surfaceContainer = Color(0xFF101018), surfaceContainerHigh = Color(0xFF181820), surfaceContainerHighest = Color(0xFF202028),
+    bgDeep = Color(0xFF000000), bgBase = Color(0xFF040608), bgPanel = Color(0xFF080C10), bgCanvas = Color(0xFF0A0E12),
+    primary = Color(0xFF00D4AA), onPrimary = Color(0xFF003D2E), primaryContainer = Color(0xFF003D2E), onPrimaryContainer = Color(0xFF4DFFCC),
+    secondary = Color(0xFF88B8A8), onSecondary = Color(0xFF1A2E26), secondaryContainer = Color(0xFF1A2E26), onSecondaryContainer = Color(0xFFA8D8C8),
+    tertiary = Color(0xFFA8D8C8), onTertiary = Color(0xFF0E2E24), tertiaryContainer = Color(0xFF0E2E24), onTertiaryContainer = Color(0xFFC8F0E0),
+    surface = Color(0xFF040608), onSurface = Color(0xFFFFFFFF), surfaceVariant = Color(0xFF1A2E26), onSurfaceVariant = Color(0xFFC0D8D0),
+    surfaceContainerLowest = Color(0xFF000000), surfaceContainerLow = Color(0xFF0A1210), surfaceContainer = Color(0xFF0E1614), surfaceContainerHigh = Color(0xFF121A18), surfaceContainerHighest = Color(0xFF162220),
     error = Color(0xFFFFB4AB), onError = Color(0xFF690005), errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
-    outline = Color(0xFF585868), outlineVariant = Color(0xFF282830),
-    inverseSurface = Color(0xFFF0F0F5), inverseOnSurface = Color(0xFF14141C), inversePrimary = Color(0xFF4A6FA5),
-    scrim = Color(0xFF000000), accent = Color(0xFFA8C8FF), onAccent = Color(0xFF003062),
-    glassTint = Color(0x28FFFFFF), glassBorder = Color(0x18FFFFFF), glassHighlight = Color(0x12FFFFFF)
+    outline = Color(0xFF2A3A34), outlineVariant = Color(0xFF1A2E26),
+    inverseSurface = Color(0xFFE8F0EC), inverseOnSurface = Color(0xFF0E1614), inversePrimary = Color(0xFF009977),
+    scrim = Color(0xFF000000), accent = Color(0xFF00D4AA), onAccent = Color(0xFF003D2E),
+    glassTint = Color(0x2800D4AA), glassBorder = Color(0x184DFFCC), glassHighlight = Color(0x12FFFFFF)
 )
 
 val DeepSpaceLightColors = AlcedoColorScheme(
-    bgDeep = Color(0xFFE8E8EC), bgBase = Color(0xFFF0F0F5), bgPanel = Color(0xFFE0E0E8), bgCanvas = Color(0xFFF4F4F8),
-    primary = Color(0xFF4A6FA5), onPrimary = Color(0xFFFFFFFF), primaryContainer = Color(0xFFB0CFFF), onPrimaryContainer = Color(0xFF002569),
-    secondary = Color(0xFF555B68), onSecondary = Color(0xFFFFFFFF), secondaryContainer = Color(0xFFD0D8E8), onSecondaryContainer = Color(0xFF181C24),
-    tertiary = Color(0xFF655080), onTertiary = Color(0xFFFFFFFF), tertiaryContainer = Color(0xFFE0D0F0), onTertiaryContainer = Color(0xFF261838),
-    surface = Color(0xFFF0F0F5), onSurface = Color(0xFF14141C), surfaceVariant = Color(0xFFDCDCE4), onSurfaceVariant = Color(0xFF44444C),
-    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF6F6FA), surfaceContainer = Color(0xFFF0F0F4), surfaceContainerHigh = Color(0xFFEAEAEF), surfaceContainerHighest = Color(0xFFE4E4EA),
+    bgDeep = Color(0xFFE8F0EC), bgBase = Color(0xFFF0F6F3), bgPanel = Color(0xFFE0E8E4), bgCanvas = Color(0xFFF4FAF7),
+    primary = Color(0xFF009977), onPrimary = Color(0xFFFFFFFF), primaryContainer = Color(0xFF4DFFCC), onPrimaryContainer = Color(0xFF003D2E),
+    secondary = Color(0xFF4A6858), onSecondary = Color(0xFFFFFFFF), secondaryContainer = Color(0xFFC8E8D8), onSecondaryContainer = Color(0xFF0A1E16),
+    tertiary = Color(0xFF3A5848), onTertiary = Color(0xFFFFFFFF), tertiaryContainer = Color(0xFFB8E0C8), onTertiaryContainer = Color(0xFF081A12),
+    surface = Color(0xFFF0F6F3), onSurface = Color(0xFF0E1614), surfaceVariant = Color(0xFFD8E4DE), onSurfaceVariant = Color(0xFF3A4A44),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF6FAF8), surfaceContainer = Color(0xFFF0F4F2), surfaceContainerHigh = Color(0xFFEAEEEC), surfaceContainerHighest = Color(0xFFE4E8E6),
     error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF), errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
-    outline = Color(0xFF74747E), outlineVariant = Color(0xFFC4C4CC),
-    inverseSurface = Color(0xFF24242E), inverseOnSurface = Color(0xFFF0F0F5), inversePrimary = Color(0xFFB0CFFF),
-    scrim = Color(0xFF000000), accent = Color(0xFF4A6FA5), onAccent = Color(0xFFFFFFFF),
-    glassTint = Color(0x28FFFFFF), glassBorder = Color(0x1A000000), glassHighlight = Color(0x33FFFFFF)
+    outline = Color(0xFF6A7A74), outlineVariant = Color(0xFFC0D0C8),
+    inverseSurface = Color(0xFF162220), inverseOnSurface = Color(0xFFE8F0EC), inversePrimary = Color(0xFF00D4AA),
+    scrim = Color(0xFF000000), accent = Color(0xFF009977), onAccent = Color(0xFFFFFFFF),
+    glassTint = Color(0x28009977), glassBorder = Color(0x1A00D4AA), glassHighlight = Color(0x33FFFFFF)
 )
 
 // ═══════════════════════════════════════════════════════════════════

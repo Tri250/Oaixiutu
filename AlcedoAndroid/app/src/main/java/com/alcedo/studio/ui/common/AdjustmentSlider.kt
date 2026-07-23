@@ -195,7 +195,12 @@ fun AdjustmentSlider(
             },
             track = { sliderState ->
                 // 2026: 轨道 — 圆角矩形 + 渐变激活
-                val fraction = (sliderState.value - sliderState.valueRange.start) / (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
+                // Clamp fraction to [0f, 1f] to prevent IllegalArgumentException from fillMaxWidth
+                val rangeSpan = sliderState.valueRange.endInclusive - sliderState.valueRange.start
+                val rawFraction = if (rangeSpan > 0f) {
+                    (sliderState.value - sliderState.valueRange.start) / rangeSpan
+                } else 0f
+                val fraction = rawFraction.coerceIn(0f, 1f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

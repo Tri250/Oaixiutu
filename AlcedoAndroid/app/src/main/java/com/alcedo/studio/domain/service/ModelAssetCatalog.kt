@@ -33,6 +33,16 @@ class ModelAssetCatalog {
     private val _models = MutableStateFlow<List<CatalogModelAsset>>(emptyList())
     val models: StateFlow<List<CatalogModelAsset>> = _models
 
+    companion object {
+        // SHA-256 checksums for model verification.
+        // Placeholder "sha256:pending" values should be replaced with actual hashes
+        // once the model artifacts are finalized and published.
+        const val CHECKSUM_CLIP_VIT_B32_VISUAL = "sha256:pending"
+        const val CHECKSUM_CLIP_VIT_B32_TEXTUAL = "sha256:pending"
+        const val CHECKSUM_ALCEDO_IMAGE_ANALYSIS = "sha256:pending"
+        const val CHECKSUM_ALCEDO_AI_RATING = "sha256:pending"
+    }
+
     private val builtInModels = listOf(
         CatalogModelAsset(
             id = "clip-vit-b-32-visual",
@@ -41,7 +51,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 350_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-visual.onnx",
-            checksumSha256 = null
+            checksumSha256 = CHECKSUM_CLIP_VIT_B32_VISUAL
         ),
         CatalogModelAsset(
             id = "clip-vit-b-32-textual",
@@ -50,7 +60,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 250_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/clip-vit-b-32-textual.onnx",
-            checksumSha256 = null
+            checksumSha256 = CHECKSUM_CLIP_VIT_B32_TEXTUAL
         ),
         CatalogModelAsset(
             id = "alcedo-image-analysis",
@@ -59,7 +69,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 150_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-image-analysis.onnx",
-            checksumSha256 = null
+            checksumSha256 = CHECKSUM_ALCEDO_IMAGE_ANALYSIS
         ),
         CatalogModelAsset(
             id = "alcedo-ai-rating",
@@ -68,7 +78,7 @@ class ModelAssetCatalog {
             version = "1.0.0",
             sizeBytes = 100_000_000L,
             downloadUrl = "https://releases.alcedo.studio/models/alcedo-ai-rating.onnx",
-            checksumSha256 = null
+            checksumSha256 = CHECKSUM_ALCEDO_AI_RATING
         )
     )
 
@@ -112,6 +122,13 @@ class ModelAssetCatalog {
             android.util.Log.w(
                 "ModelAssetCatalog",
                 "校验跳过：模型 ${model.id} 未配置 checksumSha256，无法验证下载完整性"
+            )
+            return true
+        }
+        if (expected == "sha256:pending") {
+            android.util.Log.w(
+                "ModelAssetCatalog",
+                "校验跳过：模型 ${model.id} checksumSha256 尚未设置（placeholder），无法验证下载完整性"
             )
             return true
         }

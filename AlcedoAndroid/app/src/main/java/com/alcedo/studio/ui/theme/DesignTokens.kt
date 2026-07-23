@@ -61,11 +61,11 @@ object AlcedoShadow {
 // 2026 品牌渐变: 暖色系主色渐变 + 冷色系辅助渐变
 // 用于滑块激活轨道、按钮、强调元素
 object AlcedoGradient {
-    // 主色暖渐变: 橙→珊瑚,用于主要交互元素
-    val primaryWarm = listOf(Color(0xFFFF6B35), Color(0xFFFF8A65))
-    val primaryWarmVertical = listOf(Color(0xFFFF6B35), Color(0xFFFF5722))
-    // 辅助冷渐变: 蓝→青,用于示波器/信息元素
-    val secondaryCool = listOf(Color(0xFF4FC3F7), Color(0xFF00BCD4))
+    // 主色青墨绿渐变: 青→亮青绿,用于主要交互元素
+    val primaryWarm = listOf(Color(0xFF00D4AA), Color(0xFF4DFFCC))
+    val primaryWarmVertical = listOf(Color(0xFF00D4AA), Color(0xFF009977))
+    // 辅助冷渐变: 墨绿→青,用于示波器/信息元素
+    val secondaryCool = listOf(Color(0xFF009977), Color(0xFF00D4AA))
     // 玻璃态高光: 白→透明,用于玻璃面板顶部
     val glassHighlight = listOf(Color(0x1AFFFFFF), Color(0x00FFFFFF))
     val glassHighlightVertical = listOf(Color(0x14FFFFFF), Color(0x00FFFFFF))

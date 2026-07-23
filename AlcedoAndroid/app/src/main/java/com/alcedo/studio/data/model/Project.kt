@@ -521,14 +521,14 @@ data class ImageFilter(
 // ================================================================
 
 enum class ModelDownloadStatus {
-    NOT_DOWNLOADED, DOWNLOADING, DOWNLOADED, PAUSED, FAILED, VERIFIED, ACTIVATED
+    NOT_DOWNLOADED, DOWNLOADING, DOWNLOADED, PAUSED, FAILED, VERIFIED, ACTIVATED, CORRUPT
 }
 
 data class ModelAsset(
     val modelId: String,
     val modelName: String,
     val modelType: AiModelType,
-    val version: String = "",
+    val version: String = "1.0.0",
     val fileSizeBytes: Long = 0L,
     val downloadUrl: String = "",
     val description: String = "",
@@ -538,5 +538,6 @@ data class ModelAsset(
     val localPath: String = "",
     val downloadProgress: Float = 0f,
     val isActive: Boolean = false,
-    val checksum: String = ""
+    val checksum: String = "",
+    val downloadedVersion: String = ""
 )

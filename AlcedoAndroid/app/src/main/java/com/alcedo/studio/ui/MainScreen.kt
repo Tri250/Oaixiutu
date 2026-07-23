@@ -11,7 +11,9 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -64,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +95,7 @@ import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
 import com.alcedo.studio.ui.common.NavTransitions
 import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoGradient
 import com.alcedo.studio.ui.theme.AlcedoStroke
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.ui.onboarding.OnboardingScreen
@@ -226,21 +230,29 @@ fun MainScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
-                // 干净的 Material3 底部导航栏 – surfaceContainer 暖色背景,贴合 Hasselblad Dark 旗舰观感
+                // 深空黑+青墨绿风格底部导航栏 – 增强玻璃态+指示点
                 val navBarBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha)
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity),
                     tonalElevation = 0.dp,
-                    modifier = Modifier.drawWithContent {
-                        drawContent()
-                        // 玻璃态顶部边框
-                        drawLine(
-                            color = navBarBorderColor,
-                            start = Offset(0f, 0f),
-                            end = Offset(size.width, 0f),
-                            strokeWidth = AlcedoStroke.thin.toPx()
-                        )
-                    }
+                    modifier = Modifier
+                        .drawWithContent {
+                            // 玻璃态顶部高光渐变
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = AlcedoGradient.glassHighlightVertical
+                                ),
+                                size = size
+                            )
+                            drawContent()
+                            // 玻璃态顶部边框
+                            drawLine(
+                                color = navBarBorderColor,
+                                start = Offset(0f, 0f),
+                                end = Offset(size.width, 0f),
+                                strokeWidth = AlcedoStroke.thin.toPx()
+                            )
+                        }
                 ) {
                     bottomBarDestinations.forEach { destination ->
                         AlcedoNavItem(
@@ -449,7 +461,7 @@ fun MainScreen(
     }
 }
 
-// ── 液态玻璃风格底部导航项 ───────────
+// ── 液态玻璃风格底部导航项 – 含指示点与缩放动画 ───────────
 @Composable
 private fun RowScope.AlcedoNavItem(
     selected: Boolean,
@@ -466,18 +478,45 @@ private fun RowScope.AlcedoNavItem(
             onClick()
         },
         icon = {
-            AlcedoNavIcon(
-                selected = selected,
-                imageVector = icon,
-                contentDescription = label
-            )
+            Column(
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+            ) {
+                AlcedoNavIcon(
+                    selected = selected,
+                    imageVector = icon,
+                    contentDescription = label
+                )
+                // 青墨绿指示点
+                val dotAlpha by animateFloatAsState(
+                    targetValue = if (selected) 1f else 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "dotAlpha"
+                )
+                if (dotAlpha > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(4.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(2.dp)
+                            )
+                            .scale(dotAlpha)
+                    )
+                }
+            }
         },
         label = {
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold
-                else androidx.compose.ui.text.font.FontWeight.Medium
+                else androidx.compose.ui.text.font.FontWeight.Medium,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         colors = NavigationBarItemDefaults.colors(
@@ -485,7 +524,7 @@ private fun RowScope.AlcedoNavItem(
             selectedTextColor = MaterialTheme.colorScheme.primary,
             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
             unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+            indicatorColor = Color.Transparent  // 指示点替代默认indicator
         )
     )
 }
@@ -532,7 +571,7 @@ private fun AlcedoRailItem(
     )
 }
 
-// ── 选中时带轻微缩放弹簧动画的图标 ───────────
+// ── 选中时带轻微缩放弹簧动画的图标 (1.0→1.15) ───────────
 @Composable
 private fun AlcedoNavIcon(
     selected: Boolean,
@@ -540,7 +579,7 @@ private fun AlcedoNavIcon(
     contentDescription: String
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (selected) 1.20f else 1f,
+        targetValue = if (selected) 1.15f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow

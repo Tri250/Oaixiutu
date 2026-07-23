@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#18110C</color>
-    <color name="ic_launcher_foreground">#FF7A3D</color>
+    <color name="ic_launcher_background">#040608</color>
+    <color name="ic_launcher_foreground">#00D4AA</color>
     <!-- Hasselblad Orange palette -->
     <color name="hasselblad_orange">#FFFF7A3D</color>
     <color name="hasselblad_orange_light">#FFFBB999</color>
