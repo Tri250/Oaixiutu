@@ -2410,26 +2410,41 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun export(settings: ExportSettings) {
         viewModelScope.launch {
             try {
-                val img = _imageModel.value ?: return@launch
+                val img = _imageModel.value
+                if (img == null) {
+                    showSnackbar("导出失败：图片信息丢失")
+                    return@launch
+                }
                 // Use _originalBitmap for full-quality export, not the downscaled preview.
                 // Apply the pipeline to the original to get the full-resolution result.
-                val originalBitmap = _originalBitmap.value ?: return@launch
-                var finalBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
+                val originalBitmap = _originalBitmap.value
+                if (originalBitmap == null || originalBitmap.isRecycled) {
+                    showSnackbar("导出失败：无法加载原始图片")
+                    return@launch
+                }
+                var pipelineBitmap = pipelineService.applyPipeline(originalBitmap, _params.value)
                 // C1 修复: 导出时必须应用蒙版/局部调整,否则用户所有蒙版调整
                 // (主体/天空/画笔等)不会出现在导出图像中
                 val containers = _maskContainers.value
-                if (containers.isNotEmpty()) {
-                    finalBitmap = try {
-                        maskRenderService.applyMasks(containers, finalBitmap)
+                val finalBitmap = if (containers.isNotEmpty()) {
+                    try {
+                        val masked = maskRenderService.applyMasks(containers, pipelineBitmap)
+                        // 蒙版生成了新 bitmap，回收旧的管线结果
+                        if (masked !== pipelineBitmap) {
+                            pipelineBitmap.recycle()
+                        }
+                        masked
                     } catch (e: Throwable) {
                         Log.e("EditorVM", "applyMasks during export failed, exporting pipeline-only result", e)
-                        finalBitmap
+                        pipelineBitmap
                     }
+                } else {
+                    pipelineBitmap
                 }
                 val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
                 // 通过 ColorScienceBridge 获取显示变换函数（用于导出时色彩空间转换）
                 val colorScienceAvailable = try {
-                    val displayTransform = colorScienceBridge.getDisplayTransform(
+                    colorScienceBridge.getDisplayTransform(
                         mode = ColorScience.ACES20,
                         peakLuminance = 100f
                     )
@@ -2441,13 +2456,30 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 }
                 val result = exportService.exportImage(img.imagePath, settingsWithExif, finalBitmap)
                 _lastExportResult.value = result
+
+                // P3 修复: 导出完成后回收传给 ExportService 的 bitmap
+                // ExportService 内部不回收外部传入的 processedBitmap
+                if (!finalBitmap.isRecycled) {
+                    finalBitmap.recycle()
+                }
+
+                // P3 修复: 导出结果反馈给用户
+                when (result) {
+                    is ExportService.ExportResult.Success -> {
+                        showSnackbar("导出成功：${result.filePath}")
+                    }
+                    is ExportService.ExportResult.Error -> {
+                        showSnackbar("导出失败：${result.message}")
+                    }
+                }
                 if (colorScienceAvailable) {
                     Log.d(TAG, "Color science bridge available for export")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                android.util.Log.e("EditorVM", "Coroutine failed", e)
+                android.util.Log.e("EditorVM", "Export failed", e)
+                showSnackbar("导出失败：${e.message ?: "未知错误"}")
             }
         }
     }

@@ -205,9 +205,12 @@ class ImportService(
         var duplicateCount = 0
         var errorCount = 0
 
+        // P3 修复: 使用局部去重缓存,避免并发导入时的竞态条件
+        // (原 importedChecksums 是类级别共享的,两个并发 importTwoPhase 调用
+        //  会互相干扰对方的去重逻辑)
+        val localChecksums = ConcurrentHashMap<Long, String>()
+
         try {
-            // 每次导入入口清理去重缓存,避免跨导入会话误判 (S2 修复)
-            importedChecksums.clear()
 
             // ── Phase A: Quick scan ──
             _importProgress.value = ImportProgress(
@@ -233,10 +236,10 @@ class ImportService(
                     if (info != null) {
                         // Deduplication check
                         if (checkDuplicates && info.checksum != 0L) {
-                            if (importedChecksums.containsKey(info.checksum)) {
+                            if (localChecksums.containsKey(info.checksum)) {
                                 addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
                                     ImportPhase.PHASE_A_SCANNING,
-                                    "Duplicate of ${importedChecksums[info.checksum]}")
+                                    "Duplicate of ${localChecksums[info.checksum]}")
                                 duplicateCount++
                                 results.add(ImportResult.Duplicate(-1, info.fileName))
                                 continue
@@ -244,7 +247,7 @@ class ImportService(
                             // Also check DB
                             val existing = metadataDao.getMetadataByChecksum(info.checksum)
                             if (existing.isNotEmpty()) {
-                                importedChecksums[info.checksum] = existing.first().imageName
+                                localChecksums[info.checksum] = existing.first().imageName
                                 addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
                                     ImportPhase.PHASE_A_SCANNING,
                                     "Duplicate of ${existing.first().imageName}")
@@ -313,7 +316,7 @@ class ImportService(
                     // 1. 先检查内存去重缓存,拦截同一批次内的重复文件,
                     //    避免创建孤儿 metadata+SleeveFile 记录 (S8 修复)
                     if (info.checksum != 0L) {
-                        val existingName = importedChecksums.putIfAbsent(info.checksum, info.fileName)
+                        val existingName = localChecksums.putIfAbsent(info.checksum, info.fileName)
                         if (existingName != null) {
                             addLogEntry(info.filePath, ImportLogStatus.SKIPPED_DUPLICATE,
                                 ImportPhase.PHASE_A_CREATING,
@@ -368,7 +371,7 @@ class ImportService(
                     } catch (ce: Exception) {
                         // Rollback: 删除已插入的 metadata, 避免孤儿记录堵塞后续导入
                         metadataDao.deleteMetadataByImageId(imageId)
-                        importedChecksums.remove(info.checksum) // 回滚时清理缓存 (S8 修复)
+                        localChecksums.remove(info.checksum) // 回滚时清理缓存 (S8 修复)
                         throw ce
                     }
 
