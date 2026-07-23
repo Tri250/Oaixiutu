@@ -149,7 +149,7 @@ fun EditorScreen(
 
     // 位图变化时计算示波器数据 — 在后台线程执行，避免阻塞 UI
     LaunchedEffect(preview) {
-        preview?.let { bitmap ->
+        preview?.takeIf { !it.isRecycled }?.let { bitmap ->
             isScopeComputing = true
             withContext(Dispatchers.Default) {
                 try {
@@ -325,8 +325,8 @@ fun EditorScreen(
                         imageLoadError = imageLoadError,
                         onRetryLoad = { viewModel.retryLoadImage() },
                         isCompareMode = isCompareMode,
-                        previewBitmap = preview?.asImageBitmap(),
-                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        previewBitmap = preview?.takeIf { !it.isRecycled }?.asImageBitmap(),
+                        originalBitmap = originalBitmap?.takeIf { !it.isRecycled }?.asImageBitmap(),
                         zoomableState = zoomableState,
                         viewModel = viewModel,
                         selectedPanel = selectedPanel,
@@ -359,8 +359,8 @@ fun EditorScreen(
                         imageLoadError = imageLoadError,
                         onRetryLoad = { viewModel.retryLoadImage() },
                         isCompareMode = isCompareMode,
-                        previewBitmap = preview?.asImageBitmap(),
-                        originalBitmap = originalBitmap?.asImageBitmap(),
+                        previewBitmap = preview?.takeIf { !it.isRecycled }?.asImageBitmap(),
+                        originalBitmap = originalBitmap?.takeIf { !it.isRecycled }?.asImageBitmap(),
                         zoomableState = zoomableState,
                         viewModel = viewModel,
                         selectedPanel = selectedPanel,

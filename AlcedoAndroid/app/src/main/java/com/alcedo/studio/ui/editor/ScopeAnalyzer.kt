@@ -65,7 +65,7 @@ object ScopeAnalyzer {
 
     suspend fun computeHistogram(bitmap: Bitmap?): HistogramData =
         withContext(Dispatchers.Default) {
-            if (bitmap == null) return@withContext HistogramData()
+            if (bitmap == null || bitmap.isRecycled) return@withContext HistogramData()
 
             val r = FloatArray(256)
             val g = FloatArray(256)
@@ -115,7 +115,7 @@ object ScopeAnalyzer {
         targetColumns: Int = 384,
         targetRows: Int = 192
     ): WaveformData = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext WaveformData()
+        if (bitmap == null || bitmap.isRecycled) return@withContext WaveformData()
 
         val srcW = bitmap.width
         val srcH = bitmap.height
@@ -192,7 +192,7 @@ object ScopeAnalyzer {
         bitmap: Bitmap?,
         size: Int = 256
     ): VectorscopeData = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext VectorscopeData()
+        if (bitmap == null || bitmap.isRecycled) return@withContext VectorscopeData()
 
         val w = bitmap.width
         val h = bitmap.height
@@ -233,7 +233,7 @@ object ScopeAnalyzer {
         bitmap: Bitmap?,
         maxPoints: Int = 8192
     ): ChromaticityData = withContext(Dispatchers.Default) {
-        if (bitmap == null) return@withContext ChromaticityData()
+        if (bitmap == null || bitmap.isRecycled) return@withContext ChromaticityData()
 
         val w = bitmap.width
         val h = bitmap.height

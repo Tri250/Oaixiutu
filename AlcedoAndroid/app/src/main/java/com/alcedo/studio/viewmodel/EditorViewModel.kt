@@ -382,7 +382,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
      */
     private fun downscaleForPreview(source: Bitmap): Bitmap {
         val pixelCount = source.width.toLong() * source.height.toLong()
-        if (pixelCount <= PREVIEW_MAX_PIXELS) return source
+        if (pixelCount <= PREVIEW_MAX_PIXELS) {
+            // 必须创建副本，避免 previewSourceBitmap 与 _originalBitmap 指向同一对象
+            // 否则 regeneratePreview 回收 oldPreview 时会连带回收原始位图导致闪退
+            return source.copy(Bitmap.Config.ARGB_8888, false)
+        }
         val scale = kotlin.math.sqrt(PREVIEW_MAX_PIXELS.toFloat() / pixelCount.toFloat())
         val newW = (source.width * scale).toInt().coerceAtLeast(1)
         val newH = (source.height * scale).toInt().coerceAtLeast(1)
@@ -1083,13 +1087,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             try {
                 // C8 修复: 使用降采样位图进行预览,避免大图 OOM
                 val source = previewSourceBitmap ?: _originalBitmap.value
-                if (source != null) {
+                if (source != null && !source.isRecycled) {
                     val oldPreview = _previewBitmap.value
                     _previewBitmap.value = pipelineService.applyPipeline(source, _params.value)
-                    // Recycle the previous preview bitmap to free memory,
-                    // but only after the new one is assigned to avoid the UI
-                    // referencing a recycled bitmap.
-                    if (oldPreview != null && !oldPreview.isRecycled) {
+                    // 安全回收：只回收之前由 applyPipeline 生成的中间预览图，
+                    // 绝不可回收 source（previewSourceBitmap / _originalBitmap），
+                    // 否则后续编辑或 UI 绘制会访问已回收位图导致闪退。
+                    if (oldPreview != null && !oldPreview.isRecycled &&
+                        oldPreview !== previewSourceBitmap && oldPreview !== _originalBitmap.value
+                    ) {
                         oldPreview.recycle()
                     }
                 }
