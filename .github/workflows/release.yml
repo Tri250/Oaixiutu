@@ -60,12 +60,18 @@ jobs:
         run: chmod +x gradlew
 
       - name: Decode Keystore
-        if: ${{ secrets.ALCEDO_KEYSTORE_BASE64 != '' }}
+        id: keystore
         env:
           ALCEDO_KEYSTORE_BASE64: ${{ secrets.ALCEDO_KEYSTORE_BASE64 }}
         run: |
-          echo "$ALCEDO_KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/alcedo-release.keystore"
-          echo "ALCEDO_KEYSTORE_PATH=${{ runner.temp }}/alcedo-release.keystore" >> $GITHUB_ENV
+          if [ -n "$ALCEDO_KEYSTORE_BASE64" ]; then
+            echo "$ALCEDO_KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/alcedo-release.keystore"
+            echo "ALCEDO_KEYSTORE_PATH=${{ runner.temp }}/alcedo-release.keystore" >> $GITHUB_ENV
+            echo "decoded=true" >> $GITHUB_OUTPUT
+          else
+            echo "WARNING: ALCEDO_KEYSTORE_BASE64 is empty, skipping keystore decode"
+            echo "decoded=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --stacktrace
