@@ -869,9 +869,13 @@ private fun ImagePreviewArea(
     // 图片显示区域的计算
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // [问题1+2修复] effectiveBitmap： previewBitmap 为空时 fallback 到 originalBitmap，
+    // 防止渲染间隙切换面板时图片尺寸被缩为 0（导致显示异常小）和"无图片"占位。
+    val effectiveBitmap: ImageBitmap? = previewBitmap ?: originalBitmap
+
     // 计算 imageDisplayRect（考虑 ContentScale.Fit + zoomableState）
-    val bitmapWidth = previewBitmap?.width ?: 0
-    val bitmapHeight = previewBitmap?.height ?: 0
+    val bitmapWidth = effectiveBitmap?.width ?: 0
+    val bitmapHeight = effectiveBitmap?.height ?: 0
 
     // ContentScale.Fit 下图片的理论尺寸（未缩放时）
     val fitRect = remember(containerSize, bitmapWidth, bitmapHeight) {
@@ -941,7 +945,7 @@ private fun ImagePreviewArea(
         Crossfade(
             targetState = when {
                 isProcessing -> "loading"
-                isCompareMode && originalBitmap != null && previewBitmap != null -> "compare"
+                isCompareMode && originalBitmap != null && effectiveBitmap != null -> "compare"
                 else -> "preview"
             },
             animationSpec = tween(300),
@@ -979,7 +983,7 @@ private fun ImagePreviewArea(
                         }
                         CompareView(
                             originalImage = originalBitmap!!,
-                            editedImage = previewBitmap!!,
+                            editedImage = effectiveBitmap!!,
                             compareMode = compareMode,
                             overlayOpacity = overlayOpacity,
                             onOverlayOpacityChange = { viewModel.updateOverlayOpacity(it) },
@@ -988,25 +992,25 @@ private fun ImagePreviewArea(
                     }
                 }
                 else -> {
-                        ZoomableImageView(
-                            imageBitmap = previewBitmap,
-                            modifier = Modifier.fillMaxSize(),
-                            zoomableState = zoomableState
-                        )
+                    ZoomableImageView(
+                        imageBitmap = effectiveBitmap,
+                        modifier = Modifier.fillMaxSize(),
+                        zoomableState = zoomableState
+                    )
 
-                        // 当当前面板是 Mask 且有激活的 Brush sub-mask 时，显示画笔覆盖层
-                        if (selectedPanel == EditorPanel.MASKS && isBrushActive) {
-                            BrushOverlay(
-                                brushState = brushState,
-                                onBrushStateChanged = { newState ->
-                                    viewModel.updateBrushState(newState)
-                                },
-                                imageRect = imageDisplayRect,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                    // 当当前面板是 Mask 且有激活的 Brush sub-mask 时，显示画笔覆盖层
+                    if (selectedPanel == EditorPanel.MASKS && isBrushActive) {
+                        BrushOverlay(
+                            brushState = brushState,
+                            onBrushStateChanged = { newState ->
+                                viewModel.updateBrushState(newState)
+                            },
+                            imageRect = imageDisplayRect,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
+            }
         }
 
         // 长按时叠加显示原图
@@ -1031,7 +1035,8 @@ private fun ImagePreviewArea(
             )
         }
 
-        if (previewBitmap == null && !isProcessing) {
+        // [问题2修复] 仅当 effectiveBitmap 也为空（原始图也没加载成功）时才显示"无图片"
+        if (effectiveBitmap == null && !isProcessing) {
             if (imageLoadError) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
