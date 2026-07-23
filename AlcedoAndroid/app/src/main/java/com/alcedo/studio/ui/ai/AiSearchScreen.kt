@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -38,6 +40,10 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoStroke
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.AlbumViewModel
 import org.json.JSONArray
 
@@ -103,6 +109,18 @@ fun AiSearchScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
+                ),
+                modifier = Modifier.drawWithContent {
+                    drawContent()
+                    drawLine(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                        start = Offset(0f, size.height),
+                        end = Offset(size.width, size.height),
+                        strokeWidth = AlcedoStroke.thin.toPx()
+                    )
                 }
             )
         }
@@ -165,8 +183,8 @@ fun AiSearchScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         },
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.padding(start = 4.dp)
+                        shape = RoundedCornerShape(AlcedoRadius.full),
+                        modifier = Modifier.padding(start = AlcedoSpacing.xs)
                     )
                 }
             ) {}

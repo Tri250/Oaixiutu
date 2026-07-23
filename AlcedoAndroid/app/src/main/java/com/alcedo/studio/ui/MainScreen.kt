@@ -62,6 +62,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -89,6 +91,9 @@ import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassPanel
 import com.alcedo.studio.ui.common.LiquidGlassToolbar
 import com.alcedo.studio.ui.common.NavTransitions
+import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoStroke
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.ui.onboarding.OnboardingScreen
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
@@ -223,8 +228,18 @@ fun MainScreen(
             if (showBottomBar && navigationType == NavigationType.BOTTOM_NAVIGATION) {
                 // 干净的 Material3 底部导航栏 – surfaceContainer 暖色背景,贴合 Hasselblad Dark 旗舰观感
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 0.dp
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity),
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.drawWithContent {
+                        drawContent()
+                        // 玻璃态顶部边框
+                        drawLine(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                            start = Offset(0f, 0f),
+                            end = Offset(size.width, 0f),
+                            strokeWidth = AlcedoStroke.thin.toPx()
+                        )
+                    }
                 ) {
                     bottomBarDestinations.forEach { destination ->
                         AlcedoNavItem(

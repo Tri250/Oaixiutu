@@ -14,9 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
-import com.alcedo.studio.BuildConfig
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.alcedo.studio.BuildConfig
 import com.alcedo.studio.crash.CrashReportService
 import com.alcedo.studio.i18n.Language
 import com.alcedo.studio.i18n.LanguageManager
@@ -32,6 +34,10 @@ import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.privacy.PrivacyManager
 import com.alcedo.studio.ui.common.ConfirmDialog
+import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoStroke
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
 
@@ -156,6 +162,18 @@ fun SettingsScreen(navController: NavController) {
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
+                ),
+                modifier = Modifier.drawWithContent {
+                    drawContent()
+                    drawLine(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                        start = Offset(0f, size.height),
+                        end = Offset(size.width, size.height),
+                        strokeWidth = AlcedoStroke.thin.toPx()
+                    )
                 }
             )
         }

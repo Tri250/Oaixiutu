@@ -29,12 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import com.alcedo.studio.ui.theme.AlcedoGlass
+import com.alcedo.studio.ui.theme.AlcedoStroke
+import com.alcedo.studio.ui.theme.AlcedoRadius
+import com.alcedo.studio.ui.theme.AlcedoSpacing
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
@@ -825,10 +830,10 @@ private fun AlbumContent(
                                     onValueChange = onSearchQueryChange,
                                     placeholder = { Text(stringRes { albumSearchHint }) },
                                     singleLine = true,
-                                    shape = RoundedCornerShape(28.dp),
+                                    shape = RoundedCornerShape(AlcedoRadius.full),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                                         unfocusedBorderColor = Color.Transparent,
                                         focusedLeadingIconColor = MaterialTheme.colorScheme.primary,
@@ -885,13 +890,13 @@ private fun AlbumContent(
                                             else FontWeight.Medium
                                         )
                                     },
-                                    shape = RoundedCornerShape(50),
+                                    shape = RoundedCornerShape(AlcedoRadius.full),
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                         labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                     ),
-                                    modifier = Modifier.padding(end = 4.dp)
+                                    modifier = Modifier.padding(end = AlcedoSpacing.xs)
                                 )
                             }
                             IconButton(onClick = onOpenFilter) {
@@ -915,6 +920,19 @@ private fun AlbumContent(
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
+                        ),
+                        modifier = Modifier.drawWithContent {
+                            drawContent()
+                            // 玻璃态底部边框
+                            drawLine(
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                                start = Offset(0f, size.height),
+                                end = Offset(size.width, size.height),
+                                strokeWidth = AlcedoStroke.thin.toPx()
+                            )
                         },
                         scrollBehavior = scrollBehavior
                     )
@@ -960,8 +978,17 @@ private fun AlbumContent(
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                        )
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = AlcedoGlass.toolbarOpacity)
+                        ),
+                        modifier = Modifier.drawWithContent {
+                            drawContent()
+                            drawLine(
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoGlass.borderAlpha),
+                                start = Offset(0f, size.height),
+                                end = Offset(size.width, size.height),
+                                strokeWidth = AlcedoStroke.thin.toPx()
+                            )
+                        }
                     )
                 }
             }

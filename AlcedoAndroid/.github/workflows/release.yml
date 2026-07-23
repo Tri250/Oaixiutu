@@ -55,10 +55,17 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Decode Keystore
+        if: env.ALCEDO_KEYSTORE_BASE64 != ''
+        env:
+          ALCEDO_KEYSTORE_BASE64: ${{ secrets.ALCEDO_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ALCEDO_KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/alcedo-release.keystore"
+          echo "ALCEDO_KEYSTORE_PATH=${{ runner.temp }}/alcedo-release.keystore" >> $GITHUB_ENV
+
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --stacktrace
         env:
-          ALCEDO_KEYSTORE_PATH: ${{ secrets.ALCEDO_KEYSTORE_PATH }}
           ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
           ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
           ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
