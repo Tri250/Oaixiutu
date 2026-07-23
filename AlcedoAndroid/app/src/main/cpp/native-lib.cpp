@@ -1698,6 +1698,21 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSubtractBlackLevel(
 
 static DecoderScheduler g_scheduler;
 
+// Global reference tracking for progress callback (prevents JNI GlobalRef leak)
+static std::mutex g_callback_mutex;
+static jobject g_global_callback = nullptr;
+static JavaVM* g_callback_jvm = nullptr;
+
+static void delete_global_callback() {
+    if (g_global_callback != nullptr && g_callback_jvm != nullptr) {
+        JNIEnv* env;
+        if (g_callback_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK) {
+            env->DeleteGlobalRef(g_global_callback);
+        }
+        g_global_callback = nullptr;
+    }
+}
+
 JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeCancelDecode(
         JNIEnv *env, jobject thiz, jlong jobId) {
@@ -1722,12 +1737,22 @@ JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeShutdownScheduler(
         JNIEnv *env, jobject thiz) {
     g_scheduler.stop();
+    // Clean up global callback reference
+    {
+        std::lock_guard<std::mutex> lock(g_callback_mutex);
+        delete_global_callback();
+    }
     LOGI("DecodeNdkBridge: Scheduler shutdown");
 }
 
 JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
         JNIEnv *env, jobject thiz, jobject callback) {
+    std::lock_guard<std::mutex> lock(g_callback_mutex);
+
+    // Delete old global reference to prevent leak
+    delete_global_callback();
+
     if (callback == nullptr) {
         g_scheduler.set_progress_callback(nullptr);
         g_scheduler.set_complete_callback(nullptr);
@@ -1735,11 +1760,17 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
     }
 
     // Create a global reference to the callback
-    jobject globalCallback = env->NewGlobalRef(callback);
-    JavaVM* jvm;
-    env->GetJavaVM(&jvm);
+    g_global_callback = env->NewGlobalRef(callback);
+    env->GetJavaVM(&g_callback_jvm);
 
-    g_scheduler.set_progress_callback([jvm, globalCallback](uint64_t taskId, float progress, const std::string& stage) {
+    // Capture the global ref by value (raw pointer). The lifetime is managed
+    // by g_global_callback / delete_global_callback(), so the lambdas are
+    // safe as long as delete_global_callback() is called after the scheduler
+    // stops using the callbacks.
+    jobject cb = g_global_callback;
+    JavaVM* jvm = g_callback_jvm;
+
+    g_scheduler.set_progress_callback([jvm, cb](uint64_t taskId, float progress, const std::string& stage) {
         JNIEnv* e;
         bool attached = false;
         jint ret = jvm->GetEnv(reinterpret_cast<void**>(&e), JNI_VERSION_1_6);
@@ -1748,11 +1779,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
             attached = true;
         }
 
-        jclass cls = e->GetObjectClass(globalCallback);
+        jclass cls = e->GetObjectClass(cb);
         jmethodID mid = e->GetMethodID(cls, "onProgress", "(JFLjava/lang/String;)V");
         if (mid) {
             jstring jstage = e->NewStringUTF(stage.c_str());
-            e->CallVoidMethod(globalCallback, mid, static_cast<jlong>(taskId), progress, jstage);
+            e->CallVoidMethod(cb, mid, static_cast<jlong>(taskId), progress, jstage);
             e->DeleteLocalRef(jstage);
         }
         e->DeleteLocalRef(cls);
@@ -1760,7 +1791,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
         if (attached) jvm->DetachCurrentThread();
     });
 
-    g_scheduler.set_complete_callback([jvm, globalCallback](const DecodeResult& result) {
+    g_scheduler.set_complete_callback([jvm, cb](const DecodeResult& result) {
         JNIEnv* e;
         bool attached = false;
         jint ret = jvm->GetEnv(reinterpret_cast<void**>(&e), JNI_VERSION_1_6);
@@ -1769,11 +1800,11 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
             attached = true;
         }
 
-        jclass cls = e->GetObjectClass(globalCallback);
+        jclass cls = e->GetObjectClass(cb);
         jmethodID mid = e->GetMethodID(cls, "onComplete", "(JZLjava/lang/String;)V");
         if (mid) {
             jstring jerr = e->NewStringUTF(result.error_message.c_str());
-            e->CallVoidMethod(globalCallback, mid, static_cast<jlong>(result.task_id),
+            e->CallVoidMethod(cb, mid, static_cast<jlong>(result.task_id),
                               result.success ? JNI_TRUE : JNI_FALSE, jerr);
             e->DeleteLocalRef(jerr);
         }
@@ -2520,7 +2551,8 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeRasterizeBrushStrokes(
 
     // 将归一化坐标转换为像素坐标
     std::vector<std::pair<float, float>> points;
-    for (int i = 0; i < strokePointsCount && i < static_cast<int>(env->GetArrayLength(strokePointsX)); ++i) {
+    jsize arrayLen = env->GetArrayLength(strokePointsX);
+    for (int i = 0; i < strokePointsCount && i < arrayLen; ++i) {
         float nx = ptsX[i];
         float ny = ptsY[i];
         // 归一化 → 像素

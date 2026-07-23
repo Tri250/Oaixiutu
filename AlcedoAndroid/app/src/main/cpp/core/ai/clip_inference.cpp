@@ -8,6 +8,13 @@
 
 #ifdef HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
+
+// Concrete ONNX Runtime implementation struct.
+// Defined here (not in the header) to avoid exposing ORT headers.
+struct ClipInference::OnnxImpl {
+    Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "AlcedoClip"};
+    std::unique_ptr<Ort::Session> session;
+};
 #endif
 
 namespace alcedo::ai {
@@ -30,9 +37,7 @@ bool ClipInference::loadModel() {
 
 #ifdef HAS_ONNXRUNTIME
     try {
-        env_ = std::make_unique<OrtEnvHolder>();
-        auto& env = *reinterpret_cast<Ort::Env*>(env_.get());
-        new (&env) Ort::Env(ORT_LOGGING_LEVEL_WARNING, "AlcedoClip");
+        onnx_ = std::make_unique<OnnxImpl>();
 
         Ort::SessionOptions sessionOptions;
         sessionOptions.SetIntraOpNumThreads(config_.numThreads);
@@ -40,16 +45,15 @@ bool ClipInference::loadModel() {
             sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
         }
 
-        session_ = std::make_unique<OrtSessionHolder>();
-        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
-        new (&session) Ort::Session(*reinterpret_cast<Ort::Env*>(env_.get()),
-                                    config_.modelPath.c_str(), sessionOptions);
+        onnx_->session = std::make_unique<Ort::Session>(
+            onnx_->env, config_.modelPath.c_str(), sessionOptions);
 
         loaded_ = true;
         return true;
     } catch (const Ort::Exception& e) {
         // ONNX Runtime failed to load the model; C++ inference unavailable.
         // The Kotlin ClipInferenceEngine should be used instead.
+        onnx_.reset();
         return false;
     }
 #else
@@ -62,8 +66,7 @@ bool ClipInference::loadModel() {
 void ClipInference::unloadModel() {
     std::lock_guard<std::mutex> lock(inferenceMutex_);
 #ifdef HAS_ONNXRUNTIME
-    session_.reset();
-    env_.reset();
+    onnx_.reset();
 #endif
     loaded_ = false;
 }
@@ -192,13 +195,13 @@ std::vector<int64_t> ClipInference::tokenize(const std::string& text, int maxLen
 // ── Inference ──
 std::vector<float> ClipInference::runInference(const std::vector<float>& input, const std::string& inputName) const {
 #ifdef HAS_ONNXRUNTIME
-    if (!session_) {
+    if (!onnx_ || !onnx_->session) {
         // ONNX session not loaded; return empty to signal Kotlin delegation is needed.
         return {};
     }
 
     try {
-        auto& session = *reinterpret_cast<Ort::Session*>(session_.get());
+        auto& session = *onnx_->session;
         auto allocator = Ort::AllocatorWithDefaultOptions();
 
         // Create input tensor

@@ -532,11 +532,11 @@ void DecoderScheduler::worker_thread() {
     while (running_) {
         DecodeTask task;
         if (!get_next_task(task)) {
-            // Wait for tasks
+            // Wait for tasks. Use wait_for with the condition variable
+            // to avoid the TOCTOU race between checking queue_size() and waiting.
             std::unique_lock<std::mutex> lock(cv_mutex_);
-            if (queue_size() == 0) {
-                queue_cv_.wait_for(lock, std::chrono::milliseconds(100));
-            }
+            queue_cv_.wait_for(lock, std::chrono::milliseconds(100),
+                               [this] { return !running_ || queue_size() > 0; });
             continue;
         }
 

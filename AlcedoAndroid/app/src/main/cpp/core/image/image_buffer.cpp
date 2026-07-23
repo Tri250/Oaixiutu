@@ -348,6 +348,23 @@ void ImageBuffer::download_from_gpu() {
         return;
     }
 
+    // Check and resize CPU buffer if needed
+    {
+        size_t requiredSize = width * height * channels;
+        // Handle format-specific byte sizes
+        if (format == PixelFormat::UINT16_RGBA || format == PixelFormat::FLOAT16_RGBA) {
+            requiredSize *= 2;
+        } else if (format == PixelFormat::FLOAT32_RGBA || format == PixelFormat::FLOAT32_RGB ||
+                   format == PixelFormat::FLOAT32_RAW) {
+            requiredSize *= 4;
+        } else if (format == PixelFormat::UINT16_RAW) {
+            requiredSize *= 2;
+        }
+        if (cpu_data.size() < requiredSize) {
+            cpu_data.resize(requiredSize);
+        }
+    }
+
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width, height, glFormat, glType, cpu_data.data());
     GLenum err = glGetError();
@@ -368,7 +385,12 @@ void ImageBuffer::download_from_gpu() {
 
 void ImageBuffer::release_gpu() {
     if (gpu_texture_id) {
-        // glDeleteTextures / vkDestroyImage
+#if defined(__ANDROID__)
+        GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(gpu_texture_id));
+        if (tex != 0) {
+            glDeleteTextures(1, &tex);
+        }
+#endif
         gpu_texture_id = nullptr;
     }
     gpu_buffer_handle = nullptr;

@@ -174,7 +174,9 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 if (x >= xs[n - 1]) { pixels[idx + c] = clamp01_safe(ys[n - 1]); continue; }
                 for (int j = 0; j < n - 1; ++j) {
                     if (x >= xs[j] && x <= xs[j + 1]) {
-                        float t = (x - xs[j]) / (xs[j + 1] - xs[j]);
+                        float denom = xs[j + 1] - xs[j];
+                        if (denom <= 0.0f) { pixels[idx + c] = clamp01_safe(ys[j]); break; }
+                        float t = (x - xs[j]) / denom;
                         pixels[idx + c] = clamp01_safe(ys[j] + t * (ys[j + 1] - ys[j]));
                         break;
                     }
