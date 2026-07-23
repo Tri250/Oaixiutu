@@ -81,13 +81,21 @@ void srgb_eotf_rgb(float* r, float* g, float* b);
 float srgb_inverse_eotf(float srgb);
 void srgb_inverse_eotf_rgb(float* r, float* g, float* b);
 
-// PQ (ST.2084) EOTF: linear -> PQ
-float pq_eotf(float linear, float peak_luminance = 10000.0f);
-void pq_eotf_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);
+// PQ (ST.2084) OETF: linear → PQ (encodes linear light to PQ signal)
+// NOTE: Historically named pq_eotf, but the actual operation is OETF (encoding).
+// Use pq_oetf() for new code; pq_eotf() is kept for backward compatibility.
+float pq_oetf(float linear, float peak_luminance = 10000.0f);
+void pq_oetf_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);
+float pq_eotf(float linear, float peak_luminance = 10000.0f);       // deprecated alias for pq_oetf
+void pq_eotf_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);  // deprecated alias
 
-// PQ inverse EOTF: PQ -> linear
-float pq_inverse_eotf(float pq, float peak_luminance = 10000.0f);
-void pq_inverse_eotf_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);
+// PQ (ST.2084) EOTF: PQ → linear (decodes PQ signal to linear light)
+// NOTE: Historically named pq_inverse_eotf, but the actual operation is EOTF (decoding).
+// Use pq_eotf_decode() for new code; pq_inverse_eotf() is kept for backward compatibility.
+float pq_eotf_decode(float pq, float peak_luminance = 10000.0f);
+void pq_eotf_decode_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);
+float pq_inverse_eotf(float pq, float peak_luminance = 10000.0f);   // deprecated alias for pq_eotf_decode
+void pq_inverse_eotf_rgb(float* r, float* g, float* b, float peak_luminance = 10000.0f);  // deprecated alias
 
 // HLG OETF: linear -> HLG
 float hlg_oetf(float linear);

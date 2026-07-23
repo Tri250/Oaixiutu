@@ -116,8 +116,9 @@ static void hr_apply_impl(T* raw_data, int width, int height,
 
                     if (sym_color == pixel_color && sym_val < clip_threshold && sym_val > black_level) {
                         // Compute ratio: how much brighter is this channel relative to the center color
-                        float ratio = static_cast<float>(neighbor_val - black_level) /
-                                     static_cast<float>(sym_val - black_level);
+                        float sym_diff = static_cast<float>(sym_val - black_level);
+                        if (sym_diff < 1.0f) continue; // avoid division by near-zero
+                        float ratio = static_cast<float>(neighbor_val - black_level) / sym_diff;
                         sum_ratios += ratio;
                         count++;
                     }

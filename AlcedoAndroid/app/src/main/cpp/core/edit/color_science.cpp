@@ -286,6 +286,14 @@ void pq_eotf_rgb(float* r, float* g, float* b, float peak_luminance) {
     *b = pq_eotf(*b, peak_luminance);
 }
 
+// Correctly-named PQ OETF: linear → PQ (same implementation as pq_eotf)
+float pq_oetf(float linear, float peak_luminance) {
+    return pq_eotf(linear, peak_luminance);
+}
+void pq_oetf_rgb(float* r, float* g, float* b, float peak_luminance) {
+    pq_eotf_rgb(r, g, b, peak_luminance);
+}
+
 float pq_inverse_eotf(float pq, float peak_luminance) {
     const float m1 = 0.1593017578125f;
     const float m2 = 78.84375f;
@@ -303,6 +311,14 @@ void pq_inverse_eotf_rgb(float* r, float* g, float* b, float peak_luminance) {
     *r = pq_inverse_eotf(*r, peak_luminance);
     *g = pq_inverse_eotf(*g, peak_luminance);
     *b = pq_inverse_eotf(*b, peak_luminance);
+}
+
+// Correctly-named PQ EOTF: PQ → linear (same implementation as pq_inverse_eotf)
+float pq_eotf_decode(float pq, float peak_luminance) {
+    return pq_inverse_eotf(pq, peak_luminance);
+}
+void pq_eotf_decode_rgb(float* r, float* g, float* b, float peak_luminance) {
+    pq_inverse_eotf_rgb(r, g, b, peak_luminance);
 }
 
 float hlg_oetf(float linear) {

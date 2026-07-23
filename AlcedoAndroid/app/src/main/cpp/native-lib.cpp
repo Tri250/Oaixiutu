@@ -35,6 +35,7 @@
 #include "core/edit/operators/raw_decode_op.h"
 #include "core/edit/operators/auto_exposure_op.h"
 #include "core/edit/operators/ahd_demosaic_op.h"
+#include "core/edit/operators/amaze_demosaic_op.h"
 #include "core/sleeve/sleeve_manager.h"
 #include "core/sleeve/sleeve_filesystem.h"
 #include "core/sleeve/path_resolver.h"
@@ -951,7 +952,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
     std::vector<float> output_g(width * height);
     std::vector<float> output_b(width * height);
 
-    AHDDemosaicOperator::demosaic_uint16(
+    AMAZEDemosaicOperator::demosaic_uint16(
         reinterpret_cast<const uint16_t*>(raw), width, height, bayerPattern,
         output_r.data(), output_g.data(), output_b.data(),
         static_cast<uint16_t>(whiteLevel), static_cast<uint16_t>(blackLevel));

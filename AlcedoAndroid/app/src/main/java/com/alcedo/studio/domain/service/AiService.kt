@@ -355,7 +355,7 @@ class AiService(private val context: Context) {
         if (resized !== bitmap) resized.recycle()
 
         val embedding = tryNativeClipInference(activeModelId, rgbBytes, inputSize, inputSize, dim)
-            ?: generateFallbackEmbedding(imageId, dim)
+            ?: generateFallbackEmbedding(imageId, rgbBytes, dim)
 
         // Normalize
         AiNdkBridge.normalizeEmbedding(embedding)
@@ -655,9 +655,16 @@ class AiService(private val context: Context) {
         return AiNdkBridge.cosineSimilarity(a, b)
     }
 
-    private fun generateFallbackEmbedding(imageId: UInt, dim: Int): FloatArray {
+    private fun generateFallbackEmbedding(imageId: UInt, rgbBytes: ByteArray, dim: Int): FloatArray {
         val embedding = FloatArray(dim)
+        // Mix imageId with content-derived hash for better distribution
         var seed = imageId.toLong()
+        // Incorporate pixel data into seed (sample every 16th pixel for performance)
+        val step = maxOf(1, rgbBytes.size / 256)
+        for (i in rgbBytes.indices step step) {
+            seed = seed * 31 + (rgbBytes[i].toLong() and 0xFF)
+        }
+        // Generate normalized random-like embedding using LCG
         for (i in embedding.indices) {
             seed = seed * 1103515245L + 12345L
             embedding[i] = (seed.toDouble() / Long.MAX_VALUE.toDouble()).toFloat() * 2f - 1f
@@ -665,7 +672,7 @@ class AiService(private val context: Context) {
         return embedding
     }
 
-    private fun tryNativeClipInference(
+    private suspend fun tryNativeClipInference(
         modelId: String,
         rgbBytes: ByteArray,
         width: Int,
@@ -673,23 +680,26 @@ class AiService(private val context: Context) {
         dim: Int
     ): FloatArray? {
         return try {
-            val modelPath = getModelPath(modelId)
-            if (modelPath != null && File(modelPath).exists()) {
-                val sessionHandle = AiNdkBridge.clipCreateSession(
-                    modelPath = modelPath,
-                    imageSize = getModelInputSize(modelId),
-                    embeddingDim = dim
-                )
-                if (AiNdkBridge.clipIsLoaded(sessionHandle)) {
-                    val result = AiNdkBridge.clipEncodeImage(sessionHandle, rgbBytes, width, height)
-                    AiNdkBridge.clipDestroySession(sessionHandle)
-                    result
-                } else {
-                    AiNdkBridge.clipDestroySession(sessionHandle)
-                    null
-                }
-            } else {
-                null
+            // Try to load the model into ClipInferenceEngine if not already loaded
+            if (!clipEngine.isLoaded || clipEngine.activeModelId != modelId) {
+                val loaded = clipEngine.loadModel(modelId)
+                if (!loaded) return null
+            }
+            // Use the ClipInferenceEngine for inference (requires a Bitmap, so we
+            // construct one from the raw RGB bytes)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val pixels = IntArray(width * height)
+            for (i in pixels.indices) {
+                val r = rgbBytes[i * 3].toInt() and 0xFF
+                val g = rgbBytes[i * 3 + 1].toInt() and 0xFF
+                val b = rgbBytes[i * 3 + 2].toInt() and 0xFF
+                pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+            }
+            bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+            try {
+                clipEngine.encodeImage(bitmap)
+            } finally {
+                bitmap.recycle()
             }
         } catch (e: Exception) {
             Log.d(TAG, "Native CLIP inference not available, using fallback: ${e.message}")
@@ -697,26 +707,13 @@ class AiService(private val context: Context) {
         }
     }
 
-    private fun tryNativeClipTextInference(modelId: String, text: String): FloatArray? {
+    private suspend fun tryNativeClipTextInference(modelId: String, text: String): FloatArray? {
         return try {
-            val modelPath = getModelPath(modelId)
-            if (modelPath != null && File(modelPath).exists()) {
-                val sessionHandle = AiNdkBridge.clipCreateSession(
-                    modelPath = modelPath,
-                    imageSize = getModelInputSize(modelId),
-                    embeddingDim = getEmbeddingDim(modelId)
-                )
-                if (AiNdkBridge.clipIsLoaded(sessionHandle)) {
-                    val result = AiNdkBridge.clipEncodeText(sessionHandle, text)
-                    AiNdkBridge.clipDestroySession(sessionHandle)
-                    result
-                } else {
-                    AiNdkBridge.clipDestroySession(sessionHandle)
-                    null
-                }
-            } else {
-                null
+            if (!clipEngine.isLoaded || clipEngine.activeModelId != modelId) {
+                val loaded = clipEngine.loadModel(modelId)
+                if (!loaded) return null
             }
+            clipEngine.encodeText(text)
         } catch (e: Exception) {
             Log.d(TAG, "Native CLIP text inference not available: ${e.message}")
             null

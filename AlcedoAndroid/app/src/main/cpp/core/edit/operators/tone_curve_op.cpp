@@ -11,11 +11,15 @@ void ToneCurveOperator::apply(std::vector<float>& pixels, int width, int height,
 }
 
 float ToneCurveOperator::interpolate_curve(float x, const float* xs, const float* ys, int n) {
+    if (n <= 0 || !xs || !ys) return x;
+    if (n == 1) return ys[0];
     if (x <= xs[0]) return ys[0];
     if (x >= xs[n - 1]) return ys[n - 1];
     for (int i = 0; i < n - 1; ++i) {
         if (x >= xs[i] && x <= xs[i + 1]) {
-            float t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+            float denom = xs[i + 1] - xs[i];
+            if (denom < 1e-10f) return ys[i]; // avoid division by zero for duplicate x values
+            float t = (x - xs[i]) / denom;
             return ys[i] + t * (ys[i + 1] - ys[i]);
         }
     }
