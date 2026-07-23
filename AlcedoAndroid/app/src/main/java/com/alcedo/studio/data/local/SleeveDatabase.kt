@@ -156,7 +156,12 @@ abstract class SleeveDatabase : RoomDatabase() {
             // the explicit migrations in DatabaseMigrations so user data is
             // never silently wiped.
             .fallbackToDestructiveMigrationOnDowngrade()
-            .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+            // NOTE: Do NOT enable WAL mode for SQLCipher encrypted databases.
+            // SQLCipher's WAL support varies by version and may cause crashes
+            // (e.g. unencrypted -wal/-shm files, journal corruption on certain
+            // devices). v1.2.10 enabled WAL via setJournalMode and immediately
+            // caused import→edit crashes that were absent in v1.2.9 where
+            // execSQL("PRAGMA journal_mode=WAL") silently failed on SQLCipher.
             .build()
         }
 
