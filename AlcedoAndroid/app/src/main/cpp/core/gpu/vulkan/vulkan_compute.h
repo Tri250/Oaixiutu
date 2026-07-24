@@ -85,7 +85,7 @@ private:
     void* descriptorSetLayout_ = nullptr;
     void* descriptorSet_ = nullptr;
     void* shaderModule_ = nullptr;
-    void* currentCmdBuffer_ = nullptr; // active command buffer for recording
+    VulkanCommandBuffer* currentCmd_ = nullptr; // active command buffer for recording
 };
 
 // ============================================================

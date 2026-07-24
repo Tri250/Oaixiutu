@@ -261,10 +261,11 @@ enum class PipelineStage {
     COLOR = 8,
     CLARITY = 9,
     SHARPEN = 10,
-    EFFECTS = 11,
-    GEOMETRY = 12,
-    DISPLAY_TRANSFORM = 13,
-    FINAL = 14
+    DENOISE = 11,
+    EFFECTS = 12,
+    GEOMETRY = 13,
+    DISPLAY_TRANSFORM = 14,
+    FINAL = 15
 };
 
 // ============================================================
@@ -323,7 +324,7 @@ public:
 private:
     BufferBackend backend_ = BufferBackend::CPU;
     int working_color_space_ = 0; // sRGB linear
-    bool stage_enabled_[15] = {true}; // All enabled by default
+    bool stage_enabled_[16] = {true}; // All enabled by default
 
     static std::once_flag init_flag_;
     static std::unique_ptr<PipelineService> instance_;

@@ -1383,6 +1383,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         if (old.lensDistortionAmount != newParams.lensDistortionAmount) recordTransaction(operatorType, "lensDistortionAmount", newParams.lensDistortionAmount)
         if (old.lensVignetteAmount != newParams.lensVignetteAmount) recordTransaction(operatorType, "lensVignetteAmount", newParams.lensVignetteAmount)
         if (old.lensTcaAmount != newParams.lensTcaAmount) recordTransaction(operatorType, "lensTcaAmount", newParams.lensTcaAmount)
+        // BUG FIX: lensCx/lensCy/lensFocalRatio were missing from updateParamsWithHistory,
+        // causing undo/redo to fail for lens center and focal ratio adjustments
+        if (old.lensCx != newParams.lensCx) recordTransaction(operatorType, "lensCx", newParams.lensCx)
+        if (old.lensCy != newParams.lensCy) recordTransaction(operatorType, "lensCy", newParams.lensCy)
+        if (old.lensFocalRatio != newParams.lensFocalRatio) recordTransaction(operatorType, "lensFocalRatio", newParams.lensFocalRatio)
 
         // ── DisplayTransform 子字段对比 (H2) ──
         if (old.displayTransform.colorScience != newParams.displayTransform.colorScience)
@@ -3577,7 +3582,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 } else {
                     pipelineBitmap
                 }
-                val settingsWithExif = settings.copy(sourceExifPath = img.imagePath)
+                val settingsWithExif = settings.copy(sourceExifPath = img.imagePath, params = _params.value)
                 // 通过 ColorScienceBridge 获取显示变换函数（用于导出时色彩空间转换）
                 val colorScienceAvailable = try {
                     colorScienceBridge.getDisplayTransform(

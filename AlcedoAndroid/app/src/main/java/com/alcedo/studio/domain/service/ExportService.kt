@@ -447,7 +447,18 @@ class ExportService(private val context: Context) {
                 // This path should not be reached; no-op for safety.
             }
             ExportFormat.ULTRA_HDR -> {
-                bitmap.compress(Bitmap.CompressFormat.JPEG, settings.quality.coerceIn(1, 100), outputStream)
+                // Ultra HDR requires gain map encoding; write to temp file first
+                // via writeImage(), then copy to the output stream.
+                val tempFile = File.createTempFile("alcedo_export_uhdr_", ".jpg", context.cacheDir)
+                try {
+                    val writeOk = writeImage(bitmap, tempFile, settings)
+                    if (!writeOk) {
+                        throw java.io.IOException("Failed to write Ultra HDR image data")
+                    }
+                    tempFile.inputStream().use { it.copyTo(outputStream) }
+                } finally {
+                    tempFile.delete()
+                }
             }
         }
     }

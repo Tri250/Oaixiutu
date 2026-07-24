@@ -1293,6 +1293,7 @@ private fun ExportDialog(
 ) {
     var format by remember { mutableStateOf(ExportFormat.JPEG) }
     var quality by remember { mutableIntStateOf(95) }
+    var bitDepth by remember { mutableIntStateOf(8) }
     var colorSpace by remember { mutableStateOf(ColorSpace.SRGB) }
     var embedIcc by remember { mutableStateOf(true) }
     var includeMetadata by remember { mutableStateOf(true) }
@@ -1325,6 +1326,23 @@ private fun ExportDialog(
                         valueRange = 1f..100f,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                // 位深度
+                if (format == ExportFormat.PNG || format == ExportFormat.TIFF) {
+                    Text(stringRes { exportBitDepth }, style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = bitDepth == 8,
+                            onClick = { bitDepth = 8 },
+                            label = { Text(stringRes { export8Bit }) }
+                        )
+                        FilterChip(
+                            selected = bitDepth == 16,
+                            onClick = { bitDepth = 16 },
+                            label = { Text(stringRes { export16Bit }) }
+                        )
+                    }
                 }
 
                 // 色彩空间
@@ -1369,6 +1387,7 @@ private fun ExportDialog(
                     ExportSettings(
                         format = format,
                         quality = quality,
+                        bitDepth = bitDepth,
                         colorSpace = colorSpace,
                         embedIcc = embedIcc,
                         includeMetadata = includeMetadata,

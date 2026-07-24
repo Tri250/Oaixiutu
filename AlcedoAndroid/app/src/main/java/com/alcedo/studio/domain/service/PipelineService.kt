@@ -579,17 +579,24 @@ class PipelineService {
         list += params.geometryCropRight
         list += params.geometryCropBottom
 
-        // ── Lens correction (idx 116-120) ──
+        // ── Lens correction (idx 116-125) ──
         list += params.lensK1
         list += params.lensK2
         list += params.lensK3
         list += params.lensP1
         list += params.lensP2
+        // BUG FIX: lensCx/lensCy/lensFocalRatio/lensVignetteStrength were missing from
+        // the params array, causing lens center / focal ratio / vignette strength adjustments
+        // to have no effect in the native pipeline.
+        list += params.lensCx
+        list += params.lensCy
+        list += params.lensFocalRatio
+        list += params.lensVignetteStrength
 
-        // ── LUT enable flag (idx 121); lutPath is a string, applied via separate native call ──
+        // ── LUT enable flag (idx 126); lutPath is a string, applied via separate native call ──
         list += if (params.lutEnabled) 1f else 0f
 
-        // ── Denoise (idx 122-125) ──
+        // ── Denoise (idx 127-130) ──
         list += params.luminanceDenoiseStrength
         list += params.luminanceDenoiseDetail
         list += params.chromaDenoiseStrength

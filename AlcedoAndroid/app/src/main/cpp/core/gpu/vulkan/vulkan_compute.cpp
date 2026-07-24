@@ -507,37 +507,37 @@ void VulkanComputePipeline::release() {
 
 void VulkanComputePipeline::beginCommands(VulkanCommandBuffer& cmd) {
     cmd.begin();
-    currentCmdBuffer_ = cmd.get();
+    currentCmd_ = &cmd;
 }
 
 void VulkanComputePipeline::endCommands() {
-    if (!currentCmdBuffer_) return;
-    // End recording and submit
-    g_vkCompute.vkEndCommandBuffer(currentCmdBuffer_);
-
-    VkSubmitInfo submitInfo;
-    submitInfo.sType = 0; // VK_STRUCTURE_TYPE_SUBMIT_INFO
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &currentCmdBuffer_;
-
-    g_vkCompute.vkQueueSubmit(context_->getComputeQueue(), 1, &submitInfo, nullptr);
-    currentCmdBuffer_ = nullptr;
+    if (!currentCmd_) return;
+    // End recording and submit with fence synchronization
+    currentCmd_->end();
+    currentCmd_->submit();
+    currentCmd_ = nullptr;
 }
 
 void VulkanComputePipeline::bind() {
-    if (!currentCmdBuffer_ || !pipeline_) return;
-    g_vkCompute.vkCmdBindPipeline(currentCmdBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
-    g_vkCompute.vkCmdBindDescriptorSets(currentCmdBuffer_, VK_PIPELINE_BIND_POINT_COMPUTE,
+    if (!currentCmd_ || !pipeline_) return;
+    void* cmdBuf = currentCmd_->get();
+    if (!cmdBuf) return;
+    g_vkCompute.vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
+    g_vkCompute.vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE,
                                          pipelineLayout_, 0, 1, &descriptorSet_, 0, nullptr);
 }
 
 void VulkanComputePipeline::dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
-    if (!currentCmdBuffer_) return;
-    g_vkCompute.vkCmdDispatch(currentCmdBuffer_, groupsX, groupsY, groupsZ);
+    if (!currentCmd_) return;
+    void* cmdBuf = currentCmd_->get();
+    if (!cmdBuf) return;
+    g_vkCompute.vkCmdDispatch(cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 void VulkanComputePipeline::barrier() {
-    if (!currentCmdBuffer_) return;
+    if (!currentCmd_) return;
+    void* cmdBuf = currentCmd_->get();
+    if (!cmdBuf) return;
     // Compute-shader memory barrier: ensure writes are visible to subsequent reads
     struct VkMemoryBarrier {
         uint32_t sType = 0;
@@ -549,7 +549,7 @@ void VulkanComputePipeline::barrier() {
     memBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     memBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    g_vkCompute.vkCmdPipelineBarrier(currentCmdBuffer_,
+    g_vkCompute.vkCmdPipelineBarrier(cmdBuf,
                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                       0, // dependencyFlags
@@ -559,8 +559,10 @@ void VulkanComputePipeline::barrier() {
 }
 
 void VulkanComputePipeline::pushConstants(const void* data, uint32_t size, uint32_t offset) {
-    if (!currentCmdBuffer_ || !data || size == 0) return;
-    g_vkCompute.vkCmdPushConstants(currentCmdBuffer_, pipelineLayout_,
+    if (!currentCmd_ || !data || size == 0) return;
+    void* cmdBuf = currentCmd_->get();
+    if (!cmdBuf) return;
+    g_vkCompute.vkCmdPushConstants(cmdBuf, pipelineLayout_,
                                     VK_SHADER_STAGE_COMPUTE_BIT, offset, size, data);
 }
 

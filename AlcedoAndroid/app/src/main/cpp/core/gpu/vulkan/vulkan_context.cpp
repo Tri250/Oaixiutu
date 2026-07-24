@@ -466,7 +466,7 @@ bool VulkanContext::createCommandPool() {
     VkCommandPoolCreateInfo poolInfo;
     poolInfo.sType = 25;
     poolInfo.queueFamilyIndex = static_cast<uint32_t>(queueFamily_.computeIndex);
-    poolInfo.flags = 0; // VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT = 0x1
+    poolInfo.flags = 0x00000001; // VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 
     VkResult result = g_vk.vkCreateCommandPool(device_, &poolInfo, nullptr, &commandPool_);
     if (result != VK_SUCCESS) {

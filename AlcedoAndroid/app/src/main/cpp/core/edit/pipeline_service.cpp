@@ -73,7 +73,7 @@ public:
 // ============================================================
 
 PipelineService::PipelineService() {
-    for (int i = 0; i < 15; ++i) stage_enabled_[i] = true;
+    for (int i = 0; i < 16; ++i) stage_enabled_[i] = true;
     LOGI("PipelineService created");
 }
 
@@ -327,6 +327,97 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                    kernel[(ky + 1) * 3 + (kx + 1)];
                     int center = (y * width + x) * channels + c;
                     pixels[center] = clamp01_safe(copy[center] + (sum - copy[center]) * scale);
+                }
+            }
+        }
+    }
+
+    // Stage: Denoise
+    if (en(PipelineStage::DENOISE)) {
+        // Luminance denoise (non-local means style)
+        if (params.luminance_denoise_strength > 0.0f) {
+            // Simple bilateral-style luminance denoise: for each pixel, blend with
+            // neighboring pixels weighted by luminance similarity
+            int radius = 2;
+            float sigmaSpatial = 3.0f;
+            float sigmaRange = 0.1f * (1.0f - params.luminance_denoise_detail) + 0.02f;
+            float strength = params.luminance_denoise_strength * 0.5f;
+            if (sigmaRange < 0.005f) sigmaRange = 0.005f;
+
+            std::vector<float> copy(pixels, pixels + static_cast<size_t>(width) * height * channels);
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    int centerIdx = (y * width + x) * channels;
+                    float sumR = 0, sumG = 0, sumB = 0, sumW = 0;
+                    float cr = copy[centerIdx], cg = copy[centerIdx + 1], cb = copy[centerIdx + 2];
+                    float lumC = 0.2126f * cr + 0.7152f * cg + 0.0722f * cb;
+
+                    for (int dy = -radius; dy <= radius; ++dy) {
+                        for (int dx = -radius; dx <= radius; ++dx) {
+                            int nx = x + dx, ny = y + dy;
+                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                            int nIdx = (ny * width + nx) * channels;
+                            float nr = copy[nIdx], ng = copy[nIdx + 1], nb = copy[nIdx + 2];
+                            float lumN = 0.2126f * nr + 0.7152f * ng + 0.0722f * nb;
+                            float dist = (dx * dx + dy * dy) / (2.0f * sigmaSpatial * sigmaSpatial);
+                            float lumDiff = (lumC - lumN) * (lumC - lumN) / (2.0f * sigmaRange * sigmaRange);
+                            float w = std::exp(-dist - lumDiff);
+                            sumR += nr * w;
+                            sumG += ng * w;
+                            sumB += nb * w;
+                            sumW += w;
+                        }
+                    }
+                    if (sumW > 0.0001f) {
+                        pixels[centerIdx]     = clamp01_safe(cr + (sumR / sumW - cr) * strength);
+                        pixels[centerIdx + 1] = clamp01_safe(cg + (sumG / sumW - cg) * strength);
+                        pixels[centerIdx + 2] = clamp01_safe(cb + (sumB / sumW - cb) * strength);
+                    }
+                }
+            }
+        }
+
+        // Chroma denoise (bilateral filter on chroma channels)
+        if (params.chroma_denoise_strength > 0.0f) {
+            int radius = 1;
+            float sigmaSpatial = 2.0f;
+            float sigmaRange = params.chroma_denoise_threshold * 0.3f + 0.02f;
+            float strength = params.chroma_denoise_strength;
+
+            std::vector<float> copy(pixels, pixels + static_cast<size_t>(width) * height * channels);
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    int centerIdx = (y * width + x) * channels;
+                    float cr = copy[centerIdx], cg = copy[centerIdx + 1], cb = copy[centerIdx + 2];
+                    float lumC = 0.2126f * cr + 0.7152f * cg + 0.0722f * cb;
+                    // Chroma channels: Cr = R - Y, Cb = B - Y
+                    float crC = cr - lumC, cbC = cb - lumC;
+
+                    float sumCr = 0, sumCb = 0, sumW = 0;
+                    for (int dy = -radius; dy <= radius; ++dy) {
+                        for (int dx = -radius; dx <= radius; ++dx) {
+                            int nx = x + dx, ny = y + dy;
+                            if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                            int nIdx = (ny * width + nx) * channels;
+                            float nr = copy[nIdx], ng = copy[nIdx + 1], nb = copy[nIdx + 2];
+                            float lumN = 0.2126f * nr + 0.7152f * ng + 0.0722f * nb;
+                            float nCr = nr - lumN, nCb = nb - lumN;
+                            float dist = (dx * dx + dy * dy) / (2.0f * sigmaSpatial * sigmaSpatial);
+                            float chromaDiff = ((crC - nCr) * (crC - nCr) + (cbC - nCb) * (cbC - nCb)) /
+                                               (2.0f * sigmaRange * sigmaRange);
+                            float w = std::exp(-dist - chromaDiff);
+                            sumCr += nCr * w;
+                            sumCb += nCb * w;
+                            sumW += w;
+                        }
+                    }
+                    if (sumW > 0.0001f) {
+                        float newCr = crC + (sumCr / sumW - crC) * strength;
+                        float newCb = cbC + (sumCb / sumW - cbC) * strength;
+                        pixels[centerIdx]     = clamp01_safe(lumC + newCr);
+                        pixels[centerIdx + 1] = clamp01_safe(cg + (lumC + newCr - cr) * 0.5f + (lumC + newCb - cb) * 0.5f);
+                        pixels[centerIdx + 2] = clamp01_safe(lumC + newCb);
+                    }
                 }
             }
         }
