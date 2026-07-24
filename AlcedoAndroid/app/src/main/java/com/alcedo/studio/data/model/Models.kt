@@ -2,7 +2,7 @@ package com.alcedo.studio.data.model
 
 import androidx.room.*
 
-@Entity(tableName = "edit_history")
+@Entity(tableName = "edit_history", indices = [Index(value = ["imageId"])])
 data class EditHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val imageId: Long,
@@ -14,7 +14,7 @@ data class EditHistoryEntity(
     val paramsJson: String = "{}"
 )
 
-@Entity(tableName = "pipeline_presets")
+@Entity(tableName = "pipeline_presets", indices = [Index(value = ["name"]), Index(value = ["category"])])
 data class PipelinePresetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -25,7 +25,7 @@ data class PipelinePresetEntity(
     val isBuiltIn: Boolean = false
 )
 
-@Entity(tableName = "ai_embeddings")
+@Entity(tableName = "ai_embeddings", indices = [Index(value = ["imageId"])])
 data class AiEmbeddingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val imageId: Long,

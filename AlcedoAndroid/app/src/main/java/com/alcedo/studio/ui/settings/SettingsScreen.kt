@@ -42,6 +42,9 @@ import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.ui.theme.AlcedoThemeVariant
 import com.alcedo.studio.ui.theme.ThemeManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val APP_VERSION = BuildConfig.VERSION_NAME
 private const val DEVELOPER_NAME = "带娃的小陈工"
@@ -52,6 +55,7 @@ private val DEFAULT_EXPORT_PATH = ""  // 使用系统默认存储路径
 fun SettingsScreen(navController: NavController) {
     val s = Strings.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Theme mode (light/dark/system)
     val darkMode by ThemeManager.darkMode.collectAsStateWithLifecycle()
@@ -134,6 +138,8 @@ fun SettingsScreen(navController: NavController) {
     val colorSpaceLabel = when (selectedColorSpace) {
         "p3" -> s.gamutP3
         "rec2020" -> s.gamutRec2020
+        "adobergb" -> s.gamutAdobeRgb
+        "prophoto" -> s.gamutProPhotoRgb
         else -> s.gamutSrgb
     }
 
@@ -586,6 +592,8 @@ fun SettingsScreen(navController: NavController) {
             options = listOf(
                 "srgb" to s.gamutSrgb,
                 "p3" to s.gamutP3,
+                "adobergb" to s.gamutAdobeRgb,
+                "prophoto" to s.gamutProPhotoRgb,
                 "rec2020" to s.gamutRec2020
             ),
             selectedId = selectedColorSpace,
@@ -605,8 +613,12 @@ fun SettingsScreen(navController: NavController) {
             confirmLabel = stringRes { clear },
             onConfirm = {
                 // Actually clear thumbnail and temp caches
-                clearAppCache(context)
-                cacheSize = calculateCacheSize(context)
+                scope.launch(Dispatchers.IO) {
+                    clearAppCache(context)
+                    withContext(Dispatchers.Main) {
+                        cacheSize = calculateCacheSize(context)
+                    }
+                }
                 showClearCacheDialog = false
             },
             onDismiss = { showClearCacheDialog = false },
@@ -621,8 +633,12 @@ fun SettingsScreen(navController: NavController) {
             confirmLabel = stringRes { clear },
             onConfirm = {
                 // Actually delete AI model files
-                clearAiModels(context)
-                cacheSize = calculateCacheSize(context)
+                scope.launch(Dispatchers.IO) {
+                    clearAiModels(context)
+                    withContext(Dispatchers.Main) {
+                        cacheSize = calculateCacheSize(context)
+                    }
+                }
                 showClearModelsDialog = false
             },
             onDismiss = { showClearModelsDialog = false },

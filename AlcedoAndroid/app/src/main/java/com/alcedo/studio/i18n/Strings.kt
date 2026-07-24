@@ -383,6 +383,23 @@ interface StringResources {
     val accToneCurve: String
     val accCropOverlay: String
     val accCompareView: String
+    val accAdjustExposure: String
+    val accAdjustContrast: String
+    val accAdjustHighlights: String
+    val accAdjustShadows: String
+    val accAdjustSaturation: String
+    val accAdjustVibrance: String
+    val accAdjustClarity: String
+    val accAdjustSharpen: String
+    val accAdjustTemperature: String
+    val accAdjustTint: String
+    val accResetAdjustment: String
+    val accClosePanel: String
+    val accOpenPanel: String // "Open {name} panel"
+    val accRatingValue: String // "Rating: {n} out of 5"
+    val accProgressValue: String // "{n} percent complete"
+    val accSelected: String
+    val accNotSelected: String
 
     // ── Additional Export / UX ──────────────────────────────────────────
     val compareBefore: String
@@ -518,6 +535,8 @@ interface StringResources {
     // ── Gamut Overlays ──────────────────────────────────────────────────
     val gamutSrgb: String
     val gamutP3: String
+    val gamutAdobeRgb: String
+    val gamutProPhotoRgb: String
     val gamutRec2020: String
     val gamutAces: String
 
@@ -1028,6 +1047,27 @@ interface StringResources {
     val semanticAnalysis: String
     val curveResetButton: String
     val applyButton: String
+
+    // ── Notification strings ─────────────────────────────────────────────
+    val notificationChannelName: String
+    val notificationChannelDesc: String
+    val notificationExporting: String
+    val notificationExportProgress: String // "Exporting {current}/{total}"
+    val notificationExportTitle: String
+    val notificationExportComplete: String
+    val notificationExportFailed: String
+    val notificationExportSuccess: String // "{success}/{total}"
+    val notificationAiRating: String
+    val notificationAiRatingProgress: String // "Rating {current}/{total}"
+    val notificationAiTagging: String
+    val notificationAiTaggingProgress: String // "Processing {current}/{total}"
+    val notificationImageImport: String
+    val notificationImportProgress: String // "Importing {current}/{total}"
+    val notificationModelDownload: String
+    val notificationModelDownloadProgress: String // "Downloading {modelId}... {progress}%"
+    val notificationModelDownloadComplete: String
+    val notificationModelDownloadFailed: String
+    val notificationModelDownloadFinished: String // "{modelId} download complete"
 }
 
 /**

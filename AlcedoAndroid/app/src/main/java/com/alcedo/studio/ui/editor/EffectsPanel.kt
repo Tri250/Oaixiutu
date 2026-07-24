@@ -25,6 +25,9 @@ import com.alcedo.studio.ui.theme.AlcedoAnimation
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun EffectsPanel(
@@ -34,15 +37,20 @@ fun EffectsPanel(
 ) {
     val params by remember { viewModel.params }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val view = LocalView.current
 
     val lutPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        val realPath = copyLutToInternalStorage(context, uri)
-        if (realPath != null) {
-            viewModel.updateLut(true, realPath)
+        scope.launch(Dispatchers.IO) {
+            val realPath = copyLutToInternalStorage(context, uri)
+            if (realPath != null) {
+                withContext(Dispatchers.Main) {
+                    viewModel.updateLut(true, realPath)
+                }
+            }
         }
     }
 

@@ -220,7 +220,8 @@ class HistoryMgmtService(
             "Cloned from ${sourceVersion.displayName}"
         )
 
-        val clonedVersion = targetHistory.getVersion(clonedVersionId)!!
+        val clonedVersion = targetHistory.getVersion(clonedVersionId)
+            ?: return@withContext null
         clonedVersion.transactions.clear()
         clonedVersion.transactions.addAll(sourceVersion.transactions.map { it.copy() })
         clonedVersion.cursor = sourceVersion.cursor

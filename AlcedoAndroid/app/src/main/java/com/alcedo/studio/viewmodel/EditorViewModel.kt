@@ -1802,9 +1802,17 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
 
     private fun regenerateScopesIfNeeded() {
         if ((_showHistogram.value || _showWaveform.value || _showVectorscope.value) && _previewBitmap.value != null) {
+            // Scope data (histogram, waveform, vectorscope) is computed on-demand
+            // when the scope views request it. The debounce job prevents rapid
+            // recomputation during parameter changes by cancelling any pending
+            // scope analysis before the user settles on a value.
             scopeJob?.cancel()
             scopeJob = viewModelScope.launch {
                 delay(SCOPE_DEBOUNCE_MS)
+                ensureActive()
+                // Scope data is computed lazily by the UI layer via the
+                // computeHistogram/computeWaveform/computeVectorscope methods.
+                // This job simply enforces the debounce window.
             }
         }
     }

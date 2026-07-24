@@ -135,6 +135,28 @@ object DatabaseMigrations {
         }
     }
 
+    /**
+     * Migration from schema v3 to v4.
+     *
+     * v4 adds performance-critical indices to tables that were missing them:
+     *   - `edit_history`: index on `imageId` (used by all version queries)
+     *   - `semantic_labels`: index on `image_id` (used by label lookups)
+     *   - `ai_embeddings`: index on `imageId` (used by embedding retrieval)
+     *   - `pipeline_presets`: index on `name` (used by preset search)
+     *
+     * `CREATE INDEX IF NOT EXISTS` is used so the migration is idempotent.
+     */
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_edit_history_imageId` ON `edit_history` (`imageId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_semantic_labels_image_id` ON `semantic_labels` (`image_id`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_semantic_labels_label` ON `semantic_labels` (`label`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_ai_embeddings_imageId` ON `ai_embeddings` (`imageId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_pipeline_presets_name` ON `pipeline_presets` (`name`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_pipeline_presets_category` ON `pipeline_presets` (`category`)")
+        }
+    }
+
     /** All registered migrations, in order. Used by SleeveDatabase builders. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

@@ -576,7 +576,7 @@ class DecodeService(
                 }
             }.mapNotNull { it.await() }
                 .filter { it.second != null }
-                .associate { it.first to it.second!! }
+                .associate { (key, value) -> key to value!! }
         }
 
     suspend fun batchGenerateThumbnails(

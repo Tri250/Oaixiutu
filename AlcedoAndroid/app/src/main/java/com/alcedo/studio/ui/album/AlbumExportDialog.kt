@@ -170,7 +170,7 @@ fun AlbumExportDialog(
             // Color space
             Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
+                listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.ADOBE_RGB, ColorSpace.PROPHOTO_RGB, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
                         FilterChip(
                             selected = colorSpace == cs,

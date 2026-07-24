@@ -258,7 +258,7 @@ enum class ExportFormat {
 }
 
 enum class ColorSpace {
-    SRGB, DISPLAY_P3, REC2020, ACES, CUSTOM
+    SRGB, DISPLAY_P3, ADOBE_RGB, PROPHOTO_RGB, REC2020, ACES, CUSTOM
 }
 
 // ================================================================

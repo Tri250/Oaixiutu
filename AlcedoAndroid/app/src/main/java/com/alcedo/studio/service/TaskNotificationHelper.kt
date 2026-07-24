@@ -11,15 +11,16 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.alcedo.studio.MainActivity
+import com.alcedo.studio.i18n.Strings
 
 /**
  * Helper for showing task progress in the notification bar.
  * Supports concurrent tasks with individual progress tracking.
+ * All notification text is localized via the i18n system.
  */
 object TaskNotificationHelper {
 
     private const val CHANNEL_ID = "alcedo_task_progress"
-    private const val CHANNEL_NAME = "任务进度"
 
     // Notification IDs for different task types
     private const val NOTIFICATION_ID_EXPORT = 2001
@@ -40,10 +41,10 @@ object TaskNotificationHelper {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    CHANNEL_NAME,
+                    Strings.current.notificationChannelName,
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
-                    description = "显示导出、AI处理等后台任务的进度"
+                    description = Strings.current.notificationChannelDesc
                     setShowBadge(false)
                 }
                 nm.createNotificationChannel(channel)
@@ -83,16 +84,20 @@ object TaskNotificationHelper {
 
     fun notifyExportProgress(context: Context, current: Int, total: Int, fileName: String = "") {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val msg = if (fileName.isNotBlank()) "正在导出: $fileName" else "正在导出 $current/$total"
-        nm.notify(NOTIFICATION_ID_EXPORT, buildNotification(context, "导出中", msg, current, total))
+        val msg = if (fileName.isNotBlank()) {
+            String.format(Strings.current.notificationExporting, fileName)
+        } else {
+            String.format(Strings.current.notificationExportProgress, current, total)
+        }
+        nm.notify(NOTIFICATION_ID_EXPORT, buildNotification(context, Strings.current.notificationExportTitle, msg, current, total))
     }
 
     fun notifyExportComplete(context: Context, successCount: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val msg = "成功: $successCount/$total"
+        val msg = String.format(Strings.current.notificationExportSuccess, successCount, total)
         nm.notify(NOTIFICATION_ID_EXPORT, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("导出完成")
+            .setContentTitle(Strings.current.notificationExportComplete)
             .setContentText(msg)
             .setProgress(0, 0, false)
             .setOngoing(false)
@@ -107,7 +112,7 @@ object TaskNotificationHelper {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_EXPORT, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("导出失败")
+            .setContentTitle(Strings.current.notificationExportFailed)
             .setContentText(errorMessage)
             .setProgress(0, 0, false)
             .setOngoing(false)
@@ -123,7 +128,8 @@ object TaskNotificationHelper {
 
     fun notifyAiRatingProgress(context: Context, current: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIFICATION_ID_AI_RATING, buildNotification(context, "AI 评分中", "正在评分 $current/$total", current, total))
+        val msg = String.format(Strings.current.notificationAiRatingProgress, current, total)
+        nm.notify(NOTIFICATION_ID_AI_RATING, buildNotification(context, Strings.current.notificationAiRating, msg, current, total))
     }
 
     fun notifyAiRatingComplete(context: Context, total: Int) {
@@ -135,7 +141,8 @@ object TaskNotificationHelper {
 
     fun notifyAiTaggingProgress(context: Context, current: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIFICATION_ID_AI_TAGGING, buildNotification(context, "AI 标签生成中", "正在处理 $current/$total", current, total))
+        val msg = String.format(Strings.current.notificationAiTaggingProgress, current, total)
+        nm.notify(NOTIFICATION_ID_AI_TAGGING, buildNotification(context, Strings.current.notificationAiTagging, msg, current, total))
     }
 
     fun notifyAiTaggingComplete(context: Context, total: Int) {
@@ -147,7 +154,8 @@ object TaskNotificationHelper {
 
     fun notifyImportProgress(context: Context, current: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIFICATION_ID_IMPORT, buildNotification(context, "图片导入中", "正在导入 $current/$total", current, total))
+        val msg = String.format(Strings.current.notificationImportProgress, current, total)
+        nm.notify(NOTIFICATION_ID_IMPORT, buildNotification(context, Strings.current.notificationImageImport, msg, current, total))
     }
 
     fun notifyImportComplete(context: Context, total: Int) {
@@ -159,16 +167,16 @@ object TaskNotificationHelper {
 
     fun notifyModelDownloadProgress(context: Context, modelId: String, progress: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val msg = "正在下载 $modelId... $progress%"
-        nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, buildNotification(context, "模型下载", msg, progress, total))
+        val msg = String.format(Strings.current.notificationModelDownloadProgress, modelId, progress)
+        nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, buildNotification(context, Strings.current.notificationModelDownload, msg, progress, total))
     }
 
     fun notifyModelDownloadComplete(context: Context, modelId: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("模型下载完成")
-            .setContentText("$modelId 下载完成")
+            .setContentTitle(Strings.current.notificationModelDownloadComplete)
+            .setContentText(String.format(Strings.current.notificationModelDownloadFinished, modelId))
             .setProgress(0, 0, false)
             .setOngoing(false)
             .build())
@@ -181,7 +189,7 @@ object TaskNotificationHelper {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
-            .setContentTitle("模型下载失败")
+            .setContentTitle(Strings.current.notificationModelDownloadFailed)
             .setContentText("$modelId: $error")
             .setProgress(0, 0, false)
             .setOngoing(false)

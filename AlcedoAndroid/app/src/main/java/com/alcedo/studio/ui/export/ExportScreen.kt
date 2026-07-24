@@ -114,10 +114,12 @@ fun ExportScreen(
                 )
             }
             batchResult != null -> {
-                val br = batchResult!!
-                snackbarHostState.showSnackbar(
-                    Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
-                )
+                val br = batchResult
+                if (br != null) {
+                    snackbarHostState.showSnackbar(
+                        Strings.current.exportBatchResult.format(br.successCount.toString(), br.errorCount.toString())
+                    )
+                }
             }
         }
     }
@@ -237,7 +239,7 @@ fun ExportScreen(
             // Color Space
             Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
+                listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.ADOBE_RGB, ColorSpace.PROPHOTO_RGB, ColorSpace.REC2020, ColorSpace.ACES)
                     .forEach { cs ->
                         FilterChip(
                             selected = viewModel.colorSpace == cs,

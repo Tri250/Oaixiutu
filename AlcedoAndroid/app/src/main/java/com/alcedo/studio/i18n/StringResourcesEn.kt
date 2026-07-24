@@ -379,6 +379,23 @@ class EnglishStrings : StringResources {
     override val accToneCurve = "Tone curve editor with %s control points"
     override val accCropOverlay = "Crop overlay, drag handles to adjust"
     override val accCompareView = "Before and after comparison slider"
+    override val accAdjustExposure = "Adjust exposure"
+    override val accAdjustContrast = "Adjust contrast"
+    override val accAdjustHighlights = "Adjust highlights"
+    override val accAdjustShadows = "Adjust shadows"
+    override val accAdjustSaturation = "Adjust saturation"
+    override val accAdjustVibrance = "Adjust vibrance"
+    override val accAdjustClarity = "Adjust clarity"
+    override val accAdjustSharpen = "Adjust sharpening"
+    override val accAdjustTemperature = "Adjust white balance temperature"
+    override val accAdjustTint = "Adjust white balance tint"
+    override val accResetAdjustment = "Reset to default"
+    override val accClosePanel = "Close panel"
+    override val accOpenPanel = "Open %s panel"
+    override val accRatingValue = "Rating: %d out of 5"
+    override val accProgressValue = "%d percent complete"
+    override val accSelected = "Selected"
+    override val accNotSelected = "Not selected"
 
     // ── Additional Export / UX ──────────────────────────────────────────
     override val compareBefore = "Before"
@@ -514,6 +531,8 @@ class EnglishStrings : StringResources {
     // ── Gamut Overlays ──────────────────────────────────────────────────
     override val gamutSrgb = "sRGB"
     override val gamutP3 = "P3"
+    override val gamutAdobeRgb = "Adobe RGB"
+    override val gamutProPhotoRgb = "ProPhoto RGB"
     override val gamutRec2020 = "Rec2020"
     override val gamutAces = "ACES"
 
@@ -1022,6 +1041,28 @@ class EnglishStrings : StringResources {
     override val semanticAnalysis = "Semantic Analysis"
     override val curveResetButton = "Reset Curve"
     override val applyButton = "Apply"
+
+    // ── Notification strings ─────────────────────────────────────────────
+    override val notificationChannelName = "Task Progress"
+    override val notificationChannelDesc = "Shows progress of export, AI processing, and other background tasks"
+    override val notificationExporting = "Exporting: %s"
+    override val notificationExportProgress = "Exporting %s/%s"
+    override val notificationExportTitle = "Exporting"
+    override val notificationExportComplete = "Export Complete"
+    override val notificationExportFailed = "Export Failed"
+    override val notificationExportSuccess = "Success: %s/%s"
+    override val notificationAiRating = "AI Rating"
+    override val notificationAiRatingProgress = "Rating %s/%s"
+    override val notificationAiTagging = "AI Tagging"
+    override val notificationAiTaggingProgress = "Processing %s/%s"
+    override val notificationImageImport = "Importing Images"
+    override val notificationImportProgress = "Importing %s/%s"
+    override val notificationModelDownload = "Model Download"
+    override val notificationModelDownloadProgress = "Downloading %s... %s%%"
+    override val notificationModelDownloadComplete = "Model Download Complete"
+    override val notificationModelDownloadFailed = "Model Download Failed"
+    override val notificationModelDownloadFinished = "%s download complete"
+
     override val privacyContent = """Alcedo Studio Privacy Policy
 
 Effective Date: January 1, 2026

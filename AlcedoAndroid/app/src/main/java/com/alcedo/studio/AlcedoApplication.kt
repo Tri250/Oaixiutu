@@ -12,9 +12,14 @@ import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.utils.MemoryGuard
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AlcedoApplication : Application() {
     private val trimMemoryLock = Any()
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -62,12 +67,14 @@ class AlcedoApplication : Application() {
         // 导致导入等功能完全瘫痪。必须让初始化失败直接崩溃,让用户立即发现问题。
         AppModule.initialize(this)
 
-        // 预热数据库: 在 Application.onCreate 中触发 Room 惰性初始化,
-        // 将数据库打开/迁移失败提前到启动阶段,避免首次导入才发现问题
-        try {
-            AppModule.database.openHelper.writableDatabase
-        } catch (e: Throwable) {
-            Log.e("AlcedoApp", "Database pre-warm failed", e)
+        // 预热数据库: 异步触发 Room 惰性初始化,避免阻塞 Application.onCreate
+        // 数据库打开/迁移失败不会影响启动,仅日志记录
+        appScope.launch {
+            try {
+                AppModule.database.openHelper.writableDatabase
+            } catch (e: Throwable) {
+                Log.e("AlcedoApp", "Database pre-warm failed", e)
+            }
         }
 
         // Register memory pressure callback
@@ -79,12 +86,14 @@ class AlcedoApplication : Application() {
                             // Running low on memory — aggressive cache cleanup
                             Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
                             AppModule.thumbnailService.clearMemoryCache()
+                            AppModule.presetService.releaseResources()
                             MemoryGuard.emergencyGC()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
                             // Release non-essential caches
                             Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
                             AppModule.thumbnailService.clearMemoryCache()
+                            AppModule.presetService.releaseResources()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
                             // UI hidden — release UI caches
@@ -98,6 +107,7 @@ class AlcedoApplication : Application() {
                 synchronized(trimMemoryLock) {
                     Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
                     AppModule.thumbnailService.clearMemoryCache()
+                    AppModule.presetService.releaseResources()
                     MemoryGuard.emergencyGC()
                 }
             }

@@ -379,6 +379,23 @@ class ChineseSimplifiedStrings : StringResources {
     override val accToneCurve = "色调曲线编辑器，%s 个控制点"
     override val accCropOverlay = "裁剪覆盖层，拖动手柄调整"
     override val accCompareView = "前后对比滑块"
+    override val accAdjustExposure = "调整曝光"
+    override val accAdjustContrast = "调整对比度"
+    override val accAdjustHighlights = "调整高光"
+    override val accAdjustShadows = "调整阴影"
+    override val accAdjustSaturation = "调整饱和度"
+    override val accAdjustVibrance = "调整鲜艳度"
+    override val accAdjustClarity = "调整清晰度"
+    override val accAdjustSharpen = "调整锐度"
+    override val accAdjustTemperature = "调整白平衡色温"
+    override val accAdjustTint = "调整白平衡色调"
+    override val accResetAdjustment = "重置为默认值"
+    override val accClosePanel = "关闭面板"
+    override val accOpenPanel = "打开 %s 面板"
+    override val accRatingValue = "评分：%d 分（满分 5 分）"
+    override val accProgressValue = "已完成 %d%%"
+    override val accSelected = "已选中"
+    override val accNotSelected = "未选中"
 
     // ── Additional Export / UX ──────────────────────────────────────────
     override val compareBefore = "修改前"
@@ -514,6 +531,8 @@ class ChineseSimplifiedStrings : StringResources {
     // ── Gamut Overlays ──────────────────────────────────────────────────
     override val gamutSrgb = "sRGB"
     override val gamutP3 = "P3"
+    override val gamutAdobeRgb = "Adobe RGB"
+    override val gamutProPhotoRgb = "ProPhoto RGB"
     override val gamutRec2020 = "Rec2020"
     override val gamutAces = "ACES"
 
@@ -1022,6 +1041,28 @@ class ChineseSimplifiedStrings : StringResources {
     override val semanticAnalysis = "语义分析"
     override val curveResetButton = "重置曲线"
     override val applyButton = "应用"
+
+    // ── Notification strings ─────────────────────────────────────────────
+    override val notificationChannelName = "任务进度"
+    override val notificationChannelDesc = "显示导出、AI处理等后台任务的进度"
+    override val notificationExporting = "正在导出: %s"
+    override val notificationExportProgress = "正在导出 %s/%s"
+    override val notificationExportTitle = "导出中"
+    override val notificationExportComplete = "导出完成"
+    override val notificationExportFailed = "导出失败"
+    override val notificationExportSuccess = "成功: %s/%s"
+    override val notificationAiRating = "AI 评分中"
+    override val notificationAiRatingProgress = "正在评分 %s/%s"
+    override val notificationAiTagging = "AI 标签生成中"
+    override val notificationAiTaggingProgress = "正在处理 %s/%s"
+    override val notificationImageImport = "图片导入中"
+    override val notificationImportProgress = "正在导入 %s/%s"
+    override val notificationModelDownload = "模型下载"
+    override val notificationModelDownloadProgress = "正在下载 %s... %s%%"
+    override val notificationModelDownloadComplete = "模型下载完成"
+    override val notificationModelDownloadFailed = "模型下载失败"
+    override val notificationModelDownloadFinished = "%s 下载完成"
+
     override val privacyContent = """Alcedo Studio 隐私政策
 
 生效日期：2026年1月1日

@@ -32,6 +32,9 @@ import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
 import com.alcedo.studio.viewmodel.EditorViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Software-based built-in LUT look presets that modify PipelineParams to
@@ -224,15 +227,20 @@ fun LmtPanel(
     onApplyBuiltinPreset: ((PipelineParams) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val view = LocalView.current
 
     val lutPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        val realPath = copyLutToInternal(context, uri)
-        if (realPath != null) {
-            onLmtChanged(true, realPath, lmtIntensity)
+        scope.launch(Dispatchers.IO) {
+            val realPath = copyLutToInternal(context, uri)
+            if (realPath != null) {
+                withContext(Dispatchers.Main) {
+                    onLmtChanged(true, realPath, lmtIntensity)
+                }
+            }
         }
     }
 

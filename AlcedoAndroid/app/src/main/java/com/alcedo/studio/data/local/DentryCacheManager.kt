@@ -122,9 +122,10 @@ class DentryCacheManager(
         var currentId: Long? = parentId
         while (currentId != null) {
             val element = elementDao.getElementById(currentId)
-            if (element?.parentId != null) {
-                idsToInvalidate.add(element.parentId!!)
-                currentId = element.parentId
+            val pid = element?.parentId
+            if (pid != null) {
+                idsToInvalidate.add(pid)
+                currentId = pid
             } else {
                 currentId = null
             }

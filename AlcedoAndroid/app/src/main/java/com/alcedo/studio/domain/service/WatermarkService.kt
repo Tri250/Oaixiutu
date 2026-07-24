@@ -271,8 +271,24 @@ class WatermarkService {
         val file = File(path)
         if (!file.exists() || !file.isFile) return null
         return runCatching {
-            BitmapFactory.decodeFile(path)?.takeIf { !it.isRecycled }
+            val options = BitmapFactory.Options()
+            options.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(path, options)
+            val maxDim = 512 // Logo images don't need more than 512px
+            options.inSampleSize = calculateSampleSize(options.outWidth, options.outHeight, maxDim)
+            options.inJustDecodeBounds = false
+            BitmapFactory.decodeFile(path, options)?.takeIf { !it.isRecycled }
         }.getOrNull()
+    }
+
+    private fun calculateSampleSize(width: Int, height: Int, maxDim: Int): Int {
+        if (width <= 0 || height <= 0) return 1
+        var sampleSize = 1
+        val maxEdge = maxOf(width, height)
+        while (maxEdge / sampleSize > maxDim) {
+            sampleSize *= 2
+        }
+        return sampleSize
     }
 
     // ----------------------------------------------------------------

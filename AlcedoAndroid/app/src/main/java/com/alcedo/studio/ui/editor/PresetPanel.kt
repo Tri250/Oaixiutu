@@ -369,30 +369,30 @@ fun PresetPanel(
     }
 
     // ── Context menu (long-press): Apply / Edit / Delete / Export ──
-    if (contextMenuPreset != null) {
+    val menuPreset = contextMenuPreset
+    if (menuPreset != null) {
         PresetContextMenu(
-            preset = contextMenuPreset!!,
+            preset = menuPreset,
             onDismiss = { contextMenuPreset = null },
             onApply = {
-                val target = contextMenuPreset!!
                 contextMenuPreset = null
-                viewModel.applyPreset(target)
-                snackbarMessage = target.name
+                viewModel.applyPreset(menuPreset)
+                snackbarMessage = menuPreset.name
             },
             onEdit = {
-                editTarget = contextMenuPreset
+                editTarget = menuPreset
                 contextMenuPreset = null
             },
             onExport = {
-                exportTarget = contextMenuPreset
+                exportTarget = menuPreset
                 contextMenuPreset = null
                 // Launch SAF "create document" with a safe default filename.
-                val safeName = (exportTarget?.name ?: "preset")
+                val safeName = (menuPreset.name ?: "preset")
                     .replace(Regex("[^A-Za-z0-9._-]"), "_")
                 exportLauncher.launch("$safeName.json")
             },
             onDelete = {
-                deleteTarget = contextMenuPreset
+                deleteTarget = menuPreset
                 contextMenuPreset = null
             }
         )
@@ -431,24 +431,23 @@ fun PresetPanel(
     }
 
     // ── Edit preset dialog ──
-    if (editTarget != null) {
-        val target = editTarget!!
+    val editPreset = editTarget
+    if (editPreset != null) {
         PresetNameCategoryDialog(
             title = stringRes { presetEdit },
-            initialName = target.name,
-            initialCategory = target.category,
-            initialDescription = target.description,
+            initialName = editPreset.name,
+            initialCategory = editPreset.category,
+            initialDescription = editPreset.description,
             confirmLabel = stringRes { presetEdit },
-            allowUpdateParams = !target.isBuiltIn,
+            allowUpdateParams = !editPreset.isBuiltIn,
             onDismiss = { editTarget = null },
             onConfirm = { name, category, description, updateParams ->
-                val t = target
                 editTarget = null
                 scope.launch {
                     isBusy = true
                     try {
-                        val params = if (updateParams) viewModel.params.value else t.params
-                        presetService.updatePreset(t.id, name, category, params, description)
+                        val params = if (updateParams) viewModel.params.value else editPreset.params
+                        presetService.updatePreset(editPreset.id, name, category, params, description)
                         snackbarMessage = editedMsg
                     } catch (_: Throwable) {
                         snackbarMessage = errorMsg
@@ -461,21 +460,20 @@ fun PresetPanel(
     }
 
     // ── Delete confirmation ──
-    if (deleteTarget != null) {
-        val target = deleteTarget!!
+    val deletePreset = deleteTarget
+    if (deletePreset != null) {
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(stringRes { presetDelete }) },
-            text = { Text(target.name) },
+            text = { Text(deletePreset.name) },
             confirmButton = {
                 Button(
                     onClick = {
-                        val t = target
                         deleteTarget = null
                         scope.launch {
                             isBusy = true
                             try {
-                                presetService.deletePreset(t.id)
+                                presetService.deletePreset(deletePreset.id)
                                 snackbarMessage = deletedMsg
                             } catch (_: Throwable) {
                                 snackbarMessage = errorMsg

@@ -853,6 +853,13 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeCreateSnapshot(
             SAFE_PARAM(idx++, params.lens_k3);
             SAFE_PARAM(idx++, params.lens_p1);
             SAFE_PARAM(idx++, params.lens_p2);
+            // BUG FIX: lensCx/lensCy/lensFocalRatio/lensVignetteStrength were missing
+            // from snapshot creation, causing snapshot renders to skip lens center
+            // / focal ratio / vignette strength adjustments.
+            SAFE_PARAM(idx++, params.lens_cx);
+            SAFE_PARAM(idx++, params.lens_cy);
+            SAFE_PARAM(idx++, params.lens_focal_ratio);
+            SAFE_PARAM(idx++, params.lens_vignette_strength);
             // LUT enable flag
             { float tmp = 0.f; SAFE_PARAM(idx++, tmp); params.lut_enabled = (tmp > 0.5f); }
             // Denoise
@@ -2386,6 +2393,7 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeDeleteElement(
     std::lock_guard<std::mutex> lock(g_sleeve_mutex);
     if (!g_sleeve_manager || !path) return JNI_FALSE;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
+    if (!cpath) return JNI_FALSE;
     auto fs = g_sleeve_manager->GetFilesystem();
     bool ok = fs->Delete(cpath);
     env->ReleaseStringUTFChars(path, cpath);
@@ -2436,6 +2444,7 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
     std::lock_guard<std::mutex> lock(g_sleeve_mutex);
     if (!g_sleeve_manager || !path) return nullptr;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
+    if (!cpath) return nullptr;
     auto fs = g_sleeve_manager->GetFilesystem();
     auto ids = fs->ListFolderContent(cpath);
     env->ReleaseStringUTFChars(path, cpath);
@@ -2460,6 +2469,7 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(
     std::lock_guard<std::mutex> lock(g_sleeve_mutex);
     if (!g_sleeve_manager || !path) return env->NewStringUTF("");
     const char* cpath = env->GetStringUTFChars(path, nullptr);
+    if (!cpath) return env->NewStringUTF("{}");
     auto fs = g_sleeve_manager->GetFilesystem();
     auto elem = fs->Get(cpath);
     std::string json = "{}";

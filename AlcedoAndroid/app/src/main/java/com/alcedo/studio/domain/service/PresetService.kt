@@ -79,6 +79,25 @@ class PresetService(
     @Volatile
     private var builtInsInitialized = false
 
+    /**
+     * Release cached resources (sample bitmap, thumbnail cache).
+     * Call when the service is no longer needed or on low memory.
+     */
+    fun releaseResources() {
+        synchronized(this) {
+            sampleBitmap?.let { bmp ->
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+            sampleBitmap = null
+        }
+        thumbnailCache.values.forEach { entry ->
+            entry.thumbnail?.let { bmp ->
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+        }
+        thumbnailCache.clear()
+    }
+
     // ================================================================
     // Built-in preset seeding
     // ================================================================

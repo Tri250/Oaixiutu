@@ -53,20 +53,12 @@ PipelineService& PipelineService::Instance() {
     return *instance_;
 }
 
-// Helper: FilmGrainOperator (inline to avoid dependency issues)
-class FilmGrainOp {
-public:
-    static void apply(float* pixels, int width, int height, int channels, float intensity) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::normal_distribution<float> dist(0.0f, intensity * 0.05f);
-        size_t total = static_cast<size_t>(width) * height * channels;
-        for (size_t i = 0; i < total; ++i) {
-            pixels[i] += dist(gen);
-            pixels[i] = std::max(0.0f, std::min(1.0f, pixels[i]));
-        }
-    }
-};
+// Static random generator for film grain (avoids re-seeding on every call)
+static std::mt19937& get_film_grain_gen() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    return gen;
+}
 
 // ============================================================
 // PipelineService Implementation
@@ -426,8 +418,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: Effects
     if (en(PipelineStage::EFFECTS)) {
         if (params.film_grain > 0.0f) {
-            std::random_device rd;
-            std::mt19937 gen(rd());
+            auto& gen = get_film_grain_gen();
             std::normal_distribution<float> dist(0.0f, params.film_grain * 0.05f);
             size_t total = static_cast<size_t>(pixel_count) * channels;
             for (size_t i = 0; i < total; ++i) {

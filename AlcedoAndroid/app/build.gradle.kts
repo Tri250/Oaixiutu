@@ -49,7 +49,9 @@ android {
             }
         }
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            // x86 ABI removed: virtually no Android 9+ (API 28+) x86 devices exist,
+            // and ONNX Runtime Android AAR does not ship x86 libraries.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 
@@ -111,7 +113,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            // 保留 isProfileable 以支持生产环境性能分析（Android 16+ baseline profile 兼容）
+            // 保留 isProfileable 以支持生产环境性能分析（Android 14+ baseline profile 兼容）
             isProfileable = true
 
             // 如果 release 签名未配置，回退到 debug 签名（避免 CI 构建失败）

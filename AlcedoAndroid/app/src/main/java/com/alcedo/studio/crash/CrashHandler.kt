@@ -66,8 +66,9 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         } finally {
             // Chain to default handler so the process exits normally.
             // If handler was never initialized, re-throw to ensure proper crash behavior
-            if (defaultHandler != null) {
-                defaultHandler!!.uncaughtException(thread, throwable)
+            val handler = defaultHandler
+            if (handler != null) {
+                handler.uncaughtException(thread, throwable)
             } else {
                 // No default handler available; ensure the process does not hang
                 android.os.Process.killProcess(android.os.Process.myPid())

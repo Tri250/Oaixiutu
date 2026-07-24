@@ -212,8 +212,11 @@ fun AiRatingScreen(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(analysisError!!, style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val errorText = analysisError
+                        if (errorText != null) {
+                            Text(errorText, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(
                             onClick = {

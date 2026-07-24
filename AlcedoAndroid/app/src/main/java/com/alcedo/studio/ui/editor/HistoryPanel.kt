@@ -362,8 +362,11 @@ fun HistoryPanel(
                 Button(
                     onClick = {
                         HapticFeedback.heavyClick(view)
-                        viewModel.deleteVersion(deleteConfirmId!!)
+                        val id = deleteConfirmId
                         deleteConfirmId = null
+                        if (id != null) {
+                            viewModel.deleteVersion(id)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error

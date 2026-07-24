@@ -6,6 +6,7 @@ import android.opengl.GLES31
 import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * GPU 加速渲染管线，使用 OpenGL ES 3.1 Compute Shader 加速核心图像处理算子。
@@ -100,8 +101,8 @@ class GpuPipelineRenderer {
     @Volatile private var initialized = false
 
     // ── Uniform location 缓存 ────────────────────────────────────
-    private val pipelineUniforms = HashMap<String, Int>()
-    private val sharpenUniforms = HashMap<String, Int>()
+    private val pipelineUniforms = ConcurrentHashMap<String, Int>()
+    private val sharpenUniforms = ConcurrentHashMap<String, Int>()
 
     // ================================================================
     // 生命周期

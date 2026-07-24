@@ -83,6 +83,7 @@ class ImportService(
         val processedFiles: Int = 0,
         val phaseACompleted: Int = 0,
         val phaseBCompleted: Int = 0,
+        val phaseBThumbnailsCompleted: Int = 0,
         val currentFile: String = "",
         val currentPhase: ImportPhase = ImportPhase.IDLE,
         val status: ImportStatus = ImportStatus.IDLE,
@@ -157,7 +158,7 @@ class ImportService(
     private val supportedExtensions = setOf(
         "jpg", "jpeg", "png", "tiff", "tif", "arw", "cr2", "cr3", "nef", "dng",
         "heic", "heif", "webp", "bmp", "gif", "exr",
-        "orf", "pef", "srw", "x3f", "raf", "rw2", "mos"
+        "orf", "pef", "srw", "x3f", "raf", "rw2", "mos", "avif"
     )
 
     private val rawExtensions = setOf("arw", "cr2", "cr3", "nef", "dng", "orf", "pef", "srw", "x3f", "raf", "rw2", "mos")
@@ -511,7 +512,7 @@ class ImportService(
 
                 // Phase B 缩略图进度更新 (S5 修复)
                 _importProgress.value = _importProgress.value.copy(
-                    phaseBCompleted = index + 1,
+                    phaseBThumbnailsCompleted = index + 1,
                     currentFile = info.fileName
                 )
 
@@ -540,8 +541,11 @@ class ImportService(
             android.util.Log.e("ImportService", "importTwoPhase failed", e)
             val errorMsg = when {
                 e is OutOfMemoryError -> "内存不足, 请减少导入数量"
-                e.message != null -> e.message!!
-                else -> "导入失败: ${e::class.simpleName}"
+                else -> {
+                    val msg = e.message
+                    if (!msg.isNullOrBlank()) msg
+                    else "导入失败: ${e::class.simpleName}"
+                }
             }
             _importProgress.value = _importProgress.value.copy(status = ImportStatus.ERROR)
             // 保留已成功的计数: 外层异常不应抹除 Phase A 已成功导入的文件数
@@ -668,6 +672,16 @@ class ImportService(
                 throw CancellationException("Import cancelled by token")
             }
 
+            // 尝试持久化 URI 权限, 确保后续缩略图生成/编辑能访问 (S12 修复)
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // 部分 Provider 不支持持久化权限, 忽略
+            }
+
             val path = getRealPathFromUri(uri)
             val fileName = getFileNameFromUri(uri)
             val fileSize = getFileSizeFromUri(uri)
@@ -757,7 +771,8 @@ class ImportService(
                     type = ElementType.FILE,
                     parentId = parentFolderId,
                     imageId = imageId,
-                    filePath = path
+                    filePath = path,
+                    fileExtension = fileName.substringAfterLast('.', "").lowercase()
                 )
             } catch (ce: Exception) {
                 // Rollback: 删除已插入的 metadata, 避免孤儿记录堵塞后续导入
@@ -988,6 +1003,7 @@ class ImportService(
             "raf" -> ImageType.RAF
             "rw2" -> ImageType.RW2
             "mos" -> ImageType.MOS
+            "avif" -> ImageType.AVIF
             else -> ImageType.DEFAULT
         }
     }
@@ -1014,6 +1030,7 @@ class ImportService(
         ImageType.RAF -> "image/x-fujifilm-raf"
         ImageType.RW2 -> "image/x-panasonic-rw2"
         ImageType.MOS -> "image/x-leica-mos"
+        ImageType.AVIF -> "image/avif"
         ImageType.DEFAULT -> "application/octet-stream"
     }
 
@@ -1182,10 +1199,14 @@ class ImportService(
             if (options.outWidth <= 0 || options.outHeight <= 0) {
                 null
             } else {
-                val scale = maxOf(
-                    1,
-                    minOf(options.outWidth / maxSize, options.outHeight / maxSize, 8)
-                )
+                // inSampleSize 必须是 2 的幂, 且基于较大维度计算以确保缩略图足够小
+                // 旧逻辑: minOf(W/maxSize, H/maxSize, 8) 可能产生非 2 的幂值 (如 7),
+                // BitmapFactory 会向下取整到最近的 2 的幂, 但语义不明确会导致意料之外的缩放
+                val maxDim = maxOf(options.outWidth, options.outHeight)
+                var scale = 1
+                while (maxDim / (scale * 2) >= maxSize) {
+                    scale *= 2
+                }
 
                 BitmapFactory.Options().apply {
                     inSampleSize = scale

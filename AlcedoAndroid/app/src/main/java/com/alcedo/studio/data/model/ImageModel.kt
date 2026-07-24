@@ -15,7 +15,7 @@ import java.time.Instant
 
 enum class ImageType {
     DEFAULT, JPEG, PNG, TIFF, ARW, CR2, CR3, NEF, DNG, HEIC, HEIF, WEBP, BMP, GIF, EXR,
-    ORF, PEF, SRW, X3F, RAF, RW2, MOS
+    ORF, PEF, SRW, X3F, RAF, RW2, MOS, AVIF
 }
 
 enum class ThumbState {
@@ -169,7 +169,7 @@ data class ImageMetadataEntity(
 // FTS Entity for Semantic Labels
 // ================================================================
 
-@Entity(tableName = "semantic_labels")
+@Entity(tableName = "semantic_labels", indices = [Index(value = ["image_id"]), Index(value = ["label"])])
 data class SemanticLabelEntity(
     @PrimaryKey
     @ColumnInfo(name = "label_id")

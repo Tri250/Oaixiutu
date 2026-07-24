@@ -985,14 +985,18 @@ private fun ImagePreviewArea(
                                 )
                             }
                         }
+                        val orig = originalBitmap
+                    val edited = effectiveBitmap
+                    if (orig != null && edited != null) {
                         CompareView(
-                            originalImage = originalBitmap!!,
-                            editedImage = effectiveBitmap!!,
+                            originalImage = orig,
+                            editedImage = edited,
                             compareMode = compareMode,
                             overlayOpacity = overlayOpacity,
                             onOverlayOpacityChange = { viewModel.updateOverlayOpacity(it) },
                             modifier = Modifier.fillMaxSize()
                         )
+                    }
                     }
                 }
                 else -> {
@@ -1030,9 +1034,10 @@ private fun ImagePreviewArea(
         // P2-8 锐化蒙版可视化：在图片上方叠加显示边缘蒙版（白色高亮锐化区域）
         val showSharpeningMask by viewModel.showSharpeningMask.collectAsStateWithLifecycle()
         val sharpeningMaskBitmap by viewModel.sharpeningMaskBitmap.collectAsStateWithLifecycle()
-        if (showSharpeningMask && sharpeningMaskBitmap != null) {
+        val maskBitmap = sharpeningMaskBitmap
+        if (showSharpeningMask && maskBitmap != null) {
             Image(
-                bitmap = sharpeningMaskBitmap!!.asImageBitmap(),
+                bitmap = maskBitmap.asImageBitmap(),
                 contentDescription = stringRes { effectsShowSharpeningMask },
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
@@ -1348,7 +1353,7 @@ private fun ExportDialog(
                 // 色彩空间
                 Text(stringRes { exportColorSpace }, style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.REC2020, ColorSpace.ACES)
+                    listOf(ColorSpace.SRGB, ColorSpace.DISPLAY_P3, ColorSpace.ADOBE_RGB, ColorSpace.PROPHOTO_RGB, ColorSpace.REC2020, ColorSpace.ACES)
                         .forEach { cs ->
                             FilterChip(
                                 selected = colorSpace == cs,

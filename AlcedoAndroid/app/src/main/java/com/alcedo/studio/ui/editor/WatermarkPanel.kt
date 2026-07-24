@@ -53,6 +53,7 @@ fun WatermarkPanelDialog(
 ) {
     var config by remember { mutableStateOf(initialConfig) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val service = remember { AppModule.watermarkService }
 
     // Sample bitmap used as the preview backdrop (a soft diagonal gradient).
@@ -73,10 +74,14 @@ fun WatermarkPanelDialog(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val path = copyUriToCache(context, uri)
-            if (path != null) {
-                config = config.copy(imagePath = path)
-                onConfigChange(config)
+            scope.launch(Dispatchers.IO) {
+                val path = copyUriToCache(context, uri)
+                if (path != null) {
+                    withContext(Dispatchers.Main) {
+                        config = config.copy(imagePath = path)
+                        onConfigChange(config)
+                    }
+                }
             }
         }
     }

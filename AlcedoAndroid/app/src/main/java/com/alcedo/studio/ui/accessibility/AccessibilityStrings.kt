@@ -23,23 +23,22 @@ object AccessibilityStrings {
 
     fun albumPhoto(): String = Strings.current.navAlbum
 
-    // Fallbacks for items not yet in i18n
-    fun adjustExposure(): String = "Adjust exposure"
-    fun adjustContrast(): String = "Adjust contrast"
-    fun adjustHighlights(): String = "Adjust highlights"
-    fun adjustShadows(): String = "Adjust shadows"
-    fun adjustSaturation(): String = "Adjust saturation"
-    fun adjustVibrance(): String = "Adjust vibrance"
-    fun adjustClarity(): String = "Adjust clarity"
-    fun adjustSharpen(): String = "Adjust sharpening"
-    fun adjustTemperature(): String = "Adjust white balance temperature"
-    fun adjustTint(): String = "Adjust white balance tint"
+    fun adjustExposure(): String = Strings.current.accAdjustExposure
+    fun adjustContrast(): String = Strings.current.accAdjustContrast
+    fun adjustHighlights(): String = Strings.current.accAdjustHighlights
+    fun adjustShadows(): String = Strings.current.accAdjustShadows
+    fun adjustSaturation(): String = Strings.current.accAdjustSaturation
+    fun adjustVibrance(): String = Strings.current.accAdjustVibrance
+    fun adjustClarity(): String = Strings.current.accAdjustClarity
+    fun adjustSharpen(): String = Strings.current.accAdjustSharpen
+    fun adjustTemperature(): String = Strings.current.accAdjustTemperature
+    fun adjustTint(): String = Strings.current.accAdjustTint
 
-    fun resetAdjustment(): String = "Reset to default"
-    fun closePanel(): String = "Close panel"
-    fun openPanel(name: String): String = "Open $name panel"
+    fun resetAdjustment(): String = Strings.current.accResetAdjustment
+    fun closePanel(): String = Strings.current.accClosePanel
+    fun openPanel(name: String): String = String.format(Strings.current.accOpenPanel, name)
 
-    fun ratingValue(rating: Int): String = "Rating: $rating out of 5"
-    fun progressValue(percent: Int): String = "$percent percent complete"
-    fun selectedState(selected: Boolean): String = if (selected) "Selected" else "Not selected"
+    fun ratingValue(rating: Int): String = String.format(Strings.current.accRatingValue, rating)
+    fun progressValue(percent: Int): String = String.format(Strings.current.accProgressValue, percent)
+    fun selectedState(selected: Boolean): String = if (selected) Strings.current.accSelected else Strings.current.accNotSelected
 }

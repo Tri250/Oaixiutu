@@ -54,6 +54,7 @@ data class FileTypeFilter(
             ImageType.BMP -> FileCategory.BMP
             ImageType.HEIC, ImageType.HEIF -> FileCategory.HEIC
             ImageType.GIF -> FileCategory.GIF
+            ImageType.AVIF -> FileCategory.OTHER
             else -> FileCategory.OTHER
         }
     }

@@ -9,22 +9,23 @@ namespace alcedo {
 void ClarityOperator::box_blur_h(float* src, float* dst, int width, int height, int channels, int radius) {
     float scale = 1.0f / (2.0f * radius + 1.0f);
     for (int y = 0; y < height; ++y) {
+        int row_base = y * width * channels;
         for (int c = 0; c < channels; ++c) {
             float sum = 0.0f;
             // Initialize sum for the first pixel
             for (int kx = -radius; kx <= radius; ++kx) {
                 int sx = std::max(0, std::min(width - 1, kx));
-                sum += src[(y * width + sx) * channels + c];
+                sum += src[row_base + sx * channels + c];
             }
-            dst[(y * width + 0) * channels + c] = sum * scale;
+            dst[row_base + c] = sum * scale;
 
             // Sliding window
             for (int x = 1; x < width; ++x) {
                 int left = std::max(0, std::min(width - 1, x - radius - 1));
                 int right = std::max(0, std::min(width - 1, x + radius));
-                sum += src[(y * width + right) * channels + c];
-                sum -= src[(y * width + left) * channels + c];
-                dst[(y * width + x) * channels + c] = sum * scale;
+                sum += src[row_base + right * channels + c];
+                sum -= src[row_base + left * channels + c];
+                dst[row_base + x * channels + c] = sum * scale;
             }
         }
     }
@@ -32,21 +33,23 @@ void ClarityOperator::box_blur_h(float* src, float* dst, int width, int height, 
 
 void ClarityOperator::box_blur_v(float* src, float* dst, int width, int height, int channels, int radius) {
     float scale = 1.0f / (2.0f * radius + 1.0f);
+    int stride = width * channels;
     for (int x = 0; x < width; ++x) {
         for (int c = 0; c < channels; ++c) {
+            int col_offset = x * channels + c;
             float sum = 0.0f;
             for (int ky = -radius; ky <= radius; ++ky) {
                 int sy = std::max(0, std::min(height - 1, ky));
-                sum += src[(sy * width + x) * channels + c];
+                sum += src[sy * stride + col_offset];
             }
-            dst[(0 * width + x) * channels + c] = sum * scale;
+            dst[col_offset] = sum * scale;
 
             for (int y = 1; y < height; ++y) {
                 int top = std::max(0, std::min(height - 1, y - radius - 1));
                 int bottom = std::max(0, std::min(height - 1, y + radius));
-                sum += src[(bottom * width + x) * channels + c];
-                sum -= src[(top * width + x) * channels + c];
-                dst[(y * width + x) * channels + c] = sum * scale;
+                sum += src[bottom * stride + col_offset];
+                sum -= src[top * stride + col_offset];
+                dst[y * stride + col_offset] = sum * scale;
             }
         }
     }

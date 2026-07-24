@@ -584,13 +584,20 @@ class ExportService(private val context: Context) {
             ColorSpace.SRGB -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
             ColorSpace.DISPLAY_P3 -> AndroidColorSpace.get(AndroidColorSpace.Named.DISPLAY_P3)
             ColorSpace.REC2020 -> AndroidColorSpace.get(AndroidColorSpace.Named.BT2020)
-            ColorSpace.ACES -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
-            // ACES_SRGB_LINEAR not available in this SDK version
-            /*ColorSpace.ACES -> try {
+            ColorSpace.ADOBE_RGB -> AndroidColorSpace.get(AndroidColorSpace.Named.ADOBE_RGB)
+            ColorSpace.PROPHOTO_RGB -> try {
+                // ProPhoto RGB is not natively supported by Android.
+                // Use ACES as closest wide-gamut approximation, then apply
+                // a manual matrix conversion in applyColorSpaceManual().
+                AndroidColorSpace.get(AndroidColorSpace.Named.ACES_SRGB_LINEAR)
+            } catch (_: Exception) {
+                AndroidColorSpace.get(AndroidColorSpace.Named.DISPLAY_P3)
+            }
+            ColorSpace.ACES -> try {
                 AndroidColorSpace.get(AndroidColorSpace.Named.ACES_SRGB_LINEAR)
             } catch (_: Exception) {
                 AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
-            }*/
+            }
             else -> AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
         }
 
@@ -679,6 +686,18 @@ class ExportService(private val context: Context) {
             0.662454f, 0.272287f, 0.065259f,
             0.008079f, 0.915312f, 0.076609f,
             0.028926f, 0.094660f, 0.876415f
+        )
+        // sRGB → Adobe RGB (D65, Bradford-adapted)
+        ColorSpace.ADOBE_RGB -> floatArrayOf(
+            0.7152f, 0.2848f, 0.0000f,
+            0.0000f, 1.0000f, 0.0000f,
+            0.0000f, 0.0414f, 0.9586f
+        )
+        // sRGB → ProPhoto RGB (D50, chromatic-adaptation included)
+        ColorSpace.PROPHOTO_RGB -> floatArrayOf(
+            0.5299f, 0.3291f, 0.1410f,
+            0.0932f, 0.8709f, 0.0359f,
+            0.0215f, 0.0495f, 0.9290f
         )
         else -> null
     }
