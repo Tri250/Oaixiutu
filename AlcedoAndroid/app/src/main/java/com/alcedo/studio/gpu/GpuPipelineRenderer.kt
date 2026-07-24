@@ -514,12 +514,12 @@ class GpuPipelineRenderer {
         }
     }
 
-    private fun setUniform(cache: HashMap<String, Int>, name: String, value: Float) {
+    private fun setUniform(cache: Map<String, Int>, name: String, value: Float) {
         val loc = cache[name] ?: return
         if (loc >= 0) GLES31.glUniform1f(loc, value)
     }
 
-    private fun setUniformInt(cache: HashMap<String, Int>, name: String, value: Int) {
+    private fun setUniformInt(cache: Map<String, Int>, name: String, value: Int) {
         val loc = cache[name] ?: return
         if (loc >= 0) GLES31.glUniform1i(loc, value)
     }

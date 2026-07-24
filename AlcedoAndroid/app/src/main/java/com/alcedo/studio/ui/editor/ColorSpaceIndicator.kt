@@ -115,6 +115,8 @@ fun resolveColorSpaceFlow(
             EOTF.GAMMA24 -> "sRGB (2.4)"
         }
         ColorSpace.DISPLAY_P3 -> "Display P3"
+        ColorSpace.ADOBE_RGB -> "Adobe RGB"
+        ColorSpace.PROPHOTO_RGB -> "ProPhoto RGB"
         ColorSpace.REC2020 -> "Rec.2020"
         ColorSpace.ACES -> "ACES"
         ColorSpace.CUSTOM -> "Custom"

@@ -477,7 +477,7 @@ object AiNdkBridge {
     suspend fun clipEncodeText(context: Context, text: String): FloatArray? =
         encodeText(context, text)
 
-    fun clipDestroySession() {
+    suspend fun clipDestroySession() {
         clipEngine?.unloadModel()
         clipEngine = null
     }

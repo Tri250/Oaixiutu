@@ -221,7 +221,7 @@ class HistoryMgmtService(
         )
 
         val clonedVersion = targetHistory.getVersion(clonedVersionId)
-            ?: return@withContext null
+            ?: throw IllegalStateException("Cloned version not found: $clonedVersionId")
         clonedVersion.transactions.clear()
         clonedVersion.transactions.addAll(sourceVersion.transactions.map { it.copy() })
         clonedVersion.cursor = sourceVersion.cursor

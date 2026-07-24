@@ -212,7 +212,7 @@ class AiService(private val context: Context) {
     /**
      * Unload the current model from the CLIP inference engine.
      */
-    fun unloadModel() {
+    suspend fun unloadModel() {
         clipEngine.unloadModel()
         _modelLoadStatus.value = ClipInferenceEngine.ModelStatus.NOT_LOADED
     }

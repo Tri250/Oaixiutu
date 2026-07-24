@@ -589,12 +589,12 @@ class ExportService(private val context: Context) {
                 // ProPhoto RGB is not natively supported by Android.
                 // Use ACES as closest wide-gamut approximation, then apply
                 // a manual matrix conversion in applyColorSpaceManual().
-                AndroidColorSpace.get(AndroidColorSpace.Named.ACES_SRGB_LINEAR)
+                AndroidColorSpace.get(AndroidColorSpace.Named.ACESCG)
             } catch (_: Exception) {
                 AndroidColorSpace.get(AndroidColorSpace.Named.DISPLAY_P3)
             }
             ColorSpace.ACES -> try {
-                AndroidColorSpace.get(AndroidColorSpace.Named.ACES_SRGB_LINEAR)
+                AndroidColorSpace.get(AndroidColorSpace.Named.ACES)
             } catch (_: Exception) {
                 AndroidColorSpace.get(AndroidColorSpace.Named.SRGB)
             }

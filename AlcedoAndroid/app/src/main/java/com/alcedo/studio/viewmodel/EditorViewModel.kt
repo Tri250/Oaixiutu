@@ -808,6 +808,18 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview(isIntermediate = true)
     }
 
+    fun updateGeometryFlipH(value: Boolean) {
+        _params.value = _params.value.copy(geometryFlipH = value)
+        recordTransaction(OperatorType.GEOMETRY, "geometryFlipH", if (value) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun updateGeometryFlipV(value: Boolean) {
+        _params.value = _params.value.copy(geometryFlipV = value)
+        recordTransaction(OperatorType.GEOMETRY, "geometryFlipV", if (value) 1f else 0f)
+        regeneratePreview()
+    }
+
     fun updateVignette(strength: Float) {
         _params.value = _params.value.copy(lensVignetteStrength = strength)
         recordTransaction(OperatorType.VIGNETTE, "lensVignetteStrength", strength)
@@ -1066,24 +1078,6 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
-    fun updateLensDistortionAmount(value: Float) {
-        _params.value = _params.value.copy(lensDistortionAmount = value)
-        recordTransaction(OperatorType.LENS_CORRECTION, "lensDistortionAmount", value)
-        regeneratePreview()
-    }
-
-    fun updateLensVignetteAmount(value: Float) {
-        _params.value = _params.value.copy(lensVignetteAmount = value)
-        recordTransaction(OperatorType.LENS_CORRECTION, "lensVignetteAmount", value)
-        regeneratePreview()
-    }
-
-    fun updateLensTcaAmount(value: Float) {
-        _params.value = _params.value.copy(lensTcaAmount = value)
-        recordTransaction(OperatorType.LENS_CORRECTION, "lensTcaAmount", value)
-        regeneratePreview()
-    }
-
     fun updateLensMaker(maker: String) {
         _params.value = _params.value.copy(lensMaker = maker)
         // lensMaker 是文本字段，暂不入历史记录（history 仅支持 Float 值）
@@ -1307,6 +1301,12 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
     fun updateLutIntensityDrag(intensity: Float) = updateLutIntensity(intensity, intermediate = true)
+
+    fun updateLut(enabled: Boolean, path: String) {
+        _params.value = _params.value.copy(lutEnabled = enabled, lutPath = path)
+        recordTransaction(OperatorType.LUT, "lutEnabled", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
 
     fun updateDisplayTransform(displayTransform: DisplayTransform) {
         _params.value = _params.value.copy(displayTransform = displayTransform)

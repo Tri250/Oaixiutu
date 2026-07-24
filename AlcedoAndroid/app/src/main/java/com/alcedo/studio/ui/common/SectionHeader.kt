@@ -35,7 +35,7 @@ fun SectionHeader(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = AlcedoRadius.md,
+        shape = RoundedCornerShape(AlcedoRadius.md),
         tonalElevation = AlcedoElevation.level1.dp,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
