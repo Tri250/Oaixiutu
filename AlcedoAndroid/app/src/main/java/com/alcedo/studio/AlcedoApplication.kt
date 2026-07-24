@@ -62,10 +62,17 @@ class AlcedoApplication : Application() {
             }
         }
 
-        // AppModule.initialize 不能被吞掉异常 — 如果失败,整个应用的 DI 容器
-        // 将不可用 (所有 AppModule.context 访问都会抛 IllegalStateException),
-        // 导致导入等功能完全瘫痪。必须让初始化失败直接崩溃,让用户立即发现问题。
-        AppModule.initialize(this)
+        // AppModule.initialize — 必须在所有 runSafe 之前完成,因为后续的
+        // onTrimMemory / GPU 初始化都依赖 AppModule.context。
+        // 即使初始化失败也记录完整堆栈,便于排查。如果 DI 容器不可用,
+        // 后续 lazy 属性访问时会抛 IllegalStateException,但不会导致
+        // 应用进程立即死亡——至少能让 CrashHandler 上报崩溃。
+        try {
+            AppModule.initialize(this)
+        } catch (e: Throwable) {
+            Log.e("AlcedoApp", "CRITICAL: AppModule.initialize failed — DI container unavailable", e)
+            // 不再直接让进程死亡; CrashHandler 已安装,会上报此异常
+        }
 
         // 预热数据库: 异步触发 Room 惰性初始化,避免阻塞 Application.onCreate
         // 数据库打开/迁移失败不会影响启动,仅日志记录

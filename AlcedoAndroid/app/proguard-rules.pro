@@ -433,6 +433,10 @@
 -keepclassmembers class * {
     @net.sqlcipher.database.* <fields>;
 }
+# SQLCipher uses JNI to load its native library — must keep the loader class
+-keep class net.zetetic.database.sqlcipher.SQLiteOpenHelper { *; }
+-keep class net.zetetic.database.sqlcipher.SQLiteDatabase { *; }
+-keep class net.zetetic.database.sqlcipher.SQLiteStatement { *; }
 
 # ── Security Crypto ─────────────────────────────────────────────
 -keep class androidx.security.crypto.** { *; }
@@ -529,3 +533,20 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# ── SplashScreen Compat ──────────────────────────────────────────
+# Keep SplashScreen compat internals that may be accessed via reflection
+-keep class androidx.core.splashscreen.** { *; }
+-keep class android.window.SplashScreen { *; }
+-dontwarn android.window.SplashScreen
+
+# ── c++_shared STL ───────────────────────────────────────────────
+# Ensure the c++_shared STL library is not stripped by the packager
+# (AGP should handle this, but explicit jni rule as safety net)
+-keep class * { native <methods>; }
+
+# ── ONNX Runtime native libs ─────────────────────────────────────
+# ONNX Runtime loads native libs via System.loadLibrary in static init
+-keep class ai.onnxruntime.OrtEnvironment$* { *; }
+-keep class ai.onnxruntime.OrtSession$SessionOptions { *; }
+-keep class ai.onnxruntime.OrtSession$* { *; }
