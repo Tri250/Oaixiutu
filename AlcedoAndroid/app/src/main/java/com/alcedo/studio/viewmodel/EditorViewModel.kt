@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -2511,17 +2512,17 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "rawDecode_useCameraMatrix" -> if (p.rawDecodeParams.useCameraMatrix) 1f else 0f
                 else -> {
                     val m = hslHueRegex.matchEntire(key)
-                    if (m != null) return@let hslHueShift[m.groupValues[1].toInt()]
+                    if (m != null) return@let p.hslHueShift[m.groupValues[1].toInt()]
                     val m2 = hslSatRegex.matchEntire(key)
-                    if (m2 != null) return@let hslSaturationScale[m2.groupValues[1].toInt()]
+                    if (m2 != null) return@let p.hslSaturationScale[m2.groupValues[1].toInt()]
                     val m3 = hslLumRegex.matchEntire(key)
-                    if (m3 != null) return@let hslLuminanceScale[m3.groupValues[1].toInt()]
+                    if (m3 != null) return@let p.hslLuminanceScale[m3.groupValues[1].toInt()]
                     val m4 = mixerRegex.matchEntire(key)
-                    if (m4 != null) return@let channelMixerMatrix[m4.groupValues[1].toInt()]
+                    if (m4 != null) return@let p.channelMixerMatrix[m4.groupValues[1].toInt()]
                     val m5 = toneCurveXRegex.matchEntire(key)
-                    if (m5 != null) return@let toneCurveX[m5.groupValues[1].toInt()]
+                    if (m5 != null) return@let p.toneCurveX[m5.groupValues[1].toInt()]
                     val m6 = toneCurveYRegex.matchEntire(key)
-                    if (m6 != null) return@let toneCurveY[m6.groupValues[1].toInt()]
+                    if (m6 != null) return@let p.toneCurveY[m6.groupValues[1].toInt()]
                     value
                 }
             }

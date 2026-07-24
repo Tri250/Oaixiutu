@@ -37,6 +37,7 @@ import com.alcedo.studio.domain.service.WatermarkService
 import com.alcedo.studio.domain.service.WatermarkType
 import com.alcedo.studio.i18n.stringRes
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
