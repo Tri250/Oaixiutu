@@ -88,62 +88,64 @@ class PipelineService {
 
         val finalPixelCount = width * height
 
-        // S2 修复: 直接读取像素到 float 数组,减少中间 IntArray 分配
-        // 节省 pixelCount * 4 字节内存 (对于 2048x2048 约 16MB)
-        val pixels = IntArray(finalPixelCount)
-        sourceBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-        val floatPixels = FloatArray(finalPixelCount * 4)
-        for (i in 0 until finalPixelCount) {
-            val pixel = pixels[i]
-            val base = i * 4
-            floatPixels[base]     = ((pixel shr 16) and 0xFF) / 255.0f
-            floatPixels[base + 1] = ((pixel shr 8) and 0xFF) / 255.0f
-            floatPixels[base + 2] = (pixel and 0xFF) / 255.0f
-            floatPixels[base + 3] = ((pixel shr 24) and 0xFF) / 255.0f
-        }
-
-        // ── 始终使用 CPU 原生管线 ──
-        // GPU 管线仅处理 12 个基础参数，缺少色调曲线/Sigmoid/Color Wheels/
-        // Tint/HSL/Channel Mixer/Film Grain/Halation/LUT/镜头校正/几何/暗角
-        // 以及关键的 Display Transform（色彩科学/EOTF/输出色彩空间），
-        // 导致 GPU 返回非 null 时跳过 CPU 完整管线，线性数据直接显示→花屏。
-        // 修复：禁用 GPU 路径，始终走 CPU 原生管线（126 参数完整管线）。
-        var result: FloatArray? = null
-        // val gpu = gpuPipelineService  // 保留字段供未来 GPU 管线补全后重新启用
         try {
-            val paramsArray = buildParamsArray(params)
-            result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "CPU pipeline failed", e)
+            // S2 修复: 直接读取像素到 float 数组,减少中间 IntArray 分配
+            // 节省 pixelCount * 4 字节内存 (对于 2048x2048 约 16MB)
+            val pixels = IntArray(finalPixelCount)
+            sourceBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+            val floatPixels = FloatArray(finalPixelCount * 4)
+            for (i in 0 until finalPixelCount) {
+                val pixel = pixels[i]
+                val base = i * 4
+                floatPixels[base]     = ((pixel shr 16) and 0xFF) / 255.0f
+                floatPixels[base + 1] = ((pixel shr 8) and 0xFF) / 255.0f
+                floatPixels[base + 2] = (pixel and 0xFF) / 255.0f
+                floatPixels[base + 3] = ((pixel shr 24) and 0xFF) / 255.0f
+            }
+
+            // ── 始终使用 CPU 原生管线 ──
+            // GPU 管线仅处理 12 个基础参数，缺少色调曲线/Sigmoid/Color Wheels/
+            // Tint/HSL/Channel Mixer/Film Grain/Halation/LUT/镜头校正/几何/暗角
+            // 以及关键的 Display Transform（色彩科学/EOTF/输出色彩空间），
+            // 导致 GPU 返回非 null 时跳过 CPU 完整管线，线性数据直接显示→花屏。
+            // 修复：禁用 GPU 路径，始终走 CPU 原生管线（126 参数完整管线）。
+            var result: FloatArray? = null
+            // val gpu = gpuPipelineService  // 保留字段供未来 GPU 管线补全后重新启用
+            try {
+                val paramsArray = buildParamsArray(params)
+                result = nativeBridge.nativeApplyPipelineFloat(floatPixels, width, height, 4, paramsArray)
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "CPU pipeline failed", e)
+            }
+
+            // 修复: 原生管线可能返回 null (例如 NDK 不可用)，需要安全回退
+            if (result == null) {
+                result = floatPixels
+            }
+
+            // Convert back to Bitmap
+            val resultPixels = IntArray(finalPixelCount)
+            for (i in 0 until finalPixelCount) {
+                val idx = i * 4
+                if (idx + 3 >= result.size) break
+                val a = (result[idx + 3].coerceIn(0f, 1f) * 255f).toInt()
+                val r = (result[idx].coerceIn(0f, 1f) * 255f).toInt()
+                val g = (result[idx + 1].coerceIn(0f, 1f) * 255f).toInt()
+                val b = (result[idx + 2].coerceIn(0f, 1f) * 255f).toInt()
+                resultPixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+
+            val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            resultBitmap.setPixels(resultPixels, 0, width, 0, 0, width, height)
+
+            resultBitmap
+        } finally {
+            // S2 修复: 清理降采样临时位图，确保异常路径也能回收
+            if (needsDownscaleCleanup && !sourceBitmap.isRecycled) {
+                sourceBitmap.recycle()
+            }
         }
-
-        // 修复: 原生管线可能返回 null (例如 NDK 不可用)，需要安全回退
-        if (result == null) {
-            result = floatPixels
-        }
-
-        // Convert back to Bitmap
-        val resultPixels = IntArray(finalPixelCount)
-        for (i in 0 until finalPixelCount) {
-            val idx = i * 4
-            if (idx + 3 >= result.size) break
-            val a = (result[idx + 3].coerceIn(0f, 1f) * 255f).toInt()
-            val r = (result[idx].coerceIn(0f, 1f) * 255f).toInt()
-            val g = (result[idx + 1].coerceIn(0f, 1f) * 255f).toInt()
-            val b = (result[idx + 2].coerceIn(0f, 1f) * 255f).toInt()
-            resultPixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
-        }
-
-        val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        resultBitmap.setPixels(resultPixels, 0, width, 0, 0, width, height)
-
-        // S2 修复: 清理降采样临时位图
-        if (needsDownscaleCleanup && !sourceBitmap.isRecycled) {
-            sourceBitmap.recycle()
-        }
-
-        resultBitmap
     }
 
     // ================================================================

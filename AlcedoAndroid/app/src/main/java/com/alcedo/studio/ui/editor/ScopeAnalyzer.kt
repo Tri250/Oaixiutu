@@ -61,20 +61,29 @@ data class ChromaticityPoint(
 
 object ScopeAnalyzer {
 
+    // Maximum dimension for scope computation — prevents OOM on images with
+    // extreme aspect ratios where one dimension stays very large even after
+    // pixel-based downsampling (e.g. 40000×30 → 18680×14 without this cap).
+    private const val SCOPE_MAX_DIMENSION = 512
+
     // Maximum pixels for scope computation — images larger than this are
     // downscaled to avoid excessive memory usage and computation time.
-    private const val SCOPE_MAX_PIXELS = 512 * 512
+    private const val SCOPE_MAX_PIXELS = SCOPE_MAX_DIMENSION * SCOPE_MAX_DIMENSION
 
     /**
-     * Downsample a bitmap to [SCOPE_MAX_PIXELS] if it exceeds that limit.
+     * Downsample a bitmap to fit within both [SCOPE_MAX_PIXELS] and
+     * [SCOPE_MAX_DIMENSION] if it exceeds those limits.
      * Returns the original bitmap if already small enough.
      */
     private fun Bitmap.downsampleForScope(): Bitmap {
         val pixels = width.toLong() * height.toLong()
-        if (pixels <= SCOPE_MAX_PIXELS) return this
-        val scale = kotlin.math.sqrt(SCOPE_MAX_PIXELS.toFloat() / pixels.toFloat())
-        val newW = (width * scale).toInt().coerceAtLeast(1)
-        val newH = (height * scale).toInt().coerceAtLeast(1)
+        if (pixels <= SCOPE_MAX_PIXELS && max(width, height) <= SCOPE_MAX_DIMENSION) return this
+        // Compute scale to satisfy both pixel budget and max dimension
+        val pixelScale = if (pixels > SCOPE_MAX_PIXELS) kotlin.math.sqrt(SCOPE_MAX_PIXELS.toFloat() / pixels.toFloat()) else 1f
+        val dimScale = SCOPE_MAX_DIMENSION.toFloat() / max(width, height)
+        val scale = minOf(pixelScale, dimScale)
+        val newW = (width * scale).toInt().coerceIn(1, SCOPE_MAX_DIMENSION)
+        val newH = (height * scale).toInt().coerceIn(1, SCOPE_MAX_DIMENSION)
         return Bitmap.createScaledBitmap(this, newW, newH, true)
     }
 

@@ -128,7 +128,8 @@ void MaskOperator::combine_masks(float* mask_out, const float* mask_a, const flo
 void MaskOperator::generate_brush_mask(float* mask, int width, int height, const MaskParams& params) {
     if (params.brush_points.empty()) return;
 
-    const float radius_px = params.brush_size * static_cast<float>(width);
+    float effective_radius = std::max(1.0f, params.brush_size * std::min(width, height));
+    const float radius_px = effective_radius;
     const float hardness = std::clamp(params.brush_hardness, 0.0f, 1.0f);
     const float opacity = std::clamp(params.brush_opacity, 0.0f, 1.0f);
     const float transition = radius_px * (1.0f - hardness);

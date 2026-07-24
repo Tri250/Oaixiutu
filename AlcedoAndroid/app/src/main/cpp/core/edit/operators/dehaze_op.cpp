@@ -115,6 +115,8 @@ void DehazeOperator::box_blur(const float* src, float* dst, int width, int heigh
 
 void DehazeOperator::apply_rgb(float* pixels, int width, int height, float amount, int radius) {
     if (amount == 0.0f || width <= 0 || height <= 0) return;
+    // Early exit if no dehaze needed
+    if (std::abs(amount) < 1e-6f) return;
     int channels = 3;
     size_t pixel_count = static_cast<size_t>(width) * height;
 
@@ -181,6 +183,8 @@ void DehazeOperator::apply_rgb(float* pixels, int width, int height, float amoun
 
 void DehazeOperator::apply_rgba(float* pixels, int width, int height, float amount, int radius) {
     if (amount == 0.0f || width <= 0 || height <= 0) return;
+    // Early exit if no dehaze needed
+    if (std::abs(amount) < 1e-6f) return;
     int channels = 4;
     size_t pixel_count = static_cast<size_t>(width) * height;
 

@@ -62,6 +62,8 @@ void TextureOperator::box_blur(float* src, float* dst, int width, int height, in
 
 void TextureOperator::apply_rgb(float* pixels, int width, int height, float amount, int radius) {
     if (amount == 0.0f || radius <= 0 || width <= 0 || height <= 0) return;
+    // Early exit if no texture adjustment needed
+    if (std::abs(amount) < 1e-6f) return;
     int channels = 3;
     size_t size = static_cast<size_t>(width) * height * channels;
 
@@ -85,6 +87,8 @@ void TextureOperator::apply_rgb(float* pixels, int width, int height, float amou
 
 void TextureOperator::apply_rgba(float* pixels, int width, int height, float amount, int radius) {
     if (amount == 0.0f || radius <= 0 || width <= 0 || height <= 0) return;
+    // Early exit if no texture adjustment needed
+    if (std::abs(amount) < 1e-6f) return;
     int channels = 4;
     size_t size = static_cast<size_t>(width) * height * channels;
 

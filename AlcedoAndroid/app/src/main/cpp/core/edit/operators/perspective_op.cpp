@@ -38,6 +38,7 @@ void PerspectiveOperator::bilinear_sample(const float* src, int width, int heigh
                  v10 * fx * (1.0f - fy) +
                  v01 * (1.0f - fx) * fy +
                  v11 * fx * fy;
+        if (!std::isfinite(out[c])) out[c] = 0.0f;
     }
 }
 
