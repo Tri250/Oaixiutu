@@ -64,6 +64,8 @@ add_library(
     core/edit/operators/vibrance_op.cpp
     core/edit/operators/tint_op.cpp
     core/edit/operators/clarity_op.cpp
+    core/edit/operators/dehaze_op.cpp
+    core/edit/operators/texture_op.cpp
     core/edit/operators/tone_region_op.cpp
     core/edit/operators/hsl_op.cpp
     core/edit/operators/color_wheel_op.cpp
@@ -77,6 +79,7 @@ add_library(
     core/edit/operators/auto_exposure_op.cpp
     core/edit/operators/lens_correction_op.cpp
     core/edit/operators/geometry_op.cpp
+    core/edit/operators/perspective_op.cpp
     core/edit/operators/operator_factory.cpp
     core/edit/operators/black_op.cpp
     core/edit/operators/white_op.cpp
@@ -93,6 +96,7 @@ add_library(
     core/edit/operators/lmt_op.cpp
     core/edit/operators/cv_cvt_op.cpp
     core/edit/operators/raw_decode_op.cpp
+    core/edit/operators/mask_op.cpp
     core/edit/scope/scope_analyzer.cpp
     core/renderer/pipeline_scheduler.cpp
     core/ai/clip_inference.cpp

@@ -24,6 +24,7 @@ import com.alcedo.studio.ui.editor.HistogramChannel
 import com.alcedo.studio.ui.editor.HistogramScale
 import com.alcedo.studio.ui.editor.ScopeAnalyzer
 import com.alcedo.studio.ui.editor.WaveformMode
+import com.alcedo.studio.ui.editor.ScopeChannel
 import com.alcedo.studio.ui.editor.BrushState
 import com.alcedo.studio.ui.editor.CompareMode
 import com.alcedo.studio.utils.MemoryGuard
@@ -207,6 +208,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     // ── Masks (AI local adjustments) ──
 
     val maskRenderService by lazy { AppModule.maskRenderService }
+    val maskService by lazy { AppModule.maskService }
 
     private val _maskContainers = MutableStateFlow<List<MaskContainer>>(emptyList())
     val maskContainers: StateFlow<List<MaskContainer>> = _maskContainers.asStateFlow()
@@ -347,6 +349,9 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     private val _waveformMode = MutableStateFlow(WaveformMode.RGB_PARADE)
     val waveformMode: StateFlow<WaveformMode> = _waveformMode.asStateFlow()
 
+    private val _scopeChannel = MutableStateFlow(ScopeChannel.RGB_PARADE)
+    val scopeChannel: StateFlow<ScopeChannel> = _scopeChannel.asStateFlow()
+
     private val _gamutOverlay = MutableStateFlow(setOf(GamutOverlay.SRGB))
     val gamutOverlay: StateFlow<Set<GamutOverlay>> = _gamutOverlay.asStateFlow()
 
@@ -360,6 +365,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     fun updateHistogramChannel(channel: HistogramChannel) { _histogramChannel.value = channel }
     fun updateHistogramScale(scale: HistogramScale) { _histogramScale.value = scale }
     fun updateWaveformMode(mode: WaveformMode) { _waveformMode.value = mode }
+    fun updateScopeChannel(channel: ScopeChannel) { _scopeChannel.value = channel }
     fun updateGamutOverlay(overlay: Set<GamutOverlay>) { _gamutOverlay.value = overlay }
     fun toggleShowExport() { _showExport.value = !_showExport.value }
     fun dismissExport() { _showExport.value = false }
@@ -630,6 +636,32 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         }
     }
     fun updateClarityDrag(amount: Float, radius: Float = 15f) = updateClarity(amount, radius, intermediate = true)
+
+    fun updateDehaze(amount: Float, radius: Int = 7, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(dehazeAmount = amount, dehazeRadius = radius)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(dehazeAmount = amount, dehazeRadius = radius)
+            recordTransaction(OperatorType.DEHAZE, "dehazeAmount", amount)
+            recordTransaction(OperatorType.DEHAZE, "dehazeRadius", radius.toFloat())
+            regeneratePreview()
+        }
+    }
+    fun updateDehazeDrag(amount: Float, radius: Int = 7) = updateDehaze(amount, radius, intermediate = true)
+
+    fun updateTexture(amount: Float, radius: Int = 2, intermediate: Boolean = false) {
+        if (intermediate) {
+            _params.value = _params.value.copy(textureAmount = amount, textureRadius = radius)
+            regeneratePreview(isIntermediate = true)
+        } else {
+            _params.value = _params.value.copy(textureAmount = amount, textureRadius = radius)
+            recordTransaction(OperatorType.TEXTURE, "textureAmount", amount)
+            recordTransaction(OperatorType.TEXTURE, "textureRadius", radius.toFloat())
+            regeneratePreview()
+        }
+    }
+    fun updateTextureDrag(amount: Float, radius: Int = 2) = updateTexture(amount, radius, intermediate = true)
 
     fun updateSharpen(value: Float) {
         _params.value = _params.value.copy(sharpenAmount = value)
@@ -1053,6 +1085,53 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         regeneratePreview()
     }
 
+    // ── Perspective correction (4-point homography) ──
+
+    fun updatePerspectiveCorner(index: Int, x: Float, y: Float) {
+        val current = _params.value.perspectiveCorners.copyOf()
+        if (index in 0..3) {
+            current[index * 2] = x
+            current[index * 2 + 1] = y
+        }
+        _params.value = _params.value.copy(perspectiveCorners = current)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveCorner_$index", x)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveCorrectionMode(mode: Int) {
+        _params.value = _params.value.copy(perspectiveCorrectionMode = mode)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveCorrectionMode", mode.toFloat())
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveCorrectionAmount(amount: Float) {
+        _params.value = _params.value.copy(perspectiveCorrectionAmount = amount)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveCorrectionAmount", amount)
+        regeneratePreview()
+    }
+
+    fun updatePerspectiveShowGrid(show: Boolean) {
+        _params.value = _params.value.copy(perspectiveShowGrid = show)
+    }
+
+    fun updatePerspectiveAutoDetect(enabled: Boolean) {
+        _params.value = _params.value.copy(perspectiveAutoDetect = enabled)
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveAutoDetect", if (enabled) 1f else 0f)
+        regeneratePreview()
+    }
+
+    fun resetPerspectiveCorrection() {
+        _params.value = _params.value.copy(
+            perspectiveCorners = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
+            perspectiveCorrectionMode = 4, // FULL
+            perspectiveCorrectionAmount = 100f,
+            perspectiveShowGrid = true,
+            perspectiveAutoDetect = false
+        )
+        recordTransaction(OperatorType.PERSPECTIVE, "perspectiveCorrectionAmount", 100f)
+        regeneratePreview()
+    }
+
     // ── Lens correction toggles and amounts ──
 
     fun updateLensAutoDetect(enabled: Boolean) {
@@ -1350,6 +1429,8 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         if (old.whiteBalanceTemp != newParams.whiteBalanceTemp) recordTransaction(operatorType, "whiteBalanceTemp", newParams.whiteBalanceTemp)
         if (old.whiteBalanceTint != newParams.whiteBalanceTint) recordTransaction(operatorType, "whiteBalanceTint", newParams.whiteBalanceTint)
         if (old.clarityAmount != newParams.clarityAmount) recordTransaction(operatorType, "clarityAmount", newParams.clarityAmount)
+        if (old.dehazeAmount != newParams.dehazeAmount) recordTransaction(operatorType, "dehazeAmount", newParams.dehazeAmount)
+        if (old.textureAmount != newParams.textureAmount) recordTransaction(operatorType, "textureAmount", newParams.textureAmount)
         if (old.sharpenAmount != newParams.sharpenAmount) recordTransaction(operatorType, "sharpenAmount", newParams.sharpenAmount)
         if (old.filmGrainIntensity != newParams.filmGrainIntensity) recordTransaction(operatorType, "filmGrainIntensity", newParams.filmGrainIntensity)
         if (old.halationIntensity != newParams.halationIntensity) recordTransaction(operatorType, "halationIntensity", newParams.halationIntensity)
@@ -1375,6 +1456,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         if (old.perspectiveScale != newParams.perspectiveScale) recordTransaction(operatorType, "perspectiveScale", newParams.perspectiveScale)
         if (old.perspectiveXOffset != newParams.perspectiveXOffset) recordTransaction(operatorType, "perspectiveXOffset", newParams.perspectiveXOffset)
         if (old.perspectiveYOffset != newParams.perspectiveYOffset) recordTransaction(operatorType, "perspectiveYOffset", newParams.perspectiveYOffset)
+
+        // ── Perspective correction (4-point) 字段对比 ──
+        if (!old.perspectiveCorners.contentEquals(newParams.perspectiveCorners)) {
+            for (i in 0 until 4) {
+                recordTransaction(operatorType, "perspectiveCorner_$i", newParams.perspectiveCorners[i * 2])
+            }
+        }
+        if (old.perspectiveCorrectionMode != newParams.perspectiveCorrectionMode) recordTransaction(operatorType, "perspectiveCorrectionMode", newParams.perspectiveCorrectionMode.toFloat())
+        if (old.perspectiveCorrectionAmount != newParams.perspectiveCorrectionAmount) recordTransaction(operatorType, "perspectiveCorrectionAmount", newParams.perspectiveCorrectionAmount)
 
         // ── Lens correction 字段对比 ──
         if (old.lensAutoDetect != newParams.lensAutoDetect) recordTransaction(operatorType, "lensAutoDetect", if (newParams.lensAutoDetect) 1f else 0f)
@@ -2425,6 +2515,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "vibrance" -> p.vibrance
                 "clarityAmount" -> p.clarityAmount
                 "clarityRadius" -> p.clarityRadius
+                "dehazeAmount" -> p.dehazeAmount
+                "dehazeRadius" -> p.dehazeRadius.toFloat()
+                "textureAmount" -> p.textureAmount
+                "textureRadius" -> p.textureRadius.toFloat()
                 "sharpenAmount" -> p.sharpenAmount
                 "filmGrainIntensity" -> p.filmGrainIntensity
                 "halationIntensity" -> p.halationIntensity
@@ -2470,6 +2564,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 "perspectiveScale" -> p.perspectiveScale
                 "perspectiveXOffset" -> p.perspectiveXOffset
                 "perspectiveYOffset" -> p.perspectiveYOffset
+                "perspectiveCorrectionMode" -> p.perspectiveCorrectionMode.toFloat()
+                "perspectiveCorrectionAmount" -> p.perspectiveCorrectionAmount
+                "perspectiveShowGrid" -> if (p.perspectiveShowGrid) 1f else 0f
+                "perspectiveAutoDetect" -> if (p.perspectiveAutoDetect) 1f else 0f
                 "cropRotation" -> p.cropRotation.toFloat()
                 "cropFlipHorizontal" -> if (p.cropFlipHorizontal) 1f else 0f
                 "cropFlipVertical" -> if (p.cropFlipVertical) 1f else 0f
@@ -2629,6 +2727,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "vibrance" -> reconstructed.copy(vibrance = floatValue)
                     "clarityAmount" -> reconstructed.copy(clarityAmount = floatValue)
                     "clarityRadius" -> reconstructed.copy(clarityRadius = floatValue)
+                    "dehazeAmount" -> reconstructed.copy(dehazeAmount = floatValue)
+                    "dehazeRadius" -> reconstructed.copy(dehazeRadius = floatValue.toInt())
+                    "textureAmount" -> reconstructed.copy(textureAmount = floatValue)
+                    "textureRadius" -> reconstructed.copy(textureRadius = floatValue.toInt())
                     "sharpenAmount" -> reconstructed.copy(sharpenAmount = floatValue)
                     "filmGrainIntensity" -> reconstructed.copy(filmGrainIntensity = floatValue)
                     "halationIntensity" -> reconstructed.copy(halationIntensity = floatValue)
@@ -2675,6 +2777,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                     "perspectiveScale" -> reconstructed.copy(perspectiveScale = floatValue)
                     "perspectiveXOffset" -> reconstructed.copy(perspectiveXOffset = floatValue)
                     "perspectiveYOffset" -> reconstructed.copy(perspectiveYOffset = floatValue)
+                    "perspectiveCorrectionMode" -> reconstructed.copy(perspectiveCorrectionMode = floatValue.toInt())
+                    "perspectiveCorrectionAmount" -> reconstructed.copy(perspectiveCorrectionAmount = floatValue)
+                    "perspectiveShowGrid" -> reconstructed.copy(perspectiveShowGrid = floatValue != 0f)
+                    "perspectiveAutoDetect" -> reconstructed.copy(perspectiveAutoDetect = floatValue != 0f)
                     "cropRotation" -> reconstructed.copy(cropRotation = floatValue.toInt())
                     "cropFlipHorizontal" -> reconstructed.copy(cropFlipHorizontal = floatValue != 0f)
                     "cropFlipVertical" -> reconstructed.copy(cropFlipVertical = floatValue != 0f)
@@ -2963,6 +3069,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         map["colorWheelGainB"] = JsonPrimitive(p.colorWheelGainB)
         map["clarityAmount"] = JsonPrimitive(p.clarityAmount)
         map["clarityRadius"] = JsonPrimitive(p.clarityRadius)
+        map["dehazeAmount"] = JsonPrimitive(p.dehazeAmount)
+        map["dehazeRadius"] = JsonPrimitive(p.dehazeRadius)
+        map["textureAmount"] = JsonPrimitive(p.textureAmount)
+        map["textureRadius"] = JsonPrimitive(p.textureRadius)
         map["sharpenAmount"] = JsonPrimitive(p.sharpenAmount)
         map["filmGrainIntensity"] = JsonPrimitive(p.filmGrainIntensity)
         map["halationIntensity"] = JsonPrimitive(p.halationIntensity)
@@ -3001,6 +3111,11 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
         map["perspectiveScale"] = JsonPrimitive(p.perspectiveScale)
         map["perspectiveXOffset"] = JsonPrimitive(p.perspectiveXOffset)
         map["perspectiveYOffset"] = JsonPrimitive(p.perspectiveYOffset)
+        // Perspective correction (4-point)
+        map["perspectiveCorrectionMode"] = JsonPrimitive(p.perspectiveCorrectionMode)
+        map["perspectiveCorrectionAmount"] = JsonPrimitive(p.perspectiveCorrectionAmount)
+        map["perspectiveShowGrid"] = JsonPrimitive(p.perspectiveShowGrid)
+        map["perspectiveAutoDetect"] = JsonPrimitive(p.perspectiveAutoDetect)
         // Lens profile + correction toggles/amounts
         map["lensAutoDetect"] = JsonPrimitive(p.lensAutoDetect)
         map["lensMaker"] = JsonPrimitive(p.lensMaker)
@@ -3108,6 +3223,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 colorWheelGainB = f("colorWheelGainB", 1f),
                 clarityAmount = f("clarityAmount"),
                 clarityRadius = f("clarityRadius", 15f),
+                dehazeAmount = f("dehazeAmount"),
+                dehazeRadius = f("dehazeRadius", 7f).toInt(),
+                textureAmount = f("textureAmount"),
+                textureRadius = f("textureRadius", 2f).toInt(),
                 sharpenAmount = f("sharpenAmount"),
                 filmGrainIntensity = f("filmGrainIntensity"),
                 halationIntensity = f("halationIntensity"),
@@ -3141,6 +3260,10 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
                 perspectiveScale = f("perspectiveScale"),
                 perspectiveXOffset = f("perspectiveXOffset"),
                 perspectiveYOffset = f("perspectiveYOffset"),
+                perspectiveCorrectionMode = f("perspectiveCorrectionMode").toInt(),
+                perspectiveCorrectionAmount = f("perspectiveCorrectionAmount"),
+                perspectiveShowGrid = json["perspectiveShowGrid"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+                perspectiveAutoDetect = json["perspectiveAutoDetect"]?.jsonPrimitive?.content?.toBoolean() ?: false,
                 lensAutoDetect = json["lensAutoDetect"]?.jsonPrimitive?.content?.toBoolean() ?: false,
                 lensMaker = json["lensMaker"]?.jsonPrimitive?.content ?: "",
                 lensModel = json["lensModel"]?.jsonPrimitive?.content ?: "",
@@ -3223,6 +3346,17 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     }
 
     /**
+     * Apply a [BuiltinPreset] from the built-in preset library.
+     * Replaces all pipeline parameters and syncs derived UI state so editor
+     * panels reflect the change immediately. No database access needed.
+     */
+    fun applyBuiltinPreset(preset: com.alcedo.studio.data.preset.BuiltinPreset) {
+        applyPresetParams(preset.params)
+        recordTransaction(OperatorType.PRESET, "applyBuiltinPreset:${preset.nameZh}", 0f)
+        showSnackbar("预设已应用")
+    }
+
+    /**
      * Applies a [PipelineParams] (e.g. loaded from a database preset) and syncs
      * all derived UI state (tone curve / color wheels / HSL) so the editor
      * panels reflect the preset immediately.
@@ -3283,6 +3417,15 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
     /** Legacy convenience overload that only takes a name. */
     fun saveCurrentAsPreset(name: String) {
         saveCurrentAsPreset(name, "Custom")
+    }
+
+    /**
+     * Saves the current pipeline state as a named preset using [PresetCategory].
+     * Converts the category to a string for database storage.
+     */
+    fun saveCurrentAsPreset(name: String, category: com.alcedo.studio.data.preset.PresetCategory) {
+        val categoryStr = PresetService.categoryToString(category)
+        saveCurrentAsPreset(name, categoryStr)
     }
 
     /** Deletes a database-backed preset by its row id. */
@@ -3498,6 +3641,70 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
             Log.e("EditorVM", "applyMasksToPreview failed", e)
             source
         }
+    }
+
+    /** Update a specific sub-mask's params within a container. */
+    fun updateSubMaskParams(containerId: String, subMaskId: String, params: MaskParams) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                container.copy(
+                    subMasks = container.subMasks.map { sub ->
+                        if (sub.id == subMaskId) sub.copy(params = params) else sub
+                    }
+                )
+            } else container
+        }
+        maskRenderService.invalidate(subMaskId)
+        regenerateMaskPreview()
+    }
+
+    /** Toggle the visibility of a specific sub-mask. */
+    fun toggleSubMaskVisibility(containerId: String, subMaskId: String) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                container.copy(
+                    subMasks = container.subMasks.map { sub ->
+                        if (sub.id == subMaskId) sub.copy(visible = !sub.visible) else sub
+                    }
+                )
+            } else container
+        }
+        regenerateMaskPreview()
+    }
+
+    /** Toggle the inversion of a specific sub-mask. */
+    fun toggleSubMaskInversion(containerId: String, subMaskId: String) {
+        _maskContainers.value = _maskContainers.value.map { container ->
+            if (container.id == containerId) {
+                container.copy(
+                    subMasks = container.subMasks.map { sub ->
+                        if (sub.id == subMaskId) sub.copy(inverted = !sub.inverted) else sub
+                    }
+                )
+            } else container
+        }
+        maskRenderService.invalidate(subMaskId)
+        regenerateMaskPreview()
+    }
+
+    /** Generate a mask for a sub-mask using the native MaskService. */
+    suspend fun generateNativeSubMask(containerId: String, subMaskId: String): FloatArray? {
+        val container = _maskContainers.value.firstOrNull { it.id == containerId } ?: return null
+        val sub = container.subMasks.firstOrNull { it.id == subMaskId } ?: return null
+        val source = previewSourceBitmap ?: _originalBitmap.value ?: return null
+        return try {
+            maskService.generateSubMask(sub, source)
+        } catch (e: Throwable) {
+            Log.e("EditorVM", "generateNativeSubMask failed", e)
+            null
+        }
+    }
+
+    /** Clear all mask containers. */
+    fun clearAllMasks() {
+        _maskContainers.value = emptyList()
+        maskRenderService.invalidate()
+        _maskPreviewBitmap.value = null
     }
 
     private fun maskTypeName(type: MaskType): String = when (type) {

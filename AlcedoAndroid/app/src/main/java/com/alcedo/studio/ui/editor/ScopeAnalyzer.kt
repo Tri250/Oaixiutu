@@ -61,21 +61,39 @@ data class ChromaticityPoint(
 
 object ScopeAnalyzer {
 
+    // Maximum pixels for scope computation — images larger than this are
+    // downscaled to avoid excessive memory usage and computation time.
+    private const val SCOPE_MAX_PIXELS = 512 * 512
+
+    /**
+     * Downsample a bitmap to [SCOPE_MAX_PIXELS] if it exceeds that limit.
+     * Returns the original bitmap if already small enough.
+     */
+    private fun Bitmap.downsampleForScope(): Bitmap {
+        val pixels = width.toLong() * height.toLong()
+        if (pixels <= SCOPE_MAX_PIXELS) return this
+        val scale = kotlin.math.sqrt(SCOPE_MAX_PIXELS.toFloat() / pixels.toFloat())
+        val newW = (width * scale).toInt().coerceAtLeast(1)
+        val newH = (height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(this, newW, newH, true)
+    }
+
     // ── Histogram ──────────────────────────────────────────────────────
 
     suspend fun computeHistogram(bitmap: Bitmap?): HistogramData =
         withContext(Dispatchers.Default) {
             if (bitmap == null) return@withContext HistogramData()
 
+            val src = bitmap.downsampleForScope()
             val r = FloatArray(256)
             val g = FloatArray(256)
             val b = FloatArray(256)
             val lum = FloatArray(256)
 
-            val w = bitmap.width
-            val h = bitmap.height
+            val w = src.width
+            val h = src.height
             val pixels = IntArray(w * h)
-            bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+            src.getPixels(pixels, 0, w, 0, 0, w, h)
 
             var rMax = 0f
             var gMax = 0f
@@ -117,10 +135,11 @@ object ScopeAnalyzer {
     ): WaveformData = withContext(Dispatchers.Default) {
         if (bitmap == null) return@withContext WaveformData()
 
-        val srcW = bitmap.width
-        val srcH = bitmap.height
+        val src = bitmap.downsampleForScope()
+        val srcW = src.width
+        val srcH = src.height
         val pixels = IntArray(srcW * srcH)
-        bitmap.getPixels(pixels, 0, srcW, 0, 0, srcW, srcH)
+        src.getPixels(pixels, 0, srcW, 0, 0, srcW, srcH)
 
         val cols = targetColumns
         val rows = targetRows
@@ -194,10 +213,11 @@ object ScopeAnalyzer {
     ): VectorscopeData = withContext(Dispatchers.Default) {
         if (bitmap == null) return@withContext VectorscopeData()
 
-        val w = bitmap.width
-        val h = bitmap.height
+        val src = bitmap.downsampleForScope()
+        val w = src.width
+        val h = src.height
         val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        src.getPixels(pixels, 0, w, 0, 0, w, h)
 
         val bins = IntArray(size * size)
 
@@ -235,10 +255,11 @@ object ScopeAnalyzer {
     ): ChromaticityData = withContext(Dispatchers.Default) {
         if (bitmap == null) return@withContext ChromaticityData()
 
-        val w = bitmap.width
-        val h = bitmap.height
+        val src = bitmap.downsampleForScope()
+        val w = src.width
+        val h = src.height
         val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        src.getPixels(pixels, 0, w, 0, 0, w, h)
 
         val totalPixels = w * h
         val step = max(1, totalPixels / maxPoints)

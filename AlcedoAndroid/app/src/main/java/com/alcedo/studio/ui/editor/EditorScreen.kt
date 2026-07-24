@@ -86,7 +86,7 @@ fun EditorScreen(
     val selectedScopeType by viewModel.selectedScopeType.collectAsStateWithLifecycle()
     val histogramChannel by viewModel.histogramChannel.collectAsStateWithLifecycle()
     val histogramScale by viewModel.histogramScale.collectAsStateWithLifecycle()
-    val waveformMode by viewModel.waveformMode.collectAsStateWithLifecycle()
+    val scopeChannel by viewModel.scopeChannel.collectAsStateWithLifecycle()
     val gamutOverlay by viewModel.gamutOverlay.collectAsStateWithLifecycle()
     val compareMode by viewModel.compareMode.collectAsStateWithLifecycle()
     val overlayOpacity by viewModel.overlayOpacity.collectAsStateWithLifecycle()
@@ -553,8 +553,20 @@ fun EditorScreen(
                                             }
                                         )
                                     }
-                                    EditorPanel.INSPECTOR -> ImageInspectorPanel(
-                                        image = viewModel.imageModel.value
+                                    EditorPanel.INSPECTOR -> InspectorPanel(
+                                        histogramData = histogramData,
+                                        waveformData = waveformData,
+                                        vectorscopeData = vectorscopeData,
+                                        image = viewModel.imageModel.value,
+                                        histogramChannel = histogramChannel,
+                                        onHistogramChannelChange = { viewModel.updateHistogramChannel(it) },
+                                        histogramScale = histogramScale,
+                                        onHistogramScaleChange = { viewModel.updateHistogramScale(it) },
+                                        showClippingWarning = showClippingWarning,
+                                        onToggleClippingWarning = { viewModel.toggleClippingWarning() },
+                                        scopeChannel = scopeChannel,
+                                        onScopeChannelChange = { viewModel.updateScopeChannel(it) },
+                                        isComputing = isScopeComputing
                                     )
                                     EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
                                     EditorPanel.MASKS -> MaskPanel(
@@ -590,8 +602,8 @@ fun EditorScreen(
                     showClippingWarning = showClippingWarning,
                     onToggleClippingWarning = { viewModel.toggleClippingWarning() },
                     waveformData = waveformData,
-                    waveformMode = waveformMode,
-                    onWaveformModeChange = { viewModel.updateWaveformMode(it) },
+                    scopeChannel = scopeChannel,
+                    onScopeChannelChange = { viewModel.updateScopeChannel(it) },
                     vectorscopeData = vectorscopeData,
                     chromaticityData = chromaticityData,
                     gamutOverlay = gamutOverlay,
@@ -639,8 +651,8 @@ private fun ScopeAnalyzerPanel(
     showClippingWarning: Boolean,
     onToggleClippingWarning: () -> Unit,
     waveformData: WaveformData,
-    waveformMode: WaveformMode,
-    onWaveformModeChange: (WaveformMode) -> Unit,
+    scopeChannel: ScopeChannel,
+    onScopeChannelChange: (ScopeChannel) -> Unit,
     vectorscopeData: VectorscopeData,
     chromaticityData: ChromaticityData,
     gamutOverlay: Set<GamutOverlay>,
@@ -776,22 +788,22 @@ private fun ScopeAnalyzerPanel(
                     }
                 }
                 ScopeType.WAVEFORM -> {
-                    WaveformView(
+                    WaveformScope(
                         waveformData = waveformData,
-                        mode = waveformMode,
+                        channel = scopeChannel,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        WaveformMode.entries.forEach { m ->
+                        ScopeChannel.entries.forEach { ch ->
                             FilterChip(
-                                selected = waveformMode == m,
-                                onClick = { onWaveformModeChange(m) },
+                                selected = scopeChannel == ch,
+                                onClick = { onScopeChannelChange(ch) },
                                 label = {
                                     Text(
-                                        m.label,
+                                        ch.label,
                                         style = MaterialTheme.typography.labelSmall
                                     )
                                 },
@@ -1193,8 +1205,20 @@ private fun EditorPanelColumn(
                         }
                     )
                 }
-                EditorPanel.INSPECTOR -> ImageInspectorPanel(
-                    image = viewModel.imageModel.value
+                EditorPanel.INSPECTOR -> InspectorPanel(
+                    histogramData = histogramData,
+                    waveformData = waveformData,
+                    vectorscopeData = vectorscopeData,
+                    image = viewModel.imageModel.value,
+                    histogramChannel = histogramChannel,
+                    onHistogramChannelChange = { viewModel.updateHistogramChannel(it) },
+                    histogramScale = histogramScale,
+                    onHistogramScaleChange = { viewModel.updateHistogramScale(it) },
+                    showClippingWarning = showClippingWarning,
+                    onToggleClippingWarning = { viewModel.toggleClippingWarning() },
+                    scopeChannel = scopeChannel,
+                    onScopeChannelChange = { viewModel.updateScopeChannel(it) },
+                    isComputing = isScopeComputing
                 )
                 EditorPanel.LENS_CORRECTION -> LensCorrectionPanel(viewModel = viewModel)
                 EditorPanel.MASKS -> MaskPanel(

@@ -39,6 +39,7 @@ enum class OperatorType {
     ODT,
     LMT,
     CV_CVT,
+    MASK,
     UNKNOWN
 };
 
@@ -49,7 +50,8 @@ enum class PipelineStageName {
     Basic_Adjustment = 3,
     Color_Adjustment = 4,
     Detail_Adjustment = 5,
-    Output_Transform = 6
+    Mask_Adjustment = 6,
+    Output_Transform = 7
 };
 
 class IOperatorBase {

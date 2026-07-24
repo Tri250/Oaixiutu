@@ -328,6 +328,14 @@ data class PipelineParams(
     val clarityAmount: Float = 0f,
     val clarityRadius: Float = 15f,
 
+    // Dehaze
+    val dehazeAmount: Float = 0f,
+    val dehazeRadius: Int = 7,
+
+    // Texture
+    val textureAmount: Float = 0f,
+    val textureRadius: Int = 2,
+
     // Sharpen
     val sharpenAmount: Float = 0f,
 
@@ -376,6 +384,14 @@ data class PipelineParams(
     val perspectiveXOffset: Float = 0f,
     val perspectiveYOffset: Float = 0f,
 
+    // Perspective correction (4-point homography)
+    // 4 corners: [TLx, TLy, TRx, TRy, BRx, BRy, BLx, BLy] normalized 0-1
+    val perspectiveCorners: FloatArray = floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f),
+    val perspectiveCorrectionMode: Int = 4, // PerspectiveMode.FULL
+    val perspectiveCorrectionAmount: Float = 100f, // 0-100
+    val perspectiveShowGrid: Boolean = true,
+    val perspectiveAutoDetect: Boolean = false,
+
     // Lens correction
     val lensK1: Float = 0f,
     val lensK2: Float = 0f,
@@ -409,7 +425,14 @@ data class PipelineParams(
     val displayTransform: DisplayTransform = DisplayTransform(),
 
     // RAW decode
-    val rawDecodeParams: RawDecodeParams = RawDecodeParams()
+    val rawDecodeParams: RawDecodeParams = RawDecodeParams(),
+
+    // ── Mask ──
+    val maskEnabled: Boolean = false,
+    val maskType: Int = 0,              // 0=Brush, 1=Linear, 2=Radial, 3=Luminosity, 4=ColorRange, 5=WholeImage
+    val maskOpacity: Float = 1.0f,
+    val maskInverted: Boolean = false,
+    val maskFeather: Float = 0.2f
 )
 
 data class DisplayTransform(

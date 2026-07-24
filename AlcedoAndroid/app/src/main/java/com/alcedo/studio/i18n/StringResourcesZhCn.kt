@@ -258,6 +258,17 @@ class ChineseSimplifiedStrings : StringResources {
     override val cropCorrectTca = "色差校正"
     override val cropAmount = "强度"
 
+    // Perspective correction (4-point)
+    override val perspectiveMode = "校正模式"
+    override val perspectiveModeManual = "手动"
+    override val perspectiveModeVertical = "垂直"
+    override val perspectiveModeHorizontal = "水平"
+    override val perspectiveModeVH = "垂直+水平"
+    override val perspectiveModeFull = "四点自由"
+    override val perspectiveAmount = "校正强度"
+    override val perspectiveShowGrid = "显示网格"
+    override val perspectiveAutoDetect = "自动检测"
+
     // Effects panel
     override val editorSectionLuminanceDenoise = "亮度降噪"
     override val editorSectionChromaDenoise = "色彩降噪"
@@ -279,6 +290,8 @@ class ChineseSimplifiedStrings : StringResources {
     override val effectsShowSharpeningMask = "显示锐化蒙版"
     override val editorAmount = "数量"
     override val editorSectionClarity = "清晰度"
+    override val editorDehaze = "去雾"
+    override val editorTexture = "纹理"
     override val effectsResetClarity = "重置清晰度"
     override val editorRadius = "半径"
     override val editorSectionVignette = "暗角"
@@ -632,6 +645,8 @@ class ChineseSimplifiedStrings : StringResources {
     override val presetCategoryLandscape = "风景"
     override val presetCategoryBW = "黑白"
     override val presetCategoryStreet = "街拍"
+    override val presetCategoryVintage = "复古"
+    override val presetCategoryCreative = "创意"
     override val presetCategoryImported = "导入"
     override val presetCategoryLut = "LUT"
     override val presetApply = "应用"
@@ -830,6 +845,14 @@ class ChineseSimplifiedStrings : StringResources {
     override val maskApplyTo = "应用于"
     override val maskDeleteMask = "删除蒙版"
     override val maskDeleteSubMask = "删除子蒙版"
+    override val maskLinearStart = "起始点"
+    override val maskLinearEnd = "终止点"
+    override val maskRadialCenter = "中心点"
+    override val maskRadialRadius = "半径"
+    override val maskLuminanceShadow = "阴影范围"
+    override val maskLuminanceHighlight = "高光范围"
+    override val maskColorTarget = "目标颜色"
+    override val maskClearAll = "清除所有蒙版"
 
     // Common components
     override val loadingDefault = "加载中..."

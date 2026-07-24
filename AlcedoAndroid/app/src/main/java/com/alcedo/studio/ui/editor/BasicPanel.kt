@@ -201,6 +201,8 @@ fun BasicPanel(
                         IconButton(
                             onClick = {
                                 viewModel.updateClarity(0f)
+                                viewModel.updateDehaze(0f)
+                                viewModel.updateTexture(0f)
                                 viewModel.updateVibrance(0f)
                                 viewModel.updateSaturation(0f)
                             },
@@ -221,6 +223,22 @@ fun BasicPanel(
                         range = -1f..1f,
                         onValueChange = { viewModel.updateClarityDrag(it) },
                         onValueChangeFinished = { viewModel.updateClarity(params.clarityAmount) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorDehaze },
+                        value = params.dehazeAmount,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateDehazeDrag(it) },
+                        onValueChangeFinished = { viewModel.updateDehaze(params.dehazeAmount) },
+                        defaultValue = 0f
+                    )
+                    AdjustmentSlider(
+                        label = stringRes { editorTexture },
+                        value = params.textureAmount,
+                        range = -1f..1f,
+                        onValueChange = { viewModel.updateTextureDrag(it) },
+                        onValueChangeFinished = { viewModel.updateTexture(params.textureAmount) },
                         defaultValue = 0f
                     )
                     AdjustmentSlider(

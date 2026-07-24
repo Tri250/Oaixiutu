@@ -258,6 +258,17 @@ class EnglishStrings : StringResources {
     override val cropCorrectTca = "Correct TCA"
     override val cropAmount = "Amount"
 
+    // Perspective correction (4-point)
+    override val perspectiveMode = "Correction Mode"
+    override val perspectiveModeManual = "Manual"
+    override val perspectiveModeVertical = "Vertical"
+    override val perspectiveModeHorizontal = "Horizontal"
+    override val perspectiveModeVH = "V+H"
+    override val perspectiveModeFull = "4-Point"
+    override val perspectiveAmount = "Correction Amount"
+    override val perspectiveShowGrid = "Show Grid"
+    override val perspectiveAutoDetect = "Auto Detect"
+
     // Effects panel
     override val editorSectionLuminanceDenoise = "Luminance Denoise"
     override val editorSectionChromaDenoise = "Chroma Denoise"
@@ -279,6 +290,8 @@ class EnglishStrings : StringResources {
     override val effectsShowSharpeningMask = "Show Sharpening Mask"
     override val editorAmount = "Amount"
     override val editorSectionClarity = "Clarity"
+    override val editorDehaze = "Dehaze"
+    override val editorTexture = "Texture"
     override val effectsResetClarity = "Reset Clarity"
     override val editorRadius = "Radius"
     override val editorSectionVignette = "Vignette"
@@ -632,6 +645,8 @@ class EnglishStrings : StringResources {
     override val presetCategoryLandscape = "Landscape"
     override val presetCategoryBW = "B&W"
     override val presetCategoryStreet = "Street"
+    override val presetCategoryVintage = "Vintage"
+    override val presetCategoryCreative = "Creative"
     override val presetCategoryImported = "Imported"
     override val presetCategoryLut = "LUT"
     override val presetApply = "Apply"
@@ -830,6 +845,14 @@ class EnglishStrings : StringResources {
     override val maskApplyTo = "Apply To"
     override val maskDeleteMask = "Delete Mask"
     override val maskDeleteSubMask = "Delete Sub-Mask"
+    override val maskLinearStart = "Start Point"
+    override val maskLinearEnd = "End Point"
+    override val maskRadialCenter = "Center"
+    override val maskRadialRadius = "Radius"
+    override val maskLuminanceShadow = "Shadow Range"
+    override val maskLuminanceHighlight = "Highlight Range"
+    override val maskColorTarget = "Color Target"
+    override val maskClearAll = "Clear All Masks"
 
     // Common components
     override val loadingDefault = "Loading..."

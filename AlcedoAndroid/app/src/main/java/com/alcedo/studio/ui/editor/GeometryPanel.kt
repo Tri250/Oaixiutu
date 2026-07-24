@@ -2,6 +2,7 @@ package com.alcedo.studio.ui.editor
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -9,7 +10,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.drawLine
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
@@ -264,6 +271,140 @@ fun GeometryPanel(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+            }
+        }
+
+        // ── Perspective Correction (4-point) ────────────────────
+        LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringRes { editorSectionPerspective },
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
+                    )
+                    IconButton(
+                        onClick = {
+                            HapticFeedback.heavyClick(view)
+                            viewModel.resetPerspectiveCorrection()
+                        },
+                        modifier = Modifier.size(AlcedoIconSize.xl)
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringRes { geometryResetPerspective },
+                            modifier = Modifier.size(AlcedoIconSize.sm),
+                            tint = alcedoColors.icon
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
+
+                // Mode preset buttons
+                Text(
+                    stringRes { perspectiveMode },
+                    style = AlcedoFontRoles.uiCaptionStrong,
+                    color = alcedoColors.text
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
+                ) {
+                    PerspectiveMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = params.perspectiveCorrectionMode == mode.ordinal,
+                            onClick = {
+                                HapticFeedback.click(view)
+                                viewModel.updatePerspectiveCorrectionMode(mode.ordinal)
+                            },
+                            label = {
+                                Text(
+                                    when (mode) {
+                                        PerspectiveMode.MANUAL -> stringRes { perspectiveModeManual }
+                                        PerspectiveMode.VERTICAL -> stringRes { perspectiveModeVertical }
+                                        PerspectiveMode.HORIZONTAL -> stringRes { perspectiveModeHorizontal }
+                                        PerspectiveMode.VH -> stringRes { perspectiveModeVH }
+                                        PerspectiveMode.FULL -> stringRes { perspectiveModeFull }
+                                    },
+                                    style = AlcedoFontRoles.uiCaption
+                                )
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
+
+                // Corner point drag overlay
+                PerspectiveCornerOverlay(
+                    corners = params.perspectiveCorners,
+                    onCornerChange = { index, x, y ->
+                        viewModel.updatePerspectiveCorner(index, x, y)
+                    },
+                    showGrid = params.perspectiveShowGrid,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                )
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
+
+                // Grid toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { perspectiveShowGrid },
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
+                    )
+                    Switch(
+                        checked = params.perspectiveShowGrid,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updatePerspectiveShowGrid(it)
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
+
+                // Auto-detect toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        stringRes { perspectiveAutoDetect },
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
+                    )
+                    Switch(
+                        checked = params.perspectiveAutoDetect,
+                        onCheckedChange = {
+                            HapticFeedback.click(view)
+                            viewModel.updatePerspectiveAutoDetect(it)
+                        }
+                    )
+                }
+                Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
+
+                // Correction amount slider
+                AdjustmentSlider(
+                    label = stringRes { perspectiveAmount },
+                    value = params.perspectiveCorrectionAmount,
+                    range = 0f..100f,
+                    onValueChange = {
+                        viewModel.updatePerspectiveCorrectionAmount(it)
+                    },
+                    defaultValue = 100f,
+                    valueDisplayTransform = { "%.0f%%".format(it) }
+                )
             }
         }
 
@@ -583,5 +724,108 @@ private fun applyAspectRatioCrop(
         val newTop = (centerY - newH / 2f).coerceIn(0f, 1f)
         val newBottom = (centerY + newH / 2f).coerceIn(0f, 1f)
         viewModel.updateGeometryCrop(currentLeft, newTop, currentRight, newBottom)
+    }
+}
+
+// ============================================================
+// Perspective Correction Mode
+// ============================================================
+
+/** Perspective correction mode — must match C++ PerspectiveMode enum. */
+enum class PerspectiveMode {
+    MANUAL,       // Free 4-corner drag
+    VERTICAL,     // Vertical lines correction only
+    HORIZONTAL,   // Horizontal lines correction only
+    VH,           // Vertical + Horizontal
+    FULL          // Full free-form 4-point
+}
+
+// ============================================================
+// Perspective Corner Drag Overlay
+// ============================================================
+
+/**
+ * Overlay showing 4 draggable corner points and an optional alignment grid.
+ * [corners] is a FloatArray of 8 values: [TLx, TLy, TRx, TRy, BRx, BRy, BLx, BLy]
+ * All values are in normalized [0,1] coordinates.
+ */
+@Composable
+private fun PerspectiveCornerOverlay(
+    corners: FloatArray,
+    onCornerChange: (index: Int, x: Float, y: Float) -> Unit,
+    showGrid: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // Local mutable copy for drag
+    val localCorners = remember { corners.copyOf() }
+    // Sync from external state
+    LaunchedEffect(corners) {
+        corners.copyInto(localCorners)
+    }
+
+    val handleRadius = 12f
+    val lineColor = Color(0xFF4FC3F7) // Light blue
+    val handleColor = Color(0xFF29B6F6)
+    val handleBorderColor = Color.White
+    val gridColor = Color(0x804FC3F7) // Semi-transparent
+
+    Box(modifier = modifier) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+
+            // Draw alignment grid
+            if (showGrid) {
+                val gridDivisions = 8
+                for (i in 1 until gridDivisions) {
+                    val x = w * i / gridDivisions
+                    val y = h * i / gridDivisions
+                    drawLine(gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
+                    drawLine(gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+                }
+            }
+
+            // Convert normalized corners to pixel positions
+            val px = FloatArray(4) { localCorners[it * 2] * w }
+            val py = FloatArray(4) { localCorners[it * 2 + 1] * h }
+
+            // Draw quadrilateral edges
+            for (i in 0 until 4) {
+                val next = (i + 1) % 4
+                drawLine(lineColor, Offset(px[i], py[i]), Offset(px[next], py[next]), strokeWidth = 2f)
+            }
+
+            // Draw diagonal guides
+            drawLine(gridColor, Offset(px[0], py[0]), Offset(px[2], py[2]), strokeWidth = 1f)
+            drawLine(gridColor, Offset(px[1], py[1]), Offset(px[3], py[3]), strokeWidth = 1f)
+
+            // Draw corner handles
+            for (i in 0 until 4) {
+                drawCircle(handleColor, handleRadius, Offset(px[i], py[i]))
+                drawCircle(handleBorderColor, handleRadius, Offset(px[i], py[i]), style = Stroke(width = 2f))
+            }
+        }
+
+        // Invisible drag areas for each corner
+        for (i in 0 until 4) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(i) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            val w = size.width
+                            val h = size.height
+                            if (w > 0f && h > 0f) {
+                                val newX = (localCorners[i * 2] + dragAmount.x / w).coerceIn(0f, 1f)
+                                val newY = (localCorners[i * 2 + 1] + dragAmount.y / h).coerceIn(0f, 1f)
+                                localCorners[i * 2] = newX
+                                localCorners[i * 2 + 1] = newY
+                                onCornerChange(i, newX, newY)
+                            }
+                        }
+                    }
+            )
+        }
     }
 }

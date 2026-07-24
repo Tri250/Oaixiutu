@@ -715,6 +715,137 @@ private fun SubMaskRow(
                     valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
                 )
             }
+
+            // Linear gradient direction controls
+            if (sub.type == MaskType.LINEAR) {
+                val start = sub.params.linearStart ?: android.graphics.PointF(0.2f, 0.2f)
+                val end = sub.params.linearEnd ?: android.graphics.PointF(0.8f, 0.8f)
+                AdjustmentSlider(
+                    label = "Start X",
+                    value = start.x,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            linearStart = android.graphics.PointF(it, start.y)
+                        )))
+                    },
+                    defaultValue = 0.2f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+                AdjustmentSlider(
+                    label = "Start Y",
+                    value = start.y,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            linearStart = android.graphics.PointF(start.x, it)
+                        )))
+                    },
+                    defaultValue = 0.2f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+                AdjustmentSlider(
+                    label = "End X",
+                    value = end.x,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            linearEnd = android.graphics.PointF(it, end.y)
+                        )))
+                    },
+                    defaultValue = 0.8f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+                AdjustmentSlider(
+                    label = "End Y",
+                    value = end.y,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            linearEnd = android.graphics.PointF(end.x, it)
+                        )))
+                    },
+                    defaultValue = 0.8f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+            }
+
+            // Radial gradient center / radius controls
+            if (sub.type == MaskType.RADIAL) {
+                val center = sub.params.radialCenter ?: android.graphics.PointF(0.5f, 0.5f)
+                AdjustmentSlider(
+                    label = "Center X",
+                    value = center.x,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            radialCenter = android.graphics.PointF(it, center.y)
+                        )))
+                    },
+                    defaultValue = 0.5f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+                AdjustmentSlider(
+                    label = "Center Y",
+                    value = center.y,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(
+                            radialCenter = android.graphics.PointF(center.x, it)
+                        )))
+                    },
+                    defaultValue = 0.5f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+                AdjustmentSlider(
+                    label = "Radius",
+                    value = sub.params.radialRadius,
+                    range = 0.05f..0.9f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(radialRadius = it)))
+                    },
+                    defaultValue = 0.4f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+            }
+
+            // Luminance range controls
+            if (sub.type == MaskType.LUMINANCE_RANGE) {
+                AdjustmentSlider(
+                    label = "Shadow Range",
+                    value = sub.params.luminanceMin,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(luminanceMin = it)))
+                    },
+                    defaultValue = 0.25f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}" }
+                )
+                AdjustmentSlider(
+                    label = "Highlight Range",
+                    value = sub.params.luminanceMax,
+                    range = 0f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(luminanceMax = it)))
+                    },
+                    defaultValue = 0.75f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}" }
+                )
+            }
+
+            // Color range controls
+            if (sub.type == MaskType.COLOR_RANGE) {
+                AdjustmentSlider(
+                    label = "Color Range",
+                    value = sub.params.colorRange,
+                    range = 0.01f..1f,
+                    onValueChange = {
+                        onUpdate(sub.copy(params = sub.params.copy(colorRange = it)))
+                    },
+                    defaultValue = 0.15f,
+                    valueDisplayTransform = { "${(it * 100).roundToInt()}%" }
+                )
+            }
         }
 
         // Reorder buttons + delete

@@ -157,6 +157,21 @@ object DatabaseMigrations {
         }
     }
 
+    /**
+     * Migration from schema v4 to v5.
+     *
+     * v5 adds a `thumbnailPath` column to `pipeline_presets` for persisted
+     * thumbnail file paths, allowing thumbnails to be reloaded without
+     * re-rendering from the pipeline.
+     */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE pipeline_presets ADD COLUMN thumbnailPath TEXT NOT NULL DEFAULT ''"
+            )
+        }
+    }
+
     /** All registered migrations, in order. Used by SleeveDatabase builders. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

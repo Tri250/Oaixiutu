@@ -6,9 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,9 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.alcedo.studio.data.preset.BuiltinPreset
+import com.alcedo.studio.data.preset.PresetCategory
 import com.alcedo.studio.domain.service.PresetService
 import com.alcedo.studio.domain.service.PresetWithThumbnail
-import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.theme.AlcedoElevation
@@ -43,23 +42,8 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 /**
- * Filter chips shown above the preset grid.
- */
-enum class PresetFilter(val labelKey: StringResources.() -> String) {
-    ALL({ presetCategoryAll }),
-    BUILTIN({ presetCategoryBuiltin }),
-    PORTRAIT({ presetCategoryPortrait }),
-    LANDSCAPE({ presetCategoryLandscape }),
-    FILM({ presetCategoryFilm }),
-    STREET({ presetCategoryStreet }),
-    BW({ presetCategoryBW }),
-    CUSTOM({ presetCategoryCustom }),
-    IMPORTED({ presetCategoryImported }),
-    LUT({ presetCategoryLut })
-}
-
-/**
  * Categories selectable in the create/edit preset dialog.
+ * Includes the two new categories: Vintage and Creative.
  */
 private val PRESET_CATEGORIES = listOf(
     PresetService.CATEGORY_GENERAL,
@@ -67,7 +51,9 @@ private val PRESET_CATEGORIES = listOf(
     PresetService.CATEGORY_LANDSCAPE,
     PresetService.CATEGORY_FILM,
     PresetService.CATEGORY_STREET,
-    PresetService.CATEGORY_BW
+    PresetService.CATEGORY_VINTAGE,
+    PresetService.CATEGORY_BW,
+    PresetService.CATEGORY_CREATIVE
 )
 
 private fun categoryColor(category: String): Color = when (category) {
@@ -76,21 +62,36 @@ private fun categoryColor(category: String): Color = when (category) {
     PresetService.CATEGORY_LANDSCAPE -> Color(0xFF5CB670)
     PresetService.CATEGORY_BW -> Color(0xFF9E9E9E)
     PresetService.CATEGORY_STREET -> Color(0xFFB07ACC)
+    PresetService.CATEGORY_VINTAGE -> Color(0xFFC4956A)
+    PresetService.CATEGORY_CREATIVE -> Color(0xFF5CB6B6)
     PresetService.CATEGORY_IMPORTED -> Color(0xFF5C9BB6)
     PresetService.CATEGORY_LUT -> Color(0xFFE07A3A)
     else -> Color(0xFF5C9BB6)
 }
 
+private fun presetCategoryColor(category: PresetCategory): Color = when (category) {
+    PresetCategory.Basic -> Color(0xFF5C9BB6)
+    PresetCategory.Film -> Color(0xFFE0A040)
+    PresetCategory.Portrait -> Color(0xFFE07A9A)
+    PresetCategory.Landscape -> Color(0xFF5CB670)
+    PresetCategory.Street -> Color(0xFFB07ACC)
+    PresetCategory.Vintage -> Color(0xFFC4956A)
+    PresetCategory.BnW -> Color(0xFF9E9E9E)
+    PresetCategory.Creative -> Color(0xFF5CB6B6)
+}
+
 /**
- * RapidRAW-inspired preset management panel.
+ * Redesigned preset management panel with category tabs and built-in preset library.
  *
- * Shows a 3-column grid of presets with REAL pipeline-rendered thumbnails,
- * a search bar, category filter chips (All / Portrait / Landscape / Film /
- * Street / B&W / Custom / Imported / LUT), long-press actions
- * (Apply / Edit / Delete / Export), a "Save current as preset" action with a
- * name/category/description dialog, multi-format import (.json / .xmp / .cube),
- * and single-preset SAF export to .json. Tapping a preset applies it to the
- * current image immediately.
+ * Features:
+ * - Category tabs: Horizontal scrollable tabs for each PresetCategory
+ * - Preset grid: 3-column grid of preset thumbnails with names
+ * - Apply on tap: Apply preset with a single tap
+ * - Long press menu: Edit/Delete/Share/Export for user presets
+ * - Import button: Import .alcedo-preset / .json / .xmp / .cube files
+ * - Create preset button: Save current settings as a new preset
+ * - Built-in presets: Available immediately from BuiltinPresets
+ * - User presets: Persisted in Room database
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -103,14 +104,20 @@ fun PresetPanel(
     val presetService = remember { viewModel.presetService }
     val alcedoColors = LocalAlcedoColors.current
 
-    val presets by presetService.getAllPresets()
+    // Database-backed presets (user presets + previously seeded built-in presets)
+    val dbPresets by presetService.getAllPresets()
         .catch { emit(emptyList()) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val currentPreview by viewModel.previewBitmap.collectAsStateWithLifecycle()
 
+    // Built-in presets from BuiltinPresets (available immediately)
+    val builtinPresets = remember { presetService.getAllBuiltinPresets() }
+
+    // Selected category tab
+    var selectedCategory by remember { mutableStateOf<PresetCategory?>(null) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf(PresetFilter.ALL) }
     var contextMenuPreset by remember { mutableStateOf<PresetWithThumbnail?>(null) }
+    var contextMenuBuiltin by remember { mutableStateOf<BuiltinPreset?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<PresetWithThumbnail?>(null) }
     var deleteTarget by remember { mutableStateOf<PresetWithThumbnail?>(null) }
@@ -120,9 +127,7 @@ fun PresetPanel(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Precompute string resources in the @Composable scope so they can be
-    // referenced inside coroutines / try-catch blocks (composables cannot be
-    // invoked from those contexts).
+    // Precompute string resources
     val errorMsg = stringRes { error }
     val importedMsg = stringRes { presetImported }
     val exportedFmt = stringRes { presetExported }
@@ -138,9 +143,7 @@ fun PresetPanel(
         }
     }
 
-    // Import launcher — picks a preset file (.json / .xmp / .cube) and imports
-    // it. Dispatches by extension so XMP and CUBE files are parsed by the
-    // matching importer in PresetService.
+    // Import launcher — picks a preset file (.json / .xmp / .cube / .alcedo-preset)
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -159,7 +162,7 @@ fun PresetPanel(
         }
     }
 
-    // Export launcher — SAF "create file" for a single preset as .json.
+    // Export launcher — SAF "create file" for a single preset as .json
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -181,36 +184,38 @@ fun PresetPanel(
         exportTarget = null
     }
 
-    val filteredPresets = remember(presets, searchQuery, selectedFilter) {
-        presets.filter { p ->
-            val matchesSearch = searchQuery.isBlank() ||
-                p.name.contains(searchQuery, ignoreCase = true)
-            val matchesFilter = when (selectedFilter) {
-                PresetFilter.ALL -> true
-                PresetFilter.BUILTIN -> p.isBuiltIn
-                PresetFilter.CUSTOM -> !p.isBuiltIn &&
-                    p.category !in listOf(
-                        PresetService.CATEGORY_IMPORTED,
-                        PresetService.CATEGORY_LUT
-                    )
-                PresetFilter.PORTRAIT -> p.category == PresetService.CATEGORY_PORTRAIT
-                PresetFilter.LANDSCAPE -> p.category == PresetService.CATEGORY_LANDSCAPE
-                PresetFilter.FILM -> p.category == PresetService.CATEGORY_FILM
-                PresetFilter.STREET -> p.category == PresetService.CATEGORY_STREET
-                PresetFilter.BW -> p.category == PresetService.CATEGORY_BW
-                PresetFilter.IMPORTED -> p.category == PresetService.CATEGORY_IMPORTED
-                PresetFilter.LUT -> p.category == PresetService.CATEGORY_LUT
-            }
-            matchesSearch && matchesFilter
+    // ── Compute filtered presets ──
+    // When a category is selected, show built-in presets from that category
+    // plus matching user presets from the database.
+    val filteredBuiltinPresets = remember(builtinPresets, selectedCategory, searchQuery) {
+        val byCategory = if (selectedCategory != null) {
+            builtinPresets.filter { it.category == selectedCategory }
+        } else {
+            builtinPresets
+        }
+        if (searchQuery.isBlank()) byCategory
+        else byCategory.filter {
+            it.nameZh.contains(searchQuery, ignoreCase = true) ||
+                it.nameEn.contains(searchQuery, ignoreCase = true)
         }
     }
 
+    val filteredDbPresets = remember(dbPresets, selectedCategory, searchQuery) {
+        val byCategory = if (selectedCategory != null) {
+            val categoryStr = PresetService.categoryToString(selectedCategory)
+            dbPresets.filter { it.category == categoryStr }
+        } else {
+            dbPresets
+        }
+        if (searchQuery.isBlank()) byCategory
+        else byCategory.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    }
+
+    val hasAnyPresets = filteredBuiltinPresets.isNotEmpty() || filteredDbPresets.isNotEmpty()
+
     Box(modifier = modifier.fillMaxWidth()) {
-        // Manual column-of-rows grid (3 columns) — avoids nesting
-        // LazyVerticalGrid inside the editor's vertically scrolling panel.
         Column(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.md)
         ) {
             // ── Top action bar ──
@@ -233,7 +238,7 @@ fun PresetPanel(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                // Import (.json / .xmp / .cube)
+                // Import (.json / .xmp / .cube / .alcedo-preset)
                 OutlinedButton(
                     onClick = {
                         importLauncher.launch(
@@ -277,29 +282,148 @@ fun PresetPanel(
                 textStyle = AlcedoFontRoles.uiCaption
             )
 
-            // ── Category filter chips ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)
+            // ── Category tabs ──
+            ScrollableTabRow(
+                selectedTabIndex = selectedCategory?.let { cat ->
+                    PresetCategory.entries.indexOf(cat) + 1 // +1 for "All" tab
+                } ?: 0,
+                modifier = Modifier.fillMaxWidth(),
+                edgePadding = AlcedoSpacing.xs
             ) {
-                PresetFilter.entries.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = {
+                // "All" tab
+                Tab(
+                    selected = selectedCategory == null,
+                    onClick = { selectedCategory = null },
+                    text = {
+                        Text(
+                            stringRes { presetCategoryAll },
+                            style = AlcedoFontRoles.uiOverline,
+                            maxLines = 1
+                        )
+                    }
+                )
+                // Category tabs
+                PresetCategory.entries.forEach { category ->
+                    Tab(
+                        selected = selectedCategory == category,
+                        onClick = { selectedCategory = category },
+                        text = {
                             Text(
-                                stringRes(filter.labelKey),
-                                style = AlcedoFontRoles.uiOverline
+                                category.labelEn,
+                                style = AlcedoFontRoles.uiOverline,
+                                maxLines = 1
                             )
                         }
                     )
                 }
             }
 
-            // ── Preset grid (3 columns, manual rows) ──
-            if (filteredPresets.isEmpty()) {
+            // ── Built-in presets section ──
+            if (filteredBuiltinPresets.isNotEmpty()) {
+                // Section header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = alcedoColors.primary
+                    )
+                    Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
+                    Text(
+                        stringRes { presetCategoryBuiltin },
+                        style = AlcedoFontRoles.uiOverline,
+                        color = alcedoColors.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // Built-in preset grid (3 columns)
+                val builtinRows = filteredBuiltinPresets.chunked(3)
+                builtinRows.forEach { rowPresets ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
+                    ) {
+                        rowPresets.forEach { preset ->
+                            BuiltinPresetCard(
+                                preset = preset,
+                                modifier = Modifier.weight(1f),
+                                onTap = {
+                                    HapticFeedback.click(view)
+                                    viewModel.applyBuiltinPreset(preset)
+                                    snackbarMessage = preset.nameZh
+                                },
+                                onLongPress = {
+                                    HapticFeedback.heavyClick(view)
+                                    contextMenuBuiltin = preset
+                                }
+                            )
+                        }
+                        repeat(3 - rowPresets.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            // ── User presets section ──
+            if (filteredDbPresets.isNotEmpty()) {
+                // Section header (only show if built-in presets are also visible)
+                if (filteredBuiltinPresets.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = alcedoColors.textMuted
+                        )
+                        Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
+                        Text(
+                            stringRes { presetCategoryCustom },
+                            style = AlcedoFontRoles.uiOverline,
+                            color = alcedoColors.textMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // User preset grid (3 columns)
+                val userRows = filteredDbPresets.chunked(3)
+                userRows.forEach { rowPresets ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
+                    ) {
+                        rowPresets.forEach { preset ->
+                            PresetCard(
+                                preset = preset,
+                                modifier = Modifier.weight(1f),
+                                onTap = {
+                                    HapticFeedback.click(view)
+                                    viewModel.applyPreset(preset)
+                                    snackbarMessage = preset.name
+                                },
+                                onLongPress = {
+                                    HapticFeedback.heavyClick(view)
+                                    contextMenuPreset = preset
+                                }
+                            )
+                        }
+                        repeat(3 - rowPresets.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            // ── Empty state ──
+            if (!hasAnyPresets) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -319,35 +443,6 @@ fun PresetPanel(
                             style = AlcedoFontRoles.uiCaption,
                             color = alcedoColors.textMuted.copy(alpha = 0.6f)
                         )
-                    }
-                }
-            } else {
-                val rows = filteredPresets.chunked(3)
-                rows.forEach { rowPresets ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
-                    ) {
-                        rowPresets.forEach { preset ->
-                            PresetCard(
-                                preset = preset,
-                                modifier = Modifier.weight(1f),
-                                onTap = {
-                                    // Tap applies the preset to the current image.
-                                    HapticFeedback.click(view)
-                                    viewModel.applyPreset(preset)
-                                    snackbarMessage = preset.name
-                                },
-                                onLongPress = {
-                                    HapticFeedback.heavyClick(view)
-                                    contextMenuPreset = preset
-                                }
-                            )
-                        }
-                        // Pad the last row so cards keep equal width
-                        repeat(3 - rowPresets.size) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
                     }
                 }
             }
@@ -371,7 +466,29 @@ fun PresetPanel(
         )
     }
 
-    // ── Context menu (long-press): Apply / Edit / Delete / Export ──
+    // ── Context menu for built-in presets (Apply only) ──
+    val menuBuiltin = contextMenuBuiltin
+    if (menuBuiltin != null) {
+        AlertDialog(
+            onDismissRequest = { contextMenuBuiltin = null },
+            title = { Text(menuBuiltin.nameZh, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column {
+                    ContextMenuRow(Icons.Default.Check, stringRes { presetApply }, {
+                        contextMenuBuiltin = null
+                        viewModel.applyBuiltinPreset(menuBuiltin)
+                        snackbarMessage = menuBuiltin.nameZh
+                    }, { contextMenuBuiltin = null })
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { contextMenuBuiltin = null }) { Text(stringRes { cancel }) }
+            }
+        )
+    }
+
+    // ── Context menu for user presets (Apply / Edit / Delete / Export) ──
     val menuPreset = contextMenuPreset
     if (menuPreset != null) {
         PresetContextMenu(
@@ -389,7 +506,6 @@ fun PresetPanel(
             onExport = {
                 exportTarget = menuPreset
                 contextMenuPreset = null
-                // Launch SAF "create document" with a safe default filename.
                 val safeName = (menuPreset.name ?: "preset")
                     .replace(Regex("[^A-Za-z0-9._-]"), "_")
                 exportLauncher.launch("$safeName.json")
@@ -496,7 +612,118 @@ fun PresetPanel(
 }
 
 // ================================================================
-// Preset card
+// Built-in preset card
+// ================================================================
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BuiltinPresetCard(
+    preset: BuiltinPreset,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    val alcedoColors = LocalAlcedoColors.current
+    val catColor = presetCategoryColor(preset.category)
+
+    Surface(
+        modifier = modifier
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongPress
+            ),
+        shape = RoundedCornerShape(AlcedoRadius.sm),
+        color = alcedoColors.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = AlcedoElevation.level1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(AlcedoSpacing.xs),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Thumbnail placeholder with category color accent
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(AlcedoRadius.xs))
+                    .background(alcedoColors.surfaceContainerLowest),
+                contentAlignment = Alignment.Center
+            ) {
+                // Category-colored accent gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            catColor.copy(alpha = 0.12f)
+                        )
+                )
+                // Built-in badge
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(3.dp)
+                        .background(
+                            alcedoColors.scrim.copy(alpha = 0.55f),
+                            RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        stringRes { presetCategoryBuiltin },
+                        style = AlcedoFontRoles.uiOverline,
+                        fontSize = TextUnit(9f, TextUnitType.Sp),
+                        color = alcedoColors.text
+                    )
+                }
+                // Category icon
+                Icon(
+                    imageVector = when (preset.category) {
+                        PresetCategory.Basic -> Icons.Default.Tune
+                        PresetCategory.Film -> Icons.Default.Movie
+                        PresetCategory.Portrait -> Icons.Default.Face
+                        PresetCategory.Landscape -> Icons.Default.Landscape
+                        PresetCategory.Street -> Icons.Default.LocationCity
+                        PresetCategory.Vintage -> Icons.Default.History
+                        PresetCategory.BnW -> Icons.Default.Contrast
+                        PresetCategory.Creative -> Icons.Default.Palette
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = catColor.copy(alpha = 0.6f)
+                )
+            }
+            Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
+            // Preset name
+            Text(
+                text = preset.nameZh,
+                style = AlcedoFontRoles.uiOverline,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            // Category badge
+            Box(
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(catColor.copy(alpha = 0.18f))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            ) {
+                Text(
+                    text = preset.category.labelEn,
+                    style = AlcedoFontRoles.uiOverline,
+                    fontSize = TextUnit(9f, TextUnitType.Sp),
+                    color = catColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+// ================================================================
+// User preset card (database-backed, with real thumbnail)
 // ================================================================
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -573,7 +800,7 @@ private fun PresetCard(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
-            // Description (optional, shown when present)
+            // Description (optional)
             if (preset.description.isNotBlank()) {
                 Text(
                     text = preset.description,

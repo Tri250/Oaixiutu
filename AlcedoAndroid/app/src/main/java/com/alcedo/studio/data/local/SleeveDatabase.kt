@@ -51,7 +51,7 @@ import android.security.keystore.KeyProperties
         PipelinePresetEntity::class,
         AiEmbeddingEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class SleeveDatabase : RoomDatabase() {

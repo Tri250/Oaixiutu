@@ -22,7 +22,8 @@ data class PipelinePresetEntity(
     @ColumnInfo(defaultValue = "") val description: String = "",
     val paramsJson: String,
     val createdTime: Long,
-    val isBuiltIn: Boolean = false
+    val isBuiltIn: Boolean = false,
+    @ColumnInfo(defaultValue = "") val thumbnailPath: String = ""
 )
 
 @Entity(tableName = "ai_embeddings", indices = [Index(value = ["imageId"])])

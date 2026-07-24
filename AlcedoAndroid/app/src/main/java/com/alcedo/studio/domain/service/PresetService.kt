@@ -12,6 +12,11 @@ import com.alcedo.studio.data.model.OpenDrtLook
 import com.alcedo.studio.data.model.OpenDrtTonescale
 import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.data.model.PipelinePresetEntity
+import com.alcedo.studio.data.preset.BuiltinPreset
+import com.alcedo.studio.data.preset.BuiltinPresets
+import com.alcedo.studio.data.preset.PresetCategory
+import com.alcedo.studio.data.preset.PresetIO
+import com.alcedo.studio.data.preset.UserPreset
 import com.alcedo.studio.domain.repository.EditHistoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -64,10 +69,36 @@ class PresetService(
         const val CATEGORY_GENERAL = "General"
         const val CATEGORY_IMPORTED = "Imported"
         const val CATEGORY_LUT = "LUT"
+        const val CATEGORY_VINTAGE = "Vintage"
+        const val CATEGORY_CREATIVE = "Creative"
 
         private const val TAG = "PresetService"
         private const val SAMPLE_SIZE = 160
         private const val EXPORT_FORMAT_VERSION = 1
+
+        /** Map [PresetCategory] to legacy category strings for database storage. */
+        fun categoryToString(cat: PresetCategory): String = when (cat) {
+            PresetCategory.Basic -> CATEGORY_GENERAL
+            PresetCategory.Film -> CATEGORY_FILM
+            PresetCategory.Portrait -> CATEGORY_PORTRAIT
+            PresetCategory.Landscape -> CATEGORY_LANDSCAPE
+            PresetCategory.Street -> CATEGORY_STREET
+            PresetCategory.Vintage -> CATEGORY_VINTAGE
+            PresetCategory.BnW -> CATEGORY_BW
+            PresetCategory.Creative -> CATEGORY_CREATIVE
+        }
+
+        /** Map legacy category string to [PresetCategory]. */
+        fun stringToCategory(str: String): PresetCategory = when (str) {
+            CATEGORY_FILM -> PresetCategory.Film
+            CATEGORY_PORTRAIT -> PresetCategory.Portrait
+            CATEGORY_LANDSCAPE -> PresetCategory.Landscape
+            CATEGORY_BW -> PresetCategory.BnW
+            CATEGORY_STREET -> PresetCategory.Street
+            CATEGORY_VINTAGE -> PresetCategory.Vintage
+            CATEGORY_CREATIVE -> PresetCategory.Creative
+            else -> PresetCategory.Basic
+        }
     }
 
     private data class ThumbnailCacheEntry(val paramsJson: String, val thumbnail: Bitmap?)
@@ -215,6 +246,128 @@ class PresetService(
     suspend fun deletePreset(presetId: Long): Unit = withContext(Dispatchers.IO) {
         presetDao.deleteById(presetId)
         thumbnailCache.remove(presetId)
+    }
+
+    // ================================================================
+    // Built-in preset access (no database needed)
+    // ================================================================
+
+    /**
+     * Returns built-in presets from [BuiltinPresets] for a given category.
+     * These are available immediately without database access.
+     */
+    fun getBuiltinPresets(category: PresetCategory): List<BuiltinPreset> =
+        BuiltinPresets.getByCategory(category)
+
+    /**
+     * Returns all built-in presets from [BuiltinPresets].
+     */
+    fun getAllBuiltinPresets(): List<BuiltinPreset> =
+        BuiltinPresets.all
+
+    // ================================================================
+    // User preset queries
+    // ================================================================
+
+    /**
+     * Returns user (non-built-in) presets as a Flow, each carrying a real
+     * pipeline-rendered thumbnail.
+     */
+    fun getUserPresets(): Flow<List<PresetWithThumbnail>> =
+        presetDao.getUserPresetsFlow().map { entities ->
+            entities.map { entity ->
+                val params = deserializeParams(entity.paramsJson)
+                PresetWithThumbnail(
+                    id = entity.id,
+                    name = entity.name,
+                    category = entity.category,
+                    description = entity.description,
+                    isBuiltIn = entity.isBuiltIn,
+                    createdTime = entity.createdTime,
+                    params = params,
+                    thumbnail = getOrGenerateThumbnail(entity.id, entity.paramsJson, params)
+                )
+            }
+        }
+
+    // ================================================================
+    // Preset creation with PresetCategory
+    // ================================================================
+
+    /**
+     * Creates a new user preset using [PresetCategory] enum.
+     * Converts the category to a string for database storage.
+     */
+    suspend fun createPreset(
+        name: String,
+        category: PresetCategory,
+        params: PipelineParams,
+        thumbnailBitmap: Bitmap?,
+        description: String = ""
+    ): Long = withContext(Dispatchers.IO) {
+        createPreset(name, categoryToString(category), params, thumbnailBitmap, description)
+    }
+
+    // ================================================================
+    // PresetIO-based import/export (SAF)
+    // ================================================================
+
+    /**
+     * Imports a preset from a URI using [PresetIO].
+     * Returns the new preset id, or -1 on failure.
+     */
+    suspend fun importPresetFromUri(uri: android.net.Uri, context: android.content.Context): Long =
+        withContext(Dispatchers.IO) {
+            try {
+                val result = PresetIO.importPreset(uri, context)
+                val userPreset = result.getOrElse {
+                    Log.e(TAG, "PresetIO import failed", it)
+                    return@withContext -1L
+                }
+                ensureBuiltInPresetsInitialized()
+                val entity = PipelinePresetEntity(
+                    name = userPreset.name.ifBlank { "Imported Preset" },
+                    category = userPreset.category.ifBlank { CATEGORY_IMPORTED },
+                    description = "",
+                    paramsJson = serializeParams(userPreset.params),
+                    createdTime = System.currentTimeMillis(),
+                    isBuiltIn = false
+                )
+                val id = presetDao.insert(entity)
+                if (id <= 0) {
+                    Log.e(TAG, "Import preset from URI failed: insert returned invalid id $id")
+                    return@withContext -1L
+                }
+                Log.d(TAG, "Imported preset from URI, id=$id")
+                id
+            } catch (e: Throwable) {
+                Log.e(TAG, "Import preset from URI failed", e)
+                -1L
+            }
+        }
+
+    /**
+     * Exports a preset to a URI using [PresetIO].
+     * Returns true on success.
+     */
+    suspend fun exportPresetToUri(
+        presetId: Long,
+        uri: android.net.Uri,
+        context: android.content.Context
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val entity = presetDao.getById(presetId) ?: return@withContext false
+            val userPreset = UserPreset(
+                name = entity.name,
+                category = entity.category,
+                params = deserializeParams(entity.paramsJson)
+            )
+            val result = PresetIO.exportPreset(userPreset, uri, context)
+            result.isSuccess
+        } catch (e: Throwable) {
+            Log.e(TAG, "Export preset to URI failed", e)
+            false
+        }
     }
 
     /**
@@ -605,12 +758,41 @@ class PresetService(
         map["cropBottom"] = JsonPrimitive(p.cropBottom)
         map["perspectiveH"] = JsonPrimitive(p.perspectiveH)
         map["perspectiveV"] = JsonPrimitive(p.perspectiveV)
+        map["perspectiveDistortion"] = JsonPrimitive(p.perspectiveDistortion)
+        map["perspectiveVertical"] = JsonPrimitive(p.perspectiveVertical)
+        map["perspectiveHorizontal"] = JsonPrimitive(p.perspectiveHorizontal)
+        map["perspectiveRotation"] = JsonPrimitive(p.perspectiveRotation)
+        map["perspectiveAspect"] = JsonPrimitive(p.perspectiveAspect)
+        map["perspectiveScale"] = JsonPrimitive(p.perspectiveScale)
+        map["perspectiveXOffset"] = JsonPrimitive(p.perspectiveXOffset)
+        map["perspectiveYOffset"] = JsonPrimitive(p.perspectiveYOffset)
+        p.perspectiveCorners.forEachIndexed { i, v -> map["perspectiveCorners[$i]"] = JsonPrimitive(v) }
+        map["perspectiveCorrectionMode"] = JsonPrimitive(p.perspectiveCorrectionMode)
+        map["perspectiveCorrectionAmount"] = JsonPrimitive(p.perspectiveCorrectionAmount)
+        map["perspectiveShowGrid"] = JsonPrimitive(p.perspectiveShowGrid)
+        map["perspectiveAutoDetect"] = JsonPrimitive(p.perspectiveAutoDetect)
         map["lensK1"] = JsonPrimitive(p.lensK1)
         map["lensK2"] = JsonPrimitive(p.lensK2)
         map["lensK3"] = JsonPrimitive(p.lensK3)
         map["lensP1"] = JsonPrimitive(p.lensP1)
         map["lensP2"] = JsonPrimitive(p.lensP2)
         map["lensVignetteStrength"] = JsonPrimitive(p.lensVignetteStrength)
+        map["lensCx"] = JsonPrimitive(p.lensCx)
+        map["lensCy"] = JsonPrimitive(p.lensCy)
+        map["lensFocalRatio"] = JsonPrimitive(p.lensFocalRatio)
+        map["dehazeAmount"] = JsonPrimitive(p.dehazeAmount)
+        map["dehazeRadius"] = JsonPrimitive(p.dehazeRadius)
+        map["textureAmount"] = JsonPrimitive(p.textureAmount)
+        map["textureRadius"] = JsonPrimitive(p.textureRadius)
+        map["luminanceDenoiseStrength"] = JsonPrimitive(p.luminanceDenoiseStrength)
+        map["luminanceDenoiseDetail"] = JsonPrimitive(p.luminanceDenoiseDetail)
+        map["chromaDenoiseStrength"] = JsonPrimitive(p.chromaDenoiseStrength)
+        map["chromaDenoiseThreshold"] = JsonPrimitive(p.chromaDenoiseThreshold)
+        map["maskEnabled"] = JsonPrimitive(p.maskEnabled)
+        map["maskType"] = JsonPrimitive(p.maskType)
+        map["maskOpacity"] = JsonPrimitive(p.maskOpacity)
+        map["maskInverted"] = JsonPrimitive(p.maskInverted)
+        map["maskFeather"] = JsonPrimitive(p.maskFeather)
         map["channelMixerMonochrome"] = JsonPrimitive(p.channelMixerMonochrome)
         map["toneCurvePoints"] = JsonPrimitive(p.toneCurvePoints)
         p.hslHueShift.forEachIndexed { i, v -> map["hslHueShift[$i]"] = JsonPrimitive(v) }
@@ -706,12 +888,41 @@ class PresetService(
                 cropBottom = f("cropBottom", 1f),
                 perspectiveH = f("perspectiveH"),
                 perspectiveV = f("perspectiveV"),
+                perspectiveDistortion = f("perspectiveDistortion"),
+                perspectiveVertical = f("perspectiveVertical"),
+                perspectiveHorizontal = f("perspectiveHorizontal"),
+                perspectiveRotation = f("perspectiveRotation"),
+                perspectiveAspect = f("perspectiveAspect"),
+                perspectiveScale = f("perspectiveScale"),
+                perspectiveXOffset = f("perspectiveXOffset"),
+                perspectiveYOffset = f("perspectiveYOffset"),
+                perspectiveCorners = FloatArray(8) { i -> f("perspectiveCorners[$i]", floatArrayOf(0f,0f, 1f,0f, 1f,1f, 0f,1f)[i]) },
+                perspectiveCorrectionMode = f("perspectiveCorrectionMode", 4f).toInt(),
+                perspectiveCorrectionAmount = f("perspectiveCorrectionAmount", 100f),
+                perspectiveShowGrid = obj["perspectiveShowGrid"]?.jsonPrimitive?.content?.toBoolean() ?: true,
+                perspectiveAutoDetect = obj["perspectiveAutoDetect"]?.jsonPrimitive?.content?.toBoolean() ?: false,
                 lensK1 = f("lensK1"),
                 lensK2 = f("lensK2"),
                 lensK3 = f("lensK3"),
                 lensP1 = f("lensP1"),
                 lensP2 = f("lensP2"),
                 lensVignetteStrength = f("lensVignetteStrength"),
+                lensCx = f("lensCx", 0.5f),
+                lensCy = f("lensCy", 0.5f),
+                lensFocalRatio = f("lensFocalRatio", 1f),
+                dehazeAmount = f("dehazeAmount"),
+                dehazeRadius = f("dehazeRadius", 7f).toInt(),
+                textureAmount = f("textureAmount"),
+                textureRadius = f("textureRadius", 2f).toInt(),
+                luminanceDenoiseStrength = f("luminanceDenoiseStrength"),
+                luminanceDenoiseDetail = f("luminanceDenoiseDetail", 0.5f),
+                chromaDenoiseStrength = f("chromaDenoiseStrength"),
+                chromaDenoiseThreshold = f("chromaDenoiseThreshold", 0.5f),
+                maskEnabled = obj["maskEnabled"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                maskType = f("maskType").toInt(),
+                maskOpacity = f("maskOpacity", 1f),
+                maskInverted = obj["maskInverted"]?.jsonPrimitive?.content?.toBoolean() ?: false,
+                maskFeather = f("maskFeather", 0.2f),
                 channelMixerMatrix = channelMixer,
                 channelMixerMonochrome = obj["channelMixerMonochrome"]?.jsonPrimitive?.content?.toBoolean() ?: false,
                 hslHueShift = hslHueShift,

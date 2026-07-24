@@ -742,6 +742,25 @@ object AlcedoNativeBridge {
     }
 
     // ================================================================
+    // Perspective correction (4-point homography)
+    // ================================================================
+
+    external fun nativeApplyPerspectiveCorrection(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        corners: FloatArray, amount: Float, mode: Int
+    ): FloatArray
+
+    fun applyPerspectiveCorrection(
+        input: FloatArray, width: Int, height: Int, channels: Int,
+        corners: FloatArray, amount: Float, mode: Int
+    ): FloatArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.execute("applyPerspectiveCorrection") {
+            nativeApplyPerspectiveCorrection(input, width, height, channels, corners, amount, mode)
+        }
+    }
+
+    // ================================================================
     // Auto exposure (from NativePipelineBridge)
     // ================================================================
 
@@ -1023,6 +1042,88 @@ object AlcedoNativeBridge {
                 strokePointsX, strokePointsY, strokePointsCount,
                 brushSize, brushHardness, brushOpacity
             )
+        }
+    }
+
+    // ================================================================
+    // Mask Operator (generate / apply / combine / feather masks)
+    // ================================================================
+
+    /**
+     * Generate a mask from params via native MaskOperator.
+     *
+     * @param maskType 0=Brush, 1=LinearGradient, 2=RadialGradient, 3=Luminosity, 4=ColorRange, 5=WholeImage
+     * @param maskParams Float array: [opacity, inverted(0/1), feather, brush_size, brush_hardness, brush_opacity,
+     *        linear_start_x, linear_start_y, linear_end_x, linear_end_y,
+     *        radial_center_x, radial_center_y, radial_radius_x, radial_radius_y,
+     *        lum_min, lum_max, color_target_r, color_target_g, color_target_b, color_range]
+     * @return FloatArray of length width*height with mask weights [0..1]
+     */
+    external fun nativeGenerateMask(
+        width: Int, height: Int,
+        maskType: Int,
+        maskParams: FloatArray,
+        brushPointsX: FloatArray, brushPointsY: FloatArray, brushPressures: FloatArray,
+        brushPointCount: Int
+    ): FloatArray
+
+    /** Apply mask to blend original and edited: output = original*(1-mask) + edited*mask */
+    external fun nativeApplyMask(
+        original: FloatArray, edited: FloatArray, mask: FloatArray,
+        width: Int, height: Int, channels: Int
+    ): FloatArray
+
+    /** Combine two masks: mode 0=Add, 1=Subtract, 2=Intersect */
+    external fun nativeCombineMasks(
+        maskA: FloatArray, maskB: FloatArray,
+        width: Int, height: Int, combineMode: Int
+    ): FloatArray
+
+    /** Feather (blur) a mask. Returns the blurred copy. */
+    external fun nativeFeatherMask(
+        mask: FloatArray, width: Int, height: Int, radiusPx: Float
+    ): FloatArray
+
+    fun generateMask(
+        width: Int, height: Int,
+        maskType: Int,
+        maskParams: FloatArray,
+        brushPointsX: FloatArray, brushPointsY: FloatArray, brushPressures: FloatArray,
+        brushPointCount: Int
+    ): FloatArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.executeFloatArray("generateMask") {
+            nativeGenerateMask(width, height, maskType, maskParams,
+                brushPointsX, brushPointsY, brushPressures, brushPointCount)
+        }
+    }
+
+    fun applyMask(
+        original: FloatArray, edited: FloatArray, mask: FloatArray,
+        width: Int, height: Int, channels: Int
+    ): FloatArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.executeFloatArray("applyMask") {
+            nativeApplyMask(original, edited, mask, width, height, channels)
+        }
+    }
+
+    fun combineMasks(
+        maskA: FloatArray, maskB: FloatArray,
+        width: Int, height: Int, combineMode: Int
+    ): FloatArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.executeFloatArray("combineMasks") {
+            nativeCombineMasks(maskA, maskB, width, height, combineMode)
+        }
+    }
+
+    fun featherMask(
+        mask: FloatArray, width: Int, height: Int, radiusPx: Float
+    ): FloatArray? {
+        if (!isAvailable) return null
+        return NdkSafeCall.executeFloatArray("featherMask") {
+            nativeFeatherMask(mask, width, height, radiusPx)
         }
     }
 }

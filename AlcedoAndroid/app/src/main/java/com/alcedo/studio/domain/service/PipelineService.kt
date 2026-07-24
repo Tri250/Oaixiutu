@@ -602,6 +602,28 @@ class PipelineService {
         list += params.chromaDenoiseStrength
         list += params.chromaDenoiseThreshold
 
+        // ── Dehaze (idx 131-132) ──
+        list += params.dehazeAmount
+        list += params.dehazeRadius.toFloat()
+
+        // ── Texture (idx 133-134) ──
+        list += params.textureAmount
+        list += params.textureRadius.toFloat()
+
+        // ── Perspective correction (idx 135-145): corners[8] + mode + amount ──
+        for (i in 0 until 8) {
+            list += if (i < params.perspectiveCorners.size) params.perspectiveCorners[i] else 0f
+        }
+        list += params.perspectiveCorrectionMode.toFloat()
+        list += (params.perspectiveCorrectionAmount / 100f) // Normalize 0-100 to 0-1
+
+        // ── Mask (idx 146-150) ──
+        list += if (params.maskEnabled) 1f else 0f
+        list += params.maskType.toFloat()
+        list += params.maskOpacity
+        list += if (params.maskInverted) 1f else 0f
+        list += params.maskFeather
+
         return list.toFloatArray()
     }
 }

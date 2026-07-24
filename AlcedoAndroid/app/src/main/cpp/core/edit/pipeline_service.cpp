@@ -3,6 +3,8 @@
 #include "operators/vibrance_op.h"
 #include "operators/tint_op.h"
 #include "operators/clarity_op.h"
+#include "operators/dehaze_op.h"
+#include "operators/texture_op.h"
 #include "operators/tone_region_op.h"
 #include "operators/hsl_op.h"
 #include "operators/color_wheel_op.h"
@@ -16,6 +18,8 @@
 #include "operators/auto_exposure_op.h"
 #include "operators/lens_correction_op.h"
 #include "operators/geometry_op.h"
+#include "operators/perspective_op.h"
+#include "operators/mask_op.h"
 #include "color_science.h"
 #include <cmath>
 #include <algorithm>
@@ -94,6 +98,13 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     if (!pixels || width <= 0 || height <= 0) return false;
     size_t pixel_count = static_cast<size_t>(width) * height;
     auto en = [&](PipelineStage s) { return stage_enabled_[static_cast<int>(s)]; };
+
+    // Save original pixels for mask blending (if mask is enabled)
+    std::vector<float> original_copy;
+    if (params.mask_enabled && params.mask_data != nullptr) {
+        size_t total = pixel_count * channels;
+        original_copy.assign(pixels, pixels + total);
+    }
 
     // Stage: Auto Exposure (must run before Exposure)
     if (en(PipelineStage::AUTO_EXPOSURE) && params.auto_exposure_enabled) {
@@ -342,6 +353,32 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         }
     }
 
+    // Stage: Dehaze
+    if (en(PipelineStage::CLARITY) && params.dehaze != 0.0f) {
+        if (channels == 4)
+            DehazeOperator::apply_rgba(pixels, width, height, params.dehaze, params.dehaze_radius);
+        else
+            DehazeOperator::apply_rgb(pixels, width, height, params.dehaze, params.dehaze_radius);
+        for (size_t i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
+    }
+
+    // Stage: Texture
+    if (en(PipelineStage::CLARITY) && params.texture != 0.0f) {
+        if (channels == 4)
+            TextureOperator::apply_rgba(pixels, width, height, params.texture, params.texture_radius);
+        else
+            TextureOperator::apply_rgb(pixels, width, height, params.texture, params.texture_radius);
+        for (size_t i = 0; i < pixel_count; ++i) {
+            int idx = i * channels;
+            for (int c = 0; c < 3 && c < channels; ++c)
+                pixels[idx + c] = clamp01_safe(pixels[idx + c]);
+        }
+    }
+
     // Stage: Sharpen
     if (en(PipelineStage::SHARPEN) && params.sharpen != 0.0f) {
         std::vector<float> copy(pixels, pixels + static_cast<size_t>(width) * height * channels);
@@ -523,6 +560,76 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             else
                 LensCorrectionOperator::correct_vignette_rgb(pixels, width, height,
                                                               params.lens_vignette_strength);
+        }
+
+        // Perspective correction (4-point homography)
+        // Check if corners differ from identity or amount is not full
+        {
+            float identity[8] = {0,0, 1,0, 1,1, 0,1};
+            bool corners_changed = false;
+            for (int i = 0; i < 8; ++i) {
+                if (std::abs(params.perspective_corners[i] - identity[i]) > 1e-4f) {
+                    corners_changed = true;
+                    break;
+                }
+            }
+            if (corners_changed || params.perspective_correction_amount < 0.999f) {
+                // Need a temp buffer for perspective warp (in-place not supported)
+                size_t total_pixels = static_cast<size_t>(width) * height * channels;
+                std::vector<float> temp(total_pixels);
+                std::copy(pixels, pixels + total_pixels, temp.data());
+
+                PerspectiveOperator::apply(pixels, width, height,
+                                           temp.data(), width, height,
+                                           channels,
+                                           params.perspective_corners,
+                                           params.perspective_correction_amount,
+                                           params.perspective_correction_mode);
+            }
+        }
+    }
+
+    // Stage: Mask application — blend original and edited pixels using mask
+    if (params.mask_enabled && params.mask_data != nullptr && !original_copy.empty()) {
+        // mask_data is a float array of width*height with values [0..1]
+        // For each pixel: output = original * (1-mask) + edited * mask
+        // Invert mask if requested
+        std::vector<float> mask_buf;
+        const float* mask_ptr = params.mask_data;
+
+        if (params.mask_inverted) {
+            mask_buf.assign(params.mask_data, params.mask_data + pixel_count);
+            MaskOperator::invert_mask(mask_buf.data(), width, height);
+            mask_ptr = mask_buf.data();
+        }
+
+        // Apply mask opacity
+        std::vector<float> opacity_mask;
+        if (params.mask_opacity < 0.999f) {
+            opacity_mask.assign(mask_ptr, mask_ptr + pixel_count);
+            for (size_t i = 0; i < pixel_count; ++i) {
+                opacity_mask[i] *= params.mask_opacity;
+            }
+            mask_ptr = opacity_mask.data();
+        }
+
+        // Feather mask if feather > 0
+        std::vector<float> feathered_mask;
+        if (params.mask_feather > 0.001f) {
+            feathered_mask.assign(mask_ptr, mask_ptr + pixel_count);
+            float radius_px = params.mask_feather * std::min(width, height);
+            MaskOperator::feather_mask(feathered_mask.data(), width, height, radius_px);
+            mask_ptr = feathered_mask.data();
+        }
+
+        // Blend: output = original * (1-mask) + edited * mask
+        for (size_t i = 0; i < pixel_count; ++i) {
+            float w = std::max(0.0f, std::min(1.0f, mask_ptr[i]));
+            float inv_w = 1.0f - w;
+            int idx = i * channels;
+            for (int c = 0; c < channels; ++c) {
+                pixels[idx + c] = clamp01_safe(original_copy[idx + c] * inv_w + pixels[idx + c] * w);
+            }
         }
     }
 

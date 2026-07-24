@@ -255,6 +255,10 @@ object AppModule {
         MaskRenderService(maskInferenceService)
     }
 
+    val maskService: MaskService by lazy {
+        MaskService(maskInferenceService)
+    }
+
     val watermarkService: WatermarkService by lazy {
         WatermarkService()
     }

@@ -262,6 +262,17 @@ interface StringResources {
     val cropCorrectTca: String
     val cropAmount: String
 
+    // Perspective correction (4-point)
+    val perspectiveMode: String
+    val perspectiveModeManual: String
+    val perspectiveModeVertical: String
+    val perspectiveModeHorizontal: String
+    val perspectiveModeVH: String
+    val perspectiveModeFull: String
+    val perspectiveAmount: String
+    val perspectiveShowGrid: String
+    val perspectiveAutoDetect: String
+
     // Effects panel
     val editorSectionLuminanceDenoise: String
     val editorSectionChromaDenoise: String
@@ -283,6 +294,8 @@ interface StringResources {
     val effectsShowSharpeningMask: String
     val editorAmount: String
     val editorSectionClarity: String
+    val editorDehaze: String
+    val editorTexture: String
     val effectsResetClarity: String
     val editorRadius: String
     val editorSectionVignette: String
@@ -636,6 +649,8 @@ interface StringResources {
     val presetCategoryLandscape: String
     val presetCategoryBW: String
     val presetCategoryStreet: String
+    val presetCategoryVintage: String
+    val presetCategoryCreative: String
     val presetCategoryImported: String
     val presetCategoryLut: String
     val presetApply: String
@@ -834,6 +849,14 @@ interface StringResources {
     val maskApplyTo: String
     val maskDeleteMask: String
     val maskDeleteSubMask: String
+    val maskLinearStart: String
+    val maskLinearEnd: String
+    val maskRadialCenter: String
+    val maskRadialRadius: String
+    val maskLuminanceShadow: String
+    val maskLuminanceHighlight: String
+    val maskColorTarget: String
+    val maskClearAll: String
 
     // Common components
     val loadingDefault: String

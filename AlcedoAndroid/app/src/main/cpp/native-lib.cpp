@@ -34,8 +34,10 @@
 #include "core/edit/operators/curve_op.h"
 #include "core/edit/operators/raw_decode_op.h"
 #include "core/edit/operators/auto_exposure_op.h"
+#include "core/edit/operators/mask_op.h"
 #include "core/edit/operators/ahd_demosaic_op.h"
 #include "core/edit/operators/amaze_demosaic_op.h"
+#include "core/edit/operators/perspective_op.h"
 #include "core/sleeve/sleeve_manager.h"
 #include "core/sleeve/sleeve_filesystem.h"
 #include "core/sleeve/path_resolver.h"
@@ -81,7 +83,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     if (!params) { env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT); return nullptr; }
 
     jsize paramsLen = env->GetArrayLength(paramsArray);
-    if (paramsLen < 38) {  // minimum expected params count (basic 38 with sigmoidShoulder/sigmoidPivot, full 131)
+    if (paramsLen < 38) {  // minimum expected params count (basic 38, full 146 with perspective correction)
         LOGE("Params array too short: %d < 38", paramsLen);
         env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
         env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
@@ -189,6 +191,26 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     SAFE_PARAM(p_idx++, pipeline_params.luminance_denoise_detail);
     SAFE_PARAM(p_idx++, pipeline_params.chroma_denoise_strength);
     SAFE_PARAM(p_idx++, pipeline_params.chroma_denoise_threshold);
+
+    // ── Dehaze (idx 131-132) ──
+    SAFE_PARAM(p_idx++, pipeline_params.dehaze);
+    { float tmp = 7.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.dehaze_radius = static_cast<int>(tmp); }
+
+    // ── Texture (idx 133-134) ──
+    SAFE_PARAM(p_idx++, pipeline_params.texture);
+    { float tmp = 2.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.texture_radius = static_cast<int>(tmp); }
+
+    // ── Perspective correction (idx 135-145): corners[8] + mode + amount ──
+    for (int i = 0; i < 8; ++i) { SAFE_PARAM(p_idx++, pipeline_params.perspective_corners[i]); }
+    { int tmp = 4; SAFE_PARAM(p_idx++, tmp); pipeline_params.perspective_correction_mode = tmp; }
+    SAFE_PARAM(p_idx++, pipeline_params.perspective_correction_amount);
+
+    // ── Mask (idx 146-150) ──
+    { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.mask_enabled = (tmp > 0.5f); }
+    { int tmp = 0; SAFE_PARAM(p_idx++, tmp); pipeline_params.mask_type = tmp; }
+    SAFE_PARAM(p_idx++, pipeline_params.mask_opacity);
+    { float tmp = 0.f; SAFE_PARAM(p_idx++, tmp); pipeline_params.mask_inverted = (tmp > 0.5f); }
+    SAFE_PARAM(p_idx++, pipeline_params.mask_feather);
 
     env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
 
@@ -867,6 +889,22 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeCreateSnapshot(
             SAFE_PARAM(idx++, pipeline_params.luminance_denoise_detail);
             SAFE_PARAM(idx++, pipeline_params.chroma_denoise_strength);
             SAFE_PARAM(idx++, pipeline_params.chroma_denoise_threshold);
+            // Dehaze
+            SAFE_PARAM(idx++, pipeline_params.dehaze);
+            { float tmp = 7.f; SAFE_PARAM(idx++, tmp); pipeline_params.dehaze_radius = static_cast<int>(tmp); }
+            // Texture
+            SAFE_PARAM(idx++, pipeline_params.texture);
+            { float tmp = 2.f; SAFE_PARAM(idx++, tmp); pipeline_params.texture_radius = static_cast<int>(tmp); }
+            // Perspective correction
+            for (int i = 0; i < 8; ++i) { SAFE_PARAM(idx++, pipeline_params.perspective_corners[i]); }
+            { int tmp = 4; SAFE_PARAM(idx++, tmp); pipeline_params.perspective_correction_mode = tmp; }
+            SAFE_PARAM(idx++, pipeline_params.perspective_correction_amount);
+            // Mask (basic params only; mask_data pointer is set separately)
+            { float tmp = 0.f; SAFE_PARAM(idx++, tmp); pipeline_params.mask_enabled = (tmp > 0.5f); }
+            { int tmp = 0; SAFE_PARAM(idx++, tmp); pipeline_params.mask_type = tmp; }
+            SAFE_PARAM(idx++, pipeline_params.mask_opacity);
+            { float tmp = 0.f; SAFE_PARAM(idx++, tmp); pipeline_params.mask_inverted = (tmp > 0.5f); }
+            SAFE_PARAM(idx++, pipeline_params.mask_feather);
         }
         if (params) env->ReleaseFloatArrayElements(paramsArray, params, JNI_ABORT);
     }
@@ -2122,6 +2160,49 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(
 }
 
 // ============================================================
+// Perspective Correction (standalone operator)
+// ============================================================
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPerspectiveCorrection(
+        JNIEnv *env, jobject thiz,
+        jfloatArray input, jint width, jint height, jint channels,
+        jfloatArray corners, jfloat amount, jint mode) {
+    jsize len = env->GetArrayLength(input);
+    jfloat *pixels = env->GetFloatArrayElements(input, nullptr);
+    if (!pixels) return nullptr;
+
+    jfloat *cornerData = env->GetFloatArrayElements(corners, nullptr);
+    if (!cornerData) {
+        env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+        return nullptr;
+    }
+
+    float src_corners[8];
+    for (int i = 0; i < 8 && i < env->GetArrayLength(corners); ++i) {
+        src_corners[i] = cornerData[i];
+    }
+    env->ReleaseFloatArrayElements(corners, cornerData, JNI_ABORT);
+
+    std::vector<float> float_pixels(pixels, pixels + len);
+    env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
+
+    std::vector<float> output(len);
+    alcedo::PerspectiveOperator::apply(output.data(), width, height,
+                                        float_pixels.data(), width, height,
+                                        channels, src_corners, amount, mode);
+
+    jfloatArray result = env->NewFloatArray(len);
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create perspective correction result array");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, len, output.data());
+    return result;
+}
+
+// ============================================================
 // New Pipeline Operators: ColorTemp / CST / ODT / LMT / HLS / Curve / RawDecode
 // ============================================================
 
@@ -3339,6 +3420,235 @@ JNIEXPORT jfloatArray JNICALL
 Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyResize(
         JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jint dstWidth, jint dstHeight, jint method) {
     return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyResize(env, thiz, input, width, height, channels, dstWidth, dstHeight, method);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyPerspectiveCorrection(
+        JNIEnv *env, jobject thiz, jfloatArray input, jint width, jint height, jint channels, jfloatArray corners, jfloat amount, jint mode) {
+    return Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPerspectiveCorrection(env, thiz, input, width, height, channels, corners, amount, mode);
+}
+
+// ============================================================
+// Mask Operator JNI — generate mask, apply mask, combine masks
+// ============================================================
+
+/**
+ * Generate a mask from params. Returns a FloatArray of length width*height.
+ *
+ * maskType: 0=Brush, 1=LinearGradient, 2=RadialGradient, 3=Luminosity, 4=ColorRange, 5=WholeImage
+ * maskParams: [opacity, inverted(0/1), feather,
+ *              brush_size, brush_hardness, brush_opacity,
+ *              linear_start_x, linear_start_y, linear_end_x, linear_end_y,
+ *              radial_center_x, radial_center_y, radial_radius_x, radial_radius_y,
+ *              lum_min, lum_max,
+ *              color_target_r, color_target_g, color_target_b, color_range]
+ * brushPointsX/Y: normalized (0-1) brush stroke coordinates (only for Brush type)
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateMask(
+    JNIEnv *env, jobject thiz,
+    jint width, jint height,
+    jint maskType,
+    jfloatArray maskParams,
+    jfloatArray brushPointsX, jfloatArray brushPointsY, jfloatArray brushPressures, jint brushPointCount) {
+
+    if (width <= 0 || height <= 0) {
+        LOGE("Invalid dimensions for nativeGenerateMask: %d x %d", width, height);
+        return nullptr;
+    }
+
+    // Parse mask params
+    jfloat* mp = env->GetFloatArrayElements(maskParams, nullptr);
+    if (!mp) return nullptr;
+    int mpLen = env->GetArrayLength(maskParams);
+
+    MaskParams params;
+    params.type = static_cast<MaskType>(maskType);
+    params.opacity = (0 < mpLen) ? mp[0] : 1.0f;
+    params.inverted = (1 < mpLen) ? (mp[1] > 0.5f) : false;
+    params.feather = (2 < mpLen) ? mp[2] : 0.2f;
+
+    // Brush params
+    params.brush_size = (3 < mpLen) ? mp[3] : 0.05f;
+    params.brush_hardness = (4 < mpLen) ? mp[4] : 0.5f;
+    params.brush_opacity = (5 < mpLen) ? mp[5] : 1.0f;
+
+    // Linear gradient params
+    params.linear_start_x = (6 < mpLen) ? mp[6] : 0.2f;
+    params.linear_start_y = (7 < mpLen) ? mp[7] : 0.2f;
+    params.linear_end_x = (8 < mpLen) ? mp[8] : 0.8f;
+    params.linear_end_y = (9 < mpLen) ? mp[9] : 0.8f;
+
+    // Radial gradient params
+    params.radial_center_x = (10 < mpLen) ? mp[10] : 0.5f;
+    params.radial_center_y = (11 < mpLen) ? mp[11] : 0.5f;
+    params.radial_radius_x = (12 < mpLen) ? mp[12] : 0.4f;
+    params.radial_radius_y = (13 < mpLen) ? mp[13] : 0.4f;
+
+    // Luminosity params
+    params.lum_min = (14 < mpLen) ? mp[14] : 0.0f;
+    params.lum_max = (15 < mpLen) ? mp[15] : 1.0f;
+
+    // Color range params
+    params.color_target_r = (16 < mpLen) ? mp[16] : 0.5f;
+    params.color_target_g = (17 < mpLen) ? mp[17] : 0.5f;
+    params.color_target_b = (18 < mpLen) ? mp[18] : 0.5f;
+    params.color_range = (19 < mpLen) ? mp[19] : 0.15f;
+
+    env->ReleaseFloatArrayElements(maskParams, mp, JNI_ABORT);
+
+    // Parse brush points (only for brush type)
+    if (params.type == MaskType::Brush && brushPointCount > 0 &&
+        brushPointsX && brushPointsY && brushPressures) {
+        jfloat* ptsX = env->GetFloatArrayElements(brushPointsX, nullptr);
+        jfloat* ptsY = env->GetFloatArrayElements(brushPointsY, nullptr);
+        jfloat* pressures = env->GetFloatArrayElements(brushPressures, nullptr);
+        if (ptsX && ptsY && pressures) {
+            jsize xLen = env->GetArrayLength(brushPointsX);
+            for (int i = 0; i < brushPointCount && i < xLen; ++i) {
+                params.brush_points.push_back({ptsX[i], ptsY[i], pressures[i]});
+            }
+        }
+        if (ptsX) env->ReleaseFloatArrayElements(brushPointsX, ptsX, JNI_ABORT);
+        if (ptsY) env->ReleaseFloatArrayElements(brushPointsY, ptsY, JNI_ABORT);
+        if (pressures) env->ReleaseFloatArrayElements(brushPressures, pressures, JNI_ABORT);
+    }
+
+    // Generate mask
+    const size_t n = static_cast<size_t>(width) * height;
+    std::vector<float> mask(n, 0.0f);
+    MaskOperator::generate_mask(mask.data(), width, height, params);
+
+    // Return to Java
+    jfloatArray output = env->NewFloatArray(static_cast<jsize>(n));
+    if (!output || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for mask");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(output, 0, static_cast<jsize>(n), mask.data());
+    return output;
+}
+
+/**
+ * Apply mask to blend original and edited images.
+ * output[i] = original[i] * (1 - mask[i]) + edited[i] * mask[i]
+ *
+ * Returns a FloatArray of length width*height*channels.
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeApplyMask(
+    JNIEnv *env, jobject thiz,
+    jfloatArray original, jfloatArray edited, jfloatArray mask,
+    jint width, jint height, jint channels) {
+
+    if (width <= 0 || height <= 0 || channels <= 0) {
+        LOGE("Invalid parameters for nativeApplyMask");
+        return nullptr;
+    }
+
+    const size_t pixelCount = static_cast<size_t>(width) * height;
+    const size_t dataSize = pixelCount * channels;
+
+    jfloat* origData = env->GetFloatArrayElements(original, nullptr);
+    jfloat* editData = env->GetFloatArrayElements(edited, nullptr);
+    jfloat* maskData = env->GetFloatArrayElements(mask, nullptr);
+
+    if (!origData || !editData || !maskData) {
+        if (origData) env->ReleaseFloatArrayElements(original, origData, JNI_ABORT);
+        if (editData) env->ReleaseFloatArrayElements(edited, editData, JNI_ABORT);
+        if (maskData) env->ReleaseFloatArrayElements(mask, maskData, JNI_ABORT);
+        return nullptr;
+    }
+
+    std::vector<float> output(dataSize);
+    MaskOperator::apply_mask(origData, editData, output.data(), width, height, channels, maskData);
+
+    env->ReleaseFloatArrayElements(original, origData, JNI_ABORT);
+    env->ReleaseFloatArrayElements(edited, editData, JNI_ABORT);
+    env->ReleaseFloatArrayElements(mask, maskData, JNI_ABORT);
+
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(dataSize));
+    if (!result || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for applyMask output");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(result, 0, static_cast<jsize>(dataSize), output.data());
+    return result;
+}
+
+/**
+ * Combine two masks with the given mode.
+ * combineMode: 0=Add, 1=Subtract, 2=Intersect
+ * Returns a FloatArray of length width*height.
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeCombineMasks(
+    JNIEnv *env, jobject thiz,
+    jfloatArray maskA, jfloatArray maskB,
+    jint width, jint height, jint combineMode) {
+
+    if (width <= 0 || height <= 0) {
+        LOGE("Invalid parameters for nativeCombineMasks");
+        return nullptr;
+    }
+
+    const size_t n = static_cast<size_t>(width) * height;
+
+    jfloat* aData = env->GetFloatArrayElements(maskA, nullptr);
+    jfloat* bData = env->GetFloatArrayElements(maskB, nullptr);
+    if (!aData || !bData) {
+        if (aData) env->ReleaseFloatArrayElements(maskA, aData, JNI_ABORT);
+        if (bData) env->ReleaseFloatArrayElements(maskB, bData, JNI_ABORT);
+        return nullptr;
+    }
+
+    std::vector<float> result(n);
+    auto mode = static_cast<MaskOperator::CombineMode>(combineMode);
+    MaskOperator::combine_masks(result.data(), aData, bData, width, height, mode);
+
+    env->ReleaseFloatArrayElements(maskA, aData, JNI_ABORT);
+    env->ReleaseFloatArrayElements(maskB, bData, JNI_ABORT);
+
+    jfloatArray out = env->NewFloatArray(static_cast<jsize>(n));
+    if (!out || env->ExceptionCheck()) {
+        LOGE("Failed to create float array for combineMasks output");
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(out, 0, static_cast<jsize>(n), result.data());
+    return out;
+}
+
+/**
+ * Feather (blur) a mask in-place. Returns the blurred mask.
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeFeatherMask(
+    JNIEnv *env, jobject thiz,
+    jfloatArray mask, jint width, jint height, jfloat radiusPx) {
+
+    if (width <= 0 || height <= 0 || radiusPx < 1.0f) {
+        return mask; // Return unmodified
+    }
+
+    const size_t n = static_cast<size_t>(width) * height;
+    jfloat* maskData = env->GetFloatArrayElements(mask, nullptr);
+    if (!maskData) return nullptr;
+
+    std::vector<float> result(maskData, maskData + n);
+    env->ReleaseFloatArrayElements(mask, maskData, JNI_ABORT);
+
+    MaskOperator::feather_mask(result.data(), width, height, radiusPx);
+
+    jfloatArray out = env->NewFloatArray(static_cast<jsize>(n));
+    if (!out || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return nullptr;
+    }
+    env->SetFloatArrayRegion(out, 0, static_cast<jsize>(n), result.data());
+    return out;
 }
 
 } // extern "C"

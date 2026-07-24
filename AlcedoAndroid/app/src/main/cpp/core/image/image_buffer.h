@@ -194,6 +194,14 @@ struct PipelineParams {
     float clarity = 0.0f;
     float clarity_radius = 15.0f;
 
+    // Dehaze
+    float dehaze = 0.0f;
+    int dehaze_radius = 7;
+
+    // Texture
+    float texture = 0.0f;
+    int texture_radius = 2;
+
     // Sharpen
     float sharpen = 0.0f;
 
@@ -224,6 +232,11 @@ struct PipelineParams {
     float geometry_perspective_src[8] = {0,0, 1,0, 1,1, 0,1};
     float geometry_perspective_dst[8] = {0,0, 1,0, 1,1, 0,1};
 
+    // Perspective correction (4-point homography)
+    float perspective_corners[8] = {0,0, 1,0, 1,1, 0,1}; // TL,TR,BR,BL normalized
+    int perspective_correction_mode = 4; // PerspectiveMode::FULL
+    float perspective_correction_amount = 1.0f; // 0..1
+
     // Lens correction
     float lens_k1 = 0.0f;
     float lens_k2 = 0.0f;
@@ -243,6 +256,16 @@ struct PipelineParams {
 
     // RAW decode
     RawDecodeParams raw_decode_params;
+
+    // ── Mask ──
+    bool mask_enabled = false;           // Whether mask is active
+    int mask_type = 0;                   // 0=Brush, 1=Linear, 2=Radial, 3=Luminosity, 4=ColorRange, 5=WholeImage
+    float mask_opacity = 1.0f;           // 0-1
+    bool mask_inverted = false;          // Invert the mask
+    float mask_feather = 0.2f;           // Edge softening (normalized 0-1)
+    // Mask blend data pointer (externally managed; not owned by PipelineParams)
+    // If non-null, this float array (width*height) overrides the procedural mask.
+    const float* mask_data = nullptr;
 };
 
 // ============================================================

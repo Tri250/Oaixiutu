@@ -31,6 +31,15 @@ interface PipelinePresetDao {
     @Query("SELECT * FROM pipeline_presets WHERE isBuiltIn = 0 ORDER BY name ASC")
     suspend fun getUserPresets(): List<PipelinePresetEntity>
 
+    @Query("SELECT * FROM pipeline_presets WHERE isBuiltIn = 0 ORDER BY name ASC")
+    fun getUserPresetsFlow(): Flow<List<PipelinePresetEntity>>
+
+    @Query("SELECT * FROM pipeline_presets WHERE category = :category AND isBuiltIn = 0 ORDER BY name ASC")
+    suspend fun getUserPresetsByCategory(category: String): List<PipelinePresetEntity>
+
+    @Query("SELECT * FROM pipeline_presets WHERE category = :category AND isBuiltIn = 0 ORDER BY name ASC")
+    fun getUserPresetsByCategoryFlow(category: String): Flow<List<PipelinePresetEntity>>
+
     @Query("SELECT * FROM pipeline_presets WHERE name LIKE '%' || :query || '%' ORDER BY name ASC")
     suspend fun searchByName(query: String): List<PipelinePresetEntity>
 
