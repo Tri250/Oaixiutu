@@ -192,7 +192,7 @@ fun InspectorPanel(
                             modifier = Modifier.height(26.dp)
                         )
                         Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
-                    )
+                    }
                 }
             }
 
