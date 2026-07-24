@@ -60,8 +60,8 @@ public:
         std::random_device rd;
         std::mt19937 gen(rd());
         std::normal_distribution<float> dist(0.0f, intensity * 0.05f);
-        int total = width * height * channels;
-        for (int i = 0; i < total; ++i) {
+        size_t total = static_cast<size_t>(width) * height * channels;
+        for (size_t i = 0; i < total; ++i) {
             pixels[i] += dist(gen);
             pixels[i] = std::max(0.0f, std::min(1.0f, pixels[i]));
         }
@@ -100,7 +100,7 @@ bool PipelineService::is_stage_enabled(PipelineStage stage) const {
 bool PipelineService::process(float* pixels, int width, int height, int channels,
                                const PipelineParams& params) {
     if (!pixels || width <= 0 || height <= 0) return false;
-    int pixel_count = width * height;
+    size_t pixel_count = static_cast<size_t>(width) * height;
     auto en = [&](PipelineStage s) { return stage_enabled_[static_cast<int>(s)]; };
 
     // Stage: Auto Exposure (must run before Exposure)
@@ -112,7 +112,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: Exposure
     if (en(PipelineStage::EXPOSURE) && params.exposure != 0.0f) {
         float scale = std::pow(2.0f, params.exposure);
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c) {
                 pixels[idx + c] *= scale;
@@ -124,10 +124,10 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: White Balance (Planckian locus for physically accurate color temperature)
     if (en(PipelineStage::WHITE_BALANCE) &&
         (params.white_balance_temp != 6500.0f || params.white_balance_tint != 0.0f)) {
-        color_science::planckian_white_balance_bulk(pixels, pixel_count, channels,
+        color_science::planckian_white_balance_bulk(pixels, static_cast<int>(pixel_count), channels,
                                                      params.white_balance_temp,
                                                      params.white_balance_tint);
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)
                 pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -138,7 +138,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     if (en(PipelineStage::TONE) && params.contrast != 0.0f) {
         float scale = 1.0f + params.contrast;
         float offset = -0.5f * scale + 0.5f;
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c) {
                 float& v = pixels[idx + c];
@@ -154,7 +154,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         ToneRegionOperator::apply_rgb(pixels, width, height,
                                        params.shadows, params.midtones, params.highlights,
                                        params.shadow_boundary, params.highlight_boundary);
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)
                 pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -163,7 +163,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
     // Stage: Tone Curve
     if (en(PipelineStage::TONE_CURVE) && params.tone_curve_points >= 2) {
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c) {
                 float x = pixels[idx + c];
@@ -187,8 +187,8 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
     // Stage: Sigmoid contrast
     if (params.sigmoid_contrast != 0.0f) {
-        color_science::sigmoid_contrast_bulk(pixels, pixel_count, channels, params.sigmoid_contrast, params.sigmoid_pivot, params.sigmoid_shoulder);
-        for (int i = 0; i < pixel_count; ++i) {
+        color_science::sigmoid_contrast_bulk(pixels, static_cast<int>(pixel_count), channels, params.sigmoid_contrast, params.sigmoid_pivot, params.sigmoid_shoulder);
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)
                 pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -201,7 +201,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         if (params.saturation != 0.0f) {
             float lumR = 0.2126f, lumG = 0.7152f, lumB = 0.0722f;
             float s = 1.0f + params.saturation;
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 float r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
                 float lum = r * lumR + g * lumG + b * lumB;
@@ -214,7 +214,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
         // Vibrance
         if (params.vibrance != 0.0f) {
             VibranceOperator::apply_rgb(pixels, width, height, params.vibrance);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -227,7 +227,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                      params.tint_highlight_hue, params.tint_highlight_strength,
                                      params.tint_shadow_hue, params.tint_shadow_strength,
                                      params.tint_balance);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -252,7 +252,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                            params.color_wheel_gain[0],
                                            params.color_wheel_gain[1],
                                            params.color_wheel_gain[2]);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -272,7 +272,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                                    params.hsl_hue_shift,
                                    params.hsl_saturation_scale,
                                    params.hsl_luminance_scale);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -291,7 +291,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             ChannelMixerOperator::apply_rgb(pixels, width, height,
                                              params.channel_mixer_matrix,
                                              params.channel_mixer_monochrome);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -305,7 +305,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             ClarityOperator::apply_rgba(pixels, width, height, params.clarity, params.clarity_radius);
         else
             ClarityOperator::apply_rgb(pixels, width, height, params.clarity, params.clarity_radius);
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)
                 pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -314,7 +314,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
     // Stage: Sharpen
     if (en(PipelineStage::SHARPEN) && params.sharpen != 0.0f) {
-        std::vector<float> copy(pixels, pixels + width * height * channels);
+        std::vector<float> copy(pixels, pixels + static_cast<size_t>(width) * height * channels);
         float kernel[9] = {0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f};
         float scale = params.sharpen * 0.5f;
         for (int y = 1; y < height - 1; ++y) {
@@ -338,8 +338,8 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             std::random_device rd;
             std::mt19937 gen(rd());
             std::normal_distribution<float> dist(0.0f, params.film_grain * 0.05f);
-            int total = pixel_count * channels;
-            for (int i = 0; i < total; ++i) {
+            size_t total = static_cast<size_t>(pixel_count) * channels;
+            for (size_t i = 0; i < total; ++i) {
                 pixels[i] += dist(gen);
                 pixels[i] = clamp01_safe(pixels[i]);
             }
@@ -354,7 +354,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 HalationOperator::apply_rgb(pixels, width, height,
                                              params.halation_intensity, params.halation_threshold,
                                              params.halation_spread, params.halation_red_bias);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
                     pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -370,7 +370,7 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 else
                     LutOperator::apply_rgb(pixels, width, height, lut_data, lut_size);
                 LutOperator::free_parsed_lut(lut_data);
-                for (int i = 0; i < pixel_count; ++i) {
+                for (size_t i = 0; i < pixel_count; ++i) {
                     int idx = i * channels;
                     for (int c = 0; c < 3 && c < channels; ++c)
                         pixels[idx + c] = clamp01_safe(pixels[idx + c]);
@@ -538,10 +538,10 @@ bool PipelineService::decode_raw(const uint16_t* raw_data, int raw_width, int ra
 
 void PipelineService::apply_display_transform(float* pixels, int width, int height, int channels,
                                                const DisplayTransform& transform) {
-    int pixel_count = width * height;
+    size_t pixel_count = static_cast<size_t>(width) * height;
 
     if (transform.color_science == 2) { // LINEAR
-        for (int i = 0; i < pixel_count; ++i) {
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             float r = pixels[idx], g = pixels[idx+1], b = pixels[idx+2];
             color_science::apply_peak_luminance_scale(&r, &g, &b, transform.peak_luminance);
@@ -556,13 +556,13 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
         }
     } else if (transform.color_science == 0) { // ACES 2.0
         // sRGB → AP0 → RRT → display color space → peak luminance → EOTF
-        color_science::convert_color_space_bulk(pixels, pixel_count, channels, 0, 3);
-        color_science::aces_rrt_bulk(pixels, pixel_count, channels, channels);
+        color_science::convert_color_space_bulk(pixels, static_cast<int>(pixel_count), channels, 0, 3);
+        color_science::aces_rrt_bulk(pixels, static_cast<int>(pixel_count), channels, channels);
         int dst_space = (transform.display_color_space == 1) ? 1 :
                         (transform.display_color_space == 2) ? 2 : 0;
-        color_science::convert_color_space_bulk(pixels, pixel_count, channels, 3, dst_space);
-        color_science::apply_peak_luminance_scale_bulk(pixels, pixel_count, channels, transform.peak_luminance);
-        for (int i = 0; i < pixel_count; ++i) {
+        color_science::convert_color_space_bulk(pixels, static_cast<int>(pixel_count), channels, 3, dst_space);
+        color_science::apply_peak_luminance_scale_bulk(pixels, static_cast<int>(pixel_count), channels, transform.peak_luminance);
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             float r = pixels[idx], g = pixels[idx+1], b = pixels[idx+2];
             switch (transform.eotf) {
@@ -575,9 +575,9 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
             pixels[idx]=clamp01_safe(r); pixels[idx+1]=clamp01_safe(g); pixels[idx+2]=clamp01_safe(b);
         }
     } else if (transform.color_science == 1) { // OpenDRT
-        color_science::opendrt_tone_map_bulk(pixels, pixel_count, channels, channels);
-        color_science::apply_peak_luminance_scale_bulk(pixels, pixel_count, channels, transform.peak_luminance);
-        for (int i = 0; i < pixel_count; ++i) {
+        color_science::opendrt_tone_map_bulk(pixels, static_cast<int>(pixel_count), channels, channels);
+        color_science::apply_peak_luminance_scale_bulk(pixels, static_cast<int>(pixel_count), channels, transform.peak_luminance);
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             float r = pixels[idx], g = pixels[idx+1], b = pixels[idx+2];
             switch (transform.eotf) {
@@ -594,7 +594,7 @@ void PipelineService::apply_display_transform(float* pixels, int width, int heig
 
 bool PipelineService::process_stage(PipelineStage stage, float* pixels, int width, int height,
                                      int channels, const PipelineParams& params) {
-    int pixel_count = width * height;
+    size_t pixel_count = static_cast<size_t>(width) * height;
     switch (stage) {
         case PipelineStage::AUTO_EXPOSURE: {
             PipelineParams mutable_params = params;
@@ -603,7 +603,7 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
         }
         case PipelineStage::EXPOSURE: {
             float scale = std::pow(2.0f, params.exposure);
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c) {
                     pixels[idx + c] *= scale;
@@ -613,7 +613,7 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
             break;
         }
         case PipelineStage::WHITE_BALANCE: {
-            color_science::planckian_white_balance_bulk(pixels, pixel_count, channels,
+            color_science::planckian_white_balance_bulk(pixels, static_cast<int>(pixel_count), channels,
                                                          params.white_balance_temp,
                                                          params.white_balance_tint);
             break;
@@ -621,7 +621,7 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
         case PipelineStage::TONE: {
             float scale = 1.0f + params.contrast;
             float offset = -0.5f * scale + 0.5f;
-            for (int i = 0; i < pixel_count; ++i) {
+            for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c) {
                     float& v = pixels[idx + c];
@@ -635,7 +635,7 @@ bool PipelineService::process_stage(PipelineStage stage, float* pixels, int widt
             if (params.saturation != 0.0f) {
                 float lumR = 0.2126f, lumG = 0.7152f, lumB = 0.0722f;
                 float s = 1.0f + params.saturation;
-                for (int i = 0; i < pixel_count; ++i) {
+                for (size_t i = 0; i < pixel_count; ++i) {
                     int idx = i * channels;
                     float r = pixels[idx], g = pixels[idx + 1], b = pixels[idx + 2];
                     float lum = r * lumR + g * lumG + b * lumB;
@@ -673,8 +673,8 @@ void PipelineService::apply_auto_exposure(float* pixels, int width, int height, 
     // Apply the computed exposure
     if (ev != 0.0f) {
         float scale = std::pow(2.0f, ev);
-        int pixel_count = width * height;
-        for (int i = 0; i < pixel_count; ++i) {
+        size_t pixel_count = static_cast<size_t>(width) * height;
+        for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c) {
                 pixels[idx + c] *= scale;
@@ -704,7 +704,7 @@ PipelineSnapshot::~PipelineSnapshot() {
 std::unique_ptr<PipelineSnapshot> PipelineSnapshot::create(const float* pixels, int width, int height,
                                                              int channels, const PipelineParams& params) {
     auto snapshot = std::make_unique<PipelineSnapshot>(width, height, channels, params);
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
     snapshot->data_.assign(pixels, pixels + total);
     return snapshot;
 }
@@ -714,7 +714,7 @@ bool PipelineSnapshot::render(float* output, int output_width, int output_height
     if (output_width != width_ || output_height != height_) return false;
 
     // Simple copy for read-only rendering
-    int total = width_ * height_ * channels_;
+    size_t total = static_cast<size_t>(width_) * height_ * channels_;
     std::copy(data_.data(), data_.data() + total, output);
     return true;
 }

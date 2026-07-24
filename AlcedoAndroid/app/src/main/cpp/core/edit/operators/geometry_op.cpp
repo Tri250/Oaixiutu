@@ -202,6 +202,7 @@ void GeometryOperator::dng_warp_rectilinear(float* dst, int dst_width, int dst_h
                                              int channels,
                                              const float coefficients[4],
                                              float cx, float cy) {
+    if (dst_width <= 0 || dst_height <= 0 || src_width <= 0 || src_height <= 0) return;
     float cx_px = cx * src_width;
     float cy_px = cy * src_height;
     float max_r = std::sqrt(cx_px * cx_px + cy_px * cy_px);
@@ -244,6 +245,7 @@ void GeometryOperator::crop(float* dst, int dst_width, int dst_height,
                             const float* src, int src_width, int src_height,
                             int channels,
                             int src_x, int src_y, int src_w, int src_h) {
+    if (dst_width <= 0 || dst_height <= 0 || src_w <= 0 || src_h <= 0) return;
     for (int y = 0; y < dst_height; ++y) {
         for (int x = 0; x < dst_width; ++x) {
             int sx = src_x + x * src_w / dst_width;
@@ -261,7 +263,7 @@ void GeometryOperator::crop(float* dst, int dst_width, int dst_height,
 }
 
 void GeometryOperator::flip_horizontal(float* data, int width, int height, int channels) {
-    int row_size = width * channels;
+    size_t row_size = static_cast<size_t>(width) * channels;
     std::vector<float> row(row_size);
     for (int y = 0; y < height; ++y) {
         float* row_ptr = data + y * row_size;
@@ -275,7 +277,7 @@ void GeometryOperator::flip_horizontal(float* data, int width, int height, int c
 }
 
 void GeometryOperator::flip_vertical(float* data, int width, int height, int channels) {
-    int row_size = width * channels;
+    size_t row_size = static_cast<size_t>(width) * channels;
     std::vector<float> row(row_size);
     for (int y = 0; y < height / 2; ++y) {
         float* top = data + y * row_size;

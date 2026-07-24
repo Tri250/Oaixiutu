@@ -33,13 +33,13 @@ void ComputeHistogram(const FinalDisplayFrameView& frame, const ScopeRequest& re
     }
 
     const float* p = frame.pixels;
-    int total = frame.width * frame.height;
+    size_t total = static_cast<size_t>(frame.width) * frame.height;
     int channels = frame.channels;
     if (channels < 3) channels = 4;
 
     // Per-channel accumulation into integer counters (avoid float races).
     std::vector<uint64_t> r_hist(bins, 0), g_hist(bins, 0), b_hist(bins, 0);
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         float r = std::clamp(p[i * channels + 0], 0.0f, 1.0f);
         float g = std::clamp(p[i * channels + 1], 0.0f, 1.0f);
         float b = std::clamp(p[i * channels + 2], 0.0f, 1.0f);
@@ -101,7 +101,7 @@ void ComputeWaveform(const FinalDisplayFrameView& frame, const ScopeRequest& req
 
     // For each destination column, sample a vertical strip of source pixels
     // and accumulate luminance into the corresponding row buckets.
-    std::vector<uint64_t> counts(w * h, 0);
+    std::vector<uint64_t> counts(static_cast<size_t>(w) * h, 0);
     for (int x = 0; x < fw; ++x) {
         int dst_x = (w * x) / std::max(1, fw);
         if (dst_x >= w) dst_x = w - 1;
@@ -146,13 +146,13 @@ void ComputeVectorscope(const FinalDisplayFrameView& frame, const ScopeRequest& 
     const float* p = frame.pixels;
     int channels = frame.channels;
     if (channels < 3) channels = 4;
-    int total = frame.width * frame.height;
+    size_t total = static_cast<size_t>(frame.width) * frame.height;
 
     std::vector<uint64_t> counts(s * s, 0);
     // Cb/Cr plane: cb = B - Y, cr = R - Y, where Y = 0.299R+0.587G+0.114B.
     // Map [-0.5, 0.5] -> [0, s-1].
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = std::clamp(p[idx + 0], 0.0f, 1.0f);
         float g = std::clamp(p[idx + 1], 0.0f, 1.0f);
         float b = std::clamp(p[idx + 2], 0.0f, 1.0f);

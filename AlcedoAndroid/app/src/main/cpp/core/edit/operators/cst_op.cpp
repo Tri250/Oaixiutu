@@ -17,12 +17,22 @@ CSTOp::CSTOp(CSTTransformType type, const char* input_space, const char* output_
 }
 
 void CSTOp::SetInputSpace(const char* space) {
+    if (!space) {
+        input_space_[0] = '\0';
+        dirty_ = true;
+        return;
+    }
     std::strncpy(input_space_, space, sizeof(input_space_) - 1);
     input_space_[sizeof(input_space_) - 1] = '\0';
     dirty_ = true;
 }
 
 void CSTOp::SetOutputSpace(const char* space) {
+    if (!space) {
+        output_space_[0] = '\0';
+        dirty_ = true;
+        return;
+    }
     std::strncpy(output_space_, space, sizeof(output_space_) - 1);
     output_space_[sizeof(output_space_) - 1] = '\0';
     dirty_ = true;
@@ -31,6 +41,7 @@ void CSTOp::SetOutputSpace(const char* space) {
 // Map space name to color_science space code
 // 0=sRGB, 1=Display P3, 2=Rec2020, 3=ACES AP0, 4=ACES AP1
 static int SpaceNameToCode(const char* name) {
+    if (!name) return 0; // Default to sRGB for null input
     if (std::strstr(name, "sRGB") || std::strstr(name, "srgb") || std::strstr(name, "709"))
         return 0;
     if (std::strstr(name, "P3") || std::strstr(name, "p3") || std::strstr(name, "Display"))
@@ -127,8 +138,8 @@ void CSTOp::ApplyImpl(float* pixels, int width, int height, int channels) {
         RebuildMatrix();
     }
 
-    int total = width * height;
-    color_science::apply_matrix_3x3_bulk(matrix_, pixels, total, channels);
+    size_t total = static_cast<size_t>(width) * height;
+    color_science::apply_matrix_3x3_bulk(matrix_, pixels, static_cast<int>(total), channels);
 }
 
 } // namespace alcedo

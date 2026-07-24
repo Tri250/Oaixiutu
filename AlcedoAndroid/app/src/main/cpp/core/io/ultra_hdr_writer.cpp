@@ -194,9 +194,9 @@ bool UltraHdrWriter::ConvertHdrToLinear(const ImageBuffer& hdr_buffer,
     const int width = hdr_buffer.width;
     const int height = hdr_buffer.height;
     const int channels = hdr_buffer.channels;
-    const int pixel_count = width * height;
+    const size_t pixel_count = static_cast<size_t>(width) * height;
 
-    linear_rgba.resize(static_cast<size_t>(pixel_count) * 4);  // Always output RGBA
+    linear_rgba.resize(pixel_count * 4);  // Always output RGBA
 
     const float* src = hdr_buffer.float_data();
     if (!src) {
@@ -205,7 +205,7 @@ bool UltraHdrWriter::ConvertHdrToLinear(const ImageBuffer& hdr_buffer,
         return false;
     }
 
-    for (int i = 0; i < pixel_count; ++i) {
+    for (size_t i = 0; i < pixel_count; ++i) {
         float r = src[i * channels + 0];
         float g = src[i * channels + 1];
         float b = src[i * channels + 2];
@@ -251,12 +251,12 @@ bool UltraHdrWriter::ConvertHdrToLinear(const ImageBuffer& hdr_buffer,
 bool UltraHdrWriter::GenerateSdrBase(const float* linear_rgba,
                                       int width, int height,
                                       std::vector<uint8_t>& sdr_rgb) {
-    const int pixel_count = width * height;
-    sdr_rgb.resize(static_cast<size_t>(pixel_count) * 3);
+    const size_t pixel_count = static_cast<size_t>(width) * height;
+    sdr_rgb.resize(pixel_count * 3);
 
     // Estimate white point from max luminance in the image
     float max_lum = 0.0f;
-    for (int i = 0; i < pixel_count; ++i) {
+    for (size_t i = 0; i < pixel_count; ++i) {
         float lum = 0.2126f * linear_rgba[i * 4 + 0] +
                     0.7152f * linear_rgba[i * 4 + 1] +
                     0.0722f * linear_rgba[i * 4 + 2];
@@ -285,12 +285,12 @@ bool UltraHdrWriter::ComputeGainMap(const float* linear_hdr,
                                      int width, int height,
                                      float hdr_headroom,
                                      std::vector<float>& gain_map) {
-    const int pixel_count = width * height;
-    gain_map.resize(static_cast<size_t>(pixel_count));
+    const size_t pixel_count = static_cast<size_t>(width) * height;
+    gain_map.resize(pixel_count);
 
     const float eps = 1e-6f;
 
-    for (int i = 0; i < pixel_count; ++i) {
+    for (size_t i = 0; i < pixel_count; ++i) {
         // HDR luminance (scene-linear, relative)
         float hdr_lum = 0.2126f * linear_hdr[i * 4 + 0] +
                         0.7152f * linear_hdr[i * 4 + 1] +

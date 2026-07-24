@@ -173,7 +173,8 @@ object SafHelper {
         val isRaw: Boolean
     )
 
-    // Open input stream from SAF URI
+    // Open input stream from SAF URI.
+    // Callers MUST close the returned stream (prefer using .use { }).
     fun openInputStream(context: Context, uri: Uri): InputStream? {
         return try {
             context.contentResolver.openInputStream(uri)
@@ -183,7 +184,8 @@ object SafHelper {
         }
     }
 
-    // Open output stream to SAF URI
+    // Open output stream to SAF URI.
+    // Callers MUST close the returned stream (prefer using .use { }).
     fun openOutputStream(context: Context, uri: Uri): OutputStream? {
         return try {
             context.contentResolver.openOutputStream(uri)

@@ -47,7 +47,7 @@ int RCDDemosaicOperator::color_at(int y, int x, const BayerInfo& info) {
 // Hamilton-Adams edge-directed green interpolation
 void RCDDemosaicOperator::interpolate_green(const float* src, int width, int height,
                                              const BayerInfo& info, float* g) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     std::fill(g, g + total, 0.0f);
 
     for (int y = 0; y < height; ++y) {
@@ -118,7 +118,7 @@ void RCDDemosaicOperator::interpolate_red_blue(const float* src, const float* g,
                                                 int width, int height,
                                                 const BayerInfo& info,
                                                 float* r, float* b) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     std::vector<float> diff_r(total, 0.0f);
     std::vector<float> diff_b(total, 0.0f);
 
@@ -220,16 +220,21 @@ void RCDDemosaicOperator::demosaic_uint16(const uint16_t* raw_data, int width, i
                                            int bayer_pattern,
                                            float* output_r, float* output_g, float* output_b,
                                            uint16_t white_level, uint16_t black_level) {
-    int total = width * height;
+    if (!raw_data || !output_r || !output_g || !output_b || width <= 0 || height <= 0) {
+        LOGE("RCD demosaic: invalid parameters (w=%d, h=%d)", width, height);
+        return;
+    }
+    size_t total = static_cast<size_t>(width) * height;
     BayerInfo info = get_bayer_info(bayer_pattern);
 
     // Convert to float and normalize
+    // Guard against uint16_t underflow: cast to int32_t before subtracting
     std::vector<float> src(total);
     float range = static_cast<float>(white_level - black_level);
     if (range < 1.0f) range = 65535.0f;
-    for (int i = 0; i < total; ++i) {
-        src[i] = static_cast<float>(raw_data[i] - black_level) / range;
-        src[i] = std::max(0.0f, src[i]);
+    for (size_t i = 0; i < total; ++i) {
+        float val = static_cast<float>(static_cast<int32_t>(raw_data[i]) - static_cast<int32_t>(black_level));
+        src[i] = std::clamp(val / range, 0.0f, 1.0f);
     }
 
     // Interpolate green
@@ -249,13 +254,17 @@ void RCDDemosaicOperator::demosaic_float(const float* raw_data, int width, int h
                                          int bayer_pattern,
                                          float* output_r, float* output_g, float* output_b,
                                          float white_level, float black_level) {
-    int total = width * height;
+    if (!raw_data || !output_r || !output_g || !output_b || width <= 0 || height <= 0) {
+        LOGE("RCD demosaic (float): invalid parameters (w=%d, h=%d)", width, height);
+        return;
+    }
+    size_t total = static_cast<size_t>(width) * height;
     BayerInfo info = get_bayer_info(bayer_pattern);
 
     std::vector<float> src(total);
     float range = white_level - black_level;
     if (range < 1e-6f) range = 1.0f;
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         src[i] = (raw_data[i] - black_level) / range;
         src[i] = std::max(0.0f, src[i]);
     }

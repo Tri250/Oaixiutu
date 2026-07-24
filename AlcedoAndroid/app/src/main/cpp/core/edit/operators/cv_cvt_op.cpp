@@ -114,7 +114,7 @@ CVCvtColorOp::CVCvtColorOp(Code code) : code_(code) {}
 // ============================================================
 
 void CVCvtColorOp::ApplyImpl(float* pixels, int width, int height, int channels) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     switch (code_) {
         case RGB2BGR:

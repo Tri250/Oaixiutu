@@ -83,6 +83,12 @@ float AutoExposureOperator::compute_auto_exposure(const float* pixels, int width
         return 5.0f; // +5 stops max
     }
 
+    if (target_luminance <= 0.0f) {
+        // Invalid target luminance
+        LOGI("AutoExposure: invalid target_luminance=%.4f", target_luminance);
+        return 0.0f;
+    }
+
     // Calculate exposure adjustment in stops (EV)
     // target / current = 2^exposure
     // exposure = log2(target / current)

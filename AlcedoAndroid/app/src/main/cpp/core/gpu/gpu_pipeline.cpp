@@ -159,7 +159,8 @@ bool GpuPipeline::executeChain(
             void* srcData = nullptr;
             void* dstData = nullptr;
             if (input->lockRead(&srcData) && output->lockWrite(&dstData)) {
-                memcpy(dstData, srcData, input->totalBytes());
+                size_t copyBytes = std::min(input->totalBytes(), output->totalBytes());
+                memcpy(dstData, srcData, copyBytes);
                 output->unlock();
                 input->unlock();
             }
@@ -193,7 +194,8 @@ bool GpuPipeline::executeChain(
         void* src = nullptr;
         void* dst = nullptr;
         if (input->lockRead(&src) && ping.lockWrite(&dst)) {
-            memcpy(dst, src, input->totalBytes());
+            size_t copyBytes = std::min(input->totalBytes(), ping.totalBytes());
+            memcpy(dst, src, copyBytes);
             ping.unlock();
             input->unlock();
         }
@@ -273,10 +275,11 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
 
     int w = input->width();
     int h = input->height();
-    int pixelCount = w * h;
+    size_t pixelCount = static_cast<size_t>(w) * h;
 
     // Copy input to output first
-    memcpy(outData, inData, input->totalBytes());
+    size_t copyBytes = std::min(input->totalBytes(), output->totalBytes());
+    memcpy(outData, inData, copyBytes);
 
     float* pixels = static_cast<float*>(outData);
 
@@ -310,7 +313,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
             switch (type_) {
                 case GpuOperatorType::COLOR_WHEEL: {
                     // CPU 色彩调色：lift/gamma/gain
-                    int count = w * h * 4;
+                    size_t count = static_cast<size_t>(w) * h * 4;
                     for (int i = 0; i < count; i += 4) {
                         for (int c = 0; c < 3; ++c) {
                             float lift = params.lift[c];
@@ -326,7 +329,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
                 case GpuOperatorType::HALATION: {
                     // CPU 光晕：增强高光区域
                     float amount = params.halationAmount;
-                    int count = w * h * 4;
+                    size_t count = static_cast<size_t>(w) * h * 4;
                     for (int i = 0; i < count; i += 4) {
                         for (int c = 0; c < 3; ++c) {
                             float val = pixels[i + c];
@@ -341,7 +344,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
                     // CPU 色彩科学：曝光 + gamma
                     float scale = std::pow(2.0f, params.csExposure);
                     float gamma = (params.outputGamma > 0.0f) ? params.outputGamma : 1.0f;
-                    int count = w * h * 4;
+                    size_t count = static_cast<size_t>(w) * h * 4;
                     for (int i = 0; i < count; i += 4) {
                         for (int c = 0; c < 3; ++c) {
                             float val = pixels[i + c] / 255.0f;
@@ -380,7 +383,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
                 case GpuOperatorType::HIGHLIGHT_RECON: {
                     // CPU 高光重建：裁剪高光
                     float thresh = params.hrClipThreshold * 255.0f;
-                    int count = w * h * 4;
+                    size_t count = static_cast<size_t>(w) * h * 4;
                     for (int i = 0; i < count; i += 4) {
                         for (int c = 0; c < 3; ++c) {
                             if (pixels[i + c] > thresh) pixels[i + c] = thresh;
@@ -394,7 +397,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
                     float white = params.whiteLevel;
                     if (white > black) {
                         float norm = 255.0f / (white - black);
-                        int count = w * h * 4;
+                        size_t count = static_cast<size_t>(w) * h * 4;
                         for (int i = 0; i < count; i += 4) {
                             for (int c = 0; c < 3; ++c) {
                                 pixels[i + c] = std::clamp((pixels[i + c] - black) * norm, 0.0f, 255.0f);
@@ -417,7 +420,7 @@ bool CpuFallbackOperator::execute(GpuBuffer* input, GpuBuffer* output,
 
 void CpuFallbackOperator::executeExposure(float* pixels, int w, int h, const GpuOperatorParams& p) {
     float scale = std::pow(2.0f, p.exposureStops);
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
     for (int i = 0; i < count; i += 4) {
         pixels[i]     *= scale;
         pixels[i + 1] *= scale;
@@ -428,7 +431,7 @@ void CpuFallbackOperator::executeExposure(float* pixels, int w, int h, const Gpu
 void CpuFallbackOperator::executeContrast(float* pixels, int w, int h, const GpuOperatorParams& p) {
     float mid = 128.0f;
     float factor = std::tan((p.contrast + 1.0f) * 0.785398f);
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
     for (int i = 0; i < count; i += 4) {
         for (int j = 0; j < 3; ++j) {
             float val = pixels[i + j];
@@ -440,7 +443,7 @@ void CpuFallbackOperator::executeContrast(float* pixels, int w, int h, const Gpu
 void CpuFallbackOperator::executeSaturation(float* pixels, int w, int h, const GpuOperatorParams& p) {
     const float lumR = 0.299f, lumG = 0.587f, lumB = 0.114f;
     float sat = p.saturation + 1.0f;
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
     for (int i = 0; i < count; i += 4) {
         float lum = pixels[i] * lumR + pixels[i + 1] * lumG + pixels[i + 2] * lumB;
         pixels[i]     = std::clamp(lum + (pixels[i]     - lum) * sat, 0.0f, 255.0f);
@@ -478,7 +481,7 @@ void CpuFallbackOperator::executeWhiteBalance(float* pixels, int w, int h, const
         b /= lumScale;
     }
 
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
     for (int i = 0; i < count; i += 4) {
         pixels[i]     = std::clamp(pixels[i]     * r, 0.0f, 255.0f);
         pixels[i + 1] = std::clamp(pixels[i + 1] * g, 0.0f, 255.0f);
@@ -489,7 +492,7 @@ void CpuFallbackOperator::executeWhiteBalance(float* pixels, int w, int h, const
 void CpuFallbackOperator::executeToneCurve(float* pixels, int w, int h, const GpuOperatorParams& p) {
     float s = -p.blacks[0];
     float hl = p.blacks[3];
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
     for (int i = 0; i < count; i += 4) {
         for (int j = 0; j < 3; ++j) {
             float x = pixels[i + j] / 255.0f;
@@ -502,7 +505,7 @@ void CpuFallbackOperator::executeToneCurve(float* pixels, int w, int h, const Gp
 }
 
 void CpuFallbackOperator::executeHSL(float* pixels, int w, int h, const GpuOperatorParams& p) {
-    int count = w * h * 4;
+    size_t count = static_cast<size_t>(w) * h * 4;
 
     auto rgbToHsl = [](float r, float g, float b, float& h, float& s, float& l) {
         float minC = std::min({r, g, b});
@@ -554,7 +557,7 @@ void CpuFallbackOperator::executeHSL(float* pixels, int w, int h, const GpuOpera
 void CpuFallbackOperator::executeSharpen(float* pixels, int w, int h, const GpuOperatorParams& p) {
     if (p.sharpenAmount < 0.001f) return;
 
-    std::vector<float> blurred(w * h * 4);
+    std::vector<float> blurred(static_cast<size_t>(w) * h * 4);
     // Simple 3x3 box blur
     const float kernel[9] = {1.0f/16, 2.0f/16, 1.0f/16, 2.0f/16, 4.0f/16, 2.0f/16, 1.0f/16, 2.0f/16, 1.0f/16};
 
@@ -574,7 +577,7 @@ void CpuFallbackOperator::executeSharpen(float* pixels, int w, int h, const GpuO
         }
     }
 
-    for (int i = 0; i < w * h * 4; i += 4) {
+    for (size_t i = 0; i < static_cast<size_t>(w) * h * 4; i += 4) {
         for (int c = 0; c < 3; ++c) {
             float detail = pixels[i + c] - blurred[i + c];
             float threshold = p.sharpenThreshold * 255.0f;

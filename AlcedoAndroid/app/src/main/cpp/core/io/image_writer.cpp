@@ -100,9 +100,9 @@ bool ImageWriter::WriteImageToPath(const ImageBuffer& buffer,
             return false;
         }
         // Convert uint8 → float32
-        int total = src_w * src_h * channels;
+        size_t total = static_cast<size_t>(src_w) * src_h * channels;
         std::vector<float> f32_data(total);
-        for (int i = 0; i < total; ++i) {
+        for (size_t i = 0; i < total; ++i) {
             f32_data[i] = static_cast<float>(src_u8[i]) / 255.0f;
         }
         src_float = f32_data.data();
@@ -131,16 +131,16 @@ bool ImageWriter::WriteImageToPath(const ImageBuffer& buffer,
     int out_channels = channels;
 
     if (needs_rgb_only && channels == 4) {
-        int pixel_count = dst_w * dst_h;
-        rgb_f32.resize(static_cast<size_t>(pixel_count) * 3);
-        RgbaF32ToRgbF32(work_float, rgb_f32.data(), pixel_count);
+        size_t pixel_count = static_cast<size_t>(dst_w) * dst_h;
+        rgb_f32.resize(pixel_count * 3);
+        RgbaF32ToRgbF32(work_float, rgb_f32.data(), static_cast<int>(pixel_count));
         work_float = rgb_f32.data();
         out_channels = 3;
     }
 
     // ── Convert to target bit depth ──
-    int total_pixels = dst_w * dst_h;
-    int total_samples = total_pixels * out_channels;
+    size_t total_pixels = static_cast<size_t>(dst_w) * dst_h;
+    size_t total_samples = total_pixels * out_channels;
 
     // Format tag for the raw blob header
     int format_tag = static_cast<int>(options.format_);
@@ -148,7 +148,7 @@ bool ImageWriter::WriteImageToPath(const ImageBuffer& buffer,
     if (options.bit_depth_ == ExportFormatOptions::BIT_DEPTH::BIT_8) {
         std::vector<uint8_t> u8_data(total_samples);
         if (!ConvertFloat32ToUint8(work_float, u8_data.data(),
-                                   total_pixels, out_channels)) {
+                                   static_cast<int>(total_pixels), out_channels)) {
             __android_log_print(ANDROID_LOG_ERROR, kTag,
                                 "WriteImageToPath: uint8 conversion failed");
             return false;
@@ -161,7 +161,7 @@ bool ImageWriter::WriteImageToPath(const ImageBuffer& buffer,
     if (options.bit_depth_ == ExportFormatOptions::BIT_DEPTH::BIT_16) {
         std::vector<uint16_t> u16_data(total_samples);
         if (!ConvertFloat32ToUint16(work_float, u16_data.data(),
-                                    total_pixels, out_channels)) {
+                                    static_cast<int>(total_pixels), out_channels)) {
             __android_log_print(ANDROID_LOG_ERROR, kTag,
                                 "WriteImageToPath: uint16 conversion failed");
             return false;
@@ -199,8 +199,8 @@ bool ImageWriter::ShouldWriteUltraHdr(const ImageBuffer& buffer,
 bool ImageWriter::ConvertFloat32ToUint8(const float* src, uint8_t* dst,
                                          int pixel_count, int channels) {
     if (!src || !dst) return false;
-    int total = pixel_count * channels;
-    for (int i = 0; i < total; ++i) {
+    size_t total = static_cast<size_t>(pixel_count) * channels;
+    for (size_t i = 0; i < total; ++i) {
         float v = ClampF32(src[i], 0.0f, 1.0f);
         dst[i] = static_cast<uint8_t>(v * 255.0f + 0.5f);
     }
@@ -210,8 +210,8 @@ bool ImageWriter::ConvertFloat32ToUint8(const float* src, uint8_t* dst,
 bool ImageWriter::ConvertFloat32ToUint16(const float* src, uint16_t* dst,
                                           int pixel_count, int channels) {
     if (!src || !dst) return false;
-    int total = pixel_count * channels;
-    for (int i = 0; i < total; ++i) {
+    size_t total = static_cast<size_t>(pixel_count) * channels;
+    for (size_t i = 0; i < total; ++i) {
         float v = ClampF32(src[i], 0.0f, 1.0f);
         dst[i] = static_cast<uint16_t>(v * 65535.0f + 0.5f);
     }

@@ -158,7 +158,17 @@ void ImageBuffer::convert_to_float32() {
                 uint32_t sign = (h >> 15) & 1;
                 uint32_t f_bits;
                 if (h_exp == 0) {
-                    f_bits = (sign << 31) | (h_mant << 13); // Denormal
+                    if (h_mant == 0) {
+                        f_bits = sign << 31; // Zero
+                    } else {
+                        // Denormal half → normalize to float32
+                        // Find the leading 1 in h_mant (10-bit value)
+                        uint32_t m = h_mant;
+                        int32_t e = 1; // bias for denormal
+                        while ((m & 0x400) == 0) { m <<= 1; e--; }
+                        m &= 0x3FF; // remove the leading 1
+                        f_bits = (sign << 31) | ((127 - 15 + e) << 23) | (m << 13);
+                    }
                 } else if (h_exp == 0x1F) {
                     f_bits = (sign << 31) | (0xFF << 23) | (h_mant << 13); // Inf/NaN
                 } else {
@@ -206,7 +216,9 @@ void ImageBuffer::convert_to_float16() {
         int32_t exp = ((f_bits >> 23) & 0xFF) - 127 + 15;
         uint32_t mant = (f_bits >> 13) & 0x3FF;
         if (exp <= 0) {
-            dst[i] = static_cast<uint16_t>((sign << 15) | (mant >> (1 - exp)));
+            int32_t shift = 1 - exp;
+            uint32_t shifted_mant = (shift < 32) ? (mant >> shift) : 0;
+            dst[i] = static_cast<uint16_t>((sign << 15) | shifted_mant);
         } else if (exp >= 0x1F) {
             dst[i] = static_cast<uint16_t>((sign << 15) | (0x1F << 10) | mant);
         } else {

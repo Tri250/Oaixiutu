@@ -84,11 +84,11 @@ void HSLOperator::apply_rgb(float* pixels, int width, int height,
                              const float saturation_scale[8],
                              const float luminance_scale[8]) {
     if (!pixels) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     float half_width = hue_width / 360.0f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -137,11 +137,11 @@ void HSLOperator::apply_rgba(float* pixels, int width, int height,
                               const float saturation_scale[8],
                               const float luminance_scale[8]) {
     if (!pixels) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     float half_width = hue_width / 360.0f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

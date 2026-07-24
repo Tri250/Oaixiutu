@@ -58,8 +58,9 @@ bool MetadataDecoder::parse_tiff_header(const uint8_t* data, size_t size, TiffCt
 bool MetadataDecoder::read_ifd_entry(const TiffCtx& ctx, uint32_t ifd_offset, uint16_t idx,
                                       uint16_t& tag, uint16_t& type, uint32_t& count,
                                       uint32_t& value_offset, const uint8_t*& value_ptr) {
-    uint32_t off = ifd_offset + 2 + idx * 12;
-    if (off + 12 > ctx.size) return false;
+    uint64_t off64 = static_cast<uint64_t>(ifd_offset) + 2 + static_cast<uint64_t>(idx) * 12;
+    if (off64 > UINT32_MAX || off64 + 12 > ctx.size) return false;
+    uint32_t off = static_cast<uint32_t>(off64);
     tag = read_u16(ctx.data + off, ctx.little_endian);
     type = read_u16(ctx.data + off + 2, ctx.little_endian);
     count = read_u32(ctx.data + off + 4, ctx.little_endian);
@@ -71,7 +72,9 @@ bool MetadataDecoder::read_ifd_entry(const TiffCtx& ctx, uint32_t ifd_offset, ui
         case 5: case 10: case 12: vsize = 8; break;
         default: vsize = 4; break;
     }
-    uint32_t total = count * vsize;
+    uint64_t total64 = static_cast<uint64_t>(count) * vsize;
+    if (total64 > UINT32_MAX) return false;
+    uint32_t total = static_cast<uint32_t>(total64);
     if (total <= 4) {
         value_offset = off + 8;
         value_ptr = ctx.data + off + 8;

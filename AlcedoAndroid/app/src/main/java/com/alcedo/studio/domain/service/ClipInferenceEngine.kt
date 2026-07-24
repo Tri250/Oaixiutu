@@ -190,8 +190,26 @@ class ClipInferenceEngine(private val context: Context) {
 
     /**
      * Unload the current model and release resources.
+     * Must be called from a coroutine scope to safely synchronize with in-flight inference.
      */
-    fun unloadModel() {
+    suspend fun unloadModel() {
+        // Wait for any in-flight inference to complete before cleaning up
+        inferenceMutex.withLock {
+            cleanupSessions()
+            status = ModelStatus.NOT_LOADED
+            activeModelConfig = null
+        }
+    }
+
+    /**
+     * Unload the current model without waiting for in-flight inference.
+     * Use only when no inference is in progress (e.g., from a non-coroutine context).
+     * WARNING: If in-flight inference exists, calling this may cause a crash.
+     * For safe unloading, prefer the suspend [unloadModel] instead.
+     */
+    fun unloadModelSync() {
+        // Note: This is NOT thread-safe w.r.t. concurrent inference.
+        // Callers must ensure no inference is running when calling this.
         cleanupSessions()
         status = ModelStatus.NOT_LOADED
         activeModelConfig = null
@@ -552,11 +570,11 @@ class ClipInferenceEngine(private val context: Context) {
             val vocabAsset = "ai_models/${modelId}_vocab.txt"
 
             val merges = try {
-                context.assets.open(mergesAsset).bufferedReader().readText()
+                context.assets.open(mergesAsset).use { it.bufferedReader().readText() }
             } catch (_: Exception) { null }
 
             val vocab = try {
-                context.assets.open(vocabAsset).bufferedReader().readText()
+                context.assets.open(vocabAsset).use { it.bufferedReader().readText() }
             } catch (_: Exception) { null }
 
             // Also try from files directory

@@ -10,7 +10,9 @@ static constexpr float kLumB = 0.0722f;
 
 // Smooth step function for soft region masks
 static inline float smoothstep(float edge0, float edge1, float x) {
-    float t = std::max(0.0f, std::min(1.0f, (x - edge0) / (edge1 - edge0)));
+    float range = edge1 - edge0;
+    if (std::abs(range) < 1e-10f) return (x >= edge1) ? 1.0f : 0.0f;
+    float t = std::max(0.0f, std::min(1.0f, (x - edge0) / range));
     return t * t * (3.0f - 2.0f * t);
 }
 
@@ -19,7 +21,7 @@ void ToneRegionOperator::apply_rgb(float* pixels, int width, int height,
                                     float shadow_boundary, float highlight_boundary,
                                     float smoothness) {
     if (shadows == 0.0f && midtones == 0.0f && highlights == 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     // Adjust boundaries based on smoothness
     float sb_low = shadow_boundary * 0.5f;
@@ -27,8 +29,8 @@ void ToneRegionOperator::apply_rgb(float* pixels, int width, int height,
     float hb_low = highlight_boundary * (1.0f - smoothness * 0.3f);
     float hb_high = highlight_boundary + (1.0f - highlight_boundary) * 0.5f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -76,15 +78,15 @@ void ToneRegionOperator::apply_rgba(float* pixels, int width, int height,
                                      float shadow_boundary, float highlight_boundary,
                                      float smoothness) {
     if (shadows == 0.0f && midtones == 0.0f && highlights == 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     float sb_low = shadow_boundary * 0.5f;
     float sb_high = shadow_boundary * (1.0f + smoothness * 0.5f);
     float hb_low = highlight_boundary * (1.0f - smoothness * 0.3f);
     float hb_high = highlight_boundary + (1.0f - highlight_boundary) * 0.5f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

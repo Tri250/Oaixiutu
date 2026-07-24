@@ -660,6 +660,7 @@ struct BaselineJpeg {
     }
     int extend(int v, int ssss) {
         if (ssss == 0) return 0;
+        if (ssss >= 31) return v; // guard against overflow
         int vt = 1 << (ssss - 1);
         return (v < vt) ? (v + 1 - (1 << ssss)) : v;
     }
@@ -1199,7 +1200,7 @@ void encodeBlock(BitWriter& w, const int coeffs[64], int& prevDc,
     while (mag > 0) { ++ssss; mag >>= 1; }
     const EncHuff& dcE = dcTab[ssss];
     w.writeBits(dcE.code, dcE.length);
-    if (ssss > 0) {
+    if (ssss > 0 && ssss < 31) {
         int v = (diff < 0) ? (diff + (1 << ssss) - 1) : diff;
         w.writeBits(static_cast<uint32_t>(v), ssss);
     }
@@ -1222,8 +1223,10 @@ void encodeBlock(BitWriter& w, const int coeffs[64], int& prevDc,
             uint8_t rs = static_cast<uint8_t>((run << 4) | s);
             const EncHuff& e = acTab[rs];
             w.writeBits(e.code, e.length);
-            int v = (coeff < 0) ? (coeff + (1 << s) - 1) : coeff;
-            w.writeBits(static_cast<uint32_t>(v), s);
+            if (s > 0 && s < 31) {
+                int v = (coeff < 0) ? (coeff + (1 << s) - 1) : coeff;
+                w.writeBits(static_cast<uint32_t>(v), s);
+            }
             run = 0;
         }
     }

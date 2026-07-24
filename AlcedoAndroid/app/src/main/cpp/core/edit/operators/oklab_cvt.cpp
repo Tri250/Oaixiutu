@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
+#include <mutex>
 
 namespace alcedo {
 namespace OklabCvt {
@@ -42,14 +43,13 @@ static constexpr float kLMS2RGB[9] = {
 // ACES AP1 → Linear sRGB matrix (for ACESRGB↔Oklab bridge)
 static float s_ap1_to_srgb[9] = {};
 static float s_srgb_to_ap1[9] = {};
-static bool s_matrices_initialized = false;
+static std::once_flag s_matrices_once;
 
 static void EnsureMatrices() {
-    if (!s_matrices_initialized) {
+    std::call_once(s_matrices_once, []() {
         color_science::get_ap1_to_srgb_matrix(s_ap1_to_srgb);
         color_science::get_srgb_to_ap1_matrix(s_srgb_to_ap1);
-        s_matrices_initialized = true;
-    }
+    });
 }
 
 // ============================================================
@@ -59,7 +59,7 @@ static void EnsureMatrices() {
 static constexpr int kAcesccLUTSize = 4096;
 static std::vector<float> s_acescc_to_linear_lut;
 static std::vector<float> s_linear_to_acescc_lut;
-static bool s_lut_initialized = false;
+static std::once_flag s_lut_once;
 
 static float AcesccEncodeRaw(float linear) {
     if (linear <= 0.0f) return -0.35828683f;
@@ -84,34 +84,32 @@ static float AcesccDecodeRaw(float acescc) {
 }
 
 void InitAcesccLUT() {
-    if (s_lut_initialized) return;
+    std::call_once(s_lut_once, []() {
+        s_acescc_to_linear_lut.resize(kAcesccLUTSize);
+        s_linear_to_acescc_lut.resize(kAcesccLUTSize);
 
-    s_acescc_to_linear_lut.resize(kAcesccLUTSize);
-    s_linear_to_acescc_lut.resize(kAcesccLUTSize);
+        // ACEScc range: approximately -0.358 to 1.468
+        float acescc_min = -0.36f;
+        float acescc_max = 1.47f;
 
-    // ACEScc range: approximately -0.358 to 1.468
-    float acescc_min = -0.36f;
-    float acescc_max = 1.47f;
+        for (int i = 0; i < kAcesccLUTSize; ++i) {
+            float acescc = acescc_min + (acescc_max - acescc_min) * i / (kAcesccLUTSize - 1);
+            s_acescc_to_linear_lut[i] = AcesccDecodeRaw(acescc);
+        }
 
-    for (int i = 0; i < kAcesccLUTSize; ++i) {
-        float acescc = acescc_min + (acescc_max - acescc_min) * i / (kAcesccLUTSize - 1);
-        s_acescc_to_linear_lut[i] = AcesccDecodeRaw(acescc);
-    }
-
-    // Linear range: 0 to ~65504, but most useful range is 0 to ~16
-    // Use logarithmic spacing for better precision in shadows
-    for (int i = 0; i < kAcesccLUTSize; ++i) {
-        float t = static_cast<float>(i) / (kAcesccLUTSize - 1);
-        // Map t∈[0,1] to linear∈[0, 16] with sqrt spacing for shadow precision
-        float linear = t * t * 16.0f;
-        s_linear_to_acescc_lut[i] = AcesccEncodeRaw(linear);
-    }
-
-    s_lut_initialized = true;
+        // Linear range: 0 to ~65504, but most useful range is 0 to ~16
+        // Use logarithmic spacing for better precision in shadows
+        for (int i = 0; i < kAcesccLUTSize; ++i) {
+            float t = static_cast<float>(i) / (kAcesccLUTSize - 1);
+            // Map t∈[0,1] to linear∈[0, 16] with sqrt spacing for shadow precision
+            float linear = t * t * 16.0f;
+            s_linear_to_acescc_lut[i] = AcesccEncodeRaw(linear);
+        }
+    });
 }
 
 float AcesccToLinear(float acescc) {
-    if (!s_lut_initialized) InitAcesccLUT();
+    InitAcesccLUT();
 
     float acescc_min = -0.36f;
     float acescc_max = 1.47f;
@@ -128,7 +126,7 @@ float AcesccToLinear(float acescc) {
 }
 
 float LinearToAcescc(float linear) {
-    if (!s_lut_initialized) InitAcesccLUT();
+    InitAcesccLUT();
 
     float t = std::sqrt(std::clamp(linear / 16.0f, 0.0f, 1.0f));
     float idx_f = t * (kAcesccLUTSize - 1);

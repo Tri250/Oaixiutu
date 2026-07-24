@@ -83,9 +83,9 @@ std::vector<float> luminance_denoise_nlm(
     for (auto& w : patch_weights) w /= weight_sum;
 
     // Step 1: Build luminance image for distance computation
-    const int n = width * height;
+    const size_t n = static_cast<size_t>(width) * height;
     std::vector<float> luma(n);
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         int idx = i * channels;
         luma[i] = rgb_to_luma(input[idx], input[idx + 1], input[idx + 2]);
     }
@@ -177,7 +177,7 @@ std::vector<float> chroma_denoise_bilateral(
 ) {
     if (strength <= 0.0f) return input;
 
-    const int n = width * height;
+    const size_t n = static_cast<size_t>(width) * height;
 
     // Spatial sigma for bilateral filter
     const float sigma_s = 3.0f + strength * 5.0f;  // spatial: 3..8 pixels

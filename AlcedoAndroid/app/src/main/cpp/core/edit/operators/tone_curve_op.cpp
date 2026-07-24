@@ -6,14 +6,14 @@ namespace alcedo {
 void ToneCurveOperator::apply(std::vector<float>& pixels, int width, int height,
                               const float* curve_x, const float* curve_y, int num_points) {
     if (num_points <= 0 || !curve_x || !curve_y) return;
-    int total = width * height;
-    if (total <= 0) return;
-    int channels = static_cast<int>(pixels.size()) / total;
+    size_t total = static_cast<size_t>(width) * height;
+    if (total == 0) return;
+    int channels = static_cast<int>(pixels.size()) / static_cast<int>(total);
     if (channels <= 0) return;
     // Apply curve only to RGB channels (skip alpha if present)
     int colorChannels = std::min(channels, 3);
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         for (int c = 0; c < colorChannels; ++c) {
             pixels[idx + c] = std::clamp(interpolate_curve(pixels[idx + c], curve_x, curve_y, num_points), 0.0f, 1.0f);
         }

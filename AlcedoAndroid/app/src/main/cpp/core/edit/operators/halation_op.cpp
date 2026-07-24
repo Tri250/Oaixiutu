@@ -50,7 +50,7 @@ void HalationOperator::box_blur_v(float* src, float* dst, int width, int height,
 }
 
 void HalationOperator::box_blur_rgb(float* src, float* dst, int width, int height, int radius) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     std::vector<float> tmp(total);
     // Blur each channel independently
     for (int c = 0; c < 3; ++c) {
@@ -71,13 +71,13 @@ void HalationOperator::apply_rgb(float* pixels, int width, int height,
                                   float intensity, float threshold,
                                   float spread, float red_bias) {
     if (intensity <= 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     int channels = 3;
 
     // Step 1: Extract highlights (pixels above threshold)
     std::vector<float> highlight_mask(total, 0.0f);
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -94,8 +94,8 @@ void HalationOperator::apply_rgb(float* pixels, int width, int height,
 
     // Step 2: Create RGB highlight image (red-biased)
     std::vector<float> highlight_rgb(total * channels);
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float mask = highlight_mask[i];
         // Red bias: boost the red channel relative to green and blue
         highlight_rgb[idx]     = pixels[idx] * mask * (1.0f + red_bias);
@@ -110,8 +110,8 @@ void HalationOperator::apply_rgb(float* pixels, int width, int height,
 
     // Step 4: Blend the blurred highlights back into the image
     float blend = intensity * 0.5f;
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         pixels[idx]     += blurred_highlights[idx] * blend;
         pixels[idx + 1] += blurred_highlights[idx + 1] * blend;
         pixels[idx + 2] += blurred_highlights[idx + 2] * blend;
@@ -126,13 +126,13 @@ void HalationOperator::apply_rgba(float* pixels, int width, int height,
                                    float intensity, float threshold,
                                    float spread, float red_bias) {
     if (intensity <= 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     int channels = 3;
 
     // Extract highlights
     std::vector<float> highlight_mask(total, 0.0f);
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -146,9 +146,9 @@ void HalationOperator::apply_rgba(float* pixels, int width, int height,
 
     // Create highlight RGB image
     std::vector<float> highlight_rgb(total * channels);
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
-        int src_idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
+        size_t src_idx = i * 4;
         float mask = highlight_mask[i];
         highlight_rgb[idx]     = pixels[src_idx] * mask * (1.0f + red_bias);
         highlight_rgb[idx + 1] = pixels[src_idx + 1] * mask * (1.0f - red_bias * 0.3f);
@@ -162,9 +162,9 @@ void HalationOperator::apply_rgba(float* pixels, int width, int height,
 
     // Blend
     float blend = intensity * 0.5f;
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
-        int src_idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
+        size_t src_idx = i * 3;
         pixels[idx]     += blurred_highlights[src_idx] * blend;
         pixels[idx + 1] += blurred_highlights[src_idx + 1] * blend;
         pixels[idx + 2] += blurred_highlights[src_idx + 2] * blend;

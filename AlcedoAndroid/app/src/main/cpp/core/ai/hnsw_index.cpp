@@ -7,8 +7,9 @@ namespace alcedo::ai {
 // ── Construction ──
 HnswIndex::HnswIndex(int embeddingDim, const HnswConfig& config)
     : embeddingDim_(embeddingDim), config_(config), rng_(std::random_device{}()) {
-    // Normalize levelMult
-    config_.levelMult = 1.0f / std::log(1.0f * config_.M);
+    // Normalize levelMult: guard against M <= 1 which would make log(M) <= 0
+    float logM = std::log(std::max(2.0f, static_cast<float>(config_.M)));
+    config_.levelMult = 1.0f / logM;
     config_.M_max = config_.M;
     config_.M_max0 = config_.M * 2;
 }
@@ -35,6 +36,8 @@ float HnswIndex::distance(const std::vector<float>& a, const std::vector<float>&
 int HnswIndex::randomLevel() const {
     std::uniform_real_distribution<float> dist(0.0f, 1.0f);
     float r = dist(rng_);
+    // Guard against r == 0 which would cause log(0) = -inf
+    r = std::max(r, 1e-10f);
     return static_cast<int>(-std::log(r) * config_.levelMult);
 }
 
@@ -152,24 +155,37 @@ void HnswIndex::connectNeighbors(uint64_t nodeId, int layer) {
         // Check if we should add nodeId to nId's neighbors
         if (nit->second->neighbors[layer].size() < static_cast<size_t>(maxConn)) {
             nit->second->neighbors[layer].push_back(nodeId);
-        } else {
+        } else if (!nit->second->neighbors[layer].empty()) {
             // Prune: replace the farthest neighbor if the new node is closer
             // Distance should be from nId's perspective: distance(nId, neighbor)
             const float* nEmb = nit->second->embedding.data();
             auto& nNeighbors = nit->second->neighbors[layer];
 
             size_t worstIdx = 0;
-            float worstDist = distance(nEmb, nodes_[nNeighbors[0]]->embedding.data());
-            for (size_t j = 1; j < nNeighbors.size(); ++j) {
-                float d = distance(nEmb, nodes_[nNeighbors[j]]->embedding.data());
-                if (d > worstDist) {
-                    worstDist = d;
-                    worstIdx = j;
+            auto worstIt = nodes_.find(nNeighbors[0]);
+            if (worstIt == nodes_.end()) {
+                // First neighbor no longer exists; replace it directly
+                nNeighbors[0] = nodeId;
+            } else {
+                float worstDist = distance(nEmb, worstIt->second->embedding.data());
+                for (size_t j = 1; j < nNeighbors.size(); ++j) {
+                    auto jit = nodes_.find(nNeighbors[j]);
+                    if (jit == nodes_.end()) {
+                        // Stale neighbor reference; replace it
+                        worstIdx = j;
+                        worstDist = std::numeric_limits<float>::max();
+                        break;
+                    }
+                    float d = distance(nEmb, jit->second->embedding.data());
+                    if (d > worstDist) {
+                        worstDist = d;
+                        worstIdx = j;
+                    }
                 }
-            }
-            float dToN = distance(nEmb, nodeEmb);
-            if (dToN < worstDist) {
-                nNeighbors[worstIdx] = nodeId;
+                float dToN = distance(nEmb, nodeEmb);
+                if (dToN < worstDist) {
+                    nNeighbors[worstIdx] = nodeId;
+                }
             }
         }
     }
@@ -377,7 +393,7 @@ bool HnswIndex::deserialize(const std::vector<uint8_t>& data) {
         int32_t embDim;
 
         if (!readVal(id) || !readVal(level) || !readVal(embDim)) return false;
-        if (embDim != embeddingDim_) return false;
+        if (embDim != embeddingDim_ || embDim < 0 || level < 0) return false;
 
         std::vector<float> emb(embDim);
         for (int32_t j = 0; j < embDim; ++j) {
@@ -388,6 +404,7 @@ bool HnswIndex::deserialize(const std::vector<uint8_t>& data) {
         for (int32_t L = 0; L <= level; ++L) {
             int32_t nCount;
             if (!readVal(nCount)) return false;
+            if (nCount < 0) return false;
             node->neighbors[L].reserve(nCount);
             for (int32_t j = 0; j < nCount; ++j) {
                 uint64_t nId;

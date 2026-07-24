@@ -162,8 +162,9 @@ bool RawDecoder::parse_tiff_header(const uint8_t* data, size_t size, TiffContext
 
 bool RawDecoder::read_tiff_entry(const TiffContext& ctx, uint32_t ifd_offset,
                                   uint16_t index, TiffEntry& entry) {
-    uint32_t off = ifd_offset + 2 + index * 12;
-    if (off + 12 > ctx.size) return false;
+    uint64_t off64 = static_cast<uint64_t>(ifd_offset) + 2 + static_cast<uint64_t>(index) * 12;
+    if (off64 > UINT32_MAX || off64 + 12 > ctx.size) return false;
+    uint32_t off = static_cast<uint32_t>(off64);
     entry.tag   = read_u16(ctx.data + off, ctx.little_endian);
     entry.type  = read_u16(ctx.data + off + 2, ctx.little_endian);
     entry.count = read_u32(ctx.data + off + 4, ctx.little_endian);
@@ -175,7 +176,9 @@ bool RawDecoder::read_tiff_entry(const TiffContext& ctx, uint32_t ifd_offset,
         case 5: case 10: case 12: vsize = 8; break;
         default: vsize = 4; break;
     }
-    uint32_t total = entry.count * vsize;
+    uint64_t total64 = static_cast<uint64_t>(entry.count) * vsize;
+    if (total64 > UINT32_MAX) return false;
+    uint32_t total = static_cast<uint32_t>(total64);
     if (total <= 4) {
         entry.offset = off + 8;
         entry.data_ptr = ctx.data + off + 8;
@@ -1017,8 +1020,8 @@ void RawDecoder::demosaic_amaze(const uint16_t* raw, int width, int height,
     float wl = static_cast<float>(std::max(white_level - black_level, 1));
 
     // Temporary buffer for normalized values
-    std::vector<float> norm(width * height);
-    for (int i = 0; i < width * height; ++i) {
+    std::vector<float> norm(static_cast<size_t>(width) * height);
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         norm[i] = clampf(static_cast<float>(raw[i] - black_level) / wl, 0.0f, 1.0f);
     }
 
@@ -1116,8 +1119,8 @@ void RawDecoder::demosaic_vng4(const uint16_t* raw, int width, int height,
     // Simplified VNG4: use 4 gradient directions for interpolation
     float wl = static_cast<float>(std::max(white_level - black_level, 1));
 
-    std::vector<float> norm(width * height);
-    for (int i = 0; i < width * height; ++i) {
+    std::vector<float> norm(static_cast<size_t>(width) * height);
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         norm[i] = clampf(static_cast<float>(raw[i] - black_level) / wl, 0.0f, 1.0f);
     }
 
@@ -1185,7 +1188,7 @@ void RawDecoder::demosaic_vng4(const uint16_t* raw, int width, int height,
 
 void RawDecoder::apply_white_balance_16bit(uint16_t* rgb, int width, int height,
                                             const float* multipliers) {
-    for (int i = 0; i < width * height; ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         int idx = i * 3;
         float r = static_cast<float>(rgb[idx]) * multipliers[0];
         float g = static_cast<float>(rgb[idx + 1]) * multipliers[1];
@@ -1198,7 +1201,7 @@ void RawDecoder::apply_white_balance_16bit(uint16_t* rgb, int width, int height,
 
 void RawDecoder::apply_white_balance_float(float* rgb, int width, int height,
                                             const float* multipliers) {
-    for (int i = 0; i < width * height; ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         int idx = i * 3;
         rgb[idx] *= multipliers[0];
         rgb[idx + 1] *= multipliers[1];
@@ -1323,7 +1326,7 @@ void RawDecoder::scale_to_16bit(uint16_t* raw, int width, int height,
                                  int bits_per_sample) {
     if (bits_per_sample >= 16 || bits_per_sample <= 0) return;
     int shift = 16 - bits_per_sample;
-    for (int i = 0; i < width * height; ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         raw[i] = static_cast<uint16_t>(raw[i] << shift);
     }
 }
@@ -1527,12 +1530,12 @@ bool RawDecoder::decompress_nikon_he(const uint8_t* compressed_data, size_t comp
                 if (outputIdx >= 0) {
                     size_t outSize = 0;
                     uint8_t* outBuf = AMediaCodec_getOutputBuffer(codec, outputIdx, &outSize);
-                    if (outBuf && outSize >= static_cast<size_t>(width * height * 2)) {
+                    if (outBuf && outSize >= static_cast<size_t>(width) * height * 2) {
                         // Convert decoded bytes to uint16_t RAW data
                         // HEVC output is typically YUV420; for Nikon HE the TTH
                         // (Tone Transfer Heuristic) maps pixel values back to linear RAW.
                         // Here we read the decoded output as 16-bit samples.
-                        for (int i = 0; i < width * height; ++i) {
+                        for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
                             output[i] = (outBuf[i * 2] << 8) | outBuf[i * 2 + 1];
                         }
                         AMediaCodec_releaseOutputBuffer(codec, outputIdx, false);
@@ -1562,15 +1565,15 @@ bool RawDecoder::decompress_nikon_he(const uint8_t* compressed_data, size_t comp
 #endif
 
     // Fallback: treat as uncompressed if possible
-    if (compressed_size >= static_cast<size_t>(width * height * 2)) {
-        for (int i = 0; i < width * height && i * 2 < static_cast<int>(compressed_size); ++i) {
+    if (compressed_size >= static_cast<size_t>(width) * height * 2) {
+        for (size_t i = 0; i < static_cast<size_t>(width) * height && i * 2 < compressed_size; ++i) {
             output[i] = (compressed_data[i * 2] << 8) | compressed_data[i * 2 + 1];
         }
         return true;
     }
 
     // Cannot decode without MediaCodec and data is too small for uncompressed
-    std::fill(output, output + width * height, 0);
+    std::fill(output, output + static_cast<size_t>(width) * height, 0);
     return false;
 }
 
@@ -1647,6 +1650,7 @@ int decodeSymbol(const uint8_t* data, size_t size, size_t& bitOffset,
 // negative; otherwise the value is the positive magnitude directly.
 int decodeDiff(const uint8_t* data, size_t size, size_t& bitOffset, int ssss) {
     if (ssss == 0) return 0;
+    if (ssss >= 31) return 0; // guard against overflow
     int value = 0;
     for (int i = 0; i < ssss; ++i) {
         value = (value << 1) | readBit(data, size, bitOffset);
@@ -1803,7 +1807,7 @@ bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
         scanData.push_back(b);
     }
 
-    const int maxVal = (1 << precision) - 1;
+    const int maxVal = (precision > 0 && precision < 31) ? ((1 << precision) - 1) : 65535;
     const int shift = pointTransform;
     size_t bitOffset = 0;
     bool ok = true;
@@ -1822,7 +1826,10 @@ bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
             int predReduced;
             if (row == 0 && col == 0) {
                 // First sample uses 2^(P-Pt-1) as the prediction.
-                predReduced = 1 << (precision - shift - 1);
+                int shiftAmount = precision - shift - 1;
+                if (shiftAmount < 0) shiftAmount = 0;
+                if (shiftAmount >= 31) shiftAmount = 30;
+                predReduced = 1 << shiftAmount;
             } else {
                 int ra = (col > 0) ? output[row * width + col - 1] : 0;
                 int rb = (row > 0) ? output[(row - 1) * width + col] : 0;
@@ -1836,6 +1843,7 @@ bool RawDecoder::decompress_lossless_jpeg(const uint8_t* data, size_t size,
             }
 
             int value = (predReduced + diff) << shift;
+            // Clamp to valid range in case of signed overflow
             if (value < 0) value = 0;
             if (value > maxVal) value = maxVal;
             output[row * width + col] = static_cast<uint16_t>(value);

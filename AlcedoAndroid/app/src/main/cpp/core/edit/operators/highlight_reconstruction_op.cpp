@@ -75,8 +75,8 @@ static void hr_apply_impl(T* raw_data, int width, int height,
     // 2. Use the average ratio to estimate the clipped channel value
     // 3. Blend the reconstructed value with the clipped value
 
-    std::vector<T> result(width * height);
-    std::copy(raw_data, raw_data + width * height, result.begin());
+    std::vector<T> result(static_cast<size_t>(width) * height);
+    std::copy(raw_data, raw_data + static_cast<size_t>(width) * height, result.begin());
 
     for (int y = 2; y < height - 2; ++y) {
         for (int x = 2; x < width - 2; ++x) {

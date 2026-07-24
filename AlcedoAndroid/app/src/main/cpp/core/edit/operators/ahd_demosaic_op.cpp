@@ -48,7 +48,7 @@ int AHDDemosaicOperator::color_at(int y, int x, const BayerInfo& info) {
 void AHDDemosaicOperator::ahd_interpolate(const float* src, int width, int height,
                                            const BayerInfo& info,
                                            float* output_r, float* output_g, float* output_b) {
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
     int stride = width;
 
     // Allocate buffers for horizontal and vertical interpolations
@@ -220,6 +220,37 @@ void AHDDemosaicOperator::ahd_interpolate(const float* src, int width, int heigh
         }
     }
 
+    // ── Step 3b: Fill border pixels in H and V buffers with simple bilinear ──
+    // For border rows/columns where directional interpolation was skipped,
+    // fill green at non-green pixels using nearest available green neighbors.
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int c = color_at(y, x, info);
+            if (c == 1) continue; // green pixels already filled
+            int idx3 = (y * width + x) * 3;
+
+            // Check if green is still 0 in H buffer (means it wasn't interpolated)
+            if (std::abs(rgb_h[idx3 + 1]) < 1e-10f) {
+                float sum = 0.0f;
+                int count = 0;
+                if (y > 0) { sum += rgb_h[((y-1)*width+x)*3+1]; count++; }
+                if (y < height-1) { sum += rgb_h[((y+1)*width+x)*3+1]; count++; }
+                if (x > 0) { sum += rgb_h[(y*width+(x-1))*3+1]; count++; }
+                if (x < width-1) { sum += rgb_h[(y*width+(x+1))*3+1]; count++; }
+                if (count > 0) rgb_h[idx3 + 1] = sum / count;
+            }
+            if (std::abs(rgb_v[idx3 + 1]) < 1e-10f) {
+                float sum = 0.0f;
+                int count = 0;
+                if (y > 0) { sum += rgb_v[((y-1)*width+x)*3+1]; count++; }
+                if (y < height-1) { sum += rgb_v[((y+1)*width+x)*3+1]; count++; }
+                if (x > 0) { sum += rgb_v[(y*width+(x-1))*3+1]; count++; }
+                if (x < width-1) { sum += rgb_v[(y*width+(x+1))*3+1]; count++; }
+                if (count > 0) rgb_v[idx3 + 1] = sum / count;
+            }
+        }
+    }
+
     // ── Step 4: Homogeneity-directed selection ──
     // For each pixel, choose the direction (H or V) that produces
     // more homogeneous (smooth) results in a local neighborhood.
@@ -301,16 +332,21 @@ void AHDDemosaicOperator::demosaic_uint16(const uint16_t* raw_data, int width, i
                                             int bayer_pattern,
                                             float* output_r, float* output_g, float* output_b,
                                             uint16_t white_level, uint16_t black_level) {
-    int total = width * height;
+    if (!raw_data || !output_r || !output_g || !output_b || width <= 0 || height <= 0) {
+        LOGE("AHD demosaic: invalid parameters (w=%d, h=%d)", width, height);
+        return;
+    }
+    size_t total = static_cast<size_t>(width) * height;
     BayerInfo info = get_bayer_info(bayer_pattern);
 
     // Convert to float and normalize
+    // Guard against uint16_t underflow: cast to int32_t before subtracting
     std::vector<float> src(total);
     float range = static_cast<float>(white_level - black_level);
     if (range < 1.0f) range = 65535.0f;
-    for (int i = 0; i < total; ++i) {
-        src[i] = static_cast<float>(raw_data[i] - black_level) / range;
-        src[i] = std::max(0.0f, src[i]);
+    for (size_t i = 0; i < total; ++i) {
+        float val = static_cast<float>(static_cast<int32_t>(raw_data[i]) - static_cast<int32_t>(black_level));
+        src[i] = std::clamp(val / range, 0.0f, 1.0f);
     }
 
     ahd_interpolate(src.data(), width, height, info, output_r, output_g, output_b);
@@ -322,13 +358,17 @@ void AHDDemosaicOperator::demosaic_float(const float* raw_data, int width, int h
                                            int bayer_pattern,
                                            float* output_r, float* output_g, float* output_b,
                                            float white_level, float black_level) {
-    int total = width * height;
+    if (!raw_data || !output_r || !output_g || !output_b || width <= 0 || height <= 0) {
+        LOGE("AHD demosaic (float): invalid parameters (w=%d, h=%d)", width, height);
+        return;
+    }
+    size_t total = static_cast<size_t>(width) * height;
     BayerInfo info = get_bayer_info(bayer_pattern);
 
     std::vector<float> src(total);
     float range = white_level - black_level;
     if (range < 1e-6f) range = 1.0f;
-    for (int i = 0; i < total; ++i) {
+    for (size_t i = 0; i < total; ++i) {
         src[i] = (raw_data[i] - black_level) / range;
         src[i] = std::max(0.0f, src[i]);
     }

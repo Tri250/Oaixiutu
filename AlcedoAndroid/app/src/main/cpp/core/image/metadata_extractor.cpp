@@ -137,8 +137,9 @@ bool MetadataExtractor::parse_tiff_header(const uint8_t* data, size_t size, bool
 bool MetadataExtractor::parse_ifd_entry(const uint8_t* data, size_t size, bool little_endian,
                                          uint32_t ifd_offset, uint16_t entry_index,
                                          uint16_t& tag, uint16_t& type, uint32_t& count, uint32_t& value_offset) {
-    uint32_t entry_offset = ifd_offset + 2 + entry_index * 12;
-    if (entry_offset + 12 > size) return false;
+    uint64_t entry_offset64 = static_cast<uint64_t>(ifd_offset) + 2 + static_cast<uint64_t>(entry_index) * 12;
+    if (entry_offset64 > UINT32_MAX || entry_offset64 + 12 > size) return false;
+    uint32_t entry_offset = static_cast<uint32_t>(entry_offset64);
 
     tag = read_uint16(data + entry_offset, little_endian);
     type = read_uint16(data + entry_offset + 2, little_endian);
@@ -157,7 +158,9 @@ bool MetadataExtractor::parse_ifd_entry(const uint8_t* data, size_t size, bool l
         default: value_size = 4; break;
     }
 
-    uint32_t total_size = count * value_size;
+    uint64_t total_size64 = static_cast<uint64_t>(count) * value_size;
+    if (total_size64 > UINT32_MAX) return false;
+    uint32_t total_size = static_cast<uint32_t>(total_size64);
     if (total_size <= 4) {
         value_offset = entry_offset + 8;
     } else {

@@ -112,6 +112,7 @@ void CropRotateOperator::apply_rotate(float* dst, const float* src, int src_widt
 
         int dst_width = static_cast<int>(std::ceil(max_x - min_x));
         int dst_height = static_cast<int>(std::ceil(max_y - min_y));
+        if (dst_width <= 0 || dst_height <= 0) return;
 
         float dst_cx = dst_width * 0.5f;
         float dst_cy = dst_height * 0.5f;

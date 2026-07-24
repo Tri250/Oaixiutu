@@ -193,9 +193,9 @@ void LMTOp::ApplyImpl(float* pixels, int width, int height, int channels, float 
     // Clamp intensity to valid range
     intensity = std::clamp(intensity, 0.0f, 1.0f);
 
-    int total = width * height;
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    size_t total = static_cast<size_t>(width) * height;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = std::clamp(pixels[idx], 0.0f, 1.0f);
         float g = std::clamp(pixels[idx + 1], 0.0f, 1.0f);
         float b = std::clamp(pixels[idx + 2], 0.0f, 1.0f);

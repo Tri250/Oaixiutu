@@ -35,7 +35,7 @@ void TintOperator::apply_rgb(float* pixels, int width, int height,
                               float balance) {
     if (!pixels) return;
     if (highlight_strength == 0.0f && shadow_strength == 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     // Compute highlight tint color
     float hh_norm = std::fmod(highlight_hue, 360.0f) / 360.0f;
@@ -53,8 +53,8 @@ void TintOperator::apply_rgb(float* pixels, int width, int height,
     float split_point = 0.5f + balance * 0.15f;
     split_point = std::max(0.05f, std::min(0.95f, split_point));
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];
@@ -85,7 +85,7 @@ void TintOperator::apply_rgba(float* pixels, int width, int height,
                                float balance) {
     if (!pixels) return;
     if (highlight_strength == 0.0f && shadow_strength == 0.0f) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     float hh_norm = std::fmod(highlight_hue, 360.0f) / 360.0f;
     if (hh_norm < 0.0f) hh_norm += 1.0f;
@@ -100,8 +100,8 @@ void TintOperator::apply_rgba(float* pixels, int width, int height,
     float split_point = 0.5f + balance * 0.15f;
     split_point = std::max(0.05f, std::min(0.95f, split_point));
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

@@ -159,6 +159,7 @@ object MediaStoreHelper {
     }
 
     // ── Open input stream from content URI ──
+    // Callers MUST close the returned stream (prefer using .use { }).
 
     fun openInputStream(context: Context, uri: Uri): InputStream? {
         return try {

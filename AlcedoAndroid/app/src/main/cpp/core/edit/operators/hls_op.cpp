@@ -90,7 +90,7 @@ void HLSOp::SetHueRange(int profile, float range) {
 
 void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
     if (!pixels || channels < 3) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     // Check if any adjustments are non-zero
     bool has_adjustments = false;
@@ -106,8 +106,8 @@ void HLSOp::ApplyImpl(float* pixels, int width, int height, int channels) {
 
     static constexpr float kPi = 3.14159265358979323846f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * channels;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * channels;
         float r = pixels[idx];
         float g = pixels[idx + 1];
         float b = pixels[idx + 2];

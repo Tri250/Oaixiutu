@@ -53,7 +53,7 @@ void ClarityOperator::box_blur_v(float* src, float* dst, int width, int height, 
 }
 
 void ClarityOperator::box_blur(float* src, float* dst, int width, int height, int channels, int radius) {
-    int size = width * height * channels;
+    size_t size = static_cast<size_t>(width) * height * channels;
     std::vector<float> tmp(size);
     box_blur_h(src, tmp.data(), width, height, channels, radius);
     box_blur_v(tmp.data(), dst, width, height, channels, radius);
@@ -62,14 +62,14 @@ void ClarityOperator::box_blur(float* src, float* dst, int width, int height, in
 void ClarityOperator::apply_rgb(float* pixels, int width, int height, float amount, float radius) {
     if (amount == 0.0f || radius <= 0.0f) return;
     int channels = 3;
-    int size = width * height * channels;
+    size_t size = static_cast<size_t>(width) * height * channels;
     int iradius = std::max(1, static_cast<int>(radius));
 
     std::vector<float> blurred(size);
     box_blur(pixels, blurred.data(), width, height, channels, iradius);
 
     float scale = amount * 0.5f;
-    for (int i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         float detail = pixels[i] - blurred[i];
         pixels[i] = std::clamp(pixels[i] + detail * scale, 0.0f, 1.0f);
     }
@@ -78,14 +78,14 @@ void ClarityOperator::apply_rgb(float* pixels, int width, int height, float amou
 void ClarityOperator::apply_rgba(float* pixels, int width, int height, float amount, float radius) {
     if (amount == 0.0f || radius <= 0.0f) return;
     int channels = 4;
-    int size = width * height * channels;
+    size_t size = static_cast<size_t>(width) * height * channels;
     int iradius = std::max(1, static_cast<int>(radius));
 
     std::vector<float> blurred(size);
     box_blur(pixels, blurred.data(), width, height, channels, iradius);
 
     float scale = amount * 0.5f;
-    for (int i = 0; i < size; i += 4) {
+    for (size_t i = 0; i < size; i += 4) {
         for (int c = 0; c < 3; ++c) {
             float detail = pixels[i + c] - blurred[i + c];
             pixels[i + c] = std::clamp(pixels[i + c] + detail * scale, 0.0f, 1.0f);

@@ -270,8 +270,14 @@ object AiNdkBridge {
             }
             nodes.remove(id)
             if (id == entryPoint) {
-                entryPoint = if (nodes.isEmpty()) 0L else nodes.keys.first()
-                maxLevel = if (nodes.isEmpty()) -1 else nodes[entryPoint]?.level ?: -1
+                if (nodes.isEmpty()) {
+                    entryPoint = 0L
+                    hasEntry = false
+                    maxLevel = -1
+                } else {
+                    entryPoint = nodes.keys.first()
+                    maxLevel = nodes[entryPoint]?.level ?: -1
+                }
             }
         }
 
@@ -280,6 +286,7 @@ object AiNdkBridge {
         fun clear() {
             nodes.clear()
             entryPoint = 0
+            hasEntry = false
             maxLevel = -1
         }
 

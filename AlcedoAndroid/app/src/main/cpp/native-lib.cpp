@@ -132,10 +132,10 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyPipelineFl
     SAFE_PARAM(p_idx++, pipeline_params.tint_balance);
 
     // Display transform
-    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.color_science = static_cast<int>(tmp); }
-    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.eotf = static_cast<int>(tmp); }
+    { int tmp = 0; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.color_science = static_cast<int>(tmp); }
+    { int tmp = 0; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.eotf = static_cast<int>(tmp); }
     SAFE_PARAM(p_idx++, pipeline_params.display_transform.peak_luminance);
-    { int tmp; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.display_color_space = static_cast<int>(tmp); }
+    { int tmp = 0; SAFE_PARAM(p_idx++, tmp); pipeline_params.display_transform.display_color_space = static_cast<int>(tmp); }
 
     // ── Tone region boundaries (idx 38-39) ──
     SAFE_PARAM(p_idx++, pipeline_params.shadow_boundary);
@@ -331,6 +331,12 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDecodeRaw(
         jint demosaic,
         jboolean highlightReconstruction
 ) {
+    if (!rawPath) {
+        LOGE("nativeDecodeRaw: null rawPath");
+        jintArray empty = env->NewIntArray(0);
+        if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
+        return empty ? empty : env->NewIntArray(0);
+    }
     const char *path = env->GetStringUTFChars(rawPath, nullptr);
     if (!path) {
         LOGE("Failed to get raw path string");
@@ -474,7 +480,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeConvertColorSpa
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    color_science::convert_color_space_bulk(float_pixels.data(), width * height, 3, srcSpace, dstSpace);
+    color_science::convert_color_space_bulk(float_pixels.data(), static_cast<int>(static_cast<size_t>(width) * height), 3, srcSpace, dstSpace);
 
     jfloatArray result = env->NewFloatArray(len);
     if (!result || env->ExceptionCheck()) {
@@ -540,6 +546,10 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplyLut(
         jint height,
         jstring lutPath
 ) {
+    if (!lutPath) {
+        LOGE("nativeApplyLut: null lutPath");
+        return JNI_FALSE;
+    }
     const char *path = env->GetStringUTFChars(lutPath, nullptr);
     jsize len = env->GetArrayLength(pixels);
     jfloat *pix = env->GetFloatArrayElements(pixels, nullptr);
@@ -571,6 +581,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeExtractMetadata
         jobject thiz,
         jstring filePath
 ) {
+    if (!filePath) return nullptr;
     const char *path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -662,7 +673,7 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeApplySigmoidCon
     std::vector<float> float_pixels(pixels, pixels + len);
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
-    color_science::sigmoid_contrast_bulk(float_pixels.data(), width * height, 3, contrast, pivot, shoulder);
+    color_science::sigmoid_contrast_bulk(float_pixels.data(), static_cast<int>(static_cast<size_t>(width) * height), 3, contrast, pivot, shoulder);
 
     jfloatArray result = env->NewFloatArray(len);
     if (!result || env->ExceptionCheck()) {
@@ -903,9 +914,9 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAHD(
     if (!raw) return nullptr;
 
     size_t outputSize = static_cast<size_t>(width) * height * 3;
-    std::vector<float> output_r(width * height);
-    std::vector<float> output_g(width * height);
-    std::vector<float> output_b(width * height);
+    std::vector<float> output_r(outputSize / 3);
+    std::vector<float> output_g(outputSize / 3);
+    std::vector<float> output_b(outputSize / 3);
 
     AHDDemosaicOperator::demosaic_uint16(
         reinterpret_cast<const uint16_t*>(raw), width, height, bayerPattern,
@@ -949,9 +960,9 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeDemosaicAMAZE(
     if (!raw) return nullptr;
 
     size_t outputSize = static_cast<size_t>(width) * height * 3;
-    std::vector<float> output_r(width * height);
-    std::vector<float> output_g(width * height);
-    std::vector<float> output_b(width * height);
+    std::vector<float> output_r(outputSize / 3);
+    std::vector<float> output_g(outputSize / 3);
+    std::vector<float> output_b(outputSize / 3);
 
     AMAZEDemosaicOperator::demosaic_uint16(
         reinterpret_cast<const uint16_t*>(raw), width, height, bayerPattern,
@@ -1001,6 +1012,7 @@ Java_com_alcedo_studio_ndk_AlcedoNdkBridge_nativeInitialize(JNIEnv* env, jobject
 JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDetectFormat(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return env->NewStringUTF("unknown");
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return env->NewStringUTF("unknown");
     std::string fmt = RawDecoder::detect_format(path);
@@ -1011,6 +1023,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDetectFormat(
 JNIEXPORT jboolean JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeIsRawFormat(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return JNI_FALSE;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return JNI_FALSE;
     bool is_raw = RawDecoder::is_raw_format(path);
@@ -1025,6 +1038,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeIsRawFormat(
 JNIEXPORT jobject JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReadRawInfo(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1117,6 +1131,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeReadRawInfo(
     env->DeleteLocalRef(tungWb);
     env->DeleteLocalRef(camWb);
     env->DeleteLocalRef(cfaPattern);
+    env->DeleteLocalRef(cls);
 
     return result;
 }
@@ -1132,6 +1147,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
         jboolean useCameraMatrix, jboolean halfResolution, jboolean outputFloat,
         jboolean extractThumbnail, jboolean extractPreview, jint maxThumbnailDim,
         jint wbIlluminant) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1158,6 +1174,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     if (!cls) return nullptr;
 
     jmethodID ctor = env->GetMethodID(cls, "<init>", "([F[S[SIII[BII[BIILcom/alcedo/studio/domain/service/DecodeService$RawImageInfo;)V");
+    if (!ctor) { LOGE("Failed to get NativeDecodeResult constructor"); env->DeleteLocalRef(cls); return nullptr; }
 
     // Float RGB data
     jfloatArray jrgb = nullptr;
@@ -1225,8 +1242,10 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
 
     // Build RawImageInfo
     jclass infoCls = env->FindClass("com/alcedo/studio/domain/service/DecodeService$RawImageInfo");
+    if (!infoCls) { LOGE("Failed to find RawImageInfo class"); return nullptr; }
     jmethodID infoCtor = env->GetMethodID(infoCls, "<init>",
         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IIIIII[F[F[F[F[IILjava/lang/String;Z)V");
+    if (!infoCtor) { LOGE("Failed to get RawImageInfo constructor"); env->DeleteLocalRef(infoCls); return nullptr; }
 
     jstring jfmt = env->NewStringUTF(result.image_info.format.c_str());
     jstring jmake = env->NewStringUTF(result.image_info.make.c_str());
@@ -1304,6 +1323,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRaw(
     env->DeleteLocalRef(jfmt); env->DeleteLocalRef(jmake); env->DeleteLocalRef(jmodel);
     env->DeleteLocalRef(jcamMat); env->DeleteLocalRef(jdayWb); env->DeleteLocalRef(jtungWb);
     env->DeleteLocalRef(jcamWb); env->DeleteLocalRef(jcfaPat); env->DeleteLocalRef(jcomp);
+    env->DeleteLocalRef(cls); env->DeleteLocalRef(infoCls);
 
     return jresult;
 }
@@ -1343,7 +1363,9 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
 
     // Simplified return - just the float RGB data
     jclass cls = env->FindClass("com/alcedo/studio/domain/service/NativeDecodeResult");
+    if (!cls) { env->DeleteLocalRef(jrgb); return nullptr; }
     jmethodID ctor = env->GetMethodID(cls, "<init>", "([F[S[SIII[BII[BIILcom/alcedo/studio/domain/service/DecodeService$RawImageInfo;)V");
+    if (!ctor) { LOGE("Failed to get NativeDecodeResult constructor in decode from memory"); env->DeleteLocalRef(cls); env->DeleteLocalRef(jrgb); return nullptr; }
 
     jobject jresult = env->NewObject(cls, ctor,
         jrgb, nullptr, nullptr, result.width, result.height, nullptr,
@@ -1351,9 +1373,12 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
     if (env->ExceptionCheck()) {
         LOGE("Exception during NewObject for decode from memory result");
         env->ExceptionDescribe(); env->ExceptionClear();
+        env->DeleteLocalRef(jrgb);
+        env->DeleteLocalRef(cls);
         return nullptr;
     }
     env->DeleteLocalRef(jrgb);
+    env->DeleteLocalRef(cls);
     return jresult;
 }
 
@@ -1364,6 +1389,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeDecodeRawFromMemory(
 JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractMetadata(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1395,6 +1421,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractMetadataFromMemory(
 JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractExif(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1409,6 +1436,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractExif(
 JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractXmp(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1423,6 +1451,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractXmp(
 JNIEXPORT jbyteArray JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractIccProfile(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1446,6 +1475,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractIccProfile(
 JNIEXPORT jfloatArray JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractDngColor(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1477,6 +1507,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractDngColor(
 JNIEXPORT jobject JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnail(
         JNIEnv *env, jobject thiz, jstring filePath, jint maxDimension, jboolean useEmbedded) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1493,7 +1524,9 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnail(
     if (!result.success) return nullptr;
 
     jclass cls = env->FindClass("com/alcedo/studio/domain/service/NativeThumbnailResult");
+    if (!cls) return nullptr;
     jmethodID ctor = env->GetMethodID(cls, "<init>", "([BIIZ)V");
+    if (!ctor) { env->DeleteLocalRef(cls); return nullptr; }
 
     jbyteArray jdata = env->NewByteArray(result.data.size());
     if (!jdata || env->ExceptionCheck()) {
@@ -1509,9 +1542,12 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnail(
     if (env->ExceptionCheck()) {
         LOGE("Exception during NewObject for thumbnail result");
         env->ExceptionDescribe(); env->ExceptionClear();
+        env->DeleteLocalRef(jdata);
+        env->DeleteLocalRef(cls);
         return nullptr;
     }
     env->DeleteLocalRef(jdata);
+    env->DeleteLocalRef(cls);
     return jresult;
 }
 
@@ -1540,6 +1576,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeGenerateThumbnailFromRGB(
 JNIEXPORT jbyteArray JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedThumbnail(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1564,6 +1601,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedThumbnail(
 JNIEXPORT jbyteArray JNICALL
 Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeExtractEmbeddedPreview(
         JNIEnv *env, jobject thiz, jstring filePath) {
+    if (!filePath) return nullptr;
     const char* path = env->GetStringUTFChars(filePath, nullptr);
     if (!path) return nullptr;
 
@@ -1654,7 +1692,7 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeApplyColorMatrix(
         return;
     }
 
-    RawDecoder::apply_color_matrix_float(rgb, width * height, mat);
+    RawDecoder::apply_color_matrix_float(rgb, static_cast<int>(static_cast<size_t>(width) * height), mat);
 
     env->ReleaseFloatArrayElements(rgbData, rgb, 0);
     env->ReleaseFloatArrayElements(matrix, mat, JNI_ABORT);
@@ -1777,11 +1815,14 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
         bool attached = false;
         jint ret = jvm->GetEnv(reinterpret_cast<void**>(&e), JNI_VERSION_1_6);
         if (ret == JNI_EDETACHED) {
-            jvm->AttachCurrentThread(&e, nullptr);
+            if (jvm->AttachCurrentThread(&e, nullptr) != JNI_OK) return;
             attached = true;
+        } else if (ret != JNI_OK) {
+            return;
         }
 
         jclass cls = e->GetObjectClass(cb);
+        if (!cls) { if (attached) jvm->DetachCurrentThread(); return; }
         jmethodID mid = e->GetMethodID(cls, "onProgress", "(JFLjava/lang/String;)V");
         if (mid) {
             jstring jstage = e->NewStringUTF(stage.c_str());
@@ -1798,11 +1839,14 @@ Java_com_alcedo_studio_ndk_DecodeNdkBridge_nativeSetProgressCallback(
         bool attached = false;
         jint ret = jvm->GetEnv(reinterpret_cast<void**>(&e), JNI_VERSION_1_6);
         if (ret == JNI_EDETACHED) {
-            jvm->AttachCurrentThread(&e, nullptr);
+            if (jvm->AttachCurrentThread(&e, nullptr) != JNI_OK) return;
             attached = true;
+        } else if (ret != JNI_OK) {
+            return;
         }
 
         jclass cls = e->GetObjectClass(cb);
+        if (!cls) { if (attached) jvm->DetachCurrentThread(); return; }
         jmethodID mid = e->GetMethodID(cls, "onComplete", "(JZLjava/lang/String;)V");
         if (mid) {
             jstring jerr = e->NewStringUTF(result.error_message.c_str());
@@ -2151,7 +2195,9 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetCurve(
 
     // ctrlPts is a flat array of [x0,y0,x1,y1,...] pairs
     std::vector<alcedo::CurveOp::ControlPoint> cp_vec;
-    int num_pts = count;
+    jsize ptsLen = env->GetArrayLength(ctrlPts);
+    int num_pts = (count > 0) ? count : 0;
+    if (num_pts * 2 > ptsLen) num_pts = ptsLen / 2;
     for (int i = 0; i < num_pts; ++i) {
         cp_vec.push_back({pts[i * 2], pts[i * 2 + 1]});
     }
@@ -2203,9 +2249,11 @@ Java_com_alcedo_studio_domain_service_NativePipelineBridge_nativeSetRawDecode(
 // ============================================================
 
 static std::shared_ptr<alcedo::SleeveManager> g_sleeve_manager;
+static std::mutex g_sleeve_mutex;
 
 JNIEXPORT void JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeInitializeSleeve(JNIEnv *env, jobject thiz) {
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
     g_sleeve_manager = std::make_shared<alcedo::SleeveManager>();
     g_sleeve_manager->Initialize();
     LOGI("SleeveManager initialized");
@@ -2214,9 +2262,15 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeInitializeSleeve(JNIEnv *env, j
 JNIEXPORT jint JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFolder(
         JNIEnv *env, jobject thiz, jstring path, jstring name) {
-    if (!g_sleeve_manager) return -1;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !path || !name) return -1;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     const char* cname = env->GetStringUTFChars(name, nullptr);
+    if (!cpath || !cname) {
+        if (cpath) env->ReleaseStringUTFChars(path, cpath);
+        if (cname) env->ReleaseStringUTFChars(name, cname);
+        return -1;
+    }
     auto fs = g_sleeve_manager->GetFilesystem();
     auto element = fs->Create(cpath, cname, alcedo::SleeveElement::TYPE_FOLDER);
     env->ReleaseStringUTFChars(path, cpath);
@@ -2227,9 +2281,15 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFolder(
 JNIEXPORT jint JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFile(
         JNIEnv *env, jobject thiz, jstring path, jstring name) {
-    if (!g_sleeve_manager) return -1;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !path || !name) return -1;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     const char* cname = env->GetStringUTFChars(name, nullptr);
+    if (!cpath || !cname) {
+        if (cpath) env->ReleaseStringUTFChars(path, cpath);
+        if (cname) env->ReleaseStringUTFChars(name, cname);
+        return -1;
+    }
     auto fs = g_sleeve_manager->GetFilesystem();
     auto element = fs->Create(cpath, cname, alcedo::SleeveElement::TYPE_FILE);
     env->ReleaseStringUTFChars(path, cpath);
@@ -2240,7 +2300,8 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCreateFile(
 JNIEXPORT jboolean JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeDeleteElement(
         JNIEnv *env, jobject thiz, jstring path) {
-    if (!g_sleeve_manager) return JNI_FALSE;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !path) return JNI_FALSE;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     auto fs = g_sleeve_manager->GetFilesystem();
     bool ok = fs->Delete(cpath);
@@ -2251,9 +2312,15 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeDeleteElement(
 JNIEXPORT jboolean JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeMoveElement(
         JNIEnv *env, jobject thiz, jstring src, jstring dst) {
-    if (!g_sleeve_manager) return JNI_FALSE;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !src || !dst) return JNI_FALSE;
     const char* csrc = env->GetStringUTFChars(src, nullptr);
     const char* cdst = env->GetStringUTFChars(dst, nullptr);
+    if (!csrc || !cdst) {
+        if (csrc) env->ReleaseStringUTFChars(src, csrc);
+        if (cdst) env->ReleaseStringUTFChars(dst, cdst);
+        return JNI_FALSE;
+    }
     auto fs = g_sleeve_manager->GetFilesystem();
     bool ok = fs->Move(csrc, cdst);
     env->ReleaseStringUTFChars(src, csrc);
@@ -2264,9 +2331,15 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeMoveElement(
 JNIEXPORT jboolean JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCopyElement(
         JNIEnv *env, jobject thiz, jstring src, jstring dst) {
-    if (!g_sleeve_manager) return JNI_FALSE;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !src || !dst) return JNI_FALSE;
     const char* csrc = env->GetStringUTFChars(src, nullptr);
     const char* cdst = env->GetStringUTFChars(dst, nullptr);
+    if (!csrc || !cdst) {
+        if (csrc) env->ReleaseStringUTFChars(src, csrc);
+        if (cdst) env->ReleaseStringUTFChars(dst, cdst);
+        return JNI_FALSE;
+    }
     auto fs = g_sleeve_manager->GetFilesystem();
     bool ok = fs->Copy(csrc, cdst);
     env->ReleaseStringUTFChars(src, csrc);
@@ -2277,7 +2350,8 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeCopyElement(
 JNIEXPORT jintArray JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
         JNIEnv *env, jobject thiz, jstring path) {
-    if (!g_sleeve_manager) return nullptr;
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !path) return nullptr;
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     auto fs = g_sleeve_manager->GetFilesystem();
     auto ids = fs->ListFolderContent(cpath);
@@ -2300,7 +2374,8 @@ Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeListFolder(
 JNIEXPORT jstring JNICALL
 Java_com_alcedo_studio_ndk_SleeveNdkBridge_nativeResolvePath(
         JNIEnv *env, jobject thiz, jstring path) {
-    if (!g_sleeve_manager) return env->NewStringUTF("");
+    std::lock_guard<std::mutex> lock(g_sleeve_mutex);
+    if (!g_sleeve_manager || !path) return env->NewStringUTF("");
     const char* cpath = env->GetStringUTFChars(path, nullptr);
     auto fs = g_sleeve_manager->GetFilesystem();
     auto elem = fs->Get(cpath);
@@ -2545,7 +2620,7 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeRasterizeBrushStrokes(
     }
 
     // 初始化遮罩为全 0
-    std::vector<float> mask(width * height, 0.0f);
+    std::vector<float> mask(static_cast<size_t>(width) * height, 0.0f);
 
     // 笔触半径（像素）= 归一化大小 * 图片宽度
     float radiusPx = brushSize * static_cast<float>(width);
@@ -2624,17 +2699,17 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateEdgeMask(
     if (!pixels) return nullptr;
 
     int channels = 4; // RGBA
-    std::vector<float> gray(width * height);
+    std::vector<float> gray(static_cast<size_t>(width) * height);
 
     // RGBA → 灰度
-    for (int i = 0; i < width * height; ++i) {
+    for (size_t i = 0; i < static_cast<size_t>(width) * height; ++i) {
         gray[i] = 0.299f * pixels[i * 4] + 0.587f * pixels[i * 4 + 1] + 0.114f * pixels[i * 4 + 2];
     }
     env->ReleaseFloatArrayElements(input, pixels, JNI_ABORT);
 
     // Sobel 边缘检测
     int r = std::max(1, static_cast<int>(radius));
-    std::vector<float> edges(width * height, 0.0f);
+    std::vector<float> edges(static_cast<size_t>(width) * height, 0.0f);
 
     for (int y = r; y < height - r; ++y) {
         for (int x = r; x < width - r; ++x) {
@@ -2655,13 +2730,13 @@ Java_com_alcedo_studio_ndk_AlcedoNativeBridge_nativeGenerateEdgeMask(
     }
 
     // 返回单通道 mask
-    jfloatArray output = env->NewFloatArray(width * height);
+    jfloatArray output = env->NewFloatArray(static_cast<jsize>(static_cast<size_t>(width) * height));
     if (!output || env->ExceptionCheck()) {
         LOGE("Failed to create float array for edge mask");
         if (env->ExceptionCheck()) { env->ExceptionDescribe(); env->ExceptionClear(); }
         return nullptr;
     }
-    env->SetFloatArrayRegion(output, 0, width * height, edges.data());
+    env->SetFloatArrayRegion(output, 0, static_cast<jsize>(static_cast<size_t>(width) * height), edges.data());
     return output;
 }
 

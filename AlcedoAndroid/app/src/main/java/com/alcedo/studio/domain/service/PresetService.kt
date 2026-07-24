@@ -483,35 +483,39 @@ class PresetService(
      */
     private fun getOrCreateSampleBitmap(): Bitmap {
         sampleBitmap?.let { return it }
-        val size = SAMPLE_SIZE
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val skinA = Color.rgb(180, 120, 90)
-        val skinB = Color.rgb(225, 175, 135)
-        val skyA = Color.rgb(70, 125, 175)
-        val skyB = Color.rgb(150, 190, 225)
-        val grassA = Color.rgb(55, 115, 55)
-        val grassB = Color.rgb(115, 165, 80)
-        val redA = Color.rgb(175, 55, 75)
-        val redB = Color.rgb(225, 105, 140)
-        for (y in 0 until size) {
-            val tone = y.toFloat() / (size - 1).toFloat() // 0..1 dark->light
-            val toneFactor = 0.32f + 0.68f * tone
-            for (x in 0 until size) {
-                val xf = x.toFloat() / size.toFloat()
-                val base = when {
-                    xf < 0.25f -> blend(skinA, skinB, xf / 0.25f)
-                    xf < 0.5f -> blend(skyA, skyB, (xf - 0.25f) / 0.25f)
-                    xf < 0.75f -> blend(grassA, grassB, (xf - 0.5f) / 0.25f)
-                    else -> blend(redA, redB, (xf - 0.75f) / 0.25f)
+        synchronized(this) {
+            // Double-check after acquiring lock
+            sampleBitmap?.let { return it }
+            val size = SAMPLE_SIZE
+            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val skinA = Color.rgb(180, 120, 90)
+            val skinB = Color.rgb(225, 175, 135)
+            val skyA = Color.rgb(70, 125, 175)
+            val skyB = Color.rgb(150, 190, 225)
+            val grassA = Color.rgb(55, 115, 55)
+            val grassB = Color.rgb(115, 165, 80)
+            val redA = Color.rgb(175, 55, 75)
+            val redB = Color.rgb(225, 105, 140)
+            for (y in 0 until size) {
+                val tone = y.toFloat() / (size - 1).toFloat() // 0..1 dark->light
+                val toneFactor = 0.32f + 0.68f * tone
+                for (x in 0 until size) {
+                    val xf = x.toFloat() / size.toFloat()
+                    val base = when {
+                        xf < 0.25f -> blend(skinA, skinB, xf / 0.25f)
+                        xf < 0.5f -> blend(skyA, skyB, (xf - 0.25f) / 0.25f)
+                        xf < 0.75f -> blend(grassA, grassB, (xf - 0.5f) / 0.25f)
+                        else -> blend(redA, redB, (xf - 0.75f) / 0.25f)
+                    }
+                    val r = (Color.red(base) * toneFactor).toInt().coerceIn(0, 255)
+                    val g = (Color.green(base) * toneFactor).toInt().coerceIn(0, 255)
+                    val b = (Color.blue(base) * toneFactor).toInt().coerceIn(0, 255)
+                    bmp.setPixel(x, y, Color.rgb(r, g, b))
                 }
-                val r = (Color.red(base) * toneFactor).toInt().coerceIn(0, 255)
-                val g = (Color.green(base) * toneFactor).toInt().coerceIn(0, 255)
-                val b = (Color.blue(base) * toneFactor).toInt().coerceIn(0, 255)
-                bmp.setPixel(x, y, Color.rgb(r, g, b))
             }
+            sampleBitmap = bmp
+            return bmp
         }
-        sampleBitmap = bmp
-        return bmp
     }
 
     private fun blend(c1: Int, c2: Int, t: Float): Int {

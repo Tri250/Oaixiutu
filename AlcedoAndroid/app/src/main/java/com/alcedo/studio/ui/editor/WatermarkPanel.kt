@@ -572,10 +572,10 @@ private fun copyUriToCache(
     uri: android.net.Uri
 ): String? {
     return runCatching {
-        val input = context.contentResolver.openInputStream(uri) ?: return null
         val outFile = java.io.File(context.cacheDir, "wm_logo_${System.currentTimeMillis()}.png")
-        outFile.outputStream().use { output -> input.copyTo(output) }
-        input.close()
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            outFile.outputStream().use { output -> input.copyTo(output) }
+        } ?: return null
         outFile.absolutePath
     }.getOrNull()
 }

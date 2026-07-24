@@ -92,8 +92,9 @@ void LensCorrectionOperator::apply_rgb(float* pixels, int width, int height,
                                         float cx, float cy,
                                         float focal_length_ratio) {
     if (k1 == 0.0f && k2 == 0.0f && k3 == 0.0f && p1 == 0.0f && p2 == 0.0f) return;
+    if (width <= 0 || height <= 0) return;
     int channels = 3;
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
 
     std::vector<float> src(total);
     std::copy(pixels, pixels + total, src.begin());
@@ -101,12 +102,15 @@ void LensCorrectionOperator::apply_rgb(float* pixels, int width, int height,
     float cx_px = cx * width;
     float cy_px = cy * height;
     float max_radius = std::sqrt(cx_px * cx_px + cy_px * cy_px);
+    if (max_radius < 1e-6f) return;
+
+    float safe_focal = (std::fabs(focal_length_ratio) < 1e-6f) ? 1e-6f : focal_length_ratio;
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             // Normalized coordinates relative to principal point
             float xn = (x - cx_px) / max_radius;
-            float yn = (y - cy_px) / max_radius * focal_length_ratio;
+            float yn = (y - cy_px) / max_radius * safe_focal;
 
             // Apply inverse distortion: find the source (undistorted) point
             // that maps to this output (distorted) position.
@@ -115,7 +119,7 @@ void LensCorrectionOperator::apply_rgb(float* pixels, int width, int height,
 
             // Convert back to pixel coordinates
             float src_x = src_xn * max_radius + cx_px;
-            float src_y = src_yn * max_radius / focal_length_ratio + cy_px;
+            float src_y = src_yn * max_radius / safe_focal + cy_px;
 
             float out[3];
             bilinear_sample(src.data(), width, height, channels, src_x, src_y, out);
@@ -134,8 +138,9 @@ void LensCorrectionOperator::apply_rgba(float* pixels, int width, int height,
                                          float cx, float cy,
                                          float focal_length_ratio) {
     if (k1 == 0.0f && k2 == 0.0f && k3 == 0.0f && p1 == 0.0f && p2 == 0.0f) return;
+    if (width <= 0 || height <= 0) return;
     int channels = 4;
-    int total = width * height * channels;
+    size_t total = static_cast<size_t>(width) * height * channels;
 
     std::vector<float> src(total);
     std::copy(pixels, pixels + total, src.begin());
@@ -143,17 +148,20 @@ void LensCorrectionOperator::apply_rgba(float* pixels, int width, int height,
     float cx_px = cx * width;
     float cy_px = cy * height;
     float max_radius = std::sqrt(cx_px * cx_px + cy_px * cy_px);
+    if (max_radius < 1e-6f) return;
+
+    float safe_focal = (std::fabs(focal_length_ratio) < 1e-6f) ? 1e-6f : focal_length_ratio;
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             float xn = (x - cx_px) / max_radius;
-            float yn = (y - cy_px) / max_radius * focal_length_ratio;
+            float yn = (y - cy_px) / max_radius * safe_focal;
 
             float src_xn, src_yn;
             inverse_distort(xn, yn, k1, k2, k3, p1, p2, &src_xn, &src_yn);
 
             float src_x = src_xn * max_radius + cx_px;
-            float src_y = src_yn * max_radius / focal_length_ratio + cy_px;
+            float src_y = src_yn * max_radius / safe_focal + cy_px;
 
             float out[4];
             bilinear_sample(src.data(), width, height, channels, src_x, src_y, out);
@@ -170,7 +178,7 @@ void LensCorrectionOperator::apply_rgba(float* pixels, int width, int height,
 void LensCorrectionOperator::correct_vignette_rgb(float* pixels, int width, int height,
                                                    float strength, float midpoint,
                                                    float roundness) {
-    if (strength <= 0.0f) return;
+    if (strength <= 0.0f || width <= 0 || height <= 0) return;
     int channels = 3;
     float cx = width * 0.5f;
     float cy = height * 0.5f;
@@ -206,7 +214,7 @@ void LensCorrectionOperator::correct_vignette_rgb(float* pixels, int width, int 
 void LensCorrectionOperator::correct_vignette_rgba(float* pixels, int width, int height,
                                                     float strength, float midpoint,
                                                     float roundness) {
-    if (strength <= 0.0f) return;
+    if (strength <= 0.0f || width <= 0 || height <= 0) return;
     int channels = 4;
     float cx = width * 0.5f;
     float cy = height * 0.5f;

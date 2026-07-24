@@ -308,7 +308,9 @@ float pq_inverse_eotf(float pq, float peak_luminance) {
 
     pq = std::max(0.0f, pq);
     float pq_pow = std::pow(pq, 1.0f / m2);
-    float y = std::pow(std::max(0.0f, pq_pow - c1) / (c2 - c3 * pq_pow), 1.0f / m1);
+    float denom = c2 - c3 * pq_pow;
+    if (denom <= 0.0f) return 0.0f;
+    float y = std::pow(std::max(0.0f, pq_pow - c1) / denom, 1.0f / m1);
     return y * (peak_luminance / 10000.0f);
 }
 
@@ -338,7 +340,9 @@ float hlg_oetf(float linear) {
     if (linear <= 1.0f / 12.0f) {
         return std::sqrt(3.0f * linear);
     }
-    return a * std::log(12.0f * linear - b) + c;
+    float log_arg = 12.0f * linear - b;
+    if (log_arg <= 0.0f) return std::sqrt(3.0f * linear);  // fallback to linear branch
+    return a * std::log(log_arg) + c;
 }
 
 void hlg_oetf_rgb(float* r, float* g, float* b) {
@@ -712,13 +716,18 @@ void okhsl_to_srgb(float h, float s, float l, float* r, float* g, float* b) {
 
     oklab_to_linear_srgb(l, a_, bb_, r, g, b);
 
-    // Clamp
-    *r = std::max(0.0f, *r);
-    *g = std::max(0.0f, *g);
-    *b = std::max(0.0f, *b);
+    // Apply sRGB EOTF to convert from linear to non-linear sRGB
+    *r = srgb_eotf(std::clamp(*r, 0.0f, 1.0f));
+    *g = srgb_eotf(std::clamp(*g, 0.0f, 1.0f));
+    *b = srgb_eotf(std::clamp(*b, 0.0f, 1.0f));
 }
 
 void srgb_to_okhsl(float r, float g, float b, float* h, float* s, float* l) {
+    // Input is non-linear sRGB; must linearize before converting to OKLab
+    r = srgb_inverse_eotf(r);
+    g = srgb_inverse_eotf(g);
+    b = srgb_inverse_eotf(b);
+
     float L, a_, bb_;
     linear_srgb_to_oklab(r, g, b, &L, &a_, &bb_);
 

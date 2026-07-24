@@ -72,11 +72,17 @@ void ClipInference::unloadModel() {
 
 // ── Image preprocessing ──
 std::vector<float> ClipInference::resizeAndCrop(const uint8_t* rgbData, int srcW, int srcH, int targetSize) {
+    // Input validation
+    if (!rgbData || srcW <= 0 || srcH <= 0 || targetSize <= 0) {
+        return std::vector<float>(targetSize > 0 ? targetSize * targetSize * 3 : 0, 0.0f);
+    }
+
     // Bilinear resize + center crop to targetSize×targetSize
     std::vector<float> result(targetSize * targetSize * 3, 0.0f);
 
     // Compute crop region
     int cropSize = std::min(srcW, srcH);
+    if (cropSize <= 0) return result;
     int cropX = (srcW - cropSize) / 2;
     int cropY = (srcH - cropSize) / 2;
 
@@ -125,8 +131,8 @@ void ClipInference::normalizePixels(std::vector<float>& pixels, int size) {
     const float meanR = 0.48145466f, meanG = 0.4578275f, meanB = 0.40821073f;
     const float stdR = 0.26862954f, stdG = 0.26130258f, stdB = 0.27577711f;
 
-    int totalPixels = size * size;
-    for (int i = 0; i < totalPixels; ++i) {
+    size_t totalPixels = static_cast<size_t>(size) * size;
+    for (size_t i = 0; i < totalPixels; ++i) {
         pixels[i * 3 + 0] = (pixels[i * 3 + 0] - meanR) / stdR;
         pixels[i * 3 + 1] = (pixels[i * 3 + 1] - meanG) / stdG;
         pixels[i * 3 + 2] = (pixels[i * 3 + 2] - meanB) / stdB;
@@ -357,6 +363,12 @@ std::vector<float> ClipInference::runInferenceInt64(const std::vector<int64_t>& 
 
 ClipInferenceResult ClipInference::encodeImage(const uint8_t* rgbData, int width, int height) {
     ClipInferenceResult result;
+
+    if (!rgbData || width <= 0 || height <= 0) {
+        result.success = false;
+        result.errorMessage = "Invalid image input parameters";
+        return result;
+    }
 
     if (!loaded_) {
         result.success = false;

@@ -101,13 +101,15 @@ void LutOperator::apply_rgb(float* pixels, int width, int height,
                              float input_min, float input_max,
                              float output_min, float output_max) {
     if (!lut_data || lut_size < 2) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     float input_range = input_max - input_min;
     float output_range = output_max - output_min;
+    if (std::abs(input_range) < 1e-10f) input_range = 1.0f;
+    if (std::abs(output_range) < 1e-10f) output_range = 1.0f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 3;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 3;
         float r = (pixels[idx] - input_min) / input_range;
         float g = (pixels[idx + 1] - input_min) / input_range;
         float b = (pixels[idx + 2] - input_min) / input_range;
@@ -130,13 +132,15 @@ void LutOperator::apply_rgba(float* pixels, int width, int height,
                               float input_min, float input_max,
                               float output_min, float output_max) {
     if (!lut_data || lut_size < 2) return;
-    int total = width * height;
+    size_t total = static_cast<size_t>(width) * height;
 
     float input_range = input_max - input_min;
     float output_range = output_max - output_min;
+    if (std::abs(input_range) < 1e-10f) input_range = 1.0f;
+    if (std::abs(output_range) < 1e-10f) output_range = 1.0f;
 
-    for (int i = 0; i < total; ++i) {
-        int idx = i * 4;
+    for (size_t i = 0; i < total; ++i) {
+        size_t idx = i * 4;
         float r = (pixels[idx] - input_min) / input_range;
         float g = (pixels[idx + 1] - input_min) / input_range;
         float b = (pixels[idx + 2] - input_min) / input_range;

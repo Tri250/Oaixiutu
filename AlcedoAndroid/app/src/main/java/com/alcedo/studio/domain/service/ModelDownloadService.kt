@@ -241,41 +241,41 @@ class ModelDownloadService(private val context: Context) {
                     tempFile.sink().buffer()
                 }
 
-                body.source().use { source ->
-                    val buffer = okio.Buffer()
-                    var bytesRead: Long
-                    while (source.read(buffer, 8192).also { bytesRead = it } != -1L) {
-                        if (!isActive) {
-                            sink.close()
-                            // Keep temp file for resume
-                            updateModel(modelId, model.copy(
-                                downloadStatus = ModelDownloadStatus.PAUSED
-                            ))
-                            _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
-                                remove(modelId)
+                sink.use { sinkBuf ->
+                    body.source().use { source ->
+                        val buffer = okio.Buffer()
+                        var bytesRead: Long
+                        while (source.read(buffer, 8192).also { bytesRead = it } != -1L) {
+                            if (!isActive) {
+                                // Keep temp file for resume
+                                updateModel(modelId, model.copy(
+                                    downloadStatus = ModelDownloadStatus.PAUSED
+                                ))
+                                _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                                    remove(modelId)
+                                }
+                                return@launch
                             }
-                            return@launch
+                            sinkBuf.write(buffer, bytesRead)
+                            downloadedBytes += bytesRead
+                            val progress = if (totalBytes > 0) {
+                                (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            withContext(Dispatchers.Main) {
+                                onProgress(progress)
+                            }
+                            updateModel(modelId, model.copy(downloadProgress = progress))
+                            // Update download progress StateFlow
+                            _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
+                                this[modelId] = progress
+                            }
+                            // Update notification bar progress
+                            TaskNotificationHelper.notifyModelDownloadProgress(
+                                context, modelId, (progress * 100).toInt(), 100
+                            )
                         }
-                        sink.write(buffer, bytesRead)
-                        downloadedBytes += bytesRead
-                        val progress = if (totalBytes > 0) {
-                            (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-                        withContext(Dispatchers.Main) {
-                            onProgress(progress)
-                        }
-                        updateModel(modelId, model.copy(downloadProgress = progress))
-                        // Update download progress StateFlow
-                        _downloadProgress.value = _downloadProgress.value.toMutableMap().apply {
-                            this[modelId] = progress
-                        }
-                        // Update notification bar progress
-                        TaskNotificationHelper.notifyModelDownloadProgress(
-                            context, modelId, (progress * 100).toInt(), 100
-                        )
                     }
                 }
-                sink.close()
                 body.close()
 
                 // Move temp to final
