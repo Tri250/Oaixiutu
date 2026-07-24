@@ -41,14 +41,9 @@
 -dontwarn kotlin.reflect.**
 
 # ── NDK Bridge Classes ──────────────────────────────────────────
-# Keep all NDK bridge objects and their native methods
--keep class com.alcedo.studio.ndk.AlcedoNdkBridge { *; }
--keep class com.alcedo.studio.ndk.AiNdkBridge { *; }
--keep class com.alcedo.studio.ndk.AlcedoNativeBridge { *; }
--keep class com.alcedo.studio.ndk.NdkSafeCall { *; }
+# Keep ALL NDK bridge objects — native code references them by name
+-keep class com.alcedo.studio.ndk.** { *; }
 # Legacy bridges (may still be referenced by native code)
--keep class com.alcedo.studio.ndk.DecodeNdkBridge { *; }
--keep class com.alcedo.studio.ndk.SleeveNdkBridge { *; }
 -keep class com.alcedo.studio.domain.service.NativePipelineBridge { *; }
 -keep class com.alcedo.studio.security.NativeSecurityChecker { *; }
 # JNI-constructed data classes (NewObject in native-lib.cpp)
@@ -448,6 +443,26 @@
 # ── Application Class ───────────────────────────────────────────
 -keep class com.alcedo.studio.AlcedoApplication { *; }
 -keep class com.alcedo.studio.MainActivity { *; }
+
+# ── Startup-Critical Packages (CRITICAL — used in Application.onCreate / Activity.onCreate) ──
+# These classes are directly invoked during app startup. If R8 strips them,
+# the app will crash immediately with ClassNotFoundException.
+# Crash handling (CrashHandler.initialize called first in Application.onCreate)
+-keep class com.alcedo.studio.crash.** { *; }
+# Privacy consent (PrivacyManager.initialize called in Application.onCreate)
+-keep class com.alcedo.studio.privacy.** { *; }
+# Internationalization (LanguageManager.initialize called in MainActivity.onCreate)
+-keep class com.alcedo.studio.i18n.** { *; }
+# Utility — ContextProvider (called from AppModule.initialize)
+-keep class com.alcedo.studio.util.** { *; }
+# Utility — MemoryGuard (called from Application.onCreate onTrimMemory)
+-keep class com.alcedo.studio.utils.** { *; }
+# App-level services (RenderService, TaskNotificationHelper — referenced from AppModule)
+-keep class com.alcedo.studio.service.** { *; }
+# GPU pipeline (GpuPipelineRenderer, ShaderSources — referenced from AppModule)
+-keep class com.alcedo.studio.gpu.** { *; }
+# Permission helpers (used at runtime for media/notifications)
+-keep class com.alcedo.studio.permission.** { *; }
 
 # ── AndroidManifest-declared Components ─────────────────────────
 # FileProvider declared in manifest
