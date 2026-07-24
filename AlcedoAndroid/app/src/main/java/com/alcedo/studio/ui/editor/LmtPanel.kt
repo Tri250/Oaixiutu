@@ -229,6 +229,7 @@ fun LmtPanel(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val alcedoColors = LocalAlcedoColors.current
 
     val lutPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -257,8 +258,8 @@ fun LmtPanel(
                 ) {
                     Text(
                         stringRes { lmtTitle },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     Switch(
                         checked = lmtEnabled,
@@ -294,14 +295,14 @@ fun LmtPanel(
                         ) {
                             Text(
                                 stringRes { lmtActiveLut },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                style = AlcedoFontRoles.uiOverline,
+                                color = alcedoColors.textMuted
                             )
                             Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                             Text(
                                 lmtPath.substringAfterLast('/'),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                style = AlcedoFontRoles.uiCaption,
+                                color = alcedoColors.text
                             )
                         }
                     }
@@ -326,14 +327,14 @@ fun LmtPanel(
                 Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                     Text(
                         stringRes { lmtBuiltInPresets },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                     Text(
                         stringRes { lmtBuiltInPresetsDesc },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = AlcedoFontRoles.uiCaption,
+                        color = alcedoColors.textMuted
                     )
                     Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
@@ -366,12 +367,13 @@ private fun BuiltinPresetChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     Surface(
         modifier = modifier
             .clip(RoundedCornerShape(AlcedoRadius.sm))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(AlcedoRadius.sm),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = alcedoColors.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = 1.dp
     ) {
         Column(
@@ -388,18 +390,18 @@ private fun BuiltinPresetChip(
                     .background(preset.color)
                     .border(
                         1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        alcedoColors.outlineVariant.copy(alpha = 0.3f),
                         RoundedCornerShape(AlcedoRadius.xs)
                     )
             )
             Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
             Text(
                 text = stringRes(preset.nameKey),
-                style = MaterialTheme.typography.labelSmall,
+                style = AlcedoFontRoles.uiOverline,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface
+                color = alcedoColors.text
             )
         }
     }

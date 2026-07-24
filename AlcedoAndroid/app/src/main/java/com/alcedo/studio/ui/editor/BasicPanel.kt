@@ -12,9 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoAnimation
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -25,6 +23,7 @@ fun BasicPanel(
     focusMode: FocusModeState = FocusModeState()
 ) {
     val params by remember { viewModel.params }
+    val alcedoColors = LocalAlcedoColors.current
 
     // 专注模式下用于切换活跃小节的小节标签
     val focusSections = listOf(
@@ -51,8 +50,8 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionLight },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -70,7 +69,7 @@ fun BasicPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetLight },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.icon
                             )
                         }
                     }
@@ -146,8 +145,8 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionWhiteBalance },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -159,7 +158,7 @@ fun BasicPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetWb },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.icon
                             )
                         }
                     }
@@ -196,8 +195,8 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorPresence },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -211,7 +210,7 @@ fun BasicPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetPresence },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.icon
                             )
                         }
                     }
@@ -255,8 +254,8 @@ fun BasicPanel(
                     ) {
                         Text(
                             stringRes { editorSectionSplitToning },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -268,7 +267,7 @@ fun BasicPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { editorResetSplitTone },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.icon
                             )
                         }
                     }

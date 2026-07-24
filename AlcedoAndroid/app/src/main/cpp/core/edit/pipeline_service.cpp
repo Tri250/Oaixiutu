@@ -143,9 +143,14 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
     // Stage: Tone Regions
     if (en(PipelineStage::TONE) &&
         (params.highlights != 0.0f || params.shadows != 0.0f || params.midtones != 0.0f)) {
-        ToneRegionOperator::apply_rgb(pixels, width, height,
-                                       params.shadows, params.midtones, params.highlights,
-                                       params.shadow_boundary, params.highlight_boundary);
+        if (channels == 4)
+            ToneRegionOperator::apply_rgba(pixels, width, height,
+                                           params.shadows, params.midtones, params.highlights,
+                                           params.shadow_boundary, params.highlight_boundary);
+        else
+            ToneRegionOperator::apply_rgb(pixels, width, height,
+                                           params.shadows, params.midtones, params.highlights,
+                                           params.shadow_boundary, params.highlight_boundary);
         for (size_t i = 0; i < pixel_count; ++i) {
             int idx = i * channels;
             for (int c = 0; c < 3 && c < channels; ++c)
@@ -205,7 +210,10 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
         // Vibrance
         if (params.vibrance != 0.0f) {
-            VibranceOperator::apply_rgb(pixels, width, height, params.vibrance);
+            if (channels == 4)
+                VibranceOperator::apply_rgba(pixels, width, height, params.vibrance);
+            else
+                VibranceOperator::apply_rgb(pixels, width, height, params.vibrance);
             for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
@@ -215,10 +223,16 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
 
         // Tint
         if (params.tint_highlight_strength > 0.0f || params.tint_shadow_strength > 0.0f) {
-            TintOperator::apply_rgb(pixels, width, height,
-                                     params.tint_highlight_hue, params.tint_highlight_strength,
-                                     params.tint_shadow_hue, params.tint_shadow_strength,
-                                     params.tint_balance);
+            if (channels == 4)
+                TintOperator::apply_rgba(pixels, width, height,
+                                         params.tint_highlight_hue, params.tint_highlight_strength,
+                                         params.tint_shadow_hue, params.tint_shadow_strength,
+                                         params.tint_balance);
+            else
+                TintOperator::apply_rgb(pixels, width, height,
+                                         params.tint_highlight_hue, params.tint_highlight_strength,
+                                         params.tint_shadow_hue, params.tint_shadow_strength,
+                                         params.tint_balance);
             for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
@@ -234,16 +248,28 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 params.color_wheel_gain[c] != 1.0f) { cw_nonzero = true; break; }
         }
         if (cw_nonzero) {
-            ColorWheelOperator::apply_rgb(pixels, width, height,
-                                           params.color_wheel_lift[0],
-                                           params.color_wheel_lift[1],
-                                           params.color_wheel_lift[2],
-                                           params.color_wheel_gamma[0],
-                                           params.color_wheel_gamma[1],
-                                           params.color_wheel_gamma[2],
-                                           params.color_wheel_gain[0],
-                                           params.color_wheel_gain[1],
-                                           params.color_wheel_gain[2]);
+            if (channels == 4)
+                ColorWheelOperator::apply_rgba(pixels, width, height,
+                                               params.color_wheel_lift[0],
+                                               params.color_wheel_lift[1],
+                                               params.color_wheel_lift[2],
+                                               params.color_wheel_gamma[0],
+                                               params.color_wheel_gamma[1],
+                                               params.color_wheel_gamma[2],
+                                               params.color_wheel_gain[0],
+                                               params.color_wheel_gain[1],
+                                               params.color_wheel_gain[2]);
+            else
+                ColorWheelOperator::apply_rgb(pixels, width, height,
+                                               params.color_wheel_lift[0],
+                                               params.color_wheel_lift[1],
+                                               params.color_wheel_lift[2],
+                                               params.color_wheel_gamma[0],
+                                               params.color_wheel_gamma[1],
+                                               params.color_wheel_gamma[2],
+                                               params.color_wheel_gain[0],
+                                               params.color_wheel_gain[1],
+                                               params.color_wheel_gain[2]);
             for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
@@ -259,11 +285,18 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
                 params.hsl_luminance_scale[c] != 1.0f) { has_hsl = true; break; }
         }
         if (has_hsl) {
-            HSLOperator::apply_rgb(pixels, width, height,
-                                   params.hsl_hue_ranges, params.hsl_hue_width,
-                                   params.hsl_hue_shift,
-                                   params.hsl_saturation_scale,
-                                   params.hsl_luminance_scale);
+            if (channels == 4)
+                HSLOperator::apply_rgba(pixels, width, height,
+                                       params.hsl_hue_ranges, params.hsl_hue_width,
+                                       params.hsl_hue_shift,
+                                       params.hsl_saturation_scale,
+                                       params.hsl_luminance_scale);
+            else
+                HSLOperator::apply_rgb(pixels, width, height,
+                                       params.hsl_hue_ranges, params.hsl_hue_width,
+                                       params.hsl_hue_shift,
+                                       params.hsl_saturation_scale,
+                                       params.hsl_luminance_scale);
             for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)
@@ -280,9 +313,14 @@ bool PipelineService::process(float* pixels, int width, int height, int channels
             }
         }
         if (!is_identity) {
-            ChannelMixerOperator::apply_rgb(pixels, width, height,
-                                             params.channel_mixer_matrix,
-                                             params.channel_mixer_monochrome);
+            if (channels == 4)
+                ChannelMixerOperator::apply_rgba(pixels, width, height,
+                                                 params.channel_mixer_matrix,
+                                                 params.channel_mixer_monochrome);
+            else
+                ChannelMixerOperator::apply_rgb(pixels, width, height,
+                                                 params.channel_mixer_matrix,
+                                                 params.channel_mixer_monochrome);
             for (size_t i = 0; i < pixel_count; ++i) {
                 int idx = i * channels;
                 for (int c = 0; c < 3 && c < channels; ++c)

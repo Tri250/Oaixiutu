@@ -12,8 +12,7 @@ import com.alcedo.studio.domain.service.LensCorrectionDatabase
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -24,6 +23,7 @@ fun LensCorrectionPanel(
 ) {
     val params by viewModel.params
     val image by viewModel.imageModel.collectAsStateWithLifecycle()
+    val alcedoColors = LocalAlcedoColors.current
 
     // 自动检测镜头型号
     var autoDetectedProfile by remember { mutableStateOf<LensCorrectionDatabase.LensProfile?>(null) }
@@ -62,13 +62,13 @@ fun LensCorrectionPanel(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             stringRes { inspectorAutoDetectedLens },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = AlcedoFontRoles.uiOverline,
+                            color = alcedoColors.textMuted
                         )
                         Text(
                             "${profile.make} ${profile.model}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiBody,
+                            color = alcedoColors.text
                         )
                     }
                     Button(onClick = {
@@ -96,14 +96,14 @@ fun LensCorrectionPanel(
                 ) {
                     Text(
                         stringRes { editorSectionLensCorrection },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = { viewModel.updateLensCorrection(0f, 0f, 0f, 0f, 0f) },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringRes { resetButton }, modifier = Modifier.size(AlcedoIconSize.sm), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Refresh, contentDescription = stringRes { resetButton }, modifier = Modifier.size(AlcedoIconSize.sm), tint = alcedoColors.textMuted)
                     }
                 }
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
@@ -139,8 +139,8 @@ fun LensCorrectionPanel(
             Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { lensAdvanced },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = AlcedoFontRoles.uiTitle,
+                    color = alcedoColors.text
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 AdjustmentSlider(

@@ -16,8 +16,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 private val DEMOSAIC_LABELS: Map<DemosaicAlgorithm, String> = mapOf(
@@ -36,6 +35,7 @@ fun RawDecodePanel(
     val params by remember { viewModel.params }
     val raw = params.rawDecodeParams
     val view = LocalView.current
+    val alcedoColors = LocalAlcedoColors.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -50,8 +50,8 @@ fun RawDecodePanel(
                 ) {
                     Text(
                         stringRes { rawDemosaicTitle },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -67,7 +67,7 @@ fun RawDecodePanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { rawReset },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.textMuted
                         )
                     }
                 }
@@ -76,8 +76,8 @@ fun RawDecodePanel(
 
                 Text(
                     stringRes { rawDemosaicAlgorithm },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiOverline,
+                    color = alcedoColors.textMuted
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Row(
@@ -101,7 +101,7 @@ fun RawDecodePanel(
                                     com.alcedo.studio.data.model.OperatorType.RAW_DECODE
                                 )
                             },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(label, style = AlcedoFontRoles.uiOverline) }
                         )
                     }
                 }
@@ -112,8 +112,8 @@ fun RawDecodePanel(
             Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { rawProcessingOptions },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = AlcedoFontRoles.uiTitle,
+                    color = alcedoColors.text
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
@@ -165,15 +165,15 @@ fun RawDecodePanel(
             Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { rawSensorParameters },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = AlcedoFontRoles.uiTitle,
+                    color = alcedoColors.text
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
 
                 Text(
                     stringRes { rawBayerPattern },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiOverline,
+                    color = alcedoColors.textMuted
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.xs))
                 Row(
@@ -192,7 +192,7 @@ fun RawDecodePanel(
                                     com.alcedo.studio.data.model.OperatorType.RAW_DECODE
                                 )
                             },
-                            label = { Text(name, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(name, style = AlcedoFontRoles.uiOverline) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -241,6 +241,7 @@ private fun RawBooleanRow(
     checked: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -251,21 +252,21 @@ private fun RawBooleanRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                style = AlcedoFontRoles.uiBody,
+                color = alcedoColors.text
             )
             if (description.isNotBlank()) {
                 Text(
                     description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiCaption,
+                    color = alcedoColors.textMuted
                 )
             }
         }
         Switch(checked = checked, onCheckedChange = onToggle)
     }
     HorizontalDivider(
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        color = alcedoColors.outlineVariant.copy(alpha = 0.3f),
         thickness = 0.5.dp,
         modifier = Modifier.padding(vertical = AlcedoSpacing.xs)
     )

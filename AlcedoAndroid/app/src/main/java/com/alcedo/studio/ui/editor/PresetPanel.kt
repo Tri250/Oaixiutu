@@ -34,8 +34,10 @@ import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.theme.AlcedoElevation
+import com.alcedo.studio.ui.theme.AlcedoFontRoles
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -99,6 +101,7 @@ fun PresetPanel(
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val presetService = remember { viewModel.presetService }
+    val alcedoColors = LocalAlcedoColors.current
 
     val presets by presetService.getAllPresets()
         .catch { emit(emptyList()) }
@@ -225,7 +228,7 @@ fun PresetPanel(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         stringRes { presetCreate },
-                        style = MaterialTheme.typography.labelSmall,
+                        style = AlcedoFontRoles.uiOverline,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -250,7 +253,7 @@ fun PresetPanel(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         stringRes { presetImport },
-                        style = MaterialTheme.typography.labelSmall,
+                        style = AlcedoFontRoles.uiOverline,
                         maxLines = 1
                     )
                 }
@@ -261,7 +264,7 @@ fun PresetPanel(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringRes { presetSearch }, style = MaterialTheme.typography.bodySmall) },
+                placeholder = { Text(stringRes { presetSearch }, style = AlcedoFontRoles.uiCaption) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -271,7 +274,7 @@ fun PresetPanel(
                     }
                 },
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall
+                textStyle = AlcedoFontRoles.uiCaption
             )
 
             // ── Category filter chips ──
@@ -288,7 +291,7 @@ fun PresetPanel(
                         label = {
                             Text(
                                 stringRes(filter.labelKey),
-                                style = MaterialTheme.typography.labelSmall
+                                style = AlcedoFontRoles.uiOverline
                             )
                         }
                     )
@@ -308,13 +311,13 @@ fun PresetPanel(
                             Icons.Default.PhotoLibrary,
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            tint = alcedoColors.textMuted.copy(alpha = 0.4f)
                         )
                         Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                         Text(
                             stringRes { presetTitle },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            style = AlcedoFontRoles.uiCaption,
+                            color = alcedoColors.textMuted.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -355,7 +358,7 @@ fun PresetPanel(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.35f)),
+                    .background(alcedoColors.scrim.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -482,7 +485,7 @@ fun PresetPanel(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = alcedoColors.danger)
                 ) { Text(stringRes { presetDelete }) }
             },
             dismissButton = {
@@ -504,6 +507,7 @@ private fun PresetCard(
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     Surface(
         modifier = modifier
             .combinedClickable(
@@ -511,7 +515,7 @@ private fun PresetCard(
                 onLongClick = onLongPress
             ),
         shape = RoundedCornerShape(AlcedoRadius.sm),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = alcedoColors.surfaceVariant.copy(alpha = 0.5f),
         tonalElevation = AlcedoElevation.level1.dp
     ) {
         Column(
@@ -524,7 +528,7 @@ private fun PresetCard(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(AlcedoRadius.xs))
-                    .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+                    .background(alcedoColors.surfaceContainerLowest),
                 contentAlignment = Alignment.Center
             ) {
                 val thumb = preset.thumbnail
@@ -545,16 +549,16 @@ private fun PresetCard(
                             .align(Alignment.TopStart)
                             .padding(3.dp)
                             .background(
-                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f),
+                                alcedoColors.scrim.copy(alpha = 0.55f),
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Text(
                             stringRes { presetCategoryBuiltin },
-                            style = MaterialTheme.typography.labelSmall,
+                            style = AlcedoFontRoles.uiOverline,
                             fontSize = TextUnit(9f, TextUnitType.Sp),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = alcedoColors.text
                         )
                     }
                 }
@@ -563,7 +567,7 @@ private fun PresetCard(
             // Preset name
             Text(
                 text = preset.name,
-                style = MaterialTheme.typography.labelSmall,
+                style = AlcedoFontRoles.uiOverline,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -573,12 +577,12 @@ private fun PresetCard(
             if (preset.description.isNotBlank()) {
                 Text(
                     text = preset.description,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = AlcedoFontRoles.uiOverline,
                     fontSize = TextUnit(9f, TextUnitType.Sp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = alcedoColors.textMuted.copy(alpha = 0.7f),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 1.dp)
@@ -595,7 +599,7 @@ private fun PresetCard(
             ) {
                 Text(
                     text = preset.category.ifBlank { stringRes { presetCategoryCustom } },
-                    style = MaterialTheme.typography.labelSmall,
+                    style = AlcedoFontRoles.uiOverline,
                     fontSize = TextUnit(9f, TextUnitType.Sp),
                     color = catColor,
                     fontWeight = FontWeight.Medium
@@ -631,7 +635,7 @@ private fun PresetContextMenu(
                     stringRes { presetDelete },
                     onDelete,
                     onDismiss,
-                    tint = MaterialTheme.colorScheme.error
+                    tint = LocalAlcedoColors.current.danger
                 )
             }
         },
@@ -648,7 +652,7 @@ private fun ContextMenuRow(
     label: String,
     onClick: () -> Unit,
     onDismiss: () -> Unit,
-    tint: Color = MaterialTheme.colorScheme.onSurface
+    tint: Color = LocalAlcedoColors.current.text
 ) {
     Row(
         modifier = Modifier
@@ -743,7 +747,7 @@ private fun PresetNameCategoryDialog(
                         Checkbox(checked = updateParams, onCheckedChange = { updateParams = it })
                         Text(
                             stringRes { presetCreate },
-                            style = MaterialTheme.typography.bodySmall
+                            style = AlcedoFontRoles.uiCaption
                         )
                     }
                 }

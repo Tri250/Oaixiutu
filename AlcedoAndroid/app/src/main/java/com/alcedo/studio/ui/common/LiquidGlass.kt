@@ -28,7 +28,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import com.alcedo.studio.ui.theme.LocalAlcedoColorScheme
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 
 // ═══════════════════════════════════════════════════════════════════
 // Liquid Glass Effect System – 2026 flagship frosted-glass UI
@@ -56,7 +56,7 @@ private object LiquidGlassDefaults {
 
 @Composable
 private fun glassColors(): Triple<Color, Color, Color> {
-    val alcedoScheme = LocalAlcedoColorScheme()
+    val alcedoScheme = LocalAlcedoColors.current
     return Triple(
         alcedoScheme.glassTint,
         alcedoScheme.glassBorder,

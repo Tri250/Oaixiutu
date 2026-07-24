@@ -29,10 +29,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
-import com.alcedo.studio.ui.theme.AlcedoAnimation
-import com.alcedo.studio.ui.theme.AlcedoRadius
-import com.alcedo.studio.ui.theme.AlcedoSlider
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
+import com.alcedo.studio.ui.theme.AlcedoFontRoles
+import com.alcedo.studio.ui.theme.EditorLabelStyle
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 
 /**
  * 2026 旗舰版 AdjustmentSlider
@@ -66,6 +66,7 @@ fun AdjustmentSlider(
     val isModified = value != defaultValue
     val interactionSource = remember { MutableInteractionSource() }
     val isDragged by interactionSource.collectIsDraggedAsState()
+    val alcedoColors = LocalAlcedoColors.current
 
     val thumbSize by animateDpAsState(
         targetValue = if (isDragged) AlcedoSlider.thumbRadiusActive * 2
@@ -86,8 +87,8 @@ fun AdjustmentSlider(
         label = "labelFlash"
     )
     val blendedLabelColor = lerpColor(
-        MaterialTheme.colorScheme.onSurface,
-        MaterialTheme.colorScheme.primary,
+        alcedoColors.text,
+        alcedoColors.accent,
         labelColor
     )
 
@@ -116,25 +117,25 @@ fun AdjustmentSlider(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 2026: 标签文字 — 半粗体,14sp,行高20sp
+            // 2026: 标签文字 — UiCaption 角色,半粗体
             Text(
                 label,
-                style = MaterialTheme.typography.labelLarge.copy(
+                style = EditorLabelStyle.textStyle().copy(
                     fontWeight = if (isModified) FontWeight.SemiBold else FontWeight.Medium
                 ),
                 color = if (enabled) blendedLabelColor
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                else alcedoColors.text.copy(alpha = AlcedoOpacity.disabled),
                 modifier = Modifier.weight(1f)
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 2026: 数值显示 — 使用次要容器色背景,微圆角,更精致
+                // 2026: 数值显示 — DataCaption 角色,等宽数字
                 Text(
                     valueDisplayTransform(value),
-                    style = MaterialTheme.typography.labelLarge.copy(
+                    style = EditorLabelStyle.numericStyle().copy(
                         fontWeight = if (isModified) FontWeight.SemiBold else FontWeight.Normal
                     ),
-                    color = if (isModified && enabled) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isModified && enabled) alcedoColors.accent
+                    else alcedoColors.textMuted
                 )
                 Spacer(modifier = Modifier.width(AlcedoSpacing.xs))
                 // 2026: 重置按钮 — 圆形触控目标,弹性缩放动画
@@ -156,8 +157,8 @@ fun AdjustmentSlider(
                         contentDescription = stringRes { sliderReset },
                         modifier = Modifier.size(AlcedoSlider.resetIconSize),
                         tint = if (isModified && enabled)
-                            MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = AlcedoOpacity.disabled)
+                            alcedoColors.accent
+                        else alcedoColors.text.copy(alpha = AlcedoOpacity.disabled)
                     )
                 }
             }
@@ -185,7 +186,7 @@ fun AdjustmentSlider(
                     }
                 },
             thumb = {
-                // 2026: 拇指 — 圆形 + 阴影 + 内发光
+                // 2026: 拇指 — 圆形 + 阴影 + 主题感知颜色
                 Box(
                     modifier = Modifier
                         .size(thumbSize)
@@ -193,11 +194,11 @@ fun AdjustmentSlider(
                             elevation = if (isDragged) AlcedoSlider.thumbShadowElevation + 2.dp
                             else AlcedoSlider.thumbShadowElevation,
                             shape = CircleShape,
-                            ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            ambientColor = alcedoColors.accent.copy(alpha = 0.3f),
+                            spotColor = alcedoColors.accent.copy(alpha = 0.2f)
                         )
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(alcedoColors.accent)
                 )
             },
             track = { sliderState ->
@@ -213,7 +214,7 @@ fun AdjustmentSlider(
                         .fillMaxWidth()
                         .height(trackHeight)
                         .clip(RoundedCornerShape(AlcedoRadius.full))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .background(alcedoColors.divider)
                 ) {
                     if (fraction > 0f) {
                         Box(
@@ -224,8 +225,8 @@ fun AdjustmentSlider(
                                 .background(
                                     brush = Brush.horizontalGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.primary,
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                            alcedoColors.accent,
+                                            alcedoColors.accent.copy(alpha = 0.8f)
                                         )
                                     )
                                 )
@@ -253,7 +254,7 @@ fun AdjustmentSlider(
             title = {
                 Text(
                     label,
-                    style = MaterialTheme.typography.titleMedium
+                    style = AlcedoFontRoles.uiTitle
                 )
             },
             text = {
@@ -276,7 +277,7 @@ fun AdjustmentSlider(
                 }) {
                     Text(
                         stringRes { confirm },
-                        color = MaterialTheme.colorScheme.primary
+                        color = alcedoColors.accent
                     )
                 }
             },

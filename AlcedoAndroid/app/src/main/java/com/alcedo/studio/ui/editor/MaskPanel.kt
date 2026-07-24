@@ -97,6 +97,7 @@ fun MaskPanel(
     val maskPreview by viewModel.maskPreviewBitmap.collectAsStateWithLifecycle()
     val original by viewModel.originalBitmap.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzingMask.collectAsStateWithLifecycle()
+    val alcedoColors = LocalAlcedoColors.current
 
     var showNewMaskMenu by remember { mutableStateOf(false) }
     var expandedContainerId by remember { mutableStateOf<String?>(null) }
@@ -117,9 +118,9 @@ fun MaskPanel(
             ) {
                 Text(
                     stringRes { maskTitle },
-                    style = MaterialTheme.typography.titleSmall,
+                    style = AlcedoFontRoles.uiTitle,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = alcedoColors.text
                 )
                 Box {
                     FilterChip(
@@ -169,8 +170,8 @@ fun MaskPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(AlcedoSpacing.xl),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
+                    color = alcedoColors.textMuted,
+                    style = AlcedoFontRoles.uiBody
                 )
             }
         } else {
@@ -204,6 +205,7 @@ private fun MaskPreviewCard(
     isAnalyzing: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     LiquidGlassSurface(modifier = modifier) {
         Box(
             modifier = Modifier
@@ -211,7 +213,7 @@ private fun MaskPreviewCard(
                 .height(160.dp)
                 .padding(AlcedoSpacing.sm)
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(alcedoColors.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (original != null) {
@@ -234,7 +236,7 @@ private fun MaskPreviewCard(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(AlcedoRadius.lg))
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f))
+                        .background(alcedoColors.scrim.copy(alpha = 0.55f))
                         .padding(horizontal = 14.dp, vertical = AlcedoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)
@@ -242,12 +244,12 @@ private fun MaskPreviewCard(
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = alcedoColors.onPrimary
                     )
                     Text(
                         stringRes { maskAnalyzing },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.onPrimary
                     )
                 }
             }
@@ -273,6 +275,7 @@ private fun MaskContainerCard(
 ) {
     var showSubMaskMenu by remember { mutableStateOf(false) }
     var newSubMode by remember { mutableStateOf(MaskCombineMode.ADDITIVE) }
+    val alcedoColors = LocalAlcedoColors.current
 
     LiquidGlassSurface(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(AlcedoSpacing.md), verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.sm)) {
@@ -284,7 +287,7 @@ private fun MaskContainerCard(
                     Icon(
                         if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = alcedoColors.textMuted
                     )
                 }
                 // Name field
@@ -294,21 +297,21 @@ private fun MaskContainerCard(
                     label = { Text(stringRes { maskName }) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
-                    textStyle = MaterialTheme.typography.bodyMedium
+                    textStyle = AlcedoFontRoles.uiBody
                 )
                 // Visibility toggle
                 IconButton(onClick = { onUpdate(container.copy(visible = !container.visible)) }) {
                     Icon(
                         if (container.visible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = stringRes { maskVisible },
-                        tint = if (container.visible) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (container.visible) alcedoColors.accent
+                        else alcedoColors.textMuted
                     )
                 }
                 // Delete
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = stringRes { maskDeleteMask },
-                        tint = MaterialTheme.colorScheme.error)
+                        tint = alcedoColors.danger)
                 }
             }
 
@@ -321,7 +324,7 @@ private fun MaskContainerCard(
                         Icon(Icons.Default.InvertColors, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                     },
                     colors = if (container.inverted) AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        containerColor = alcedoColors.secondaryContainer
                     ) else AssistChipDefaults.assistChipColors()
                 )
                 Spacer(Modifier.width(AlcedoSpacing.sm))
@@ -392,8 +395,8 @@ private fun MaskContainerCard(
                     Spacer(Modifier.width(AlcedoSpacing.sm))
                     Text(
                         combineModeLabel(newSubMode),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = AlcedoFontRoles.uiOverline,
+                        color = alcedoColors.textMuted
                     )
                 }
             }
@@ -464,15 +467,16 @@ private fun SubMaskRow(
     val brushState by remember { viewModel.brushState }
     val activeBrush = viewModel.activeBrushSubMaskIndex.collectAsState().value
     val isActiveBrush = activeBrush?.first == containerId && activeBrush?.second == subMaskIndex
+    val alcedoColors = LocalAlcedoColors.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(AlcedoRadius.sm))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+            .background(alcedoColors.surface.copy(alpha = 0.5f))
             .border(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                alcedoColors.outlineVariant.copy(alpha = 0.4f),
                 RoundedCornerShape(AlcedoRadius.sm)
             )
             .padding(horizontal = AlcedoSpacing.sm, vertical = 6.dp),
@@ -491,14 +495,14 @@ private fun SubMaskRow(
             Icon(
                 Icons.Default.DragHandle,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = alcedoColors.textMuted,
                 modifier = Modifier.size(22.dp)
             )
         }
         Icon(
             maskTypeIcon(sub.type),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = alcedoColors.accent,
             modifier = Modifier.size(AlcedoIconSize.md)
         )
         Spacer(Modifier.width(6.dp))
@@ -508,9 +512,9 @@ private fun SubMaskRow(
             val modeLabel = combineModeLabel(sub.combineMode)
             Text(
                 "$typeLabel · $modeLabel",
-                style = MaterialTheme.typography.labelMedium,
+                style = AlcedoFontRoles.uiCaptionStrong,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = alcedoColors.text
             )
             // Combine-mode selector
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -518,7 +522,7 @@ private fun SubMaskRow(
                     FilterChip(
                         selected = sub.combineMode == mode,
                         onClick = { onUpdate(sub.copy(combineMode = mode)) },
-                        label = { Text(combineModeLabel(mode), style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(combineModeLabel(mode), style = AlcedoFontRoles.uiOverline) },
                         modifier = Modifier.padding(end = AlcedoSpacing.xs)
                     )
                 }
@@ -531,8 +535,8 @@ private fun SubMaskRow(
                 ) {
                     Icon(Icons.Default.InvertColors,
                         contentDescription = stringRes { maskInvert },
-                        tint = if (sub.inverted) MaterialTheme.colorScheme.secondary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (sub.inverted) alcedoColors.secondary
+                        else alcedoColors.textMuted,
                         modifier = Modifier.size(AlcedoIconSize.sm)
                     )
                 }
@@ -555,7 +559,7 @@ private fun SubMaskRow(
                         FilterChip(
                             selected = true,
                             onClick = { viewModel.clearActiveBrushSubMask() },
-                            label = { Text(stringRes { maskBrushDone }, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringRes { maskBrushDone }, style = AlcedoFontRoles.uiOverline) },
                             leadingIcon = {
                                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
@@ -564,7 +568,7 @@ private fun SubMaskRow(
                         FilterChip(
                             selected = false,
                             onClick = { viewModel.setActiveBrushSubMask(containerId, subMaskIndex) },
-                            label = { Text(stringRes { maskBrushEdit }, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringRes { maskBrushEdit }, style = AlcedoFontRoles.uiOverline) },
                             leadingIcon = {
                                 Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
@@ -573,8 +577,8 @@ private fun SubMaskRow(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         stringRes { inspectorStrokesCount }.format(sub.params.brushStrokes.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = AlcedoFontRoles.uiOverline,
+                        color = alcedoColors.textMuted
                     )
                 }
 
@@ -616,7 +620,7 @@ private fun SubMaskRow(
                                 viewModel.setBrushEraser(false)
                                 viewModel.setBrushDrawingMode(true)
                             },
-                            label = { Text(stringRes { maskBrushDraw }, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringRes { maskBrushDraw }, style = AlcedoFontRoles.uiOverline) },
                             leadingIcon = {
                                 Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
@@ -628,7 +632,7 @@ private fun SubMaskRow(
                                 viewModel.setBrushEraser(true)
                                 viewModel.setBrushDrawingMode(true)
                             },
-                            label = { Text(stringRes { maskBrushEraser }, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringRes { maskBrushEraser }, style = AlcedoFontRoles.uiOverline) },
                             leadingIcon = {
                                 Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
@@ -637,7 +641,7 @@ private fun SubMaskRow(
                         FilterChip(
                             selected = !brushState.isDrawingMode,
                             onClick = { viewModel.setBrushDrawingMode(false) },
-                            label = { Text(stringRes { maskBrushNavigate }, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(stringRes { maskBrushNavigate }, style = AlcedoFontRoles.uiOverline) },
                             leadingIcon = {
                                 Icon(Icons.Default.PanTool, contentDescription = null, modifier = Modifier.size(AlcedoIconSize.sm))
                             }
@@ -656,8 +660,8 @@ private fun SubMaskRow(
                             Icon(Icons.Default.Undo,
                                 contentDescription = stringRes { maskBrushUndo },
                                 tint = if (brushState.strokes.isNotEmpty())
-                                    MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    alcedoColors.text
+                                else alcedoColors.surface.copy(alpha = 0.38f),
                                 modifier = Modifier.size(AlcedoIconSize.sm)
                             )
                         }
@@ -669,8 +673,8 @@ private fun SubMaskRow(
                             Icon(Icons.Default.Delete,
                                 contentDescription = stringRes { maskBrushClear },
                                 tint = if (brushState.strokes.isNotEmpty())
-                                    MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                                    alcedoColors.danger
+                                else alcedoColors.surface.copy(alpha = 0.38f),
                                 modifier = Modifier.size(AlcedoIconSize.sm)
                             )
                         }
@@ -722,7 +726,7 @@ private fun SubMaskRow(
         }
         IconButton(onClick = onRemove, modifier = Modifier.size(AlcedoIconSize.xl)) {
             Icon(Icons.Default.Delete, contentDescription = stringRes { maskDeleteSubMask },
-                tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(AlcedoIconSize.sm))
+                tint = alcedoColors.danger, modifier = Modifier.size(AlcedoIconSize.sm))
         }
     }
 }

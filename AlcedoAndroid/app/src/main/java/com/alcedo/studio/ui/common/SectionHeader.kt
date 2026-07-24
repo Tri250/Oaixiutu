@@ -16,10 +16,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.stringRes
-import com.alcedo.studio.ui.theme.AlcedoElevation
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoRadius
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 
 @Composable
 fun SectionHeader(
@@ -32,12 +29,13 @@ fun SectionHeader(
         targetValue = if (expanded) 0f else -90f,
         label = "chevron"
     )
+    val alcedoColors = LocalAlcedoColors.current
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(AlcedoRadius.md),
         tonalElevation = AlcedoElevation.level1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = alcedoColors.bgPanel
     ) {
         Column(modifier = Modifier.padding(vertical = AlcedoSpacing.xs)) {
             Row(
@@ -50,13 +48,13 @@ fun SectionHeader(
             ) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = AlcedoFontRoles.uiTitle,
+                    color = alcedoColors.text,
                     fontWeight = FontWeight.SemiBold
                 )
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    color = alcedoColors.surfaceVariant.copy(alpha = 0.6f),
                     modifier = Modifier.size(AlcedoIconSize.xl)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -66,7 +64,7 @@ fun SectionHeader(
                             modifier = Modifier
                                 .size(AlcedoIconSize.md)
                                 .rotate(rotation),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.icon
                         )
                     }
                 }

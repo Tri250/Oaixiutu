@@ -242,3 +242,113 @@ object AlcedoSlider {
     val resetButtonSize = 28.dp      // 重置按钮尺寸
     val resetIconSize = 16.dp        // 重置图标尺寸
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Editor-Specific Tokens – 编辑器专用令牌
+// 参照 AlcedoStudio app_theme.hpp 的 editor_slider_styling.hpp
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Editor Panel Layout Tokens ───────────────────────────────────
+// 编辑器面板布局统一令牌,确保各面板间距/尺寸一致
+object AlcedoEditorLayout {
+    // 面板整体
+    val panelWidth = 320.dp           // 面板宽度(手机竖屏全宽,平板侧边栏)
+    val panelCornerRadius = 14.dp     // 面板圆角 (→ AlcedoRadius.md)
+    val panelPadding = 16.dp          // 面板内边距 (→ AlcedoSpacing.lg)
+    val sectionGap = 8.dp             // 小节间距 (→ AlcedoSpacing.sm)
+    val sectionInnerGap = 4.dp        // 小节内部间距 (→ AlcedoSpacing.xs)
+
+    // 标题行
+    val titleHeight = 32.dp           // 面板标题行高度
+    val titleIconSize = 20.dp         // 标题图标尺寸 (→ AlcedoIconSize.md)
+    val titleTrailingIconSize = 16.dp // 标题右侧图标尺寸 (→ AlcedoIconSize.sm)
+
+    // 滑块行
+    val sliderRowHeight = 48.dp       // 滑块行高度(标签+滑块)
+    val sliderLabelWidth = 64.dp      // 滑块标签宽度
+    val sliderValueWidth = 48.dp      // 滑块数值宽度
+    val sliderResetSize = 28.dp       // 滑块重置按钮尺寸 (→ AlcedoSlider.resetButtonSize)
+
+    // 面板切换栏
+    val tabBarHeight = 40.dp          // 面板切换标签栏高度
+    val tabMinWidth = 56.dp           // 单个标签最小宽度
+    val tabIndicatorHeight = 2.dp     // 活动标签指示器高度
+
+    // 历史面板
+    val historyCardHeight = 48.dp     // 历史操作卡片高度
+    val historyThumbnailSize = 36.dp  // 历史缩略图尺寸
+
+    // 预设面板
+    val presetGridColumns = 2         // 预设网格列数
+    val presetCardHeight = 72.dp      // 预设卡片高度
+    val presetThumbnailSize = 48.dp   // 预设缩略图尺寸
+
+    // 颜色轮
+    val colorWheelSize = 180.dp       // 颜色轮直径
+    val colorWheelIndicatorRadius = 8.dp // 颜色轮指示器半径
+
+    // 曲线编辑器
+    val curveCanvasMinSize = 200.dp   // 曲线画布最小尺寸
+    val curvePointSize = 10.dp        // 曲线控制点尺寸
+    val curvePointHitSize = 24.dp     // 控制点触控热区尺寸
+}
+
+// ── Editor Color Interaction Tokens ──────────────────────────────
+// 编辑器颜色交互令牌,替代各面板中的硬编码颜色
+object AlcedoEditorColors {
+    // 滑块颜色 (参照 EditorSlider*Color)
+    val sliderTrackInactive = Color(0x1AFFFFFF)   // 暗色非激活轨道
+    val sliderTrackActive = Color(0x33FFFFFF)     // 暗色激活轨道
+    val sliderThumbBorder = Color(0xFF4DFFCC)     // 滑块拇指边框(DeepSpace accent)
+    val sliderResetIcon = Color(0xFF9E9E9E)       // 重置图标颜色
+
+    // 曲线编辑器
+    val curveGridLine = Color(0x1AFFFFFF)         // 曲线网格线
+    val curveBackground = Color(0xFF0D0D0D)       // 曲线背景
+    val curveLine = Color(0xFF4FC3F7)             // 曲线线段
+    val curveControlPoint = Color(0xFFFFFFFF)     // 控制点
+
+    // 颜色轮
+    val colorWheelBorder = Color(0x33FFFFFF)      // 颜色轮边框
+    val colorWheelIndicator = Color(0xFFFFFFFF)   // 指示器
+
+    // 示波器
+    val scopeBackground = Color(0xFF0A0A0A)       // 示波器背景
+    val scopeGridLine = Color(0x14FFFFFF)         // 示波器网格线
+    val scopeWaveform = Color(0xFF00D4AA)         // 波形颜色
+    val scopeParadeR = Color(0xFFFF6B6B)          // Parade R 通道
+    val scopeParadeG = Color(0xFF6BFF6B)          // Parade G 通道
+    val scopeParadeB = Color(0xFF6B6BFF)          // Parade B 通道
+
+    // 直方图
+    val histogramR = Color(0xFFFF4444)            // 红通道
+    val histogramG = Color(0xFF44FF44)            // 绿通道
+    val histogramB = Color(0xFF4444FF)            // 蓝通道
+    val histogramLuma = Color(0xCCFFFFFF)         // 亮度通道
+    val histogramBackground = Color(0x0DFFFFFF)   // 直方图背景
+
+    // 蒙版
+    val maskOverlay = Color(0x80FF0000)           // 蒙版叠加(半透明红)
+    val maskBrushIndicator = Color(0xFFFFFFFF)    // 画笔指示器
+
+    // 对比模式
+    val compareBorder = Color(0x33FFFFFF)         // 对比分割线
+
+    // 裁剪
+    val cropGridThirds = Color(0x33FFFFFF)        // 三分线
+    val cropGridDiagonal = Color(0x1AFFFFFF)      // 对角线
+    val cropHandle = Color(0xFFFFFFFF)            // 裁剪手柄
+    val cropOverlay = Color(0x66000000)           // 裁剪遮罩
+}
+
+// ── Editor Touch Target Tokens ──────────────────────────────────
+// 触控目标尺寸令牌,确保摄影师戴手套也能操作
+// Material 3 最小触控目标 48dp,编辑器关键控件适当加大
+object AlcedoTouchTarget {
+    val minimum = 44.dp       // 最小触控目标(稍小于48dp,适配密集面板)
+    val comfortable = 48.dp   // 舒适触控目标
+    val sliderThumb = 44.dp   // 滑块拇指触控区域
+    val button = 48.dp        // 按钮触控区域
+    val icon = 44.dp          // 图标触控区域
+    val toggle = 44.dp        // 开关触控区域
+}

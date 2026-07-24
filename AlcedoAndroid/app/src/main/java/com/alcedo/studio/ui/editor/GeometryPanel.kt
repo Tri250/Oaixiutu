@@ -16,9 +16,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoAnimation
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -30,6 +28,7 @@ fun GeometryPanel(
     var selectedCropAspectRatio by remember { mutableStateOf(CropAspectRatio.FREE) }
     var selectedOverlay by remember { mutableStateOf(CompositionOverlayType.NONE) }
     val view = LocalView.current
+    val alcedoColors = LocalAlcedoColors.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -45,8 +44,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { editorSectionTransform },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -62,7 +61,7 @@ fun GeometryPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetTransform },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.icon
                         )
                     }
                 }
@@ -153,8 +152,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { editorSectionCrop },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -168,7 +167,7 @@ fun GeometryPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetCrop },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.icon
                         )
                     }
                 }
@@ -187,7 +186,7 @@ fun GeometryPanel(
                                 selectedCropAspectRatio = ratio
                                 viewModel.updateCropAspectRatio(ratio)
                             },
-                            label = { Text(ratio.label, style = MaterialTheme.typography.labelSmall) }
+                            label = { Text(ratio.label, style = AlcedoFontRoles.uiCaption) }
                         )
                     }
                 }
@@ -199,8 +198,8 @@ fun GeometryPanel(
             Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { editorSectionTransform },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = AlcedoFontRoles.uiTitle,
+                color = alcedoColors.text
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 Row(
@@ -242,8 +241,8 @@ fun GeometryPanel(
             Column(modifier = Modifier.padding(AlcedoSpacing.md)) {
                 Text(
                     stringRes { cropCompositionGuide },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = AlcedoFontRoles.uiTitle,
+                color = alcedoColors.text
                 )
                 Spacer(modifier = Modifier.height(AlcedoSpacing.sm))
                 CompositionOverlaySelector(
@@ -278,8 +277,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropPerspectiveTransform },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -292,7 +291,7 @@ fun GeometryPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetPerspective },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.icon
                         )
                     }
                 }
@@ -335,8 +334,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropLensCorrection },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -349,7 +348,7 @@ fun GeometryPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { geometryResetLens },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.icon
                         )
                     }
                 }
@@ -363,8 +362,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropLensAutoDetect },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
                     )
                     Switch(
                         checked = params.lensAutoDetect,
@@ -380,7 +379,7 @@ fun GeometryPanel(
                 OutlinedTextField(
                     value = params.lensMaker,
                     onValueChange = { viewModel.updateLensMaker(it) },
-                    label = { Text(stringRes { cropLensMaker }, style = MaterialTheme.typography.labelSmall) },
+                    label = { Text(stringRes { cropLensMaker }, style = AlcedoFontRoles.uiCaption) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     enabled = !params.lensAutoDetect
@@ -389,7 +388,7 @@ fun GeometryPanel(
                 OutlinedTextField(
                     value = params.lensModel,
                     onValueChange = { viewModel.updateLensModel(it) },
-                    label = { Text(stringRes { cropLensModel }, style = MaterialTheme.typography.labelSmall) },
+                    label = { Text(stringRes { cropLensModel }, style = AlcedoFontRoles.uiCaption) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     enabled = !params.lensAutoDetect
@@ -404,8 +403,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropCorrectDistortion },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
                     )
                     Switch(
                         checked = params.lensCorrectDistortion,
@@ -435,8 +434,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropCorrectVignette },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
                     )
                     Switch(
                         checked = params.lensCorrectVignette,
@@ -466,8 +465,8 @@ fun GeometryPanel(
                 ) {
                     Text(
                         stringRes { cropCorrectTca },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiCaptionStrong,
+                        color = alcedoColors.text
                     )
                     Switch(
                         checked = params.lensCorrectTca,

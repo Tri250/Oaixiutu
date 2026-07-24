@@ -18,9 +18,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoAnimation
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 
 @Composable
@@ -30,6 +28,7 @@ fun ColorPanel(
     focusMode: FocusModeState = FocusModeState()
 ) {
     val params by remember { viewModel.params }
+    val alcedoColors = LocalAlcedoColors.current
 
     // 专注模式下用于切换活跃小节的小节标签
     val focusSections = listOf(
@@ -87,8 +86,8 @@ private fun ColorWheelsSection(
         ) {
             Text(
                 stringRes { editorColorWheels },
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                style = AlcedoFontRoles.uiTitle,
+                color = alcedoColors.text
             )
             IconButton(
                 onClick = {
@@ -101,7 +100,7 @@ private fun ColorWheelsSection(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetWheels },
                     modifier = Modifier.size(AlcedoIconSize.sm),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = alcedoColors.icon
                 )
             }
         }
@@ -184,13 +183,13 @@ private fun ColorWheelsSection(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             label,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = AlcedoFontRoles.uiCaption,
                             color = color
                         )
                         Text(
                             "%.3f".format(value),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = AlcedoFontRoles.dataCaption,
+                            color = alcedoColors.textMuted,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -219,7 +218,7 @@ private fun ColorWheelsSection(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             label,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = AlcedoFontRoles.uiCaption,
                             color = color
                         )
                         Slider(
@@ -314,8 +313,8 @@ private fun HslSection(
         ) {
             Text(
                 stringRes { editorHsl },
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                style = AlcedoFontRoles.uiTitle,
+                color = alcedoColors.text
             )
             IconButton(
                 onClick = {
@@ -328,7 +327,7 @@ private fun HslSection(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetHsl },
                     modifier = Modifier.size(AlcedoIconSize.sm),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = alcedoColors.icon
                 )
             }
         }
@@ -372,14 +371,14 @@ private fun HslSection(
                                 drawCircle(color = hueColors[index])
                             }
                             Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
-                            Text(name, style = MaterialTheme.typography.bodyMedium)
+                            Text(name, style = AlcedoFontRoles.uiBody)
                         }
                         Text(
                             text = "H:${"%.0f".format(params.hslHueShift[index])}° " +
                                 "S:${"%.1f".format(params.hslSaturationScale[index])} " +
                                 "L:${"%.1f".format(params.hslLuminanceScale[index])}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = AlcedoFontRoles.dataCaption,
+                            color = alcedoColors.textMuted
                         )
                     }
                     if (isExpanded) {
@@ -441,8 +440,8 @@ private fun ChannelMixerSection(
         ) {
             Text(
                 stringRes { editorChannelMixer },
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                style = AlcedoFontRoles.uiTitle,
+                color = alcedoColors.text
             )
             IconButton(
                 onClick = {
@@ -458,7 +457,7 @@ private fun ChannelMixerSection(
                     Icons.Default.Refresh,
                     contentDescription = stringRes { colorResetMixer },
                     modifier = Modifier.size(AlcedoIconSize.sm),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = alcedoColors.icon
                 )
             }
         }

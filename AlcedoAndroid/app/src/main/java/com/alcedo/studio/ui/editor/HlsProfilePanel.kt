@@ -55,6 +55,7 @@ fun HlsProfilePanel(
     var selectedProfile by remember { mutableIntStateOf(0) }
     val profileNames = hueProfileNames()
     val view = LocalView.current
+    val alcedoColors = LocalAlcedoColors.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -102,7 +103,7 @@ fun HlsProfilePanel(
                                     }
                                     Text(
                                         name,
-                                        style = MaterialTheme.typography.labelSmall
+                                        style = AlcedoFontRoles.uiOverline
                                     )
                                 }
                             },
@@ -193,15 +194,15 @@ fun HlsProfilePanel(
                             }
                             Text(
                                 name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                style = AlcedoFontRoles.uiCaption,
+                                color = alcedoColors.text
                             )
                             Text(
                                 "H:${"%.0f".format(hueShift)}° " +
                                     "S:${"%.1f".format(satScale)} " +
                                     "L:${"%.1f".format(lumScale)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                style = AlcedoFontRoles.uiCaption,
+                                color = alcedoColors.textMuted
                             )
                         }
                     }
@@ -218,8 +219,8 @@ private fun HueRingIndicator(
     hueWidth: Float,
     modifier: Modifier = Modifier
 ) {
-    val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer
-    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val surfaceContainerColor = alcedoColors.surfaceContainer
+    val onSurfaceColor = alcedoColors.text
     Canvas(modifier = modifier) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val outerRadius = size.width / 2f * 0.9f

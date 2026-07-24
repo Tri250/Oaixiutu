@@ -21,9 +21,7 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
-import com.alcedo.studio.ui.theme.AlcedoAnimation
-import com.alcedo.studio.ui.theme.AlcedoIconSize
-import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.*
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,6 +37,7 @@ fun EffectsPanel(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val view = LocalView.current
+    val alcedoColors = LocalAlcedoColors.current
 
     val lutPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -83,8 +82,8 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionLuminanceDenoise },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -97,7 +96,7 @@ fun EffectsPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetLumaDenoise },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.textMuted
                             )
                         }
                     }
@@ -133,8 +132,8 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionChromaDenoise },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -147,7 +146,7 @@ fun EffectsPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetChromaDenoise },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.textMuted
                             )
                         }
                     }
@@ -183,8 +182,8 @@ fun EffectsPanel(
                     ) {
                         Text(
                             stringRes { editorSectionFilmGrain },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = AlcedoFontRoles.uiTitle,
+                            color = alcedoColors.text
                         )
                         IconButton(
                             onClick = {
@@ -197,7 +196,7 @@ fun EffectsPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetGrain },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.textMuted
                             )
                         }
                     }
@@ -225,8 +224,8 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionHalation },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -239,7 +238,7 @@ fun EffectsPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetHalation },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.textMuted
                         )
                     }
                 }
@@ -312,8 +311,8 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionSharpen },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -326,7 +325,7 @@ fun EffectsPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetSharpen },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.textMuted
                         )
                     }
                 }
@@ -355,16 +354,16 @@ fun EffectsPanel(
                         imageVector = if (showSharpeningMask) Icons.Default.Visibility
                         else Icons.Default.VisibilityOff,
                         contentDescription = stringRes { effectsShowSharpeningMask },
-                        tint = if (showSharpeningMask) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (showSharpeningMask) alcedoColors.accent
+                        else alcedoColors.textMuted,
                         modifier = Modifier.size(AlcedoIconSize.md)
                     )
                     Spacer(modifier = Modifier.width(AlcedoSpacing.sm))
                     Text(
                         text = stringRes { effectsShowSharpeningMask },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (showSharpeningMask) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        style = AlcedoFontRoles.uiOverline,
+                        color = if (showSharpeningMask) alcedoColors.accent
+                        else alcedoColors.textMuted
                     )
                 }
             }
@@ -382,8 +381,8 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionClarity },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -396,7 +395,7 @@ fun EffectsPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetClarity },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.textMuted
                         )
                     }
                 }
@@ -433,8 +432,8 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionVignette },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     IconButton(
                         onClick = {
@@ -447,7 +446,7 @@ fun EffectsPanel(
                             Icons.Default.Refresh,
                             contentDescription = stringRes { effectsResetVignette },
                             modifier = Modifier.size(AlcedoIconSize.sm),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = alcedoColors.textMuted
                         )
                     }
                 }
@@ -475,8 +474,8 @@ fun EffectsPanel(
                 ) {
                     Text(
                         stringRes { editorSectionLut },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = AlcedoFontRoles.uiTitle,
+                        color = alcedoColors.text
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
@@ -490,7 +489,7 @@ fun EffectsPanel(
                                 Icons.Default.Refresh,
                                 contentDescription = stringRes { effectsResetLut },
                                 modifier = Modifier.size(AlcedoIconSize.sm),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = alcedoColors.textMuted
                             )
                         }
                         Spacer(modifier = Modifier.width(AlcedoSpacing.xs))

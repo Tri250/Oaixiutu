@@ -46,6 +46,7 @@ fun CurvePanelV2(
     var selectedChannel by remember { mutableStateOf(CurveV2Channel.RGB) }
     var draggedPointIndex by remember { mutableIntStateOf(-1) }
     var isDragging by remember { mutableStateOf(false) }
+    val alcedoColors = LocalAlcedoColors.current
 
     val controlPoints = remember(params.toneCurveX, params.toneCurveY) {
         val count = params.toneCurvePoints
@@ -66,8 +67,8 @@ fun CurvePanelV2(
             CurveV2Channel.entries.forEach { ch ->
                 val isSelected = selectedChannel == ch
                 val color = when (ch) {
-                    CurveV2Channel.RGB -> MaterialTheme.colorScheme.primary
-                    CurveV2Channel.R -> MaterialTheme.colorScheme.error
+                    CurveV2Channel.RGB -> alcedoColors.accent
+                    CurveV2Channel.R -> alcedoColors.danger
                     CurveV2Channel.G -> Color(0xFF66BB6A)
                     CurveV2Channel.B -> Color(0xFF42A5F5)
                 }
@@ -77,7 +78,7 @@ fun CurvePanelV2(
                     label = {
                         Text(
                             ch.label,
-                            color = if (isSelected) color else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isSelected) color else alcedoColors.textMuted
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(
@@ -141,18 +142,18 @@ fun CurvePanelV2(
             Column(verticalArrangement = Arrangement.spacedBy(AlcedoSpacing.xs)) {
                 Text(
                     "Points: ${controlPoints.size} / $MAX_V2_CONTROL_POINTS",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiCaption,
+                    color = alcedoColors.textMuted
                 )
                 Text(
                     "Channel: ${selectedChannel.label}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiCaption,
+                    color = alcedoColors.textMuted
                 )
                 Text(
                     "Spline: Hermite monotone-preserving",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = AlcedoFontRoles.uiCaption,
+                    color = alcedoColors.textMuted
                 )
             }
         }
@@ -172,15 +173,15 @@ private fun CurveV2Graph(
     modifier: Modifier = Modifier
 ) {
     val curveColor = when (channel) {
-        CurveV2Channel.RGB -> MaterialTheme.colorScheme.onSurface
-        CurveV2Channel.R -> MaterialTheme.colorScheme.error
+        CurveV2Channel.RGB -> alcedoColors.text
+        CurveV2Channel.R -> alcedoColors.danger
         CurveV2Channel.G -> Color(0xFF66BB6A)
         CurveV2Channel.B -> Color(0xFF42A5F5)
     }
 
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer
-    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val gridColor = alcedoColors.outlineVariant
+    val surfaceContainerColor = alcedoColors.surfaceContainer
+    val onSurfaceColor = alcedoColors.text
 
     Canvas(
         modifier = modifier
