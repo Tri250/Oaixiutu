@@ -412,6 +412,8 @@ private fun getOperatorIcon(type: OperatorType) = when (type) {
     OperatorType.TONE_REGION -> Icons.Default.Equalizer
     OperatorType.PRESET -> Icons.Default.Bookmark
     OperatorType.DENOISE -> Icons.Default.BlurOn
+    OperatorType.DEHAZE -> Icons.Default.FilterCenterFocus
+    OperatorType.TEXTURE -> Icons.Default.AutoFixHigh
     OperatorType.VIGNETTE -> Icons.Default.Vignette
     OperatorType.PERSPECTIVE -> Icons.Default.Transform
     OperatorType.LENS_CORRECTION -> Icons.Default.CameraAlt

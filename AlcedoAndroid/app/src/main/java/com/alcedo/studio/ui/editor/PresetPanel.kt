@@ -201,8 +201,9 @@ fun PresetPanel(
     }
 
     val filteredDbPresets = remember(dbPresets, selectedCategory, searchQuery) {
-        val byCategory = if (selectedCategory != null) {
-            val categoryStr = PresetService.categoryToString(selectedCategory)
+        val category = selectedCategory
+        val byCategory = if (category != null) {
+            val categoryStr = PresetService.categoryToString(category)
             dbPresets.filter { it.category == categoryStr }
         } else {
             dbPresets

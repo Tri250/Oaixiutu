@@ -16,6 +16,7 @@ import com.alcedo.studio.domain.service.ExportService
 import com.alcedo.studio.domain.service.MaskInferenceService
 import com.alcedo.studio.domain.service.MaskRenderService
 import com.alcedo.studio.domain.service.PipelineService
+import com.alcedo.studio.domain.service.PresetService
 import com.alcedo.studio.i18n.StringResources
 import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.alcedo.studio.ui.editor.CropAspectRatio
@@ -3425,7 +3426,7 @@ class EditorViewModel(private val imageId: String) : ViewModel() {
      */
     fun saveCurrentAsPreset(name: String, category: com.alcedo.studio.data.preset.PresetCategory) {
         val categoryStr = PresetService.categoryToString(category)
-        saveCurrentAsPreset(name, categoryStr)
+        saveCurrentAsPreset(name, categoryStr, "")
     }
 
     /** Deletes a database-backed preset by its row id. */

@@ -404,7 +404,15 @@ fun EditorScreen(
                             selectedPanel = selectedPanel,
                             onPanelSelected = { viewModel.updateSelectedPanel(it) },
                             viewModel = viewModel,
-                            focusMode = focusMode
+                            focusMode = focusMode,
+                            histogramData = histogramData,
+                            waveformData = waveformData,
+                            vectorscopeData = vectorscopeData,
+                            histogramChannel = histogramChannel,
+                            histogramScale = histogramScale,
+                            showClippingWarning = showClippingWarning,
+                            scopeChannel = scopeChannel,
+                            isScopeComputing = isScopeComputing
                         )
                     }
                 }
@@ -732,6 +740,7 @@ private fun ScopeAnalyzerPanel(
                                 HistogramChannel.GREEN -> Color.Green
                                 HistogramChannel.BLUE -> Color(0xFF42A5F5)
                                 HistogramChannel.LUMINANCE -> MaterialTheme.colorScheme.onSurface
+                                HistogramChannel.RGB_PARADE -> MaterialTheme.colorScheme.onSurface
                             }
                             FilterChip(
                                 selected = histogramChannel == ch,
@@ -1119,7 +1128,15 @@ private fun EditorPanelColumn(
     selectedPanel: EditorPanel,
     onPanelSelected: (EditorPanel) -> Unit,
     viewModel: EditorViewModel,
-    focusMode: FocusModeState
+    focusMode: FocusModeState,
+    histogramData: HistogramData,
+    waveformData: WaveformData,
+    vectorscopeData: VectorscopeData,
+    histogramChannel: HistogramChannel,
+    histogramScale: HistogramScale,
+    showClippingWarning: Boolean,
+    scopeChannel: ScopeChannel,
+    isScopeComputing: Boolean
 ) {
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.surface)
