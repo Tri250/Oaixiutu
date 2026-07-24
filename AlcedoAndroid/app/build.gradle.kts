@@ -49,9 +49,7 @@ android {
             }
         }
         ndk {
-            // x86 ABI removed: virtually no Android 9+ (API 28+) x86 devices exist,
-            // and ONNX Runtime Android AAR does not ship x86 libraries.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }
     }
 
@@ -157,11 +155,6 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
-        }
-        // Ensure c++_shared STL is included for all ABIs
-        jniLibs {
-            // Do not strip any JNI libraries (including libc++_shared.so)
-            keepDebugSymbols += "**/*.so"
         }
     }
     externalNativeBuild {

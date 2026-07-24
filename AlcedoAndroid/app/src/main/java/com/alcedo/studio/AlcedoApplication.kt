@@ -12,28 +12,19 @@ import com.alcedo.studio.security.TempFileManager
 import com.alcedo.studio.security.SecurityChecker
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.utils.MemoryGuard
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class AlcedoApplication : Application() {
     private val trimMemoryLock = Any()
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
 
-        // Install crash handler first so any subsequent crash is recorded.
-        // CrashHandler.initialize also bootstraps CrashReportService.
         try {
             CrashHandler.initialize(this)
         } catch (e: Throwable) {
             Log.e("AlcedoApp", "Failed to install crash handler", e)
         }
 
-        // Each initialization step is fully isolated; nothing here
-        // can take down the application.
         runSafe("PrivacyManager.initialize") { PrivacyManager.initialize(this) }
         runSafe("PrivacyManager.applyRetentionPolicy") { PrivacyManager.applyRetentionPolicy(this) }
         runSafe("TempFileManager.cleanupOldFiles") { TempFileManager.cleanupOldFiles(this) }
@@ -43,8 +34,6 @@ class AlcedoApplication : Application() {
             Log.e("AlcedoApp", "HapticFeedback.initialize failed, haptic feedback disabled", e)
         }
 
-        // Wire crash-report upload consent into the reporting service and
-        // attempt a best-effort flush of any reports left from a prior run.
         runSafe("CrashReportService.syncConsent") {
             val consent = PrivacyManager.getConsentStatus().crashReports
             CrashReportService.setUploadEnabled(consent)
@@ -62,48 +51,28 @@ class AlcedoApplication : Application() {
             }
         }
 
-        // AppModule.initialize — 必须在所有 runSafe 之前完成,因为后续的
-        // onTrimMemory / GPU 初始化都依赖 AppModule.context。
-        // 即使初始化失败也记录完整堆栈,便于排查。如果 DI 容器不可用,
-        // 后续 lazy 属性访问时会抛 IllegalStateException,但不会导致
-        // 应用进程立即死亡——至少能让 CrashHandler 上报崩溃。
+        AppModule.initialize(this)
+
         try {
-            AppModule.initialize(this)
+            AppModule.database.openHelper.writableDatabase
         } catch (e: Throwable) {
-            Log.e("AlcedoApp", "CRITICAL: AppModule.initialize failed — DI container unavailable", e)
-            // 不再直接让进程死亡; CrashHandler 已安装,会上报此异常
+            Log.e("AlcedoApp", "Database pre-warm failed", e)
         }
 
-        // 预热数据库: 异步触发 Room 惰性初始化,避免阻塞 Application.onCreate
-        // 数据库打开/迁移失败不会影响启动,仅日志记录
-        appScope.launch {
-            try {
-                AppModule.database.openHelper.writableDatabase
-            } catch (e: Throwable) {
-                Log.e("AlcedoApp", "Database pre-warm failed", e)
-            }
-        }
-
-        // Register memory pressure callback
         registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
             override fun onTrimMemory(level: Int) {
                 synchronized(trimMemoryLock) {
                     when {
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
-                            // Running low on memory — aggressive cache cleanup
                             Log.w("AlcedoApp", "onTrimMemory level=$level — low memory, clearing caches")
                             AppModule.thumbnailService.clearMemoryCache()
-                            AppModule.presetService.releaseResources()
                             MemoryGuard.emergencyGC()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> {
-                            // Release non-essential caches
                             Log.d("AlcedoApp", "onTrimMemory level=$level — releasing caches")
                             AppModule.thumbnailService.clearMemoryCache()
-                            AppModule.presetService.releaseResources()
                         }
                         level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
-                            // UI hidden — release UI caches
                             AppModule.thumbnailService.clearMemoryCache()
                         }
                     }
@@ -114,17 +83,11 @@ class AlcedoApplication : Application() {
                 synchronized(trimMemoryLock) {
                     Log.w("AlcedoApp", "onLowMemory — emergency cleanup")
                     AppModule.thumbnailService.clearMemoryCache()
-                    AppModule.presetService.releaseResources()
                     MemoryGuard.emergencyGC()
                 }
             }
         })
 
-        // ── GPU 能力检测 ──
-        // 初始化底层 GpuService（探测 GLES / Vulkan 可用性），并创建可选的
-        // GpuPipelineService 注入到 PipelineService 中。真正的 GPU 程序与纹理
-        // 创建会在首次 applyPipeline 时按需在 GL 线程上完成，此处仅做能力探测
-        // 与服务装配，不创建 GL 上下文。
         var gpuAvailable = false
         try {
             val gpuService = AppModule.gpuService
