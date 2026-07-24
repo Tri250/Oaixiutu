@@ -75,6 +75,7 @@ private fun ColorWheelsSection(
     viewModel: EditorViewModel,
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     var selectedWheel by remember { mutableStateOf(ColorWheelType.LIFT) }
     val view = LocalView.current
 
@@ -290,6 +291,7 @@ private fun HslSection(
     viewModel: EditorViewModel,
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     val view = LocalView.current
     val hslChannelNames = listOf(
         stringRes { editorColorRed },
@@ -425,6 +427,7 @@ private fun ChannelMixerSection(
     viewModel: EditorViewModel,
     params: com.alcedo.studio.data.model.PipelineParams
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     val view = LocalView.current
     val outputLabels = listOf(
         stringRes { editorOutputR },

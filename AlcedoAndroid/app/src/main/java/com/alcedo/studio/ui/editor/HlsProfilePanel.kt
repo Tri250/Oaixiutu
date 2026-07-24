@@ -20,8 +20,10 @@ import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.SectionHeader
 import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoFontRoles
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 
 private val HUE_PROFILE_COLORS = listOf(
     Color(0xFFE53935), // Red
@@ -219,6 +221,7 @@ private fun HueRingIndicator(
     hueWidth: Float,
     modifier: Modifier = Modifier
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     val surfaceContainerColor = alcedoColors.surfaceContainer
     val onSurfaceColor = alcedoColors.text
     Canvas(modifier = modifier) {

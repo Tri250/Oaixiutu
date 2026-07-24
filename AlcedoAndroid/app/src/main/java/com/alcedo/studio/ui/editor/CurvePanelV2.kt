@@ -19,8 +19,10 @@ import com.alcedo.studio.data.model.PipelineParams
 import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.SectionHeader
 import com.alcedo.studio.ui.theme.AlcedoAnimation
+import com.alcedo.studio.ui.theme.AlcedoFontRoles
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 import kotlin.math.*
 
 data class CurveControlPoint(val x: Float, val y: Float)
@@ -172,6 +174,7 @@ private fun CurveV2Graph(
     onIsDraggingChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val alcedoColors = LocalAlcedoColors.current
     val curveColor = when (channel) {
         CurveV2Channel.RGB -> alcedoColors.text
         CurveV2Channel.R -> alcedoColors.danger

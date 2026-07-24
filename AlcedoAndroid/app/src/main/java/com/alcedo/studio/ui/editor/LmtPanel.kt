@@ -28,9 +28,11 @@ import com.alcedo.studio.i18n.stringRes
 import com.alcedo.studio.ui.common.AdjustmentSlider
 import com.alcedo.studio.ui.common.HapticFeedback
 import com.alcedo.studio.ui.common.LiquidGlassSurface
+import com.alcedo.studio.ui.theme.AlcedoFontRoles
 import com.alcedo.studio.ui.theme.AlcedoIconSize
 import com.alcedo.studio.ui.theme.AlcedoRadius
 import com.alcedo.studio.ui.theme.AlcedoSpacing
+import com.alcedo.studio.ui.theme.LocalAlcedoColors
 import com.alcedo.studio.viewmodel.EditorViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
