@@ -295,9 +295,10 @@
 # ── Build Config ────────────────────────────────────────────────
 -keep class com.alcedo.studio.BuildConfig { *; }
 
-# ── R8 Full Mode ────────────────────────────────────────────────
+# ── R8 Log Stripping (Release) ───────────────────────────────────
+# Only strip verbose and debug logs. Keep Log.i for crash diagnostics
+# in production.  Log.w and Log.e are always preserved.
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
-    public static *** i(...);
 }

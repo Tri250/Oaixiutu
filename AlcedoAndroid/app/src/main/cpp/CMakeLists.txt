@@ -1,16 +1,24 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("alcedo_core")
 
-# Strip debug symbols in release builds
+# Strip debug symbols in release builds.
+# IMPORTANT: Do NOT use --strip-all on Android shared libraries — it strips
+# the .dynsym table that the dynamic linker needs to resolve JNI symbols.
+# Use -s (--strip-debug) instead, which only removes debug info.
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -fvisibility=hidden -ffunction-sections -fdata-sections")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fvisibility=hidden -ffunction-sections -fdata-sections")
-    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -Wl,--strip-all")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} -Wl,--gc-sections -Wl,-s")
 endif()
 
 # Android 15+ (API 35+) supports 16KB page size. Link native libraries with
 # 16KB max-page-size so they load correctly on 16KB-page-size devices.
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+# Only apply to API 35+ to avoid compatibility issues on older devices.
+# The linker will still accept the library on 4KB-page devices with this
+# setting, but we gate it to be explicit about intent.
+if(ANDROID_PLATFORM_LEVEL GREATER_EQUAL 35)
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

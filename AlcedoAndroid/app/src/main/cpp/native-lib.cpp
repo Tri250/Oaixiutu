@@ -61,6 +61,16 @@ using namespace alcedo;
 extern "C" {
 
 // ============================================================
+// JNI_OnLoad — install native crash handler before any Java code runs
+// This ensures native crashes during library init are captured.
+// ============================================================
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /* reserved */) {
+    alcedo::CrashHandler::Install();
+    LOGI("JNI_OnLoad: native crash handler installed");
+    return JNI_VERSION_1_6;
+}
+
+// ============================================================
 // Full Pipeline Processing (float32 RGBA)
 // ============================================================
 
