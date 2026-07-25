@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.3.3)'
+        description: 'Release tag (e.g. v1.3.4)'
         required: true
         type: string
 
@@ -100,9 +100,9 @@ jobs:
           else
             TAG="${{ github.ref_name }}"
           fi
-          # Validate tag format
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Invalid tag format: $TAG (expected v*.*.*)"
+          # Validate tag format (allow pre-release suffixes like -rc1, -beta2)
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "ERROR: Invalid tag format: $TAG (expected v*.*.* or v*.*.*-suffix)"
             exit 1
           fi
           DEST="AlcedoStudio-${TAG}.apk"
@@ -124,6 +124,16 @@ jobs:
           if [ "$APK_SIZE" -lt 1048576 ]; then
             echo "WARNING: APK is suspiciously small ($APK_SIZE bytes), may be unsigned or corrupt"
           fi
+          # Verify native libraries are present and have dynamic symbol tables
+          echo "Checking native libraries..."
+          NATIVE_COUNT=$(unzip -l "$APK_PATH" 'lib/*/*.so' 2>/dev/null | grep -c '\.so$' || echo 0)
+          echo "Native libraries found: $NATIVE_COUNT"
+          if [ "$NATIVE_COUNT" -eq 0 ]; then
+            echo "WARNING: No native .so libraries found in APK"
+          fi
+          # Verify JNI symbols are present (not stripped)
+          echo "Checking JNI symbols in arm64-v8a/libalcedo.so..."
+          unzip -p "$APK_PATH" 'lib/arm64-v8a/libalcedo.so' 2>/dev/null | strings | grep -c "JNI_OnLoad" || echo "WARNING: JNI_OnLoad symbol not found in libalcedo.so"
           # Try apksigner if available
           BUILD_TOOLS=$(ls -d ${ANDROID_HOME}/build-tools/*/ 2>/dev/null | sort -V | tail -1)
           if [ -n "$BUILD_TOOLS" ] && [ -f "${BUILD_TOOLS}apksigner" ]; then
@@ -155,6 +165,10 @@ jobs:
             echo "### Supported Formats"
             echo "JPEG, PNG, WEBP, BMP, GIF, TIFF, HEIC, HEIF, EXR,"
             echo "ARW, CR2, CR3, NEF, DNG, ORF, PEP, SRW, X3F, RAF, RW2, MOS"
+            echo ""
+            echo "### AI Features"
+            echo "On-device CLIP/SigLIP image tagging, semantic search, AI rating"
+            echo "(OpenAI / Anthropic / Doubao Vision API support)"
           } > release_notes.md
           echo "notes_path=release_notes.md" >> "$GITHUB_OUTPUT"
 

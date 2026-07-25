@@ -30,9 +30,9 @@ android {
         versionCode = if (parts != null && parts.size >= 3) {
             parts[0] * 10000 + parts[1] * 100 + parts[2]
         } else {
-            19
+            20
         }
-        versionName = gitTag?.ifBlank { null } ?: "1.2.9"
+        versionName = gitTag?.ifBlank { null } ?: "1.3.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
