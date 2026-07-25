@@ -254,11 +254,16 @@
 }
 
 # ── SQLCipher ───────────────────────────────────────────────────
+# net.zetetic.database.sqlcipher is the package used by sqlcipher-android 4.x.
+# The legacy net.sqlcipher package is from the older community edition; keep
+# both paths to ensure the native loader and Java API are not stripped.
 -keep class net.zetetic.database.sqlcipher.** { *; }
 -keep class net.sqlcipher.** { *; }
 -dontwarn net.sqlcipher.**
+-dontwarn net.zetetic.**
 -keepclassmembers class * {
-    @net.sqlcipher.database.* <fields>;
+    @net.zetetic.database.sqlcipher.** <fields>;
+    @net.zetetic.database.sqlcipher.** <methods>;
 }
 
 # ── Security Crypto ─────────────────────────────────────────────
@@ -280,6 +285,18 @@
 # ── Domain Services ─────────────────────────────────────────────
 -keep class com.alcedo.studio.domain.service.** { *; }
 -keep class com.alcedo.studio.domain.repository.** { *; }
+
+# ── GPU / i18n / Service packages ───────────────────────────────
+-keep class com.alcedo.studio.gpu.** { *; }
+-keep class com.alcedo.studio.i18n.** { *; }
+-keep class com.alcedo.studio.service.** { *; }
+-keep class com.alcedo.studio.crash.** { *; }
+-keep class com.alcedo.studio.permission.** { *; }
+-keep class com.alcedo.studio.privacy.** { *; }
+-keep class com.alcedo.studio.security.** { *; }
+-keep class com.alcedo.studio.storage.** { *; }
+-keep class com.alcedo.studio.util.** { *; }
+-keep class com.alcedo.studio.utils.** { *; }
 
 # ── Callbacks & Listeners ──────────────────────────────────────
 -keepclassmembers class * implements android.content.ComponentCallbacks2 {

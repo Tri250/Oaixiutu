@@ -13,10 +13,10 @@ endif()
 
 # Android 15+ (API 35+) supports 16KB page size. Link native libraries with
 # 16KB max-page-size so they load correctly on 16KB-page-size devices.
-# Only apply to API 35+ to avoid compatibility issues on older devices.
-# The linker will still accept the library on 4KB-page devices with this
-# setting, but we gate it to be explicit about intent.
-if(ANDROID_PLATFORM_LEVEL GREATER_EQUAL 35)
+# ANDROID_API is set by the NDK CMake toolchain to the target API level.
+# On older devices (4KB pages), the linker still accepts 16KB-aligned libs,
+# but we gate it to API 35+ to avoid any edge-case incompatibilities.
+if(ANDROID_API GREATER_EQUAL 35)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 endif()
 
