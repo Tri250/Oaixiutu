@@ -136,6 +136,16 @@ class AiRatingService(
         }
     }
 
+    /**
+     * Release all resources held by this service.
+     * Cancels all in-flight rating jobs and the internal [CoroutineScope].
+     */
+    fun shutdown() {
+        activeJobs.values.forEach { it.cancel() }
+        activeJobs.clear()
+        scope.cancel()
+    }
+
     suspend fun rateImages(
         images: List<Pair<UInt, Bitmap>>,
         mood: RatingMood = RatingMood.CASUAL,

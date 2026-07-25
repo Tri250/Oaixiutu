@@ -483,6 +483,16 @@ class ModelDownloadService(private val context: Context) {
         _models.value = defaultModels
     }
 
+    /**
+     * Release all resources held by this service.
+     * Cancels all active downloads and the internal [CoroutineScope].
+     */
+    fun shutdown() {
+        downloadJobs.values.forEach { it.cancel() }
+        downloadJobs.clear()
+        scope.cancel()
+    }
+
     // ── Internal Helpers ──
 
     private fun updateModel(modelId: String, updated: ModelAsset) {

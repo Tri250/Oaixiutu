@@ -36,11 +36,12 @@ object SecureHttpClient {
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
 
-        // Apply certificate pinning
+        // Apply certificate pinning (only enforced for pinned domains;
+        // unpinned domains like custom AI endpoints use normal TLS verification)
         builder.certificatePinner(AlcedoCertificatePinner.buildCertificatePinner())
 
-        // Apply TLS configuration - only TLS 1.2+ and 1.3
-        val connectionSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+        // Apply TLS configuration for pinned (known) domains — strict cipher suite
+        val strictSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
             .tlsVersions(TlsVersion.TLS_1_2, TlsVersion.TLS_1_3)
             .cipherSuites(
                 // Only allow strong cipher suites
@@ -54,7 +55,15 @@ object SecureHttpClient {
             )
             .build()
 
-        builder.connectionSpecs(listOf(connectionSpec))
+        // Fallback spec for custom/unpinned AI provider endpoints (e.g., local
+        // Ollama, OpenRouter, self-hosted models) that may not support the
+        // restricted cipher suite list. Still requires TLS 1.2+.
+        val fallbackSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+            .tlsVersions(TlsVersion.TLS_1_2, TlsVersion.TLS_1_3)
+            .build()
+
+        // OkHttp tries specs in order: strict first, then fallback if it fails
+        builder.connectionSpecs(listOf(strictSpec, fallbackSpec))
 
         // Add certificate pinning failure handler
         builder.addInterceptor { chain ->

@@ -54,20 +54,25 @@ class SemanticGenerationService(
     private val _progress = MutableStateFlow(SemanticGenerationProgress())
     val progress: StateFlow<SemanticGenerationProgress> = _progress.asStateFlow()
 
+    /**
+     * Label catalog for zero-shot classification.
+     * This is the canonical catalog shared with [AiService.labelCatalog]
+     * plus additional domain-specific labels for batch generation.
+     * Both services MUST use a consistent base catalog to ensure
+     * label compatibility between single-image and batch operations.
+     */
     val labelCatalog = listOf(
+        // ── Core catalog (must match AiService.labelCatalog) ──
         "portrait", "landscape", "macro", "street photography", "documentary",
         "sports", "wildlife", "architecture", "aerial", "underwater",
         "fashion", "wedding", "event", "travel", "astro photography",
         "long exposure", "night photography", "food photography", "product photography",
         "natural light", "golden hour", "blue hour", "backlit", "silhouette",
         "soft light", "hard light", "studio lighting", "flash", "ambient light",
-        "side lighting", "front lighting", "rim lighting", "low key", "high key",
         "vibrant colors", "muted tones", "monochrome", "black and white",
         "warm tones", "cool tones", "pastel", "high contrast", "low contrast",
-        "sepia", "selective color", "complementary colors",
         "rule of thirds", "symmetry", "leading lines", "framing", "negative space",
         "minimalist", "diagonal", "centered", "off-center", "Dutch angle",
-        "bird's eye view", "worm's eye view", "wide angle", "telephoto compression",
         "person", "group of people", "child", "elderly", "athlete",
         "animal", "bird", "insect", "pet", "wildlife in habitat",
         "flower", "tree", "forest", "mountain", "beach",
@@ -78,12 +83,16 @@ class SemanticGenerationService(
         "technology", "gadget", "phone", "computer", "camera",
         "happy", "sad", "serene", "dramatic", "mysterious",
         "romantic", "energetic", "calm", "nostalgic", "melancholic",
-        "joyful", "peaceful", "tense", "whimsical", "elegant",
         "sunny", "cloudy", "rainy", "snowy", "foggy",
         "sunrise", "sunset", "twilight", "midday", "night",
         "spring", "summer", "autumn", "winter", "storm",
         "sharp", "soft focus", "bokeh", "motion blur", "grainy",
-        "clean", "detailed", "abstract", "textured", "smooth"
+        "clean", "detailed", "abstract", "textured", "smooth",
+        // ── Extended labels for batch generation ──
+        "side lighting", "front lighting", "rim lighting", "low key", "high key",
+        "sepia", "selective color", "complementary colors",
+        "bird's eye view", "worm's eye view", "wide angle", "telephoto compression",
+        "joyful", "peaceful", "tense", "whimsical", "elegant"
     )
 
     suspend fun generateAllSemanticLabels(
@@ -240,6 +249,15 @@ class SemanticGenerationService(
     fun reset() {
         cancelGeneration()
         _progress.value = SemanticGenerationProgress()
+    }
+
+    /**
+     * Release all resources held by this service.
+     * Cancels any running generation and the internal [CoroutineScope].
+     */
+    fun shutdown() {
+        cancelGeneration()
+        scope.cancel()
     }
 
     private fun loadBitmap(imagePath: String): Bitmap? {

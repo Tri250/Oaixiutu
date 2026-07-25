@@ -131,6 +131,9 @@ class AiService(private val context: Context) {
         try {
             // Initialize HNSW index (AiNdkBridge already returns 0L on failure)
             hnswIndexHandle = AiNdkBridge.hnswCreateIndex(DEFAULT_EMBEDDING_DIM)
+            // Share the single ClipInferenceEngine with AiNdkBridge so it
+            // doesn't create a duplicate ONNX Runtime environment.
+            AiNdkBridge.setClipEngine(clipEngine)
         } catch (e: Throwable) {
             android.util.Log.e(TAG, "init: HNSW index creation failed", e)
             hnswIndexHandle = 0L
@@ -532,6 +535,26 @@ class AiService(private val context: Context) {
         activeJobs.values.forEach { it.cancel() }
         activeJobs.clear()
         _taskProgress.value = emptyMap()
+    }
+
+    /**
+     * Release all resources held by this service.
+     * Call when the service is no longer needed (e.g., when the user's
+     * project is closed) to prevent memory leaks from the internal
+     * [CoroutineScope].
+     */
+    fun shutdown() {
+        cancelAllTasks()
+        scope.cancel()
+        clipEngine.unloadModelSync()
+        if (hnswIndexHandle != 0L) {
+            try {
+                AiNdkBridge.hnswRemove(hnswIndexHandle, -1) // no-op clear
+            } catch (_: Exception) {}
+            hnswIndexHandle = 0L
+        }
+        vectorIndex.clear()
+        labelStore.clear()
     }
 
     /**

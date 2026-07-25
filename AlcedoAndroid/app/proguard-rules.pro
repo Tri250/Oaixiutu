@@ -143,6 +143,16 @@
     @kotlinx.serialization.Serializable <methods>;
 }
 
+# CRITICAL: Keep generated serializer classes for kotlinx.serialization.
+# Without this rule, R8 removes or renames *$$serializer classes,
+# causing MissingFieldException / SerializationException at runtime
+# when serializing/deserializing AI credentials, model configs, etc.
+-keep class *$$serializer { *; }
+-keepclassmembers class *$$serializer {
+    <fields>;
+    <methods>;
+}
+
 -keep class **.serializer { *; }
 -keepclassmembers class * {
     *** serializer(...);
@@ -176,6 +186,10 @@
 -keep class com.microsoft.onnxruntime.** { *; }
 -dontwarn ai.onnxruntime.**
 -dontwarn com.microsoft.onnxruntime.**
+
+# ONNX Runtime NNAPI delegate (loaded via reflection)
+-keep class ai.onnxruntime.extensions.NnapiDelegate { *; }
+-dontwarn ai.onnxruntime.extensions.**
 
 # ── Metadata-Extractor ──────────────────────────────────────────
 -keep class com.drew.** { *; }
@@ -285,6 +299,17 @@
 # ── Domain Services ─────────────────────────────────────────────
 -keep class com.alcedo.studio.domain.service.** { *; }
 -keep class com.alcedo.studio.domain.repository.** { *; }
+
+# ── AI Engine ───────────────────────────────────────────────────
+# The AI engine uses reflection (NNAPI delegate, ONNX session resolution),
+# kotlinx.serialization (AiCredential, AiProviderProfile, etc.), and
+# OkHttp for LLM API calls.  Keep all AI model classes intact.
+-keep class com.alcedo.studio.ndk.AiNdkBridge$HnswGraph { *; }
+-keep class com.alcedo.studio.ndk.AiNdkBridge$HnswNode { *; }
+-keep class com.alcedo.studio.domain.service.ClipTokenizer { *; }
+-keep class com.alcedo.studio.domain.service.ClipTokenizer$Companion { *; }
+-keep class com.alcedo.studio.domain.service.ClipInferenceEngine$ModelConfig { *; }
+-keep class com.alcedo.studio.domain.service.ClipInferenceEngine$ModelStatus { *; }
 
 # ── GPU / i18n / Service packages ───────────────────────────────
 -keep class com.alcedo.studio.gpu.** { *; }

@@ -25,6 +25,10 @@ object AlcedoCertificatePinner {
         // 火山方舟 uses GlobalSign/DigiCert
         "ark.cn-beijing.volces.com" to listOf(
             "sha256/+JjwljGs4g8i5VRCl4UrgpRDOjF0yjfxRj63XD/Y4wQ="   // DigiCert Global Root CA
+        ),
+        // OpenRouter uses Cloudflare
+        "openrouter.ai" to listOf(
+            "sha256/jQ9bMubTnrnxCtgTvDvR6YqVthYzr2IkZ/hk4UDJ4Pg="   // Cloudflare Origin CA ECC
         )
     )
 

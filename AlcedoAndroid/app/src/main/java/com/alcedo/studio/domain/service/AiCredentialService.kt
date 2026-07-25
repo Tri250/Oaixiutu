@@ -25,17 +25,30 @@ import javax.crypto.spec.SecretKeySpec
  */
 class AiCredentialService(context: Context) {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val encryptedPrefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "alcedo_ai_credentials",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    /**
+     * Encrypted prefs for AI credential storage.
+     *
+     * Wrapped in a try-catch because EncryptedSharedPreferences.create() can throw
+     * on devices with a corrupted Android Keystore (common on some OEM ROMs).
+     * If creation fails, we fall back to unencrypted prefs so the app doesn't crash.
+     * Credentials stored in fallback mode are still protected at the process level
+     * by the Android sandbox, though they are not encrypted at rest.
+     */
+    private val encryptedPrefs: SharedPreferences = try {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "alcedo_ai_credentials",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        Log.e("AiCredentialService", "EncryptedSharedPreferences creation failed, falling back to unencrypted prefs", e)
+        context.getSharedPreferences("alcedo_ai_credentials_fallback", Context.MODE_PRIVATE)
+    }
 
     private val json = Json { ignoreUnknownKeys = true }
 

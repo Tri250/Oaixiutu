@@ -17,6 +17,14 @@ import kotlin.random.Random
 object AiNdkBridge {
     private const val TAG = "AiNdkBridge"
 
+    /**
+     * Shared reference to the app's single ClipInferenceEngine instance.
+     * Set by [setClipEngine] during dependency initialization.
+     * Do NOT create a separate ClipInferenceEngine here — doing so wastes
+     * memory (two ONNX Runtime environments) and causes state divergence
+     * (model loaded in one engine but not the other).
+     */
+    @Volatile
     private var clipEngine: ClipInferenceEngine? = null
 
     // HNSW 图索引实例
@@ -300,7 +308,18 @@ object AiNdkBridge {
         }
     }
 
+    /**
+     * Set the shared ClipInferenceEngine instance from AiService.
+     * This avoids creating a duplicate ONNX Runtime environment.
+     * Call this once during app initialization after AiService is created.
+     */
+    fun setClipEngine(engine: ClipInferenceEngine) {
+        clipEngine = engine
+    }
+
     fun initialize(context: Context) {
+        // Legacy entry point — only creates a local engine if none was set
+        // via setClipEngine(). Prefer calling setClipEngine() instead.
         if (clipEngine == null) {
             clipEngine = ClipInferenceEngine(context)
         }
