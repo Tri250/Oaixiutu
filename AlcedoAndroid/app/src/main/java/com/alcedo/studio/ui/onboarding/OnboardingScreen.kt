@@ -1,8 +1,7 @@
 package com.alcedo.studio.ui.onboarding
 
-import android.Manifest
+import android.app.Activity
 import android.content.Context
-import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,42 +17,64 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.alcedo.studio.permission.PermissionHelper
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/**
- * First-launch onboarding screen with 4 pages:
- * 1. Welcome / RAW editing
- * 2. AI semantic search
- * 3. Smart rating
- * 4. Get started (with permission request)
- */
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     var currentPage by remember { mutableIntStateOf(0) }
-    val hasMediaPermission = remember { mutableStateOf(false) }
     val context = LocalContext.current
-    // 防抖/防重复点击：一旦进入 onFinish 流程就锁死所有按钮，避免用户狂点导致 launcher 多次调用或状态错乱
-    var isFinishing by rememberSaveable { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val activity = (LocalView.current.context as? Activity) ?: (context as? Activity)
 
-    val onFinishUpdated by rememberUpdatedState(newValue = onFinish)
-    val mediaPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        // 🚨 修复：以前只有「全部授权」或「至少部分授权」才 onFinish，全拒时卡死！
-        //   现在无论授予还是拒绝，只要回调来了都 onFinish，继续进入主界面，
-        //   后续具体功能（AlbumScreen）会再做二次权限请求，不让用户卡在引导页。
-        val allGranted = runCatching { results.isNotEmpty() && results.all { it.value } }.getOrDefault(false)
-        val anyGranted = runCatching { results.any { it.value } }.getOrDefault(false)
-        hasMediaPermission.value = allGranted
-        Log.i("Onboarding",
-            "Media permission result: total=${results.size}, allGranted=$allGranted, anyGranted=$anyGranted -> proceeding to main")
+    var isFinishing by rememberSaveable { mutableStateOf(false) }
+    var permissionLaunched by rememberSaveable { mutableStateOf(false) }
+    var clickCount by rememberSaveable { mutableIntStateOf(0) }
+    var watchdogArmed by rememberSaveable { mutableStateOf(false) }
+
+    val finishAction: (String) -> Unit = { reason ->
+        if (isFinishing) {
+            Log.w("Onboarding", "finishAction[$reason] skipped: already finishing")
+            return
+        }
         isFinishing = true
-        onFinishUpdated()
+        Log.i("Onboarding", "[$reason] finish -> entering main screen")
+        runCatching { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+        runCatching { onFinish() }.onFailure { e ->
+            Log.wtf("Onboarding", "onFinish callback threw, forcing recomposition to unblock", e)
+        }
+    }
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { results ->
+            watchdogArmed = false
+            val allGranted = runCatching { results.isNotEmpty() && results.all { it.value } }.getOrDefault(false)
+            val anyGranted = runCatching { results.any { it.value } }.getOrDefault(false)
+            Log.i("Onboarding",
+                "Permission callback: total=${results.size} all=$allGranted any=$anyGranted")
+            finishAction("permissionResultCallback")
+        }
+    )
+
+    LaunchedEffect(watchdogArmed, permissionLaunched) {
+        if (watchdogArmed && permissionLaunched) {
+            Log.i("Onboarding", "Watchdog armed: will force-finish in 8s if no callback")
+            delay(8000L)
+            if (watchdogArmed && !isFinishing) {
+                Log.e("Onboarding", "Watchdog TRIGGERED: permission callback never arrived — force unblocking")
+                finishAction("watchdogTimeout")
+            }
+        }
     }
 
     val pages = remember {
@@ -85,29 +106,36 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .systemBarsPadding()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
+            .safeDrawingPadding()
     ) {
-        // Skip button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.End
         ) {
             TextButton(
-                enabled = !isFinishing,
                 onClick = {
                     if (isFinishing) return@TextButton
-                    isFinishing = true
-                    Log.i("Onboarding", "Skip clicked at page=$currentPage")
-                    requestMediaPermission(context, mediaPermissionLauncher, onFinish)
+                    runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+                    Log.i("Onboarding", "Skip clicked @ page=$currentPage")
+                    permissionLaunched = true
+                    watchdogArmed = true
+                    requestMediaPermission(
+                        context = context,
+                        activity = activity,
+                        launcher = mediaPermissionLauncher,
+                        onFinish = { finishAction("skipButton") }
+                    )
                 }
             ) {
                 Text("跳过")
             }
         }
 
-        // Content area
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -117,13 +145,14 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         ) {
             AnimatedContent(
                 targetState = currentPage,
+                label = "OnboardingPageTransition",
                 transitionSpec = {
                     if (targetState > initialState) {
                         slideInHorizontally { it } + fadeIn() togetherWith
-                        slideOutHorizontally { -it } + fadeOut()
+                            slideOutHorizontally { -it } + fadeOut()
                     } else {
                         slideInHorizontally { -it } + fadeIn() togetherWith
-                        slideOutHorizontally { it } + fadeOut()
+                            slideOutHorizontally { it } + fadeOut()
                     }
                 }
             ) { page ->
@@ -131,7 +160,6 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
         }
 
-        // Page indicator
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -153,48 +181,82 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
         }
 
-        // Navigation buttons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp, vertical = 24.dp),
+                .navigationBarsPadding()
+                .padding(horizontal = 32.dp, vertical = 28.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (currentPage > 0) {
                 OutlinedButton(
-                    enabled = !isFinishing,
                     onClick = {
                         if (isFinishing) return@OutlinedButton
+                        runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                         currentPage--
-                    }
+                    },
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text("上一步")
                 }
             } else {
-                Spacer(modifier = Modifier.width(1.dp))
+                Spacer(modifier = Modifier.width(8.dp))
             }
 
             Button(
-                enabled = !isFinishing,
                 onClick = {
                     if (isFinishing) return@Button
+                    runCatching { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
                     if (currentPage < pages.size - 1) {
                         currentPage++
                     } else {
-                        isFinishing = true
-                        Log.i("Onboarding", "Get-started clicked at page=$currentPage")
-                        requestMediaPermission(context, mediaPermissionLauncher, onFinish)
+                        clickCount++
+                        Log.i("Onboarding", "Get-started clicked @ page=$currentPage (clickCount=$clickCount)")
+                        if (clickCount >= 5) {
+                            Log.w("Onboarding", "Emergency bypass: 5x rapid clicks — force finish without permission")
+                            finishAction("emergencyBypass5x")
+                            return@Button
+                        }
+                        permissionLaunched = true
+                        watchdogArmed = true
+                        scope.launch {
+                            delay(400)
+                            if (!isFinishing && watchdogArmed && !permissionLaunched) {
+                                Log.w("Onboarding", "Slow launch fallback: force finish after 400ms")
+                                finishAction("slowLaunchFallback")
+                            }
+                        }
+                        requestMediaPermission(
+                            context = context,
+                            activity = activity,
+                            launcher = mediaPermissionLauncher,
+                            onFinish = { finishAction("getStartedButton") }
+                        )
                     }
                 },
-                shape = RoundedCornerShape(12.dp)
+                modifier = Modifier.height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)
             ) {
-                Text(if (currentPage < pages.size - 1) "下一步" else "开始使用")
+                Text(
+                    text = if (currentPage < pages.size - 1) "下一步" else "开始使用",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
                 if (currentPage < pages.size - 1) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
@@ -203,31 +265,30 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
 private fun requestMediaPermission(
     context: Context,
+    activity: Activity?,
     launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
     onFinish: () -> Unit
 ) {
     runCatching {
         if (PermissionHelper.hasReadMediaAccess(context)) {
-            Log.i("Onboarding", "hasReadMediaAccess=true, skipping permission request -> onFinish")
+            Log.i("Onboarding", "hasReadMediaAccess=true → skip permission → onFinish")
             onFinish()
             return@runCatching
         }
         val permissions = PermissionHelper.getReadMediaPermissions()
-        // 🚨 修复：如果 permission 列表为空（未知版本或系统异常），直接放行，
-        //   launcher.launch(emptyArray) 在部分机型上会静默不回调 → 卡死！
         if (permissions.isEmpty()) {
-            Log.w("Onboarding", "getReadMediaPermissions() returned empty list, skipping -> onFinish")
+            Log.w("Onboarding", "permission list is empty → onFinish as fallback")
             onFinish()
             return@runCatching
         }
-        Log.i("Onboarding", "requesting ${permissions.size} media permissions: $permissions")
+        Log.i("Onboarding", "launching permissions=$permissions (activity=${activity != null})")
         runCatching { launcher.launch(permissions.toTypedArray()) }.onFailure { e ->
-            Log.e("Onboarding", "launcher.launch failed -> proceed anyway", e)
+            Log.e("Onboarding", "launcher.launch failed → fallback onFinish", e)
             onFinish()
         }
     }.onFailure { e ->
-        Log.e("Onboarding", "requestMediaPermission unexpected error -> proceed anyway", e)
-        onFinish()
+        Log.e("Onboarding", "requestMediaPermission top-level failure → fallback onFinish", e)
+        runCatching { onFinish() }
     }
 }
 
@@ -240,31 +301,33 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-            modifier = Modifier.size(120.dp)
+            modifier = Modifier.size(128.dp),
+            tonalElevation = 2.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     page.icon,
                     contentDescription = null,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(60.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
-        Text(
-            page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        ProvideTextStyle(value = MaterialTheme.typography.headlineMedium) {
+            Text(
+                text = page.title,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(18.dp))
         Text(
             page.description,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.4f
+            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.45f
         )
     }
 }

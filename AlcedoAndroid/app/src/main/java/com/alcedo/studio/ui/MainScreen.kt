@@ -210,8 +210,12 @@ fun MainScreen(
     // 首次启动隐私同意弹窗 (PIPL / GDPR 合规)
     var showPrivacyDialog by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (PrivacyManager.needsConsentDialog()) {
-            showPrivacyDialog = true
+        runCatching {
+            if (PrivacyManager.isInitialized() && PrivacyManager.needsConsentDialog()) {
+                showPrivacyDialog = true
+            }
+        }.onFailure { e ->
+            android.util.Log.e("MainScreen", "PrivacyManager.needsConsentDialog failed", e)
         }
     }
 
@@ -464,10 +468,15 @@ fun MainScreen(
     //   → 用户会看到「引导页按钮 + 透明/半透明 Dialog 层」，但点击任何按钮都没反应！
     //   这里用 !showOnboarding 作为门槛，等引导页 onFinish 后再顺序弹隐私同意。
     if (!showOnboarding && showPrivacyDialog) {
-        PrivacyConsentDialog(
-            onDismiss = { showPrivacyDialog = false },
-            onAccept = { showPrivacyDialog = false }
-        )
+        runCatching {
+            PrivacyConsentDialog(
+                onDismiss = { showPrivacyDialog = false },
+                onAccept = { _ -> showPrivacyDialog = false }
+            )
+        }.onFailure { e ->
+            android.util.Log.e("MainScreen", "PrivacyConsentDialog composition failed, force-dismiss", e)
+            showPrivacyDialog = false
+        }
     }
 }
 
