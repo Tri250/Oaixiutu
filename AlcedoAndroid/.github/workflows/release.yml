@@ -1,4 +1,4 @@
-name: Release Build
+name: Release Build (Legacy subdir)
 
 on:
   push:
@@ -7,15 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag to build (e.g. v1.3.3)'
+        description: 'Tag to build (e.g. v1.3.4)'
         required: true
         type: string
+
+permissions:
+  contents: write
 
 jobs:
   build:
     name: Build Release APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -24,12 +27,37 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # If triggered manually, checkout the specified tag
-      - name: Checkout tag (manual)
+      - name: Resolve build tag
+        id: resolve_tag
+        shell: bash
+        run: |
+          cd AlcedoAndroid || true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG not found locally; will use it as output anyway"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid tag format: $TAG (expected vX.Y.Z like v1.3.4)"
+            exit 1
+          fi
+          echo "Building release for tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tag (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          git fetch --tags
-          git checkout "${{ inputs.tag_name }}"
+          TAG="${{ steps.resolve_tag.outputs.tag }}"
+          git fetch --tags || true
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            git checkout "$TAG"
+          else
+            echo "Tag $TAG does not exist; tagging current HEAD as $TAG for build"
+            git tag "$TAG" HEAD || true
+          fi
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -42,79 +70,149 @@ jobs:
         with:
           packages: 'platforms;android-35 build-tools;35.0.0 ndk;26.3.11579264 cmake;3.22.1'
 
-      - name: Enable KVM for Android emulator
+      - name: Enable KVM for Android emulator / faster build
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          sudo udevadm trigger --name-match=kvm || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/build-cache
+          key: gradle-alcedo-${{ hashFiles('AlcedoAndroid/**/*.gradle.kts', 'AlcedoAndroid/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-alcedo-
+            gradle-
+
+      - name: Grant execute permission
+        working-directory: AlcedoAndroid
+        run: chmod +x gradlew
+
       - name: Setup signing keystore
+        id: keystore
         env:
           ALCEDO_KEYSTORE_BASE64: ${{ secrets.ALCEDO_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$ALCEDO_KEYSTORE_BASE64" ]; then
-            echo "$ALCEDO_KEYSTORE_BASE64" | base64 -d > "${{ runner.temp }}/alcedo-release.keystore"
-            echo "ALCEDO_KEYSTORE_PATH=${{ runner.temp }}/alcedo-release.keystore" >> "$GITHUB_ENV"
-            echo "Signing keystore configured successfully"
+          if [ -n "$ALCEDO_KEYSTORE_BASE64" ] && [ "$ALCEDO_KEYSTORE_BASE64" != "" ]; then
+            KEYSTORE_PATH="${{ runner.temp }}/alcedo-release.keystore"
+            echo "$ALCEDO_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            KS_SIZE=$(stat -c%s "$KEYSTORE_PATH" 2>/dev/null || stat -f%z "$KEYSTORE_PATH" 2>/dev/null || echo 0)
+            echo "Signing keystore configured: $KS_SIZE bytes"
+            echo "ALCEDO_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+            echo "decoded=true" >> "$GITHUB_OUTPUT"
           else
             echo "No keystore secret found - will use debug signing fallback"
+            echo "decoded=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Release APK
+        working-directory: AlcedoAndroid
+        id: build_apk
         env:
           ALCEDO_KEYSTORE_PASSWORD: ${{ secrets.ALCEDO_KEYSTORE_PASSWORD }}
           ALCEDO_KEY_ALIAS: ${{ secrets.ALCEDO_KEY_ALIAS }}
           ALCEDO_KEY_PASSWORD: ${{ secrets.ALCEDO_KEY_PASSWORD }}
+          ORG_GRADLE_PROJECT_org.gradle.configuration-cache: "false"
         run: |
-          if [ -f "${{ runner.temp }}/alcedo-release.keystore" ]; then
-            export ALCEDO_KEYSTORE_PATH="${{ runner.temp }}/alcedo-release.keystore"
+          set -o pipefail
+          if [ -n "$ALCEDO_KEYSTORE_PATH" ]; then
+            export ALCEDO_KEYSTORE_PATH
+            echo "Using release keystore: $ALCEDO_KEYSTORE_PATH"
           fi
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build_output.log | tail -200
+          exit ${PIPESTATUS[0]}
 
       - name: Collect APK artifacts
+        id: collect_apk
+        working-directory: AlcedoAndroid
         run: |
+          TAG="${{ steps.resolve_tag.outputs.tag }}"
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK produced!"
+            ls -laR app/build/outputs/apk/ 2>/dev/null || true
+            exit 1
+          fi
+          APK_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH" 2>/dev/null || echo 0)
+          if [ "$APK_SIZE" -lt 1048576 ]; then
+            echo "ERROR: APK size too small ($APK_SIZE bytes)"
+            exit 1
+          fi
+          DEST="../AlcedoStudio-${TAG}.apk"
+          cp -f "$APK_PATH" "$DEST"
           mkdir -p artifacts
-          for apk in app/build/outputs/apk/release/*.apk; do
-            if [ -f "$apk" ]; then
-              cp "$apk" artifacts/
-            fi
-          done
+          cp -f "$APK_PATH" "artifacts/AlcedoStudio-${TAG}.apk"
           ls -la artifacts/
+          echo "apk_path=artifacts/AlcedoStudio-${TAG}.apk" >> "$GITHUB_OUTPUT"
+          echo "apk_size=$APK_SIZE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-apks
-          path: artifacts/
-          retention-days: 30
+          name: release-apks-${{ steps.resolve_tag.outputs.tag }}
+          path: AlcedoAndroid/artifacts/
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 "HEAD^" 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
-            git log --oneline --no-merges "$PREV_TAG..HEAD" >> "$GITHUB_OUTPUT"
+            git log --oneline --no-merges "$PREV_TAG..HEAD" >> "$GITHUB_OUTPUT" || echo "- (no changes)"
             echo "EOF" >> "$GITHUB_OUTPUT"
           else
             echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
-            git log --oneline --no-merges -10 >> "$GITHUB_OUTPUT"
+            git log --oneline --no-merges -15 >> "$GITHUB_OUTPUT" || echo "- Initial release"
             echo "EOF" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          name: Alcedo Studio ${{ steps.resolve_tag.outputs.tag }}
           body: |
+            ## Release Information
+
+            - **Build tag**: ${{ steps.resolve_tag.outputs.tag }}
+            - **APK size**: $(( (${{ steps.collect_apk.outputs.apk_size }} + 1048575) / 1048576 )) MB
+            - **Build date**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
             ## Changes
             ${{ steps.changelog.outputs.CHANGELOG }}
-          files: artifacts/*
+
+            ## Installation
+            - Download the APK from the Assets below
+            - Install by opening on your Android device (allow unknown sources if needed)
+            - Existing installations can be updated in-place without data loss
+          files: AlcedoAndroid/artifacts/*
           draft: false
           prerelease: false
           generate_release_notes: true
+          append_body: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            AlcedoAndroid/app/build/reports/
+            AlcedoAndroid/app/build/outputs/logs/
+            AlcedoAndroid/build/reports/
+            AlcedoAndroid/build_output.log
+          retention-days: 30
+          if-no-files-found: ignore

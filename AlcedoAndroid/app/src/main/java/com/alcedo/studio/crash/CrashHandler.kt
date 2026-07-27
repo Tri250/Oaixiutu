@@ -1,41 +1,97 @@
 package com.alcedo.studio.crash
 
 import android.content.Context
+import android.os.Looper
 import android.util.Log
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Global uncaught-exception handler.
- *
- * Acts as the entry point that the JVM/ART invokes when a thread dies with an
- * uncaught exception. The actual persistence, metadata capture and (opt-in)
- * upload work is delegated to [CrashReportService] so this class stays focused
- * on installing the handler and chaining to the platform default.
- *
- * Legacy public API (used elsewhere in the app) is preserved:
- *  - [getCrashReports], [clearCrashReports], [hasRecentCrash] now operate on
- *    whatever files exist in the crash directory, covering both the new JSON
- *    reports produced by [CrashReportService] and any older `.log` files.
- */
 object CrashHandler : Thread.UncaughtExceptionHandler {
     private const val TAG = "AlcedoCrash"
     private var defaultHandler: Thread.UncaughtExceptionHandler? = null
     private var appContext: Context? = null
     private var crashCallback: ((Throwable) -> Unit)? = null
+    private val isHandlingCrash = AtomicBoolean(false)
+    private const val CRASH_LOOP_THRESHOLD_MS = 30_000L
+    private const val MAX_CRASH_LOOP_COUNT = 3
+    private const val PREFS_CRASH_LOOP = "alcedo_crash_loop"
+    private const val KEY_LAST_CRASH_TIME = "last_crash_time"
+    private const val KEY_CRASH_COUNT = "crash_count"
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        // Make sure the report service is bootstrapped first so it can accept
-        // the crash when we delegate below.
         try {
             CrashReportService.initialize(context)
         } catch (e: Throwable) {
             Log.e(TAG, "CrashReportService.initialize failed", e)
         }
         defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler(this)
+        if (Thread.getDefaultUncaughtExceptionHandler() !== this) {
+            Thread.setDefaultUncaughtExceptionHandler(this)
+        }
+        installMainLooperSafetyNet()
+        detectAndClearCrashLoop(context)
+    }
+
+    private fun installMainLooperSafetyNet() {
+        try {
+            val handler = android.os.Handler(Looper.getMainLooper())
+            handler.post {
+                while (true) {
+                    try {
+                        Looper.loop()
+                        break
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Main looper exception caught by safety net, preventing crash loop", e)
+                        try {
+                            CrashReportService.reportCrash(Thread.currentThread(), e)
+                            CrashReportService.logEvent("main_looper_safety_net:${e.javaClass.simpleName}")
+                        } catch (_: Throwable) {}
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to install main looper safety net", e)
+        }
+    }
+
+    private fun detectAndClearCrashLoop(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_CRASH_LOOP, Context.MODE_PRIVATE)
+            val lastTime = prefs.getLong(KEY_LAST_CRASH_TIME, 0L)
+            var count = prefs.getInt(KEY_CRASH_COUNT, 0)
+            val now = System.currentTimeMillis()
+            count = if (now - lastTime < CRASH_LOOP_THRESHOLD_MS) count + 1 else 1
+            prefs.edit()
+                .putLong(KEY_LAST_CRASH_TIME, now)
+                .putInt(KEY_CRASH_COUNT, count)
+                .apply()
+            if (count >= MAX_CRASH_LOOP_COUNT) {
+                Log.w(TAG, "Crash loop detected ($count crashes in window) — performing emergency cleanup")
+                performEmergencyCleanup(context)
+                prefs.edit().remove(KEY_CRASH_COUNT).apply()
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Crash loop detection failed", e)
+        }
+    }
+
+    private fun performEmergencyCleanup(context: Context) {
+        try {
+            context.cacheDir.listFiles()?.forEach {
+                if (it.name.startsWith("alcedo_")) runCatching { it.deleteRecursively() }
+            }
+            val dbDir = File(context.filesDir.parentFile, "databases")
+            if (dbDir.exists()) {
+                dbDir.listFiles { _, name -> name.contains("sleeve", ignoreCase = true) }
+                    ?.forEach { runCatching { it.delete() } }
+            }
+            runCatching { CrashReportService.logEvent("emergency_cleanup_executed") }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Emergency cleanup failed", e)
+        }
     }
 
     fun setCrashCallback(callback: (Throwable) -> Unit) {
@@ -43,19 +99,15 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
+        if (isHandlingCrash.getAndSet(true)) {
+            Log.wtf(TAG, "Re-entrant crash detected, avoiding infinite loop", throwable)
+            killProcess()
+            return
+        }
         try {
-            // Log the crash
             Log.e(TAG, "Uncaught exception in thread: ${thread.name}", throwable)
-
-            // Delegate persistent storage + (optional) upload to the service.
-            CrashReportService.reportCrash(thread, throwable)
-
-            // Also keep a lightweight plain-text trace for legacy diagnostics
-            // tools that scan the crash directory. This does not duplicate the
-            // structured JSON report but makes the crash immediately visible.
-            writeLegacyTrace(thread, throwable)
-
-            // Notify callback — must not throw, or it will mask the real crash
+            runCatching { CrashReportService.reportCrash(thread, throwable) }
+            runCatching { writeLegacyTrace(thread, throwable) }
             try {
                 crashCallback?.invoke(throwable)
             } catch (cbEx: Exception) {
@@ -64,23 +116,26 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         } catch (e: Exception) {
             Log.e(TAG, "Error in crash handler", e)
         } finally {
-            // Chain to default handler so the process exits normally.
-            // If handler was never initialized, re-throw to ensure proper crash behavior
             val handler = defaultHandler
-            if (handler != null) {
-                handler.uncaughtException(thread, throwable)
-            } else {
-                // No default handler available; ensure the process does not hang
-                android.os.Process.killProcess(android.os.Process.myPid())
+            if (handler != null && handler !== this) {
+                try {
+                    handler.uncaughtException(thread, throwable)
+                    return
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Default handler failed, forcing exit", e)
+                }
             }
+            killProcess()
         }
     }
 
-    /**
-     * Writes a minimal plain-text marker so that legacy tooling which only
-     * scans for `.log` files continues to detect crashes. The authoritative,
-     * rich report lives in the JSON file produced by [CrashReportService].
-     */
+    private fun killProcess() {
+        try {
+            android.os.Process.killProcess(android.os.Process.myPid())
+        } catch (_: Throwable) {}
+        Runtime.getRuntime().halt(1)
+    }
+
     private fun writeLegacyTrace(thread: Thread, throwable: Throwable) {
         val context = appContext ?: return
         try {
@@ -91,7 +146,8 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             val legacyFile = File(crashDir, "crash_${timestamp}.log")
             val stringWriter = StringWriter()
             PrintWriter(stringWriter).use { pw -> throwable.printStackTrace(pw) }
-            val sanitized = CrashReportService.sanitizeStackTrace(stringWriter.toString())
+            val sanitized = runCatching { CrashReportService.sanitizeStackTrace(stringWriter.toString()) }
+                .getOrElse { stringWriter.toString() }
             legacyFile.writeText(
                 buildString {
                     appendLine("=== Alcedo Crash Report (legacy trace) ===")
@@ -116,7 +172,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     fun clearCrashReports() {
         val context = appContext ?: return
         val crashDir = File(context.filesDir, "crash_reports")
-        crashDir.listFiles()?.forEach { it.delete() }
+        crashDir.listFiles()?.forEach { runCatching { it.delete() } }
     }
 
     fun hasRecentCrash(): Boolean {
@@ -124,6 +180,17 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         if (reports.isEmpty()) return false
         val recent = reports.first()
         val age = System.currentTimeMillis() - recent.lastModified()
-        return age < 60_000 // within last minute
+        return age < 60_000
+    }
+
+    fun isCrashLoopDetected(context: Context): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_CRASH_LOOP, Context.MODE_PRIVATE)
+            val lastTime = prefs.getLong(KEY_LAST_CRASH_TIME, 0L)
+            val count = prefs.getInt(KEY_CRASH_COUNT, 0)
+            System.currentTimeMillis() - lastTime < CRASH_LOOP_THRESHOLD_MS && count >= MAX_CRASH_LOOP_COUNT - 1
+        } catch (_: Throwable) {
+            false
+        }
     }
 }

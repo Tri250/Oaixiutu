@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+private const val TAG = "PermissionHelper"
 
 // ================================================================
 // Permission types for this app
@@ -39,6 +42,14 @@ data class PermissionState(
     val shouldShowRationale: Set<String> = emptySet()
 )
 
+data class PermissionAuditResult(
+    val timestamp: Long,
+    val grantedPermissions: List<String>,
+    val deniedPermissions: List<String>,
+    val permanentlyDeniedPermissions: List<String>,
+    val notes: List<String>
+)
+
 // ================================================================
 // Permission Helper
 // ================================================================
@@ -47,162 +58,336 @@ object PermissionHelper {
 
     // Get the correct permissions based on API level
     fun getReadMediaPermissions(): List<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Android 14+: Include READ_MEDIA_VISUAL_USER_SELECTED for partial access support.
-            // When requesting together, the system handles the "Select photos" flow:
-            // - User grants full access → READ_MEDIA_IMAGES + READ_MEDIA_VIDEO granted
-            // - User selects "Select photos" → READ_MEDIA_VISUAL_USER_SELECTED granted only
-            listOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13: Use granular media permissions
-            listOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11-12: READ_EXTERNAL_STORAGE still works for reading
-            listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
-            // Android 10 and below
-            listOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                listOf(
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO,
+                    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                listOf(
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            } else {
+                listOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "getReadMediaPermissions failed", e)
+            emptyList()
         }
     }
 
     fun getWritePermission(): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+: Use MediaStore or SAF for writing, no permission needed
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                null
+            } else {
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "getWritePermission failed", e)
             null
-        } else {
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
         }
     }
 
     fun needsManageExternalStorage(): Boolean {
-        // Only request MANAGE_EXTERNAL_STORAGE as a last resort for advanced features
-        // like accessing RAW files in arbitrary directories
-        return false // Default: don't request. Use SAF/MediaStore instead.
+        return runCatching {
+            false
+        }.getOrElse { e ->
+            Log.e(TAG, "needsManageExternalStorage failed", e)
+            false
+        }
+    }
+
+    /**
+     * checkSelfPermission 的安全包装，捕获系统调用异常
+     * 某些 ROM 或特殊情况下 ContextCompat.checkSelfPermission 可能抛出异常
+     */
+    fun checkSelfPermissionSafe(context: Context, permission: String): Int {
+        return runCatching {
+            ContextCompat.checkSelfPermission(context, permission)
+        }.getOrElse { e ->
+            Log.w(TAG, "checkSelfPermissionSafe failed for $permission, assuming denied", e)
+            PackageManager.PERMISSION_DENIED
+        }
     }
 
     fun hasPermission(context: Context, permission: String): Boolean {
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        return runCatching {
+            checkSelfPermissionSafe(context, permission) == PackageManager.PERMISSION_GRANTED
+        }.getOrElse { e ->
+            Log.e(TAG, "hasPermission failed for $permission", e)
+            false
+        }
     }
 
     fun hasAllPermissions(context: Context, permissions: List<String>): Boolean {
-        return permissions.all { hasPermission(context, it) }
+        return runCatching {
+            permissions.all { hasPermission(context, it) }
+        }.getOrElse { e ->
+            Log.e(TAG, "hasAllPermissions failed", e)
+            false
+        }
     }
 
-    /**
-     * 检查是否有媒体读取访问权限（完整或部分）。
-     * - 完整访问：READ_MEDIA_IMAGES + READ_MEDIA_VIDEO 均已授予
-     * - 部分访问（Android 14+）：仅 READ_MEDIA_VISUAL_USER_SELECTED 已授予
-     * 两种情况均返回 true。调用方可通过 [isLimitedAccess] 区分是否为受限访问。
-     */
     fun hasReadMediaAccess(context: Context): Boolean {
-        if (hasAllPermissions(context, getFullReadMediaPermissions())) {
-            return true
+        return runCatching {
+            if (hasAllPermissions(context, getFullReadMediaPermissions())) {
+                return@runCatching true
+            }
+            hasPartialMediaAccess(context)
+        }.getOrElse { e ->
+            Log.e(TAG, "hasReadMediaAccess failed", e)
+            false
         }
-        // Android 14+: 用户选择了"选择照片"，仅授予了 READ_MEDIA_VISUAL_USER_SELECTED
-        return hasPartialMediaAccess(context)
     }
 
-    /**
-     * 返回完整媒体访问所需的权限列表（不含 READ_MEDIA_VISUAL_USER_SELECTED）。
-     */
     private fun getFullReadMediaPermissions(): List<String> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            listOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
-            listOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                listOf(
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            } else {
+                listOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "getFullReadMediaPermissions failed", e)
+            emptyList()
         }
     }
 
-    /**
-     * 检查是否仅有部分媒体访问权限。
-     * 在 Android 14+ 上，当 READ_MEDIA_VISUAL_USER_SELECTED 已授予，
-     * 但 READ_MEDIA_IMAGES 未授予时，返回 true。
-     * 低于 Android 14 的设备始终返回 false。
-     */
     fun hasPartialMediaAccess(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            return hasPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) &&
-                    !hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                return@runCatching hasPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) &&
+                        !hasPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+            }
+            false
+        }.getOrElse { e ->
+            Log.e(TAG, "hasPartialMediaAccess failed", e)
+            false
         }
-        return false
     }
 
-    /**
-     * 检查是否处于受限访问状态（用户在权限对话框中选择了"选择照片"）。
-     * 即 READ_MEDIA_VISUAL_USER_SELECTED 已授予，但 READ_MEDIA_IMAGES 未授予。
-     * 这与 [hasPartialMediaAccess] 语义一致，提供更具描述性的命名。
-     */
     fun isLimitedAccess(context: Context): Boolean {
-        return hasPartialMediaAccess(context)
+        return runCatching {
+            hasPartialMediaAccess(context)
+        }.getOrElse { e ->
+            Log.e(TAG, "isLimitedAccess failed", e)
+            false
+        }
     }
 
     fun hasWriteAccess(context: Context): Boolean {
-        val writePerm = getWritePermission()
-        return if (writePerm != null) {
-            hasPermission(context, writePerm)
-        } else {
-            true // On Android 10+, we use app-specific or MediaStore directories
+        return runCatching {
+            val writePerm = getWritePermission()
+            if (writePerm != null) {
+                hasPermission(context, writePerm)
+            } else {
+                true
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "hasWriteAccess failed", e)
+            false
+        }
+    }
+
+    /**
+     * shouldShowRequestPermissionRationale 的安全包装
+     * 某些 Android 版本或 ROM 上此方法可能抛出异常
+     */
+    fun shouldShowRequestPermissionRationaleSafe(activity: Activity, permission: String): Boolean {
+        return runCatching {
+            activity.shouldShowRequestPermissionRationale(permission)
+        }.getOrElse { e ->
+            Log.w(TAG, "shouldShowRequestPermissionRationaleSafe failed for $permission", e)
+            false
         }
     }
 
     fun shouldShowRationale(activity: Activity, permission: String): Boolean {
-        return activity.shouldShowRequestPermissionRationale(permission)
+        return runCatching {
+            shouldShowRequestPermissionRationaleSafe(activity, permission)
+        }.getOrElse { e ->
+            Log.e(TAG, "shouldShowRationale(Activity) failed", e)
+            false
+        }
     }
 
-    /**
-     * 检查是否应该为读取媒体权限显示解释。
-     * 仅当当前权限未授予，且至少一个未授予权限应显示 rationale 时返回 true。
-     * 若所有未授予权限都不应显示 rationale，则视为已被永久拒绝。
-     */
     fun shouldShowRationale(context: Context): Boolean {
-        val activity = context as? Activity ?: return false
-        val permissions = getReadMediaPermissions()
-        return permissions.any {
-            !hasPermission(activity, it) && activity.shouldShowRequestPermissionRationale(it)
+        return runCatching {
+            val activity = context as? Activity ?: return@runCatching false
+            val permissions = getReadMediaPermissions()
+            permissions.any {
+                !hasPermission(activity, it) && shouldShowRequestPermissionRationaleSafe(activity, it)
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "shouldShowRationale(Context) failed", e)
+            false
         }
     }
 
     fun isPermanentlyDenied(activity: Activity, permission: String, wasRequested: Boolean): Boolean {
-        // If the permission was requested before but shouldShowRationale returns false,
-        // and the permission is not granted, it means "Don't ask again" was selected
-        return wasRequested && !hasPermission(activity, permission) &&
-               !activity.shouldShowRequestPermissionRationale(permission)
-    }
-
-    fun openAppSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching {
+            wasRequested && !hasPermission(activity, permission) &&
+                    !shouldShowRequestPermissionRationaleSafe(activity, permission)
+        }.getOrElse { e ->
+            Log.e(TAG, "isPermanentlyDenied failed for $permission", e)
+            false
         }
-        context.startActivity(intent)
     }
 
-    // Check if we can use the Android 13+ Photo Picker
+    /**
+     * 验证 URI 安全性，防止 Intent URI 注入攻击
+     * 确保 scheme 为 "package"，并且 ssp 只包含安全字符
+     */
+    private fun isSafePackageUri(uri: Uri?, expectedPackage: String): Boolean {
+        return runCatching {
+            if (uri == null) return@runCatching false
+            val scheme = uri.scheme
+            if (scheme != "package") {
+                Log.w(TAG, "Unsafe URI scheme: $scheme")
+                return@runCatching false
+            }
+            val ssp = uri.schemeSpecificPart
+            if (ssp == null || !ssp.matches(Regex("^[a-zA-Z0-9_.]+$"))) {
+                Log.w(TAG, "Unsafe URI ssp: $ssp")
+                return@runCatching false
+            }
+            if (ssp != expectedPackage) {
+                Log.w(TAG, "URI package mismatch: expected=$expectedPackage, actual=$ssp")
+                return@runCatching false
+            }
+            true
+        }.getOrElse { e ->
+            Log.e(TAG, "isSafePackageUri validation failed", e)
+            false
+        }
+    }
+
+    /**
+     * 打开应用设置页面，包含 URI 安全验证
+     * 防止 Intent URI 注入导致的安全问题
+     */
+    fun openAppSettings(context: Context) {
+        runCatching {
+            val packageName = context.packageName
+            val uri = Uri.fromParts("package", packageName, null)
+            if (!isSafePackageUri(uri, packageName)) {
+                Log.e(TAG, "openAppSettings: URI validation failed, aborting")
+                return@runCatching
+            }
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = uri
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val resolveInfo = runCatching {
+                context.packageManager.resolveActivity(intent, 0)
+            }.getOrNull()
+            if (resolveInfo != null) {
+                context.startActivity(intent)
+                Log.i(TAG, "openAppSettings: launched settings for $packageName")
+            } else {
+                Log.w(TAG, "openAppSettings: No activity found to handle settings intent")
+            }
+        }.onFailure { e ->
+            Log.e(TAG, "openAppSettings failed", e)
+        }
+    }
+
     fun supportsPhotoPicker(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        return runCatching {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        }.getOrElse { e ->
+            Log.e(TAG, "supportsPhotoPicker failed", e)
+            false
+        }
     }
 
-    // Check if we need to use SAF for directory access
     fun needsSafForDirectoryAccess(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        return runCatching {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        }.getOrElse { e ->
+            Log.e(TAG, "needsSafForDirectoryAccess failed", e)
+            false
+        }
+    }
+
+    /**
+     * 权限状态审计：详细报告当前所有相关权限状态
+     * 用于调试和故障排查，绝不抛出异常
+     */
+    fun auditPermissionState(context: Context): PermissionAuditResult {
+        return runCatching {
+            val notes = mutableListOf<String>()
+            val granted = mutableListOf<String>()
+            val denied = mutableListOf<String>()
+            val permanentlyDenied = mutableListOf<String>()
+            val activity = context as? Activity
+
+            notes.add("SDK_INT=${Build.VERSION.SDK_INT}")
+            notes.add("supportsPhotoPicker=${supportsPhotoPicker()}")
+            notes.add("needsSafForDirectoryAccess=${needsSafForDirectoryAccess()}")
+
+            val allPermsToCheck = mutableListOf<String>().apply {
+                addAll(getReadMediaPermissions())
+                getWritePermission()?.let { add(it) }
+                add(Manifest.permission.CAMERA)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    add(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }.distinct()
+
+            for (perm in allPermsToCheck) {
+                when {
+                    hasPermission(context, perm) -> {
+                        granted.add(perm)
+                    }
+                    activity != null && isPermanentlyDenied(activity, perm, true) -> {
+                        permanentlyDenied.add(perm)
+                    }
+                    else -> {
+                        denied.add(perm)
+                    }
+                }
+            }
+
+            notes.add("hasReadMediaAccess=${hasReadMediaAccess(context)}")
+            notes.add("hasPartialMediaAccess=${hasPartialMediaAccess(context)}")
+            notes.add("hasWriteAccess=${hasWriteAccess(context)}")
+
+            Log.i(TAG, "auditPermissionState: granted=${granted.size}, denied=${denied.size}, permanentlyDenied=${permanentlyDenied.size}")
+            PermissionAuditResult(
+                timestamp = System.currentTimeMillis(),
+                grantedPermissions = granted,
+                deniedPermissions = denied,
+                permanentlyDeniedPermissions = permanentlyDenied,
+                notes = notes
+            )
+        }.getOrElse { e ->
+            Log.e(TAG, "auditPermissionState failed catastrophically", e)
+            PermissionAuditResult(
+                timestamp = System.currentTimeMillis(),
+                grantedPermissions = emptyList(),
+                deniedPermissions = emptyList(),
+                permanentlyDeniedPermissions = emptyList(),
+                notes = listOf("audit_failed: ${e.javaClass.simpleName}")
+            )
+        }
     }
 }
 
@@ -222,14 +407,25 @@ fun rememberPermissionState(
     val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        onResult(results)
+        runCatching {
+            onResult(results)
+        }.onFailure { e ->
+            Log.e(TAG, "rememberPermissionState: onResult callback failed", e)
+        }
     }
 
     return remember {
         object : PermissionStateHandle {
             override fun requestMediaAccess() {
-                val permissions = PermissionHelper.getReadMediaPermissions()
-                launcher.launch(permissions.toTypedArray())
+                runCatching {
+                    val permissions = PermissionHelper.getReadMediaPermissions()
+                    if (permissions.isEmpty()) {
+                        Log.w(TAG, "requestMediaAccess: permission list is empty, launching with empty array")
+                    }
+                    launcher.launch(permissions.toTypedArray())
+                }.onFailure { e ->
+                    Log.e(TAG, "requestMediaAccess failed", e)
+                }
             }
         }
     }

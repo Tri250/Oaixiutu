@@ -25,6 +25,8 @@ class AlcedoApplication : Application() {
             Log.e("AlcedoApp", "Failed to install crash handler", e)
         }
 
+        runSafe("AppIntegrityChecker.checkAndRepair") { AppIntegrityChecker.performFullCheckAndRepair(this) }
+
         runSafe("PrivacyManager.initialize") { PrivacyManager.initialize(this) }
         runSafe("PrivacyManager.applyRetentionPolicy") { PrivacyManager.applyRetentionPolicy(this) }
         runSafe("TempFileManager.cleanupOldFiles") { TempFileManager.cleanupOldFiles(this) }
