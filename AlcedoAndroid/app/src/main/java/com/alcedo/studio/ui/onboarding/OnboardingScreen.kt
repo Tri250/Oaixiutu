@@ -3,6 +3,7 @@ package com.alcedo.studio.ui.onboarding
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -35,14 +37,23 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     var currentPage by remember { mutableIntStateOf(0) }
     val hasMediaPermission = remember { mutableStateOf(false) }
     val context = LocalContext.current
+    // 防抖/防重复点击：一旦进入 onFinish 流程就锁死所有按钮，避免用户狂点导致 launcher 多次调用或状态错乱
+    var isFinishing by rememberSaveable { mutableStateOf(false) }
 
+    val onFinishUpdated by rememberUpdatedState(newValue = onFinish)
     val mediaPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        hasMediaPermission.value = results.all { it.value }
-        if (hasMediaPermission.value || results.any { it.value }) {
-            onFinish()
-        }
+        // 🚨 修复：以前只有「全部授权」或「至少部分授权」才 onFinish，全拒时卡死！
+        //   现在无论授予还是拒绝，只要回调来了都 onFinish，继续进入主界面，
+        //   后续具体功能（AlbumScreen）会再做二次权限请求，不让用户卡在引导页。
+        val allGranted = runCatching { results.isNotEmpty() && results.all { it.value } }.getOrDefault(false)
+        val anyGranted = runCatching { results.any { it.value } }.getOrDefault(false)
+        hasMediaPermission.value = allGranted
+        Log.i("Onboarding",
+            "Media permission result: total=${results.size}, allGranted=$allGranted, anyGranted=$anyGranted -> proceeding to main")
+        isFinishing = true
+        onFinishUpdated()
     }
 
     val pages = remember {
@@ -83,9 +94,15 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.End
         ) {
-            TextButton(onClick = {
-                requestMediaPermission(context, mediaPermissionLauncher, onFinish)
-            }) {
+            TextButton(
+                enabled = !isFinishing,
+                onClick = {
+                    if (isFinishing) return@TextButton
+                    isFinishing = true
+                    Log.i("Onboarding", "Skip clicked at page=$currentPage")
+                    requestMediaPermission(context, mediaPermissionLauncher, onFinish)
+                }
+            ) {
                 Text("跳过")
             }
         }
@@ -145,7 +162,13 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (currentPage > 0) {
-                OutlinedButton(onClick = { currentPage-- }) {
+                OutlinedButton(
+                    enabled = !isFinishing,
+                    onClick = {
+                        if (isFinishing) return@OutlinedButton
+                        currentPage--
+                    }
+                ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("上一步")
@@ -155,10 +178,14 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             }
 
             Button(
+                enabled = !isFinishing,
                 onClick = {
+                    if (isFinishing) return@Button
                     if (currentPage < pages.size - 1) {
                         currentPage++
                     } else {
+                        isFinishing = true
+                        Log.i("Onboarding", "Get-started clicked at page=$currentPage")
                         requestMediaPermission(context, mediaPermissionLauncher, onFinish)
                     }
                 },
@@ -179,11 +206,29 @@ private fun requestMediaPermission(
     launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
     onFinish: () -> Unit
 ) {
-    if (PermissionHelper.hasReadMediaAccess(context)) {
+    runCatching {
+        if (PermissionHelper.hasReadMediaAccess(context)) {
+            Log.i("Onboarding", "hasReadMediaAccess=true, skipping permission request -> onFinish")
+            onFinish()
+            return@runCatching
+        }
+        val permissions = PermissionHelper.getReadMediaPermissions()
+        // 🚨 修复：如果 permission 列表为空（未知版本或系统异常），直接放行，
+        //   launcher.launch(emptyArray) 在部分机型上会静默不回调 → 卡死！
+        if (permissions.isEmpty()) {
+            Log.w("Onboarding", "getReadMediaPermissions() returned empty list, skipping -> onFinish")
+            onFinish()
+            return@runCatching
+        }
+        Log.i("Onboarding", "requesting ${permissions.size} media permissions: $permissions")
+        runCatching { launcher.launch(permissions.toTypedArray()) }.onFailure { e ->
+            Log.e("Onboarding", "launcher.launch failed -> proceed anyway", e)
+            onFinish()
+        }
+    }.onFailure { e ->
+        Log.e("Onboarding", "requestMediaPermission unexpected error -> proceed anyway", e)
         onFinish()
-        return
     }
-    launcher.launch(PermissionHelper.getReadMediaPermissions().toTypedArray())
 }
 
 @Composable

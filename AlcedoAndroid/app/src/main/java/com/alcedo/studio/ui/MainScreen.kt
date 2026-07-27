@@ -215,14 +215,20 @@ fun MainScreen(
         }
     }
 
-    // 首次启动引导教程
-    val prefs = remember { com.alcedo.studio.di.AppModule.context.getSharedPreferences("alcedo_prefs", 0) }
-    val onboardingCompleted = remember { prefs.getBoolean("onboarding_completed", false) }
+    // 首次启动引导教程 – 修复：
+    // 1. prefs 用 LocalContext 而不是静态 AppModule.context
+    // 2. onboardingCompleted 用 mutableState 包装避免只读缓存
+    // 3. 🚨 最关键：只有引导页 DISABLE 时，隐私 Consent Dialog 才允许出现
+    //    因为 AlertDialog 是 Window 级 Popup，Z 轴最高，叠在引导页上面会导致 100% 点击被吞！
+    val appContext = LocalContext.current.applicationContext
+    val prefs = remember(appContext) { appContext.getSharedPreferences("alcedo_prefs", 0) }
+    var onboardingCompleted by remember(prefs) { mutableStateOf(prefs.getBoolean("onboarding_completed", false)) }
     var showOnboarding by remember { mutableStateOf(!onboardingCompleted) }
 
     if (showOnboarding) {
         OnboardingScreen(onFinish = {
             showOnboarding = false
+            onboardingCompleted = true
             prefs.edit().putBoolean("onboarding_completed", true).apply()
         })
     } else {
@@ -453,7 +459,11 @@ fun MainScreen(
     } // end else (onboarding)
 
     // 首次启动隐私同意弹窗
-    if (showPrivacyDialog) {
+    // 🚨 关键修复：引导页 ONBOARDING 显示期间，隐私 Consent Dialog 绝对禁止弹出！
+    //   AlertDialog 是 Window 级悬浮 Popup，Z-order 最高，会吞掉下层所有点击事件
+    //   → 用户会看到「引导页按钮 + 透明/半透明 Dialog 层」，但点击任何按钮都没反应！
+    //   这里用 !showOnboarding 作为门槛，等引导页 onFinish 后再顺序弹隐私同意。
+    if (!showOnboarding && showPrivacyDialog) {
         PrivacyConsentDialog(
             onDismiss = { showPrivacyDialog = false },
             onAccept = { showPrivacyDialog = false }
