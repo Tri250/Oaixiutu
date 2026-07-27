@@ -142,11 +142,11 @@ object AppIntegrityChecker {
     private fun checkCrashLoop(context: Context): CheckItemResult = runCatching {
         Log.d(TAG, "[a] Checking crash loop status...")
         val crashLoop = CrashHandler.isCrashLoopDetected(context)
-        return if (crashLoop) {
+        if (crashLoop) {
             Log.w(TAG, "[a] Crash loop detected! CrashHandler already attempted cleanup during initialize().")
             val recentCrash = CrashHandler.hasRecentCrash()
             val reports = CrashHandler.getCrashReports().size
-            CheckItemResult(
+            return@runCatching CheckItemResult(
                 name = "crash_loop",
                 passed = false,
                 repaired = true,
@@ -155,7 +155,7 @@ object AppIntegrityChecker {
             )
         } else {
             Log.i(TAG, "[a] No crash loop detected.")
-            CheckItemResult(
+            return@runCatching CheckItemResult(
                 name = "crash_loop",
                 passed = true,
                 repaired = false,
@@ -495,13 +495,13 @@ object AppIntegrityChecker {
             false
         }
 
-        return if (result) {
+        if (result) {
             Log.i(TAG, "[f] NDK library OK: native probe calls succeeded.")
-            CheckItemResult("ndk_library", passed = true, repaired = false,
+            return@runCatching CheckItemResult("ndk_library", passed = true, repaired = false,
                 severity = Severity.INFO, message = "Native library loaded and probe calls (stringFromJNI / generateId) succeeded.")
         } else {
             Log.w(TAG, "[f] NDK library probe failed despite available flag.")
-            CheckItemResult("ndk_library", passed = true, repaired = false,
+            return@runCatching CheckItemResult("ndk_library", passed = true, repaired = false,
                 severity = Severity.WARNING, message = "Native library reports available but probe failed. CPU-only fallback recommended.")
         }
     }.getOrElse { e ->
