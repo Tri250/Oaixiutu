@@ -69,9 +69,9 @@ object ThreadPool {
 
     fun getQueueStatus(): Map<String, Int> {
         return mapOf(
-            "io" to (ioExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0,
-            "compute" to (computeExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0,
-            "single" to (singleExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0
+            "io" to ((ioExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0),
+            "compute" to ((computeExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0),
+            "single" to ((singleExecutor as? ThreadPoolExecutor)?.queue?.size ?: 0)
         )
     }
 
