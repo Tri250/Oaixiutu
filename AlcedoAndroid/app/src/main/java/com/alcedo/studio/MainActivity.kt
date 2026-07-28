@@ -24,6 +24,10 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        // 【P0 修复】setKeepOnScreenCondition 必须在 super.onCreate() 之前调用，
+        // 系统在 onCreate() 期间评估该条件，延迟调用会导致 SplashScreen 异常。
+        var isReady by mutableStateOf(false)
+        splashScreen.setKeepOnScreenCondition { !isReady }
         super.onCreate(savedInstanceState)
 
         // Validate incoming intent data
@@ -39,8 +43,6 @@ class MainActivity : ComponentActivity() {
         }
 
         // Initialize managers
-        var isReady by mutableStateOf(false)
-        splashScreen.setKeepOnScreenCondition { !isReady }
         try { ThemeManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "ThemeManager init failed", e) }
         try { LanguageManager.initialize(this) } catch (e: Throwable) { Log.e("MainActivity", "LanguageManager init failed", e) }
         isReady = true

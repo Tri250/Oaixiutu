@@ -26,7 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -182,13 +185,19 @@ fun AlbumScreen(
         }
     )
 
-    // 【P0 修复】避免与 MainScreen 的串行化权限请求冲突：
-    // MainScreen 会先请求通知权限再请求媒体权限，AlbumScreen 延迟 5 秒后再检查，
-    // 给系统和用户足够的时间处理首次弹窗，避免产生并发冲突。
-    LaunchedEffect(Unit) {
-        delay(5000)
-        if (!PermissionHelper.hasReadMediaAccess(context)) {
-            permissionState.requestMediaAccess()
+    // 【P0 修复 v2】生命周期感知权限请求：
+    // MainScreen 在 RESUME 后先请求通知权限再请求媒体权限。
+    // AlbumScreen 在 RESUME 后延迟 5 秒再检查，确保不与 MainScreen 冲突。
+    val albumLifecycleOwner = LocalLifecycleOwner.current
+    var albumPermissionRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(albumLifecycleOwner) {
+        albumLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (albumPermissionRequested) return@repeatOnLifecycle
+            albumPermissionRequested = true
+            delay(5000)
+            if (!PermissionHelper.hasReadMediaAccess(context)) {
+                permissionState.requestMediaAccess()
+            }
         }
     }
 

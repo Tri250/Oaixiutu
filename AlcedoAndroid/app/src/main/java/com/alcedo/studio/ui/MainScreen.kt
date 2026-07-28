@@ -60,7 +60,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -195,41 +198,51 @@ fun MainScreen(
         android.util.Log.i("MainScreen", "Media permission result: granted=$granted, details=$results")
     }
 
-    // 【P0 修复】权限请求串行化：
-    // Android 系统同一时刻只允许一个权限请求弹窗，同时 launch 会导致第二个被静默取消。
-    // 合并为单个 LaunchedEffect，按顺序依次请求，确保弹窗不冲突。
-    LaunchedEffect(Unit) {
-        // 1. 先请求通知权限 (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                runCatching {
-                    notificationPermissionState.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    // 等待系统处理完前一个弹窗，避免冲突
-                    delay(1500)
-                }.onFailure { e ->
-                    android.util.Log.w("MainScreen", "Notification permission launch failed", e)
+    // 【P0 修复 v2】权限请求串行化 + 生命周期感知：
+    // 1. ActivityResultLauncher.launch() 要求 lifecycle 至少为 STARTED，
+    //    在 LaunchedEffect(Unit) 中直接调用会因 lifecycle 尚在 CREATED 而抛出
+    //    IllegalStateException，导致 APP 安装后启动即崩溃。
+    // 2. Android 系统同一时刻只允许一个权限请求弹窗，同时 launch 会导致第二个被静默取消。
+    // 修复：使用 repeatOnLifecycle(RESUMED) 确保在生命周期就绪后再请求权限，
+    // 并串行化两次请求，用标志位防止重复触发。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var permissionsRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (permissionsRequested) return@repeatOnLifecycle
+            permissionsRequested = true
+
+            // 1. 先请求通知权限 (Android 13+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    runCatching {
+                        notificationPermissionState.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        delay(1500)
+                    }.onFailure { e ->
+                        android.util.Log.w("MainScreen", "Notification permission launch failed", e)
+                    }
                 }
             }
-        }
 
-        // 2. 再请求媒体权限
-        val mediaPermissions = when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-            )
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES
-            )
-            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        val needsMediaRequest = mediaPermissions.any {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needsMediaRequest) {
-            runCatching { mediaPermissionLauncher.launch(mediaPermissions) }
-                .onFailure { e -> android.util.Log.w("MainScreen", "Media permission launch failed", e) }
+            // 2. 再请求媒体权限
+            val mediaPermissions = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                )
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+                    Manifest.permission.READ_MEDIA_IMAGES
+                )
+                else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            val needsMediaRequest = mediaPermissions.any {
+                ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+            }
+            if (needsMediaRequest) {
+                runCatching { mediaPermissionLauncher.launch(mediaPermissions) }
+                    .onFailure { e -> android.util.Log.w("MainScreen", "Media permission launch failed", e) }
+            }
         }
     }
 
