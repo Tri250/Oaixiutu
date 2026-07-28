@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network security config. Alcedo only makes outbound HTTPS calls to:
+      - The user-configured LLM provider endpoint (cleartext forbidden).
+      - Model asset CDN (Maven Central / GitHub releases) for downloads.
+    No user-supplied CA trust is allowed; pinning is enforced in code by
+    com.alcedo.studio.security.CertificatePinner.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

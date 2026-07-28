@@ -1,0 +1,94 @@
+// AlcedoAndroid - Detail adjustment compute kernel (Detail_Adjustment stage).
+// Applies clarity (mid-frequency local contrast) and sharpen (high-frequency
+// unsharp mask). Both use a small Gaussian neighborhood read directly from the
+// input SSBO (single-pass, no shared memory) for portability.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+const uint FLAG_CLARITY  = 1u << 0;
+const uint FLAG_SHARPEN  = 1u << 1;
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  flags;
+  float clarity_offset;    // [-1,1]
+  float clarity_radius;    // pixels
+  float sharpen_offset;    // [-1,1]
+  float sharpen_radius;    // pixels
+  float sharpen_threshold; // luminance threshold
+  float _pad0;
+  float _pad1;
+  float _pad2;
+} pc;
+
+// Fetch an RGB pixel with clamp-to-border.
+vec3 fetch_pixel(int x, int y) {
+  x = clamp(x, 0, int(pc.width) - 1);
+  y = clamp(y, 0, int(pc.height) - 1);
+  uint idx = (uint(y) * pc.width + uint(x)) * pc.channels;
+  return vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+}
+
+float luminance(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// 3x3 Gaussian blur of the luminance around (x,y).
+float gaussian_luma(int cx, int cy, float radius) {
+  // Fixed 3x3 kernel approximating the given radius (sigma ~ radius/2).
+  float w[3];
+  w[0] = exp(-1.0 / (2.0 * radius * radius));
+  w[1] = 1.0;
+  w[2] = w[0];
+  float norm = w[0] + w[1] + w[0];
+  float sum = 0.0;
+  float wsum = 0.0;
+  for (int dy = -1; dy <= 1; ++dy) {
+    for (int dx = -1; dx <= 1; ++dx) {
+      float weight = (w[dx + 1] * w[dy + 1]) / (norm * norm);
+      vec3 c = fetch_pixel(cx + dx, cy + dy);
+      sum += luminance(c) * weight;
+      wsum += weight;
+    }
+  }
+  return sum / wsum;
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  int x = int(pos.x);
+  int y = int(pos.y);
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+
+  // Clarity: local contrast on the mid-frequency luminance.
+  if ((pc.flags & FLAG_CLARITY) != 0u && pc.clarity_offset != 0.0) {
+    float blur = gaussian_luma(x, y, max(pc.clarity_radius, 1.0));
+    float l = luminance(c);
+    float detail = l - blur;
+    c += vec3(detail) * pc.clarity_offset;
+  }
+
+  // Sharpen: unsharp mask on the high-frequency luminance, thresholded.
+  if ((pc.flags & FLAG_SHARPEN) != 0u && pc.sharpen_offset != 0.0) {
+    float blur = gaussian_luma(x, y, max(pc.sharpen_radius, 1.0));
+    float l = luminance(c);
+    float high = l - blur;
+    float mag = abs(high);
+    float t = smoothstep(pc.sharpen_threshold, pc.sharpen_threshold + 0.05, mag);
+    c += vec3(high) * pc.sharpen_offset * t;
+  }
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

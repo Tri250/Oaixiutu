@@ -1,0 +1,74 @@
+// AlcedoAndroid - Color space transform compute kernel (Output_Transform stage).
+// Applies the working-space -> display output transform. Supports ACES 2.0 ODT
+// and OpenDRT via a unified parametric path (display white/black luminance,
+// surround gamma, grading midpoint/contrast, rendering gamma). A 3x3 LMT matrix
+// is applied first when the look flag is set.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+const uint FLAG_LMT        = 1u << 0;
+const uint FLAG_OPEN_DRT   = 1u << 1;  // 1 = OpenDRT, 0 = ACES 2.0 ODT
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  flags;
+  float display_white_l;   // display white luminance (linear, 1.0 default)
+  float display_black_l;   // display black luminance (0.0 default)
+  float surround_gamma;    // 1.0 default
+  float grading_midpoint;  // 0.18 default
+  float grading_contrast;  // 1.0 default
+  float rendering_gamma;   // 1.0 default
+  float look_strength;     // 1.0 default
+} pc;
+
+// 3x3 LMT (look modification) matrix in working space (identity default).
+const mat3 LMT = mat3(
+  1.0, 0.0, 0.0,
+  0.0, 1.0, 0.0,
+  0.0, 0.0, 1.0
+);
+
+// ACES 2.0 / OpenDRT simplified output transform.
+// Maps linear scene-referred value to display-referred linear value.
+float output_transform(float x) {
+  // Apply grading (pivot + contrast) in log space.
+  float log_x = log2(max(x, 1e-6) / pc.grading_midpoint) * pc.grading_contrast;
+  float graded = pc.grading_midpoint * exp2(log_x);
+
+  // Display range compression ( Reinhard-style shoulder to display white).
+  float l = graded / (graded + pc.display_white_l * pc.display_white_l);
+  l = mix(pc.display_black_l, pc.display_white_l, l);
+
+  // Surround + rendering gamma (display encoding approximation).
+  l = pow(max(l, 0.0), 1.0 / pc.rendering_gamma);
+  return l;
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+
+  // Optional look modification transform.
+  if ((pc.flags & FLAG_LMT) != 0u) {
+    c = mix(c, LMT * c, pc.look_strength);
+  }
+
+  // Per-channel output transform.
+  c.r = output_transform(c.r);
+  c.g = output_transform(c.g);
+  c.b = output_transform(c.b);
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

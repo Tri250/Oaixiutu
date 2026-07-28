@@ -1,0 +1,70 @@
+// AlcedoAndroid - Scope analyzer compute kernel (histogram path).
+// Builds a per-channel RGB histogram from the display frame in a single
+// compute dispatch. Each thread processes one pixel and atomically increments
+// the matching bin for each of the R/G/B channels. The output buffer layout
+// is planar: [R0..R(bins-1), G0..G(bins-1), B0..B(bins-1)] (uint32_t each),
+// matching the host CpuScopeAnalyzer so the same render path can consume
+// either result.
+//
+// Bindings (mirror VulkanScopeAnalyzer::TryVulkanHistogram):
+//   binding 0 = input image float SSBO (width*height*channels floats)
+//   binding 1 = output histogram uint32_t SSBO (bins*3 uint32_t values)
+//
+// Push constants mirror the host ScopePushConstants struct exactly:
+//   { uint32_t width, height, channels, bins, pad0; }
+//
+// Dispatched as (width+15)/16 x (height+15)/16 x 1 workgroups of 16x16x1.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+#extension GL_KHR_shader_subgroup_basic : enable
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf {
+  float in_data[];
+};
+layout(std430, binding = 1) buffer HistogramBuf {
+  uint hist_data[];
+};
+
+layout(push_constant) uniform PC {
+  uint width;
+  uint height;
+  uint channels;  // expected 3 (R,G,B); extra channels are ignored
+  uint bins;      // number of histogram bins per channel
+  uint pad0;
+} pc;
+
+// Map a normalized [0,1] value to a bin index in [0, bins-1]. Mirrors the
+// host rounding: bin = round(v * (bins-1)), clamped to the valid range.
+uint value_to_bin(float v) {
+  v = clamp(v, 0.0, 1.0);
+  float scale = float(pc.bins) - 1.0;
+  int b = int(v * scale + 0.5);
+  b = clamp(b, 0, int(pc.bins) - 1);
+  return uint(b);
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+  if (pc.bins == 0u) return;
+
+  uint pixel_idx = (pos.y * pc.width + pos.x) * pc.channels;
+
+  // Read R, G, B (channels 0..2). The host guarantees channels >= 3 for
+  // display frames fed to the scope analyzer.
+  float r = in_data[pixel_idx + 0u];
+  float g = in_data[pixel_idx + 1u];
+  float b = in_data[pixel_idx + 2u];
+
+  // Planar layout: channel c occupies [c*bins, (c+1)*bins).
+  uint br = value_to_bin(r);
+  uint bg = value_to_bin(g);
+  uint bb = value_to_bin(b);
+
+  // Atomic accumulation: many threads contribute to the same bin.
+  atomicAdd(hist_data[0u * pc.bins + br], 1u);
+  atomicAdd(hist_data[1u * pc.bins + bg], 1u);
+  atomicAdd(hist_data[2u * pc.bins + bb], 1u);
+}

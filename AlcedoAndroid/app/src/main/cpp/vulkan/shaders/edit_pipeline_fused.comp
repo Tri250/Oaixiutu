@@ -1,0 +1,258 @@
+// AlcedoAndroid - Fused edit-pipeline compute kernel (Merged_Stage).
+// Combines the three streamable per-pixel pipeline stages into a single
+// compute dispatch, eliminating the intermediate ping-pong buffers that the
+// per-stage VulkanKernelStream would otherwise require:
+//
+//   1. Basic_Adjustment  : exposure, contrast, shadows/highlights curves,
+//                          black/white point + slope.
+//   2. Color_Adjustment  : saturation (OKLCh chroma), vibrance, tint, HLS.
+//   3. Detail_Adjustment : clarity (mid-frequency local contrast) and
+//                          sharpen (thresholded unsharp mask).
+//
+// The stage order matches the canonical pipeline (Basic=3, Color=4,
+// Detail=5). The output-transform (cst) and To_WorkingSpace (tone_mapping)
+// stages are NOT fused here: they are scene/display-referred transforms with
+// distinct parameter sets and are dispatched separately.
+//
+// Bindings:
+//   binding 0 = input RGB float SSBO (width*height*channels floats)
+//   binding 1 = output RGB float SSBO (width*height*channels floats)
+//
+// Push constant layout mirrors the relevant subset of OperatorParams and is
+// kept under 128 bytes for broad Vulkan push-constant support.
+//
+// Dispatched as (width+15)/16 x (height+15)/16 x 1 workgroups of 16x16x1.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+#extension GL_KHR_shader_subgroup_basic : enable
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+// Master stage enable flags (mirrors the host-side stage gating).
+const uint FLAG_BASIC  = 1u << 0;
+const uint FLAG_COLOR  = 1u << 1;
+const uint FLAG_DETAIL = 1u << 2;
+
+layout(push_constant) uniform PC {
+  // Header (16 bytes).
+  uint  width;
+  uint  height;
+  uint  channels;       // expected 3
+  uint  flags;          // FLAG_BASIC | FLAG_COLOR | FLAG_DETAIL
+
+  // Basic_Adjustment params (28 bytes).
+  float exposure;          // stops
+  float contrast;          // scale around 0.18 pivot
+  float white_point;       // 1.0 default
+  float black_point;       // 0.0 default
+  float slope;             // gain between black/white
+  float shadows_offset;    // [-1,1]
+  float highlights_offset; // [-1,1]
+
+  // Color_Adjustment params (24 bytes).
+  float saturation;   // multiplier (1.0 = neutral)
+  float vibrance;     // [-1,1]
+  float tint;         // [-1,1] green-magenta
+  float hls_hue;      // degrees offset
+  float hls_light;    // [-1,1]
+  float hls_sat;      // [-1,1]
+
+  // Detail_Adjustment params (20 bytes). Total push constant = 88 bytes.
+  float clarity_offset;    // [-1,1]
+  float clarity_radius;    // pixels
+  float sharpen_offset;    // [-1,1]
+  float sharpen_radius;    // pixels
+  float sharpen_threshold; // luminance threshold
+} pc;
+
+// ---------------------------------------------------------------------------
+// Pixel fetch / luminance helpers (shared by the Detail stage).
+// ---------------------------------------------------------------------------
+vec3 fetch_pixel(int x, int y) {
+  x = clamp(x, 0, int(pc.width) - 1);
+  y = clamp(y, 0, int(pc.height) - 1);
+  uint idx = (uint(y) * pc.width + uint(x)) * pc.channels;
+  return vec3(in_data[idx], in_data[idx + 1u], in_data[idx + 2u]);
+}
+
+float luminance(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// 3x3 Gaussian-weighted luminance blur approximating the given radius
+// (sigma ~= radius/2). Single-pass, no shared memory, for portability.
+float gaussian_luma(int cx, int cy, float radius) {
+  float sigma = max(radius, 1.0) * 0.5;
+  float s2 = sigma * sigma;
+  float sum = 0.0;
+  float wsum = 0.0;
+  for (int dy = -1; dy <= 1; ++dy) {
+    for (int dx = -1; dx <= 1; ++dx) {
+      float w = exp(-(float(dx * dx + dy * dy)) / (2.0 * s2));
+      vec3 c = fetch_pixel(cx + dx, cy + dy);
+      sum += luminance(c) * w;
+      wsum += w;
+    }
+  }
+  return sum / max(wsum, 1e-6);
+}
+
+// ---------------------------------------------------------------------------
+// Basic_Adjustment (mirrors basic.comp).
+// ---------------------------------------------------------------------------
+float shadows_curve(float v) {
+  if (pc.shadows_offset == 0.0) return v;
+  float t = smoothstep(0.0, 0.25, v);
+  return v + pc.shadows_offset * (1.0 - t) * v;
+}
+
+float highlights_curve(float v) {
+  if (pc.highlights_offset == 0.0) return v;
+  float t = smoothstep(0.2, 1.0, v);
+  return v + pc.highlights_offset * t * (1.0 - v);
+}
+
+vec3 apply_basic(vec3 c) {
+  // Exposure: multiplicative gain (2^(stops)).
+  c *= pow(2.0, pc.exposure);
+
+  // Contrast around 0.18 pivot (linear).
+  c = 0.18 + (c - 0.18) * (1.0 + pc.contrast);
+
+  // Shadows / highlights local tone curves (per channel).
+  c.r = shadows_curve(c.r);
+  c.g = shadows_curve(c.g);
+  c.b = shadows_curve(c.b);
+  c.r = highlights_curve(c.r);
+  c.g = highlights_curve(c.g);
+  c.b = highlights_curve(c.b);
+
+  // Black/white point + slope (linear ramp): y = black + slope * (x - black).
+  c = pc.black_point + pc.slope * (c - pc.black_point);
+  return c;
+}
+
+// ---------------------------------------------------------------------------
+// Color_Adjustment (mirrors color.comp): linear <-> Oklab/Oklch round trip.
+// ---------------------------------------------------------------------------
+vec3 linear_to_oklab(vec3 c) {
+  float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
+  float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
+  float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
+  l = pow(max(l, 0.0), 1.0 / 3.0);
+  m = pow(max(m, 0.0), 1.0 / 3.0);
+  s = pow(max(s, 0.0), 1.0 / 3.0);
+  return vec3(
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  );
+}
+
+vec3 oklab_to_linear(vec3 lab) {
+  float l = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z;
+  float m = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z;
+  float s = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z;
+  l = l * l * l;
+  m = m * m * m;
+  s = s * s * s;
+  return vec3(
+    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+  );
+}
+
+vec3 oklab_to_oklch(vec3 lab) {
+  float c = length(lab.yz);
+  float h = atan(lab.z, lab.y);
+  if (h < 0.0) h += 6.28318530718;
+  return vec3(lab.x, c, degrees(h));
+}
+
+vec3 oklch_to_oklab(vec3 lch) {
+  float h = radians(lch.z);
+  return vec3(lch.x, lch.y * cos(h), lch.y * sin(h));
+}
+
+vec3 apply_color(vec3 c) {
+  vec3 lab = linear_to_oklab(c);
+
+  // Global saturation: scale chroma.
+  lab.yz *= pc.saturation;
+
+  // Vibrance: scale chroma more for low-saturation pixels.
+  float chroma = length(lab.yz);
+  float factor = 1.0 + pc.vibrance * (1.0 - smoothstep(0.0, 0.2, chroma));
+  lab.yz *= factor;
+
+  // Tint: shift hue slightly along the green-magenta axis (a* of Oklab).
+  lab.y += pc.tint * 0.05;
+
+  // HLS-style adjustment in Oklch (hue rotation, lightness, chroma).
+  vec3 lch = oklab_to_oklch(lab);
+  lch.z = mod(lch.z + pc.hls_hue + 360.0, 360.0);
+  lch.x = clamp(lch.x + pc.hls_light * 0.1, 0.0, 1.0);
+  lch.y = max(lch.y + pc.hls_sat * 0.1, 0.0);
+  lab = oklch_to_oklab(lch);
+
+  return oklab_to_linear(lab);
+}
+
+// ---------------------------------------------------------------------------
+// Detail_Adjustment (mirrors detail.comp). Reads the *input* neighborhood so
+// the detail response is computed from the pre-basic source, matching the
+// desktop operator ordering (detail is evaluated against the working-space
+// image, then mixed back). This keeps the fused result consistent with the
+// per-stage stream.
+// ---------------------------------------------------------------------------
+vec3 apply_detail(vec3 c, int x, int y) {
+  // Clarity: local contrast on the mid-frequency luminance.
+  if (pc.clarity_offset != 0.0) {
+    float blur = gaussian_luma(x, y, max(pc.clarity_radius, 1.0));
+    float l = luminance(c);
+    float detail = l - blur;
+    c += vec3(detail) * pc.clarity_offset;
+  }
+
+  // Sharpen: unsharp mask on the high-frequency luminance, thresholded.
+  if (pc.sharpen_offset != 0.0) {
+    float blur = gaussian_luma(x, y, max(pc.sharpen_radius, 1.0));
+    float l = luminance(c);
+    float high = l - blur;
+    float mag = abs(high);
+    float t = smoothstep(pc.sharpen_threshold, pc.sharpen_threshold + 0.05, mag);
+    c += vec3(high) * pc.sharpen_offset * t;
+  }
+  return c;
+}
+
+// ---------------------------------------------------------------------------
+// Main: fuse Basic -> Color -> Detail in a single dispatch.
+// ---------------------------------------------------------------------------
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  int x = int(pos.x);
+  int y = int(pos.y);
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1u], in_data[idx + 2u]);
+
+  if ((pc.flags & FLAG_BASIC) != 0u) {
+    c = apply_basic(c);
+  }
+  if ((pc.flags & FLAG_COLOR) != 0u) {
+    c = apply_color(c);
+  }
+  if ((pc.flags & FLAG_DETAIL) != 0u) {
+    c = apply_detail(c, x, y);
+  }
+
+  out_data[idx]      = c.r;
+  out_data[idx + 1u] = c.g;
+  out_data[idx + 2u] = c.b;
+}

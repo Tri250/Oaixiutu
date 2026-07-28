@@ -1,0 +1,51 @@
+// AlcedoAndroid - Film grain compute kernel.
+// Adds monochromatic film grain driven by a deterministic PRNG (xoshiro256**)
+// seeded per pixel from the global seed + pixel coordinates. The grain is
+// filtered through a soft Gaussian spread so it resembles photographic grain
+// rather than digital noise.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  _pad_flags;
+  float strength;     // 0 = none, 1 = strong
+  float filter_sigma; // grain softness
+  uint64_t seed;      // PRNG seed (mirrors host FilmGrainParams.seed_)
+  float _pad0;
+} pc;
+
+#include "prng.comp"
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  // Derive a per-pixel seed from the global seed + coordinates.
+  uint64_t pix = pc.seed ^ (uint64_t(pos.x) << 16) ^ uint64_t(pos.y);
+  Xoshiro256State st = seed_xoshiro256(pix);
+
+  // Two uniforms for a Gaussian-distributed grain sample.
+  float u1 = u64_to_float01(xoshiro256_next(st));
+  float u2 = u64_to_float01(xoshiro256_next(st));
+  float grain = gaussian_from_uniform(u1, u2);
+
+  // Soften the grain amplitude by the filter sigma (larger sigma -> softer).
+  float amplitude = pc.strength * 0.1 / max(pc.filter_sigma, 0.1);
+
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+  // Apply equal grain to all channels (monochromatic).
+  c += vec3(grain * amplitude);
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

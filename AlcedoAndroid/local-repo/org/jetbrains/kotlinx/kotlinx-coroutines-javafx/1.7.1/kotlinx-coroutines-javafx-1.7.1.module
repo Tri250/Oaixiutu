@@ -1,0 +1,118 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-coroutines-javafx",
+    "version": "1.7.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.4.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.7.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.8.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-javafx-1.7.1.jar",
+          "url": "kotlinx-coroutines-javafx-1.7.1.jar",
+          "size": 20973,
+          "sha512": "9e1d4d378589cd06df7e4c2632e2bc8e583307ef20a815d0dcecd7be6ad81c0fa698dfad82860e54f0a34d345e1a66bbcdd4b614d71961eee5ed9a22ddc8b213",
+          "sha256": "63ab3f39c715b4984216a73bf8af3c0c019a0f2f8d3ee18fdeef0c013463e4db",
+          "sha1": "dfe417b05dd7553aaba3e3dbf83f0e4030a30490",
+          "md5": "c3416e7b64a0e28e2435719802b2f5f7"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.7.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.8.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-javafx-1.7.1.jar",
+          "url": "kotlinx-coroutines-javafx-1.7.1.jar",
+          "size": 20973,
+          "sha512": "9e1d4d378589cd06df7e4c2632e2bc8e583307ef20a815d0dcecd7be6ad81c0fa698dfad82860e54f0a34d345e1a66bbcdd4b614d71961eee5ed9a22ddc8b213",
+          "sha256": "63ab3f39c715b4984216a73bf8af3c0c019a0f2f8d3ee18fdeef0c013463e4db",
+          "sha1": "dfe417b05dd7553aaba3e3dbf83f0e4030a30490",
+          "md5": "c3416e7b64a0e28e2435719802b2f5f7"
+        }
+      ]
+    }
+  ]
+}

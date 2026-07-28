@@ -1,0 +1,193 @@
+package com.alcedo.studio.ui.export
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.alcedo.studio.data.model.ExportConfig
+import com.alcedo.studio.data.model.ExportFormat
+import com.alcedo.studio.data.model.ImageItem
+import com.alcedo.studio.data.model.WatermarkConfig
+import com.alcedo.studio.data.model.BackgroundTaskType
+import com.alcedo.studio.domain.repository.ImageRepository
+import com.alcedo.studio.domain.service.BackgroundTaskService
+import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.domain.service.PipelineService
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * Export ViewModel. Owns the export configuration form, drives single and batch
+ * exports through [ExportService], and surfaces live progress for the export
+ * sheet. The export renders through the editor's open [PipelineService] handle
+ * so the exported image matches the on-screen preview exactly.
+ */
+@HiltViewModel
+class ExportViewModel @Inject constructor(
+    private val exportService: ExportService,
+    private val pipelineService: PipelineService,
+    private val imageRepository: ImageRepository,
+    private val taskService: BackgroundTaskService,
+) : ViewModel() {
+
+    data class ExportUiState(
+        val config: ExportConfig = ExportConfig(),
+        val isExporting: Boolean = false,
+        val completedCount: Int = 0,
+        val totalCount: Int = 0,
+        val lastOutputPath: String? = null,
+        val results: List<ExportResult> = emptyList(),
+        val error: String? = null,
+    )
+
+    data class ExportResult(
+        val imageId: String,
+        val displayName: String,
+        val outputPath: String?,
+        val success: Boolean,
+        val error: String? = null,
+    )
+
+    private val _uiState = MutableStateFlow(ExportUiState())
+    val uiState: StateFlow<ExportUiState> = _uiState.asStateFlow()
+
+    /** Live export progress from the service. */
+    val serviceProgress: StateFlow<ExportService.ExportProgress?> = exportService.progress
+
+    // ---- Configuration mutators ------------------------------------------
+
+    fun setFormat(format: ExportFormat) {
+        _uiState.update { it.copy(config = it.config.copy(format = format)) }
+    }
+
+    fun setQuality(quality: Int) {
+        _uiState.update { it.copy(config = it.config.copy(quality = quality.coerceIn(1, 100))) }
+    }
+
+    fun setMaxDimension(maxDimension: Int) {
+        _uiState.update { it.copy(config = it.config.copy(maxDimension = maxDimension.coerceAtLeast(0))) }
+    }
+
+    fun setColorSpace(colorSpace: String) {
+        _uiState.update { it.copy(config = it.config.copy(colorSpace = colorSpace)) }
+    }
+
+    fun setIncludeMetadata(include: Boolean) {
+        _uiState.update { it.copy(config = it.config.copy(includeMetadata = include)) }
+    }
+
+    fun setUltraHdr(enabled: Boolean) {
+        _uiState.update { it.copy(config = it.config.copy(ultraHdr = enabled && it.config.format == ExportFormat.JPEG)) }
+    }
+
+    fun setWatermarkEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(config = it.config.copy(includeWatermark = enabled)) }
+    }
+
+    fun updateWatermark(transform: (WatermarkConfig) -> WatermarkConfig) {
+        _uiState.update { it.copy(config = it.config.copy(watermark = transform(it.config.watermark))) }
+    }
+
+    fun setOutputDirectory(path: String?) {
+        _uiState.update { it.copy(config = it.config.copy(outputDirectory = path)) }
+    }
+
+    fun setNamingPattern(pattern: String) {
+        _uiState.update { it.copy(config = it.config.copy(namingPattern = pattern.ifBlank { "{name}_edit" })) }
+    }
+
+    // ---- Export execution ------------------------------------------------
+
+    /** Export the currently open editor image. */
+    fun exportCurrent(imageId: String) {
+        val handle = pipelineService.handle
+        if (handle == 0L) {
+            _uiState.update { it.copy(error = "No active pipeline. Open an image in the editor first.") }
+            return
+        }
+        viewModelScope.launch {
+            val item = imageRepository.getImage(imageId) ?: run {
+                _uiState.update { it.copy(error = "Image not found: $imageId") }
+                return@launch
+            }
+            runExport(listOf(item to handle))
+        }
+    }
+
+    /**
+     * Batch export a set of image ids. Each image is exported through the
+     * shared pipeline handle opened in turn; images without an open pipeline are
+     * reported as failed.
+     */
+    fun exportBatch(imageIds: List<String>) {
+        if (imageIds.isEmpty()) return
+        viewModelScope.launch {
+            val handle = pipelineService.handle
+            val items = imageIds.mapNotNull { id -> imageRepository.getImage(id)?.let { it to handle } }
+            if (items.isEmpty()) {
+                _uiState.update { it.copy(error = "No exportable images (pipeline not open).") }
+                return@launch
+            }
+            runExport(items)
+        }
+    }
+
+    private suspend fun runExport(items: List<Pair<ImageItem, Long>>) {
+        val cfg = _uiState.value.config
+        val total = items.size
+        val taskId = taskService.start(
+            BackgroundTaskType.EXPORT,
+            if (total == 1) "Exporting ${items.first().first.displayName}" else "Exporting $total images",
+            total,
+        )
+        _uiState.update {
+            it.copy(isExporting = true, totalCount = total, completedCount = 0, results = emptyList(), error = null)
+        }
+
+        val results = mutableListOf<ExportResult>()
+        items.forEachIndexed { index, (item, handle) ->
+            val request = ExportService.ExportRequest(
+                imageId = item.id,
+                displayName = item.displayName,
+                pipelineHandle = handle,
+                config = cfg,
+            )
+            val path = runCatching { exportService.export(request) }.getOrNull()
+            val success = path != null
+            results += ExportResult(item.id, item.displayName, path, success, if (!success) "export_failed" else null)
+            taskService.update(taskId, index + 1, total)
+            _uiState.update {
+                it.copy(
+                    completedCount = index + 1,
+                    results = results.toList(),
+                    lastOutputPath = path ?: it.lastOutputPath,
+                )
+            }
+        }
+
+        val failures = results.count { !it.success }
+        taskService.complete(taskId, if (failures == total) "all_failed" else null)
+        _uiState.update {
+            it.copy(
+                isExporting = false,
+                error = if (failures > 0) "$failures of $total exports failed" else null,
+            )
+        }
+    }
+
+    fun cancel() {
+        // The export loop checks progress cooperatively; mark the UI as stopped.
+        _uiState.update { it.copy(isExporting = false) }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun resetResults() {
+        _uiState.update { it.copy(results = emptyList(), completedCount = 0, totalCount = 0, lastOutputPath = null) }
+    }
+}

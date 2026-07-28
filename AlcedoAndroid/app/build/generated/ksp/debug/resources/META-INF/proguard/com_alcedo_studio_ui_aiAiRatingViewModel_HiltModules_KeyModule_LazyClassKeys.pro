@@ -1,0 +1,4 @@
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel

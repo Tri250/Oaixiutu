@@ -1,0 +1,1 @@
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel

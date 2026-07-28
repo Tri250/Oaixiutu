@@ -1,0 +1,125 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-coroutines-slf4j",
+    "version": "1.6.4",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.4.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.4"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.4"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-slf4j-1.6.4.jar",
+          "url": "kotlinx-coroutines-slf4j-1.6.4.jar",
+          "size": 3764,
+          "sha512": "6b24af3dfb7f7bc4410a3f72da6c8631f4ce1c7aaf6390281d406e987024b5374e908de6458ea464d0e76e346a9aad0d74d6b990974bb3763c41ad6ec522aff6",
+          "sha256": "e8e47a5d7ff57e89e096a409486308ad58a2f392724145973f11f679e7d11d23",
+          "sha1": "9369fcabacb66a55ca3b7939b72bb0b62af112ce",
+          "md5": "ee0321dc6b1536bf3c2df8b59cb84e8f"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-api",
+          "version": {
+            "requires": "1.7.32"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.4"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.4"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-slf4j-1.6.4.jar",
+          "url": "kotlinx-coroutines-slf4j-1.6.4.jar",
+          "size": 3764,
+          "sha512": "6b24af3dfb7f7bc4410a3f72da6c8631f4ce1c7aaf6390281d406e987024b5374e908de6458ea464d0e76e346a9aad0d74d6b990974bb3763c41ad6ec522aff6",
+          "sha256": "e8e47a5d7ff57e89e096a409486308ad58a2f392724145973f11f679e7d11d23",
+          "sha1": "9369fcabacb66a55ca3b7939b72bb0b62af112ce",
+          "md5": "ee0321dc6b1536bf3c2df8b59cb84e8f"
+        }
+      ]
+    }
+  ]
+}

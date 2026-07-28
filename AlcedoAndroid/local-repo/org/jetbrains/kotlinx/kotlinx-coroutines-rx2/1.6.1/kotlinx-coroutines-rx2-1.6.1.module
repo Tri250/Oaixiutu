@@ -1,0 +1,145 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-coroutines-rx2",
+    "version": "1.6.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "6.8.3",
+      "buildId": "4irbk5x6kragle63hngfxoqfii"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-reactive",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxjava",
+          "version": {
+            "requires": "2.2.8"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-rx2-1.6.1.jar",
+          "url": "kotlinx-coroutines-rx2-1.6.1.jar",
+          "size": 94245,
+          "sha512": "b5c5e77904be6ffa6b31b3c546dd211fc14f427c60d193c5cb8990d3be01b17c7ccedabf4db67ce0cf01f7b9a1fea2ed87bda00d35de1ebf068e248c20085472",
+          "sha256": "a9f269eedd26eaf67ba0e6d26f35a229e45e29802743fed1431ba0edd9c35804",
+          "sha1": "4ea966f7266f246af4f041d1918956e8346db1e1",
+          "md5": "2d9c8cebdd3fe78095ca02e3f51740db"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-reactive",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava2",
+          "module": "rxjava",
+          "version": {
+            "requires": "2.2.8"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-rx2-1.6.1.jar",
+          "url": "kotlinx-coroutines-rx2-1.6.1.jar",
+          "size": 94245,
+          "sha512": "b5c5e77904be6ffa6b31b3c546dd211fc14f427c60d193c5cb8990d3be01b17c7ccedabf4db67ce0cf01f7b9a1fea2ed87bda00d35de1ebf068e248c20085472",
+          "sha256": "a9f269eedd26eaf67ba0e6d26f35a229e45e29802743fed1431ba0edd9c35804",
+          "sha1": "4ea966f7266f246af4f041d1918956e8346db1e1",
+          "md5": "2d9c8cebdd3fe78095ca02e3f51740db"
+        }
+      ]
+    }
+  ]
+}

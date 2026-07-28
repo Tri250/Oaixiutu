@@ -1,0 +1,125 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-coroutines-jdk9",
+    "version": "1.7.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.4.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 9,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.7.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.8.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-jdk9-1.7.1.jar",
+          "url": "kotlinx-coroutines-jdk9-1.7.1.jar",
+          "size": 8399,
+          "sha512": "733d230535f43241c1d5f986f3d55c2f478573114f1cdf27e212a0a2a1d46fe4783c39bb9f193de7772d408f6070127ddeece2e120bbe343fab8b8d13f69e667",
+          "sha256": "e98999debb689a0c1fb88f12b48c9efb3507850d32c7b2d31994b9941e36f849",
+          "sha1": "c0f6d54731ee52f5d3f9e8e4fbf7c8dd209723dc",
+          "md5": "181d955dca59f7cc7e409bf363e44c0d"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 9,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-reactive",
+          "version": {
+            "requires": "1.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.7.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.8.20"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-jdk9-1.7.1.jar",
+          "url": "kotlinx-coroutines-jdk9-1.7.1.jar",
+          "size": 8399,
+          "sha512": "733d230535f43241c1d5f986f3d55c2f478573114f1cdf27e212a0a2a1d46fe4783c39bb9f193de7772d408f6070127ddeece2e120bbe343fab8b8d13f69e667",
+          "sha256": "e98999debb689a0c1fb88f12b48c9efb3507850d32c7b2d31994b9941e36f849",
+          "sha1": "c0f6d54731ee52f5d3f9e8e4fbf7c8dd209723dc",
+          "md5": "181d955dca59f7cc7e409bf363e44c0d"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+// AlcedoAndroid - Color adjustment compute kernel.
+// Applies the Color_Adjustment stage: global saturation (OKLCh chroma), vibrance,
+// tint, and an HLS hue/lightness/saturation tweak. Uses a linear->Oklab round
+// trip for perceptual chroma scaling.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+const uint FLAG_SATURATION = 1u << 0;
+const uint FLAG_VIBRANCE   = 1u << 1;
+const uint FLAG_TINT       = 1u << 2;
+const uint FLAG_HLS        = 1u << 3;
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  flags;
+  float saturation;   // multiplier (1.0 = neutral)
+  float vibrance;     // [-1,1]
+  float tint;         // [-1,1] green-magenta
+  float hls_hue;      // degrees offset
+  float hls_light;    // [-1,1]
+  float hls_sat;      // [-1,1]
+  float _pad0;
+  float _pad1;
+} pc;
+
+// ---- Linear sRGB -> Oklab ----
+vec3 linear_to_oklab(vec3 c) {
+  float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
+  float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
+  float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
+  l = pow(max(l, 0.0), 1.0 / 3.0);
+  m = pow(max(m, 0.0), 1.0 / 3.0);
+  s = pow(max(s, 0.0), 1.0 / 3.0);
+  return vec3(
+    0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+  );
+}
+
+vec3 oklab_to_linear(vec3 lab) {
+  float l = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z;
+  float m = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z;
+  float s = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z;
+  l = l * l * l;
+  m = m * m * m;
+  s = s * s * s;
+  return vec3(
+    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+  );
+}
+
+// Oklab -> Oklch (L, C, H in degrees).
+vec3 oklab_to_oklch(vec3 lab) {
+  float c = length(lab.yz);
+  float h = atan(lab.z, lab.y);
+  if (h < 0.0) h += 6.28318530718;
+  return vec3(lab.x, c, degrees(h));
+}
+
+vec3 oklch_to_oklab(vec3 lch) {
+  float h = radians(lch.z);
+  return vec3(lch.x, lch.y * cos(h), lch.y * sin(h));
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+  vec3 lab = linear_to_oklab(c);
+
+  // Global saturation: scale chroma.
+  if ((pc.flags & FLAG_SATURATION) != 0u) {
+    lab.yz *= pc.saturation;
+  }
+
+  // Vibrance: scale chroma more for low-saturation pixels.
+  if ((pc.flags & FLAG_VIBRANCE) != 0u) {
+    float chroma = length(lab.yz);
+    float factor = 1.0 + pc.vibrance * (1.0 - smoothstep(0.0, 0.2, chroma));
+    lab.yz *= factor;
+  }
+
+  // Tint: shift hue slightly along the green-magenta axis (a* of Oklab).
+  if ((pc.flags & FLAG_TINT) != 0u) {
+    lab.y += pc.tint * 0.05;
+  }
+
+  // HLS-style adjustment in Oklch (hue rotation, lightness, chroma).
+  if ((pc.flags & FLAG_HLS) != 0u) {
+    vec3 lch = oklab_to_oklch(lab);
+    lch.z = mod(lch.z + pc.hls_hue + 360.0, 360.0);
+    lch.x = clamp(lch.x + pc.hls_light * 0.1, 0.0, 1.0);
+    lch.y = max(lch.y + pc.hls_sat * 0.1, 0.0);
+    lab = oklch_to_oklab(lch);
+  }
+
+  vec3 outc = oklab_to_linear(lab);
+  out_data[idx]     = outc.r;
+  out_data[idx + 1] = outc.g;
+  out_data[idx + 2] = outc.b;
+}

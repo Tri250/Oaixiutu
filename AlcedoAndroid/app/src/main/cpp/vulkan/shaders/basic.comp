@@ -1,0 +1,89 @@
+// AlcedoAndroid - Basic adjustment compute kernel.
+// Applies the Basic_Adjustment stage operators in a single fused dispatch:
+// exposure, contrast, white/black point, shadows and highlights tone curves.
+// Operates on a 3-channel (RGB) 32-bit float SSBO in linear working space.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+#extension GL_KHR_shader_subgroup_basic : enable
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// binding 0 = input RGB float buffer, binding 1 = output RGB float buffer.
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+// Enable bit flags (mirrors the host OperatorParams booleans).
+const uint FLAG_EXPOSURE   = 1u << 0;
+const uint FLAG_CONTRAST   = 1u << 1;
+const uint FLAG_WHITE      = 1u << 2;
+const uint FLAG_BLACK      = 1u << 3;
+const uint FLAG_SHADOWS    = 1u << 4;
+const uint FLAG_HIGHLIGHTS = 1u << 5;
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;          // expected 3
+  uint  flags;             // enable bits
+  float exposure;          // stops
+  float contrast;          // scale around 0.18 pivot
+  float white_point;       // 1.0 default
+  float black_point;       // 0.0 default
+  float slope;             // gain between black/white
+  float shadows_offset;    // [-1,1]
+  float highlights_offset; // [-1,1]
+  float _pad0;
+} pc;
+
+// Shadows tone curve (soft compression in the toe).
+float shadows_curve(float v) {
+  if (pc.shadows_offset == 0.0) return v;
+  float t = smoothstep(0.0, 0.25, v);
+  return v + pc.shadows_offset * (1.0 - t) * v;
+}
+
+// Highlights tone curve (soft compression in the shoulder).
+float highlights_curve(float v) {
+  if (pc.highlights_offset == 0.0) return v;
+  float t = smoothstep(0.2, 1.0, v);
+  return v + pc.highlights_offset * t * (1.0 - v);
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+
+  // Exposure: multiplicative gain (2^(stops)).
+  if ((pc.flags & FLAG_EXPOSURE) != 0u) {
+    c *= pow(2.0, pc.exposure);
+  }
+
+  // Contrast around 0.18 pivot (linear).
+  if ((pc.flags & FLAG_CONTRAST) != 0) {
+    c = 0.18 + (c - 0.18) * (1.0 + pc.contrast);
+  }
+
+  // Shadows / highlights local tone curves (luminance-driven per channel).
+  if ((pc.flags & FLAG_SHADOWS) != 0u) {
+    c.r = shadows_curve(c.r);
+    c.g = shadows_curve(c.g);
+    c.b = shadows_curve(c.b);
+  }
+  if ((pc.flags & FLAG_HIGHLIGHTS) != 0u) {
+    c.r = highlights_curve(c.r);
+    c.g = highlights_curve(c.g);
+    c.b = highlights_curve(c.b);
+  }
+
+  // Black/white point + slope (linear ramp): y = black + slope * (x - black).
+  if ((pc.flags & FLAG_BLACK) != 0u || (pc.flags & FLAG_WHITE) != 0u) {
+    c = pc.black_point + pc.slope * (c - pc.black_point);
+  }
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

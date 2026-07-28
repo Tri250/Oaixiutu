@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.alcedo.studio.app-mergeDebugResources-72:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "/root/.gradle/caches/8.14.4/transforms/eb2ca07f075bde0f255ac5b508059055/transformed/material3-android-1.3.1/res/values-v30/values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

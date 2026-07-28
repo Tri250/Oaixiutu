@@ -1,0 +1,80 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.google.devtools.ksp",
+    "module": "symbol-processing-gradle-plugin",
+    "version": "2.1.0-1.0.29",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.10.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "files": [
+        {
+          "name": "symbol-processing-gradle-plugin-2.1.0-1.0.29.jar",
+          "url": "symbol-processing-gradle-plugin-2.1.0-1.0.29.jar",
+          "size": 198014,
+          "sha512": "5d0323ad9b019071e69abc3c27921ade59e3412adde2634b941f827df5868816544e60522d84d0be1308ed0b04e75259c6fa2cceb56805efcc60e3e758bb9bb0",
+          "sha256": "d68d5a99bce275bafaeb108448b9ad473b1b062564b11f1ad65bd0b5b3942b92",
+          "sha1": "f90fb255d377fce823f4bdcd0258a616b19a453b",
+          "md5": "1c1df0c9b04d3ea14fb06b4ffece7ad8"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "com.google.devtools.ksp",
+          "module": "symbol-processing-api",
+          "version": {
+            "requires": "2.1.0-1.0.29"
+          }
+        },
+        {
+          "group": "com.google.devtools.ksp",
+          "module": "symbol-processing-common-deps",
+          "version": {
+            "requires": "2.1.0-1.0.29"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "symbol-processing-gradle-plugin-2.1.0-1.0.29.jar",
+          "url": "symbol-processing-gradle-plugin-2.1.0-1.0.29.jar",
+          "size": 198014,
+          "sha512": "5d0323ad9b019071e69abc3c27921ade59e3412adde2634b941f827df5868816544e60522d84d0be1308ed0b04e75259c6fa2cceb56805efcc60e3e758bb9bb0",
+          "sha256": "d68d5a99bce275bafaeb108448b9ad473b1b062564b11f1ad65bd0b5b3942b92",
+          "sha1": "f90fb255d377fce823f4bdcd0258a616b19a453b",
+          "md5": "1c1df0c9b04d3ea14fb06b4ffece7ad8"
+        }
+      ]
+    }
+  ]
+}

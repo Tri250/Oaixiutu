@@ -1,0 +1,131 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-coroutines-guava",
+    "version": "1.6.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "6.8.3",
+      "buildId": "4irbk5x6kragle63hngfxoqfii"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "31.0.1-jre"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-guava-1.6.1.jar",
+          "url": "kotlinx-coroutines-guava-1.6.1.jar",
+          "size": 19458,
+          "sha512": "70686cefeb365f4605364b03f0e2b79af935ac5186965e5cb8c5336db005ea5f3ec23214e36ec8b47b6a2b2fc312b3800483070b63b5c9ff7f8d2f5e85cfb945",
+          "sha256": "826b7fc5f8611e01d16f3758dd7246291120f171af8d9c000ed25be3f32eb52d",
+          "sha1": "f64a99e16f773ba8bb2a94eb94f182ed67631ff2",
+          "md5": "031abdda6ba49770eeadaacfe5bf5c49"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "31.0.1-jre"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.6.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-bom",
+          "version": {
+            "requires": "1.6.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "1.6.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-coroutines-guava-1.6.1.jar",
+          "url": "kotlinx-coroutines-guava-1.6.1.jar",
+          "size": 19458,
+          "sha512": "70686cefeb365f4605364b03f0e2b79af935ac5186965e5cb8c5336db005ea5f3ec23214e36ec8b47b6a2b2fc312b3800483070b63b5c9ff7f8d2f5e85cfb945",
+          "sha256": "826b7fc5f8611e01d16f3758dd7246291120f171af8d9c000ed25be3f32eb52d",
+          "sha1": "f64a99e16f773ba8bb2a94eb94f182ed67631ff2",
+          "md5": "031abdda6ba49770eeadaacfe5bf5c49"
+        }
+      ]
+    }
+  ]
+}

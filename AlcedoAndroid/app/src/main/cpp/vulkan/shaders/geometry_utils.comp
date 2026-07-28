@@ -1,0 +1,94 @@
+// AlcedoAndroid - Geometry helpers for Vulkan compute shaders (include-only).
+// Coordinate transforms, bicubic/bilinear sampling, and lens-distortion
+// utilities shared by the geometry and resize kernels. No main() is defined.
+// SPDX-License-Identifier: GPL-3.0-only
+#ifndef ALCEDO_GEOMETRY_UTILS_COMP
+#define ALCEDO_GEOMETRY_UTILS_COMP
+
+// Linear (bilinear) sample from a 3-channel float SSBO of size width*height.
+// Coordinates are clamped to the buffer border.
+vec3 sample_bilinear(sampler2DArray smp, vec2 uv, int layer) {
+  return texture(smp, vec3(uv, float(layer))).rgb;
+}
+
+// Bilinear sample from a raw float buffer (binding provided by caller). The
+// buffer is laid out as width*height*3 floats (RGB). x/y are in pixel coords.
+vec3 sample_buffer_bilinear(const float buf[], int width, int height, float x, float y) {
+  x = clamp(x, 0.0, float(width - 1));
+  y = clamp(y, 0.0, float(height - 1));
+  int x0 = int(floor(x));
+  int y0 = int(floor(y));
+  int x1 = min(x0 + 1, width - 1);
+  int y1 = min(y0 + 1, height - 1);
+  float fx = x - float(x0);
+  float fy = y - float(y0);
+
+  int base00 = (y0 * width + x0) * 3;
+  int base10 = (y0 * width + x1) * 3;
+  int base01 = (y1 * width + x0) * 3;
+  int base11 = (y1 * width + x1) * 3;
+
+  vec3 c00 = vec3(buf[base00], buf[base00 + 1], buf[base00 + 2]);
+  vec3 c10 = vec3(buf[base10], buf[base10 + 1], buf[base10 + 2]);
+  vec3 c01 = vec3(buf[base01], buf[base01 + 1], buf[base01 + 2]);
+  vec3 c11 = vec3(buf[base11], buf[base11 + 1], buf[base11 + 2]);
+
+  vec3 a = mix(c00, c10, fx);
+  vec3 b = mix(c01, c11, fx);
+  return mix(a, b, fy);
+}
+
+// Catmull-Rom (bicubic) weight for cubic interpolation.
+float catmull_rom_weight(float t, int i) {
+  float t2 = t * t;
+  float t3 = t2 * t;
+  if (i == -1) return -0.5 * t3 + t2 - 0.5 * t;
+  if (i ==  0) return  1.5 * t3 - 2.5 * t2 + 1.0;
+  if (i ==  1) return -1.5 * t3 + 2.0 * t2 + 0.5 * t;
+  return 0.5 * t3 - 0.5 * t2;  // i == 2
+}
+
+// Bicubic sample from a raw float buffer.
+vec3 sample_buffer_bicubic(const float buf[], int width, int height, float x, float y) {
+  x = clamp(x, 0.0, float(width - 1));
+  y = clamp(y, 0.0, float(height - 1));
+  int ix = int(floor(x));
+  int iy = int(floor(y));
+  float fx = x - float(ix);
+  float fy = y - float(iy);
+
+  vec3 col = vec3(0.0);
+  for (int j = -1; j <= 2; ++j) {
+    int yy = clamp(iy + j, 0, height - 1);
+    float wy = catmull_rom_weight(fy, j);
+    for (int i = -1; i <= 2; ++i) {
+      int xx = clamp(ix + i, 0, width - 1);
+      float wx = catmull_rom_weight(fx, i);
+      int base = (yy * width + xx) * 3;
+      vec3 c = vec3(buf[base], buf[base + 1], buf[base + 2]);
+      col += c * (wx * wy);
+    }
+  }
+  return col;
+}
+
+// Brown-Conrady lens distortion model: maps a normalized radius to the
+// distorted radius. k1/k2 are radial distortion coefficients.
+vec2 apply_brown_conrady(vec2 ndc, float k1, float k2) {
+  float r2 = dot(ndc, ndc);
+  float r4 = r2 * r2;
+  float factor = 1.0 + k1 * r2 + k2 * r4;
+  return ndc * factor;
+}
+
+// Inverse of the Brown-Conrady model (approximated by 5 Newton iterations).
+vec2 invert_brown_conrady(vec2 distorted, float k1, float k2) {
+  vec2 ndc = distorted;
+  for (int i = 0; i < 5; ++i) {
+    vec2 fwd = apply_brown_conrady(ndc, k1, k2);
+    ndc += (distorted - fwd) * 0.5;
+  }
+  return ndc;
+}
+
+#endif  // ALCEDO_GEOMETRY_UTILS_COMP

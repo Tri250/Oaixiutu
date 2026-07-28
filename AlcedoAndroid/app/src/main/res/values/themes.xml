@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Base theme for Alcedo. The actual UI is rendered with Jetpack Compose
+        via AlcedoTheme; this XML theme only needs to set up a deep-black
+        window background and a no-action-bar Material3 parent so the system
+        splash, status bar and back gesture behave correctly before Compose
+        takes over the surface.
+    -->
+    <style name="Theme.AlcedoStudio" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/alcedo_pure_black</item>
+        <item name="android:statusBarColor">@color/alcedo_pure_black</item>
+        <item name="android:navigationBarColor">@color/alcedo_obsidian</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <!--
+        Splash-screen variant. androidx.core:core-splashscreen installs the
+        system splash on top of this theme; it must parent Theme.AlcedoStudio
+        and only override what the splash API requires.
+    -->
+    <style name="Theme.AlcedoStudio.Splash" parent="Theme.AlcedoStudio">
+        <item name="android:windowBackground">@color/alcedo_pure_black</item>
+    </style>
+</resources>

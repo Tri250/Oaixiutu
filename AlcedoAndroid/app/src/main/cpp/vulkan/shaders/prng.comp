@@ -1,0 +1,66 @@
+// AlcedoAndroid - PRNG helpers for Vulkan compute shaders (include-only).
+// Provides a self-contained splitmix64 / xoshiro256** generator so film grain
+// and halation can reproduce the desktop PRNG sequence on the GPU. Include this
+// file from another .comp via #include "prng.comp". No main() is defined.
+// SPDX-License-Identifier: GPL-3.0-only
+#ifndef ALCEDO_PRNG_COMP
+#define ALCEDO_PRNG_COMP
+
+// ---- splitmix64: hash a 64-bit seed into a 64-bit value ----
+uint64_t splitmix64(inout uint64_t state) {
+  state += 0x9E3779B97F4A7C15UL;
+  uint64_t z = state;
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+  z = z ^ (z >> 31);
+  return z;
+}
+
+// ---- xoshiro256** state (4 x uint64) ----
+struct Xoshiro256State {
+  uint64_t s0, s1, s2, s3;
+};
+
+uint64_t rotl64(uint64_t x, int k) {
+  return (x << k) | (x >> (64 - k));
+}
+
+uint64_t xoshiro256_next(inout Xoshiro256State st) {
+  const uint64_t result = rotl64(st.s1 * 5UL, 7) * 9UL;
+  const uint64_t t = st.s1 << 17;
+  st.s2 ^= st.s0;
+  st.s3 ^= st.s1;
+  st.s1 ^= st.s2;
+  st.s0 ^= st.s3;
+  st.s2 ^= t;
+  st.s3 = rotl64(st.s3, 45);
+  return result;
+}
+
+// Seed a xoshiro256 state from a single 64-bit value (uses splitmix64).
+Xoshiro256State seed_xoshiro256(uint64_t seed) {
+  Xoshiro256State st;
+  uint64_t s = seed;
+  st.s0 = splitmix64(s);
+  st.s1 = splitmix64(s);
+  st.s2 = splitmix64(s);
+  st.s3 = splitmix64(s);
+  return st;
+}
+
+// Convert a uniform uint64 to a float in [0,1).
+float u64_to_float01(uint64_t v) {
+  // Use the top 24 bits for a 24-bit mantissa -> [0,1).
+  return float(v >> 40) * (1.0 / 16777216.0);
+}
+
+// Standard normal via Box-Muller from two uniform floats in [0,1).
+float gaussian_from_uniform(float u1, float u2) {
+  const float EPS = 1e-10;
+  u1 = max(u1, EPS);
+  float r = sqrt(-2.0 * log(u1));
+  float theta = 6.283185307179586 * u2;
+  return r * cos(theta);
+}
+
+#endif  // ALCEDO_PRNG_COMP

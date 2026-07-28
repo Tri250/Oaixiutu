@@ -1,0 +1,9 @@
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiSearchViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiSearchViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiModelManagerViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiModelManagerViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.export.ExportViewModel

@@ -1,0 +1,94 @@
+// AlcedoAndroid - Local tone mapping compute kernel.
+// Implements the highlight/shadow local tone operator from the desktop project:
+// a log-space tone curve applied to the difference between the pixel and a
+// blurred base (local tone), driven by shadow/highlight log pivots and widths.
+// The blurred base is approximated by a 3x3 neighborhood read.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+const uint FLAG_SHADOWS    = 1u << 0;
+const uint FLAG_HIGHLIGHTS = 1u << 1;
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  flags;
+  float shadow_amount;       // [-1,1]
+  float highlight_amount;    // [-1,1]
+  float shadow_log_pivot;    // -2.45 default
+  float shadow_log_width;    // 1.35 default
+  float highlight_log_pivot; // -0.20 default
+  float highlight_log_width; // 1.15 default
+  float base_radius;         // pixels
+  float _pad0;
+} pc;
+
+vec3 fetch_pixel(int x, int y) {
+  x = clamp(x, 0, int(pc.width) - 1);
+  y = clamp(y, 0, int(pc.height) - 1);
+  uint idx = (uint(y) * pc.width + uint(x)) * pc.channels;
+  return vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+}
+
+float luminance(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// 3x3 box blur of luminance (base approximation).
+float base_blur(int cx, int cy) {
+  float sum = 0.0;
+  for (int dy = -1; dy <= 1; ++dy) {
+    for (int dx = -1; dx <= 1; ++dx) {
+      sum += luminance(fetch_pixel(cx + dx, cy + dy));
+    }
+  }
+  return sum / 9.0;
+}
+
+// Soft compression curve centered on a log pivot with a given width.
+float log_curve(float x, float pivot, float width, float amount) {
+  float lx = log2(max(x, 1e-6));
+  float d = lx - pivot;
+  // Logistic compression: pull values near the pivot toward the pivot.
+  float k = amount / max(width, 0.01);
+  float compressed = d / (1.0 + d * d * k * k * 0.25);
+  return exp2(pivot + compressed);
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  int x = int(pos.x);
+  int y = int(pos.y);
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+
+  float l = luminance(c);
+  float base = base_blur(x, y);
+  float local_detail = max(l - base, 0.0) + max(base - l, 0.0);  // |detail|
+
+  // Shadows: compress the toe around the shadow pivot.
+  if ((pc.flags & FLAG_SHADOWS) != 0u && pc.shadow_amount != 0.0) {
+    float mapped = log_curve(l, pc.shadow_log_pivot, pc.shadow_log_width,
+                             pc.shadow_amount);
+    c = mix(c, c * (mapped / max(l, 1e-6)), abs(pc.shadow_amount));
+  }
+
+  // Highlights: compress the shoulder around the highlight pivot.
+  if ((pc.flags & FLAG_HIGHLIGHTS) != 0u && pc.highlight_amount != 0.0) {
+    float mapped = log_curve(l, pc.highlight_log_pivot, pc.highlight_log_width,
+                             pc.highlight_amount);
+    c = mix(c, c * (mapped / max(l, 1e-6)), abs(pc.highlight_amount));
+  }
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

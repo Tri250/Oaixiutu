@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Full-backup content rules. Alcedo does not back up the RAW image cache or
+    any AI model artifacts (they are too large and regenerable); user-edited
+    sidecar metadata is included so edits survive device transfers.
+-->
+<full-backup-content>
+    <include domain="database" path="alcedo.db" />
+    <include domain="sharedpref" path="alcedo_prefs.xml" />
+    <include domain="file" path="sidecars/" />
+    <exclude domain="file" path="cache/" />
+    <exclude domain="file" path="thumbnails/" />
+    <exclude domain="file" path="models/" />
+</full-backup-content>

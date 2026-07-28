@@ -1,0 +1,14 @@
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.editor.EditorViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiRatingViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiSearchViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiSearchViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiModelManagerViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.ai.AiModelManagerViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.export.ExportViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.export.ExportViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.settings.SettingsViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.settings.SettingsViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.album.AlbumViewModel
+-keep,allowobfuscation,allowshrinking class com.alcedo.studio.ui.album.AlbumViewModel

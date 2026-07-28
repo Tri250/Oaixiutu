@@ -1,0 +1,70 @@
+// AlcedoAndroid - Halation compute kernel.
+// Simulates photographic halation: a soft red glow bleeding from bright
+// highlights into surrounding pixels. A highlight mask is extracted, blurred
+// (single-pass 5x5 Gaussian approximation), tinted red, and added back.
+// SPDX-License-Identifier: GPL-3.0-only
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std430, binding = 0) readonly buffer InputBuf  { float in_data[]; };
+layout(std430, binding = 1) writeonly buffer OutputBuf { float out_data[]; };
+
+layout(push_constant) uniform PC {
+  uint  width;
+  uint  height;
+  uint  channels;
+  uint  _pad_flags;
+  float strength;        // 0 = none
+  float low_threshold;   // highlight mask low threshold (0.6)
+  float high_threshold;  // highlight mask high threshold (0.7)
+  float sigma;           // blur radius in pixels
+  vec3  redshift;        // additive tint (1.0, 0.05, 0.02)
+  float additive_scale;  // overall scale
+} pc;
+
+vec3 fetch_pixel(int x, int y) {
+  x = clamp(x, 0, int(pc.width) - 1);
+  y = clamp(y, 0, int(pc.height) - 1);
+  uint idx = (uint(y) * pc.width + uint(x)) * pc.channels;
+  return vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+}
+
+float luminance(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+void main() {
+  uvec2 pos = gl_GlobalInvocationID.xy;
+  if (pos.x >= pc.width || pos.y >= pc.height) return;
+
+  int x = int(pos.x);
+  int y = int(pos.y);
+  uint idx = (pos.y * pc.width + pos.x) * pc.channels;
+  vec3 c = vec3(in_data[idx], in_data[idx + 1], in_data[idx + 2]);
+
+  // Build the blurred highlight mask over a 5x5 neighborhood.
+  float blur = 0.0;
+  float wsum = 0.0;
+  float s2 = max(pc.sigma * pc.sigma, 1.0);
+  for (int dy = -2; dy <= 2; ++dy) {
+    for (int dx = -2; dx <= 2; ++dx) {
+      float w = exp(-(float(dx * dx + dy * dy)) / (2.0 * s2));
+      vec3 p = fetch_pixel(x + dx, y + dy);
+      float l = luminance(p);
+      // Highlight gate: smoothstep between low and high threshold.
+      float mask = smoothstep(pc.low_threshold, pc.high_threshold, l);
+      blur += mask * w;
+      wsum += w;
+    }
+  }
+  blur = blur / wsum;
+
+  // Tint the blurred highlight mask red and add back.
+  vec3 halation = pc.redshift * blur * pc.strength * pc.additive_scale;
+  c += halation;
+
+  out_data[idx]     = c.r;
+  out_data[idx + 1] = c.g;
+  out_data[idx + 2] = c.b;
+}

@@ -1,0 +1,21 @@
+R_DEF: Internal format may change without notice
+local
+color alcedo_accent_blue
+color alcedo_amber
+color alcedo_obsidian
+color alcedo_on_surface
+color alcedo_pure_black
+color alcedo_surface
+color ic_launcher_background
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.AlcedoStudio
+style Theme.AlcedoStudio.Splash
+xml backup_rules
+xml data_extraction_rules
+xml file_paths
+xml locales_config
+xml network_security_config
