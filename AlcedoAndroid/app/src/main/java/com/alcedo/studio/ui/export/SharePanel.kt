@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
@@ -19,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
@@ -29,10 +31,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * Share panel for a completed export. Offers "Share" (system share sheet) and
- * "Show in files" actions for the produced output file. Rendered as a dialog.
- */
 @Composable
 fun SharePanel(
     outputPath: String,
@@ -41,6 +39,7 @@ fun SharePanel(
     val s = Strings.res
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
     val file = remember(outputPath) { File(outputPath) }
 
     AlertDialog(
@@ -61,7 +60,17 @@ fun SharePanel(
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs),
+            ) {
+                // Copy path to clipboard
+                OutlinedButton(onClick = {
+                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(outputPath))
+                }) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = AlcedoColors.AccentBlue)
+                    Text("Copy Path", color = AlcedoColors.AccentBlue)
+                }
+                // Save to folder
                 OutlinedButton(onClick = {
                     scope.launch {
                         withContext(Dispatchers.IO) { openInFiles(context, file) }

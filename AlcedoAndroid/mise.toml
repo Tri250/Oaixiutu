@@ -1,0 +1,7 @@
+[tools]
+java = "17"
+
+[env]
+JAVA_HOME = "/usr/lib/jvm/java-17"
+ANDROID_HOME = "/opt/android-sdk"
+NDK_HOME = "/opt/android-sdk/ndk/27.2.12479018"

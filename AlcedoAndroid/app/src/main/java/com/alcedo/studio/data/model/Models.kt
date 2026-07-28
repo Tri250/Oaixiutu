@@ -156,8 +156,15 @@ data class AdjustmentParams(
     val rawWhitePoint: Int = 16383,
     val rawDemosaic: String = "AHD",
     val rawNoiseReduction: Float = 0f,
+    val rawHighlightMethod: String = "Clip",
     val lensProfileEnabled: Boolean = false,
     val lensProfileId: String? = null,
+    // Lens correction
+    val distortion: Float = 0f,
+    val vignetteAmount: Float = 0f,
+    val vignetteMidpoint: Float = 50f,
+    val chromaAberrationR: Float = 0f,
+    val chromaAberrationB: Float = 0f,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -189,8 +196,13 @@ data class AdjustmentParams(
             peakLuminanceNits == other.peakLuminanceNits &&
             rawBlackLevel == other.rawBlackLevel && rawWhitePoint == other.rawWhitePoint &&
             rawDemosaic == other.rawDemosaic && rawNoiseReduction == other.rawNoiseReduction &&
+            rawHighlightMethod == other.rawHighlightMethod &&
             lensProfileEnabled == other.lensProfileEnabled &&
-            lensProfileId == other.lensProfileId
+            lensProfileId == other.lensProfileId &&
+            distortion == other.distortion && vignetteAmount == other.vignetteAmount &&
+            vignetteMidpoint == other.vignetteMidpoint &&
+            chromaAberrationR == other.chromaAberrationR &&
+            chromaAberrationB == other.chromaAberrationB
     }
 
     override fun hashCode(): Int {

@@ -1,21 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    FileProvider paths. Alcedo exposes exported JPEG/PNG/HDR files and shared
-    sidecar JSON via a FileProvider so other apps can open them via ACTION_VIEW
-    or ACTION_SEND. RAW originals are NOT exposed — they live in the app
-    private Sleeve filesystem.
--->
 <paths>
-    <files-path
-        name="exports"
-        path="exports/" />
-    <files-path
-        name="sidecars"
-        path="sidecars/" />
-    <cache-path
-        name="shared_cache"
-        path="shared/" />
-    <external-files-path
-        name="external_exports"
-        path="exports/" />
+    <external-files-path name="projects" path="projects" />
+    <external-files-path name="exports" path="exports" />
+    <external-files-path name="cache" path="cache" />
+    <external-cache-path name="shared_cache" path="." />
+    <files-path name="internal" path="." />
 </paths>

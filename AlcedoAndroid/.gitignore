@@ -1,0 +1,50 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Kotlin
+*.class
+
+# C++ compiled
+*.o
+*.so
+*.a
+
+# Vulkan SPIR-V
+*.spv
+
+# Gradle
+.gradle/
+build/
+
+# Android Studio
+.idea/
+.navigation/
+captures/
+
+# Keystore
+*.jks
+*.keystore
+
+# Local config
+local.properties
+
+# NDK build intermediates
+.cxx/
+externalNativeBuild/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Secrets
+*.env
+credentials.json

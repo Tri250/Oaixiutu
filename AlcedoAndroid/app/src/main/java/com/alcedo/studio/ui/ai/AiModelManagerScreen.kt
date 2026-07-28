@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,8 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,7 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -44,11 +48,6 @@ import com.alcedo.studio.ui.common.ErrorDialog
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
-/**
- * AI model manager screen. Lists the downloadable models from the catalogue
- * with their download/load status and size, plus download/delete actions. The
- * default CLIP/SigLIP model is flagged for semantic search.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiModelManagerScreen(
@@ -82,11 +81,17 @@ fun AiModelManagerScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(DesignTokens.spacingLg),
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
         ) {
+            // Storage summary
+            item {
+                StorageSummaryCard(totalBytes = state.models.sumOf { it.asset.sizeBytes }.let { if (it == 0L) 0L else it })
+            }
             items(state.models, key = { it.asset.id }) { entry ->
                 ModelCard(
                     entry = entry,
+                    isDefault = entry.asset.id == state.defaultClipId,
                     onDownload = { viewModel.download(entry.asset) },
                     onDelete = { viewModel.delete(entry.asset) },
+                    onSetDefault = {},
                 )
             }
         }
@@ -98,10 +103,61 @@ fun AiModelManagerScreen(
 }
 
 @Composable
+private fun StorageSummaryCard(totalBytes: Long) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = AlcedoColors.SurfaceRaised),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(DesignTokens.spacingLg),
+            verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs),
+        ) {
+            Text(
+                text = "AI Model Storage",
+                style = MaterialTheme.typography.titleSmall,
+                color = AlcedoColors.TextPrimary,
+            )
+            Text(
+                text = "Total: ${formatBytes(totalBytes)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = AlcedoColors.TextSecondary,
+            )
+            LinearProgressBar(
+                progress = if (totalBytes > 0) (totalBytes.toFloat() / 2_000_000_000f).coerceIn(0f, 1f) else 0f,
+            )
+            Text(
+                text = "of 2 GB available",
+                style = MaterialTheme.typography.labelSmall,
+                color = AlcedoColors.TextTertiary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LinearProgressBar(progress: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(4.dp)
+            .background(AlcedoColors.SurfaceElevated),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .background(AlcedoColors.AccentBlue),
+        )
+    }
+}
+
+@Composable
 private fun ModelCard(
     entry: AiModelManagerViewModel.ModelEntry,
+    isDefault: Boolean,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
+    onSetDefault: () -> Unit,
 ) {
     val s = Strings.res
     val asset = entry.asset
@@ -131,15 +187,24 @@ private fun ModelCard(
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = asset.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = AlcedoColors.TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (isDefault) {
+                            Text(
+                                text = " ★",
+                                color = AlcedoColors.Amber,
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                        }
+                    }
                     Text(
-                        text = asset.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = AlcedoColors.TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "${kindLabel(asset.kind)} · ${formatBytes(asset.sizeBytes)}",
+                        text = "${kindLabel(asset.kind)} · ${formatBytes(asset.sizeBytes)} · v${asset.version}",
                         style = MaterialTheme.typography.labelSmall,
                         color = AlcedoColors.TextTertiary,
                     )
@@ -166,6 +231,30 @@ private fun ModelCard(
                 color = AlcedoColors.TextSecondary,
             )
 
+            // Model details
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingLg),
+            ) {
+                Text(
+                    text = "Size: ${formatBytes(asset.sizeBytes)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AlcedoColors.TextTertiary,
+                )
+                Text(
+                    text = "Version: ${asset.version}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AlcedoColors.TextTertiary,
+                )
+                if (asset.dimensions > 0) {
+                    Text(
+                        text = "Dims: ${asset.dimensions}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AlcedoColors.TextTertiary,
+                    )
+                }
+            }
+
+            // Download progress
             if (entry.isDownloading) {
                 LinearProgressIndicator(
                     progress = { 0.5f },
@@ -174,9 +263,10 @@ private fun ModelCard(
                 )
             }
 
+            // Action row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
             ) {
                 if (!entry.isDownloaded && !entry.isDownloading) {
                     TextButton(onClick = onDownload) {
@@ -184,9 +274,25 @@ private fun ModelCard(
                         Text(s.downloadModel, color = AlcedoColors.AccentBlue)
                     }
                 } else if (entry.isDownloaded) {
-                    TextButton(onClick = onDelete) {
-                        Icon(Icons.Outlined.Delete, contentDescription = null, tint = AlcedoColors.Danger)
-                        Text(s.deleteModel, color = AlcedoColors.Danger)
+                    // Activate/deactivate switch
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = if (entry.isLoaded) "Active" else "Inactive",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (entry.isLoaded) AlcedoColors.Success else AlcedoColors.TextTertiary,
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        if (!isDefault) {
+                            OutlinedButton(onClick = onSetDefault) {
+                                Text(s.setAsDefault, color = AlcedoColors.AccentBlue, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(Icons.Outlined.Delete, contentDescription = s.deleteModel, tint = AlcedoColors.Danger)
+                        }
                     }
                 }
             }
@@ -195,10 +301,10 @@ private fun ModelCard(
 }
 
 private fun kindLabel(kind: AiModelKind): String = when (kind) {
-    AiModelKind.CLIP -> "CLIP"
-    AiModelKind.SIGLIP -> "SigLIP"
+    AiModelKind.CLIP -> "MobileCLIP2"
+    AiModelKind.SIGLIP -> "SigLIP2"
     AiModelKind.MASK_SEGMENT -> "Segment"
-    AiModelKind.LLM_PROXY -> "LLM"
+    AiModelKind.LLM_PROXY -> "Jina CLIP v2"
     AiModelKind.IMAGE_CAPTIONER -> "Caption"
 }
 

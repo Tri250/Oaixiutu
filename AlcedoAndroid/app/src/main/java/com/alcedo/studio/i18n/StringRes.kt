@@ -208,11 +208,19 @@ interface StringRes {
     val aspect4x3: String
     val aspect3x2: String
     val aspect16x9: String
+    val aspect2x1: String
+    val aspect3x1: String
     val perspective: String
     val perspectiveHorizontal: String
     val perspectiveVertical: String
+    val perspectiveAuto: String
     val ruleOfThirds: String
     val goldenRatio: String
+    val diagonal: String
+    val centerCross: String
+    val compositionGuide: String
+    val apply: String
+    val applyCrop: String
 
     // ---- Display transform ----
     val displayTransform: String
@@ -221,18 +229,33 @@ interface StringRes {
     val peakLuminance: String
     val acesOpenDrt: String
     val openDrt: String
+    val aces2: String
     val presets: String
+    val surround: String
+    val surroundDim: String
+    val surroundAverage: String
 
     // ---- RAW ----
     val rawDecode: String
     val highlightReconstruction: String
+    val highlightMethod: String
+    val highlightClip: String
+    val highlightReconstruct: String
+    val highlightBlend: String
+    val highlightColor: String
     val demosaic: String
     val blackLevel: String
     val whitePoint: String
     val noiseReduction: String
+    val chromaAberration: String
     val lensProfile: String
     val lensCorrection: String
     val distortion: String
+    val vignette: String
+    val vignetteAmount: String
+    val vignetteMidpoint: String
+    val chromaAberrationR: String
+    val chromaAberrationB: String
 
     // ---- Scopes ----
     val scopes: String
@@ -363,4 +386,11 @@ interface StringRes {
     val dismiss: String
     val more: String
     val back: String
+
+    // ---- Compare modes ----
+    val compareSplit: String
+    val compareSideBySide: String
+    val compareOverlay: String
+    val before: String
+    val after: String
 }

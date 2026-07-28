@@ -25,28 +25,52 @@ import com.alcedo.studio.ui.theme.DesignTokens
 
 /**
  * Display transform panel. Controls the output colour space, display rendering
- * transform (OpenDRT / ACES), EOTF and peak luminance. These set how the
- * pipeline maps scene-referred linear into the display-referred preview.
+ * transform (OpenDRT / ACES 2.0), EOTF, peak luminance, and surround.
+ * These set how the pipeline maps scene-referred linear into the display-referred
+ * preview.
  */
 @Composable
 fun DisplayTransformPanel(
     params: AdjustmentParams,
     onUpdate: (String, Float) -> Unit,
+    onUpdateString: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val s = Strings.res
     var tfExpanded by remember { mutableStateOf(false) }
     var csExpanded by remember { mutableStateOf(false) }
     var eotfExpanded by remember { mutableStateOf(false) }
+    var surroundExpanded by remember { mutableStateOf(false) }
 
-    val transforms = listOf("OpenDRT" to s.openDrt, "ACES" to s.acesOpenDrt)
-    val colorSpaces = listOf("sRGB", "Display P3", "Rec2020", "AdobeRGB")
-    val eotfs = listOf("sRGB", "BT.1886", "PQ", "HLG")
+    val transforms = listOf("OpenDRT" to s.openDrt, "ACES2" to s.aces2)
+    val colorSpaces = listOf(
+        "sRGB",
+        "Rec.709",
+        "Display P3",
+        "P3-D65",
+        "P3-D60",
+        "P3-DCI",
+        "XYZ",
+        "Rec.2020",
+        "AdobeRGB",
+    )
+    val eotfs = listOf(
+        "sRGB" to "sRGB",
+        "BT.1886" to "BT.1886",
+        "Gamma 2.2" to "Gamma 2.2",
+        "ST 2084 PQ" to "ST 2084 PQ",
+        "HLG" to "HLG",
+        "Gamma 2.6" to "Gamma 2.6",
+    )
+    val surrounds = listOf(
+        "Dim" to s.surroundDim,
+        "Average" to s.surroundAverage,
+    )
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(DesignTokens.controlSpacing)) {
         SectionHeader(title = s.displayTransform)
 
-        // Display transform
+        // Display transform (OpenDRT / ACES 2.0)
         Box {
             OutlinedTextField(
                 value = params.displayTransform,
@@ -60,7 +84,10 @@ fun DisplayTransformPanel(
                 transforms.forEach { (value, label) ->
                     DropdownMenuItem(
                         text = { Text(label) },
-                        onClick = { tfExpanded = false },
+                        onClick = {
+                            onUpdateString("displayTransform", value)
+                            tfExpanded = false
+                        },
                     )
                 }
             }
@@ -80,7 +107,10 @@ fun DisplayTransformPanel(
                 colorSpaces.forEach { cs ->
                     DropdownMenuItem(
                         text = { Text(cs) },
-                        onClick = { csExpanded = false },
+                        onClick = {
+                            onUpdateString("outputColorSpace", cs)
+                            csExpanded = false
+                        },
                     )
                 }
             }
@@ -97,10 +127,36 @@ fun DisplayTransformPanel(
                 trailingIcon = { TextButton(onClick = { eotfExpanded = true }) { Text("▾") } },
             )
             DropdownMenu(expanded = eotfExpanded, onDismissRequest = { eotfExpanded = false }) {
-                eotfs.forEach { eotf ->
+                eotfs.forEach { (value, label) ->
                     DropdownMenuItem(
-                        text = { Text(eotf) },
-                        onClick = { eotfExpanded = false },
+                        text = { Text(label) },
+                        onClick = {
+                            onUpdateString("displayEotf", value)
+                            eotfExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+
+        // Surround
+        Box {
+            OutlinedTextField(
+                value = s.surroundDim,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(s.surround) },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = { TextButton(onClick = { surroundExpanded = true }) { Text("▾") } },
+            )
+            DropdownMenu(expanded = surroundExpanded, onDismissRequest = { surroundExpanded = false }) {
+                surrounds.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            onUpdateString("surround", value)
+                            surroundExpanded = false
+                        },
                     )
                 }
             }
@@ -111,7 +167,7 @@ fun DisplayTransformPanel(
             label = s.peakLuminance,
             value = params.peakLuminanceNits.toFloat(),
             defaultValue = 100f,
-            range = 100f..1000f,
+            range = 100f..10000f,
             valueFormatter = { "%.0f nits".format(it) },
             onValueChange = { onUpdate("peakLuminanceNits", it) },
         )
@@ -126,8 +182,12 @@ fun DisplayTransformPanel(
 
 private fun colorSpaceNote(cs: String): String =
     when (cs) {
-        "Display P3" -> "Wide gamut (P3 primaries)."
-        "Rec2020" -> "Ultra-wide gamut (Rec.2020)."
+        "Display P3", "P3-D65" -> "Wide gamut (P3-D65 primaries)."
+        "P3-D60" -> "Wide gamut (P3-D60 primaries, cinema white point)."
+        "P3-DCI" -> "Wide gamut (DCI-P3, D63 white point)."
+        "XYZ" -> "CIE XYZ (connection space, no gamut limitation)."
+        "Rec.2020" -> "Ultra-wide gamut (Rec.2020)."
+        "Rec.709" -> "Standard gamut (Rec.709, same as sRGB primaries)."
         "AdobeRGB" -> "Wide gamut (Adobe RGB)."
         else -> "Standard gamut (sRGB)."
     }

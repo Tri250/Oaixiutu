@@ -15,9 +15,13 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,12 +47,6 @@ import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 import kotlinx.coroutines.launch
 
-/**
- * Settings screen. Sections: General (language), AI/Privacy (cloud LLM,
- * on-device AI, telemetry toggles), Storage (cache size, clear cache, sweep,
- * manage space), Diagnostics (native version, GPU), Presets (restore defaults),
- * and About (links to about/privacy/agreement pages).
- */
 @Composable
 fun SettingsScreen(
     onAbout: () -> Unit,
@@ -63,7 +61,13 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val languageManager = remember { LanguageManager() }
     val currentLanguage by languageManager.language.collectAsState(initial = Strings.language)
-    var languageExpanded by remember { mutableStateOf(false) }
+    var selectedTheme by remember { mutableStateOf("Dark") }
+    var defaultView by remember { mutableStateOf("Grid") }
+    var gpuBackend by remember { mutableStateOf("Vulkan") }
+    var aiStrictness by remember { mutableStateOf(0.5f) }
+    var apiKey by remember { mutableStateOf("") }
+    var aiEndpoint by remember { mutableStateOf("") }
+    var aiModel by remember { mutableStateOf("") }
 
     LaunchedEffect(currentLanguage) {
         Strings.setLanguage(currentLanguage)
@@ -80,83 +84,134 @@ fun SettingsScreen(
     ) {
         // ---- General ----
         SettingsSection(title = s.settingsGeneral) {
-            SettingsRow(
-                label = s.language,
-                value = currentLanguage.displayName,
-            )
-            Language.entries.forEach { lang ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = DesignTokens.spacingXs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = lang.displayName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (lang == currentLanguage) AlcedoColors.AccentBlue else AlcedoColors.TextSecondary,
-                        modifier = Modifier.weight(1f),
+            // Language
+            Text(s.language, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
+                Language.entries.forEach { lang ->
+                    FilterChip(
+                        selected = lang == currentLanguage,
+                        onClick = { scope.launch { languageManager.setLanguage(lang) } },
+                        label = { Text(lang.displayName, style = MaterialTheme.typography.bodySmall) },
                     )
-                    if (lang == currentLanguage) {
-                        Text("✓", color = AlcedoColors.AccentBlue)
-                    } else {
-                        TextButton(onClick = {
-                            scope.launch { languageManager.setLanguage(lang) }
-                        }) { Text(s.save, color = AlcedoColors.AccentBlue) }
+                }
+            }
+            HorizontalDivider(color = AlcedoColors.Divider)
+            // Theme
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s.theme, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
+                    listOf("Dark", "Light", "System").forEach { theme ->
+                        FilterChip(
+                            selected = selectedTheme == theme,
+                            onClick = { selectedTheme = theme },
+                            label = { Text(theme, style = MaterialTheme.typography.bodySmall) },
+                        )
+                    }
+                }
+            }
+            HorizontalDivider(color = AlcedoColors.Divider)
+            // Default view
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Default View", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
+                    listOf("Grid", "List").forEach { view ->
+                        FilterChip(
+                            selected = defaultView == view,
+                            onClick = { defaultView = view },
+                            label = { Text(view, style = MaterialTheme.typography.bodySmall) },
+                        )
                     }
                 }
             }
         }
 
-        // ---- AI / Privacy ----
+        // ---- Editor ----
+        SettingsSection(title = s.tabEditor) {
+            SettingsRow(label = "Show Histogram", value = "")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Auto-save Interval", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text("30s", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
+            }
+            HorizontalDivider(color = AlcedoColors.Divider)
+            // GPU Backend
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("GPU Backend", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
+                    listOf("Vulkan", "CPU").forEach { backend ->
+                        FilterChip(
+                            selected = gpuBackend == backend,
+                            onClick = { gpuBackend = backend },
+                            label = { Text(backend, style = MaterialTheme.typography.bodySmall) },
+                        )
+                    }
+                }
+            }
+        }
+
+        // ---- AI ----
         SettingsSection(title = s.settingsAi) {
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = { Text("API Key") },
+                placeholder = { Text("sk-...") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = aiEndpoint,
+                onValueChange = { aiEndpoint = it },
+                label = { Text("Endpoint") },
+                placeholder = { Text("https://api.openai.com/v1") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = aiModel,
+                onValueChange = { aiModel = it },
+                label = { Text("Model") },
+                placeholder = { Text("gpt-4o") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            HorizontalDivider(color = AlcedoColors.Divider)
+            // Default strictness
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Default Strictness", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text("${"%.0f%%".format(aiStrictness * 100)}", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
+            }
+            Slider(
+                value = aiStrictness,
+                onValueChange = { aiStrictness = it },
+                colors = SliderDefaults.colors(
+                    thumbColor = AlcedoColors.AccentBlue,
+                    activeTrackColor = AlcedoColors.AccentBlue,
+                ),
+            )
+            HorizontalDivider(color = AlcedoColors.Divider)
             val privacy = state.privacy
-            ToggleRow(
-                label = s.cloudLlm,
-                description = s.cloudLlmDesc,
-                checked = privacy?.cloudLlmAllowed == true,
-                onCheckedChange = { viewModel.setCloudLlmAllowed(it) },
-            )
-            ToggleRow(
-                label = s.onDeviceAi,
-                description = s.onDeviceAiDesc,
-                checked = privacy?.onDeviceAiAllowed == true,
-                onCheckedChange = { viewModel.setOnDeviceAiAllowed(it) },
-            )
-            ToggleRow(
-                label = s.telemetry,
-                description = s.telemetryDesc,
-                checked = privacy?.telemetryAllowed == true,
-                onCheckedChange = { viewModel.setTelemetryAllowed(it) },
-            )
+            ToggleRow(s.cloudLlm, s.cloudLlmDesc, privacy?.cloudLlmAllowed == true) { viewModel.setCloudLlmAllowed(it) }
+            ToggleRow(s.onDeviceAi, s.onDeviceAiDesc, privacy?.onDeviceAiAllowed == true) { viewModel.setOnDeviceAiAllowed(it) }
         }
 
         // ---- Storage ----
         SettingsSection(title = s.settingsStorage) {
             SettingsRow(label = s.cacheSize, value = Project.formatBytes(state.cacheSizeBytes))
-            ActionRow(
-                label = s.clearCache,
-                isLoading = state.isClearingCache,
-                onClick = { viewModel.clearCache() },
-            )
+            ActionRow(label = s.clearCache, isLoading = state.isClearingCache, onClick = { viewModel.clearCache() })
             ActionRow(label = s.sweepOrphans, onClick = { viewModel.sweepOrphans() })
             ActionRow(label = s.manageSpace, onClick = onManageSpace)
+        }
+
+        // ---- Privacy ----
+        SettingsSection(title = "Privacy") {
+            ToggleRow("Analytics", "Send anonymous usage analytics", privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
+            ToggleRow("Crash Reports", "Automatically send crash reports", privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
         }
 
         // ---- Diagnostics ----
         SettingsSection(title = s.nativeVersion) {
             SettingsRow(label = s.nativeVersion, value = state.nativeVersion)
-            SettingsRow(
-                label = s.gpuAvailable,
-                value = if (state.gpuAvailable) s.available else s.unavailable,
-            )
-        }
-
-        // ---- Presets ----
-        SettingsSection(title = s.presets) {
-            ActionRow(
-                label = s.restorePresets,
-                isLoading = state.isRestoringPresets,
-                onClick = { viewModel.restoreBuiltInPresets() },
-            )
+            SettingsRow(label = s.gpuAvailable, value = if (state.gpuAvailable) s.available else s.unavailable)
         }
 
         // ---- About ----
@@ -204,7 +259,9 @@ private fun SettingsRow(label: String, value: String) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (value.isNotEmpty()) {
+            Text(value, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -225,6 +282,18 @@ private fun ToggleRow(
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+}
+
+@Composable
+private fun <T> ToggleRow(
+    label: String,
+    description: String,
+    privacy: T?,
+    getter: (T) -> Boolean,
+    setter: (Boolean) -> Unit,
+) {
+    val checked = privacy?.let { getter(it) } ?: false
+    ToggleRow(label, description, checked, setter)
 }
 
 @Composable

@@ -11,10 +11,11 @@ import com.alcedo.studio.ui.common.SectionHeader
 import com.alcedo.studio.ui.theme.DesignTokens
 
 /**
- * Tone (Basic) panel. Hosts the exposure, contrast, highlights, shadows,
- * whites and blacks sliders plus a clarity/sharpen pair. Each slider pushes a
- * live value to the pipeline via [onUpdate] and commits on release via
- * [onCommit].
+ * Tone (Basic) panel matching desktop UI. Hosts exposure (-5 to +5),
+ * contrast, highlights, shadows, whites, blacks sliders plus
+ * clarity/sharpen pair. Each slider pushes a live value to the pipeline
+ * via [onUpdate] and commits on release via [onCommit].
+ * Double-tap reset, haptic feedback on snap points.
  */
 @Composable
 fun BasicPanel(
@@ -29,7 +30,7 @@ fun BasicPanel(
 
         AdjustmentSlider(
             label = s.exposure, value = params.exposure, defaultValue = 0f,
-            range = -2f..2f, valueFormatter = { "%.2f".format(it) },
+            range = -5f..5f, valueFormatter = { "%+.2f".format(it) },
             onValueChange = { onUpdate("exposure", it) },
             onValueChangeFinished = onCommit,
         )
