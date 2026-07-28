@@ -189,6 +189,7 @@ object TaskNotificationHelper {
     // ── Model download notifications ──
 
     fun notifyModelDownloadProgress(context: Context, modelId: String, progress: Int, total: Int) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = String.format(Strings.current.notificationModelDownloadProgress, modelId, progress)
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, buildNotification(context, Strings.current.notificationModelDownload, msg, progress, total))
@@ -196,7 +197,10 @@ object TaskNotificationHelper {
 
     fun notifyModelDownloadComplete(context: Context, modelId: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (!canPostNotifications(context)) return
+        if (!canPostNotifications(context)) {
+            nm.cancel(NOTIFICATION_ID_MODEL_DOWNLOAD)
+            return
+        }
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
             .setContentTitle(Strings.current.notificationModelDownloadComplete)
@@ -214,6 +218,7 @@ object TaskNotificationHelper {
     }
 
     fun notifyModelDownloadFailed(context: Context, modelId: String, error: String) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)

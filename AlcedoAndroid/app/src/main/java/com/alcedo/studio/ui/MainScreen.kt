@@ -59,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
@@ -180,19 +181,55 @@ fun MainScreen(
         }
     }
 
-    // 通知权限请求 (Android 13+)
+    // ── 所有 Permission Launcher 必须在引用之前声明 ──────────
     val notificationPermissionState = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    ) {
         // 用户决定后无需特殊处理，BackgroundTaskService 会在需要时检查
     }
 
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results.any { it.value }
+        android.util.Log.i("MainScreen", "Media permission result: granted=$granted, details=$results")
+    }
+
+    // 【P0 修复】权限请求串行化：
+    // Android 系统同一时刻只允许一个权限请求弹窗，同时 launch 会导致第二个被静默取消。
+    // 合并为单个 LaunchedEffect，按顺序依次请求，确保弹窗不冲突。
     LaunchedEffect(Unit) {
+        // 1. 先请求通知权限 (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionState.launch(Manifest.permission.POST_NOTIFICATIONS)
+                runCatching {
+                    notificationPermissionState.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    // 等待系统处理完前一个弹窗，避免冲突
+                    delay(1500)
+                }.onFailure { e ->
+                    android.util.Log.w("MainScreen", "Notification permission launch failed", e)
+                }
             }
+        }
+
+        // 2. 再请求媒体权限
+        val mediaPermissions = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        val needsMediaRequest = mediaPermissions.any {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (needsMediaRequest) {
+            runCatching { mediaPermissionLauncher.launch(mediaPermissions) }
+                .onFailure { e -> android.util.Log.w("MainScreen", "Media permission launch failed", e) }
         }
     }
 
@@ -227,34 +264,6 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         if (!prefs.getBoolean("onboarding_completed", false)) {
             prefs.edit().putBoolean("onboarding_completed", true).apply()
-        }
-    }
-
-    // 媒体权限请求（原引导页中的逻辑，现在直接在主界面启动时请求）
-    val mediaPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        val granted = results.any { it.value }
-        android.util.Log.i("MainScreen", "Media permission result: granted=$granted, details=$results")
-    }
-
-    LaunchedEffect(Unit) {
-        val permissions = when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-            )
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES
-            )
-            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        val needsRequest = permissions.any {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needsRequest) {
-            runCatching { mediaPermissionLauncher.launch(permissions) }
-                .onFailure { e -> android.util.Log.w("MainScreen", "Media permission launch failed", e) }
         }
     }
 

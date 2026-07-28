@@ -68,6 +68,7 @@ import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.permission.rememberPermissionState
 import com.alcedo.studio.storage.PhotoPickerHelper
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 // ═══════════════════════════════════════════════════════════════════
@@ -181,7 +182,11 @@ fun AlbumScreen(
         }
     )
 
+    // 【P0 修复】避免与 MainScreen 的串行化权限请求冲突：
+    // MainScreen 会先请求通知权限再请求媒体权限，AlbumScreen 延迟 5 秒后再检查，
+    // 给系统和用户足够的时间处理首次弹窗，避免产生并发冲突。
     LaunchedEffect(Unit) {
+        delay(5000)
         if (!PermissionHelper.hasReadMediaAccess(context)) {
             permissionState.requestMediaAccess()
         }
