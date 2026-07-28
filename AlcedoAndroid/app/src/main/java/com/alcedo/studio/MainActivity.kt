@@ -8,9 +8,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.alcedo.studio.ui.MainScreen
 import com.alcedo.studio.ui.theme.AlcedoTheme
@@ -26,7 +23,8 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         // 【P0 修复】setKeepOnScreenCondition 必须在 super.onCreate() 之前调用，
         // 系统在 onCreate() 期间评估该条件，延迟调用会导致 SplashScreen 异常。
-        var isReady by mutableStateOf(false)
+        // 使用普通布尔变量即可，无需 Compose mutableStateOf（SplashScreen 库不监听 Compose 状态）。
+        var isReady = false
         splashScreen.setKeepOnScreenCondition { !isReady }
         super.onCreate(savedInstanceState)
 
