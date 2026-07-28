@@ -42,15 +42,15 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     var watchdogArmed by rememberSaveable { mutableStateOf(false) }
 
     val finishAction: (String) -> Unit = { reason ->
-        if (isFinishing) {
+        if (!isFinishing) {
+            isFinishing = true
+            Log.i("Onboarding", "[$reason] finish -> entering main screen")
+            runCatching { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+            runCatching { onFinish() }.onFailure { e ->
+                Log.wtf("Onboarding", "onFinish callback threw, forcing recomposition to unblock", e)
+            }
+        } else {
             Log.w("Onboarding", "finishAction[$reason] skipped: already finishing")
-            return
-        }
-        isFinishing = true
-        Log.i("Onboarding", "[$reason] finish -> entering main screen")
-        runCatching { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
-        runCatching { onFinish() }.onFailure { e ->
-            Log.wtf("Onboarding", "onFinish callback threw, forcing recomposition to unblock", e)
         }
     }
 
