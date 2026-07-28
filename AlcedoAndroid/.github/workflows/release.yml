@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build Release APK
@@ -31,7 +35,6 @@ jobs:
         id: resolve_tag
         shell: bash
         run: |
-          cd AlcedoAndroid || true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag_name }}"
           else
@@ -145,6 +148,7 @@ jobs:
             echo "ERROR: APK size too small ($APK_SIZE bytes)"
             exit 1
           fi
+          APK_SIZE_MB=$(( (APK_SIZE + 1048575) / 1048576 ))
           DEST="../AlcedoStudio-${TAG}.apk"
           cp -f "$APK_PATH" "$DEST"
           mkdir -p artifacts
@@ -152,7 +156,66 @@ jobs:
           ls -la artifacts/
           echo "apk_path=artifacts/AlcedoStudio-${TAG}.apk" >> "$GITHUB_OUTPUT"
           echo "apk_size=$APK_SIZE" >> "$GITHUB_OUTPUT"
+          echo "apk_size_mb=$APK_SIZE_MB" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Verify APK signing
+        id: verify_signing
+        working-directory: AlcedoAndroid
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK found for signing verification"
+            exit 1
+          fi
+          SIGNING_OK=true
+          # Check v1 signing (JAR signing - META-INF/*.SF)
+          if unzip -l "$APK_PATH" | grep -q "META-INF/.*\.SF"; then
+            echo "v1 (JAR) signing: OK"
+          else
+            echo "v1 (JAR) signing: NOT FOUND"
+            SIGNING_OK=false
+          fi
+          # Check v2 signing (APK Signature Scheme v2 - exists in APK Signing Block)
+          if python3 -c "
+          import sys, struct
+          with open(sys.argv[1], 'rb') as f:
+            f.seek(-22, 2)
+            eocd = f.read(22)
+            if eocd[:4] != b'\x50\x4b\x05\x06':
+              sys.exit(1)
+            cd_offset = struct.unpack('<I', eocd[16:20])[0]
+            f.seek(cd_offset - 16)
+            magic = f.read(16)
+            if magic == b'APK Sig Block 42':
+              sys.exit(0)
+            sys.exit(1)
+          " "$APK_PATH" 2>/dev/null; then
+            echo "v2 (APK Signature Scheme) signing: OK"
+          else
+            # Fallback: check via $ANDROID_HOME build-tools apkanalyzer if available
+            APKSIGNER=$(find "$ANDROID_HOME" -name apksigner 2>/dev/null | head -1)
+            if [ -n "$APKSIGNER" ]; then
+              VERIFY_OUTPUT=$("$APKSIGNER" verify --print-certs "$APK_PATH" 2>&1) && {
+                echo "v2 signing verified via apksigner"
+                echo "$VERIFY_OUTPUT"
+              } || {
+                echo "WARNING: apksigner verification failed"
+                echo "$VERIFY_OUTPUT"
+                SIGNING_OK=false
+              }
+            else
+              echo "v2 signing: Could not verify (no apksigner, and APK Signing Block not detected via python fallback)"
+              SIGNING_OK=false
+            fi
+          fi
+          if [ "$SIGNING_OK" = false ]; then
+            echo "WARNING: APK signing verification incomplete - APK may not be properly signed"
+            echo "signing_ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "APK signing verification passed"
+            echo "signing_ok=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
@@ -165,16 +228,37 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 "HEAD^" 2>/dev/null || echo "")
+          PREV_TAG=""
+          # Strategy 1: Try HEAD^ (parent of current commit)
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            PREV_TAG=$(git describe --tags --abbrev=0 "HEAD^" 2>/dev/null || echo "")
+          fi
+          # Strategy 2: List all tags sorted by version, pick the one before current
+          if [ -z "$PREV_TAG" ]; then
+            CURRENT_TAG="${{ steps.resolve_tag.outputs.tag }}"
+            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1 | grep -v "^${CURRENT_TAG}$" || echo "")
+          fi
+          # Strategy 3: Just use the second-to-last tag by version
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | head -2 | tail -1 || echo "")
+          fi
           if [ -n "$PREV_TAG" ]; then
+            echo "Previous tag found: $PREV_TAG"
             echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
             git log --oneline --no-merges "$PREV_TAG..HEAD" >> "$GITHUB_OUTPUT" || echo "- (no changes)"
             echo "EOF" >> "$GITHUB_OUTPUT"
           else
+            echo "No previous tag found; showing recent commits"
             echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
             git log --oneline --no-merges -15 >> "$GITHUB_OUTPUT" || echo "- Initial release"
             echo "EOF" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Prepare release metadata
+        id: release_meta
+        run: |
+          BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -185,8 +269,8 @@ jobs:
             ## Release Information
 
             - **Build tag**: ${{ steps.resolve_tag.outputs.tag }}
-            - **APK size**: $(( (${{ steps.collect_apk.outputs.apk_size }} + 1048575) / 1048576 )) MB
-            - **Build date**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            - **APK size**: ${{ steps.collect_apk.outputs.apk_size_mb }} MB
+            - **Build date**: ${{ steps.release_meta.outputs.build_date }}
 
             ## Changes
             ${{ steps.changelog.outputs.CHANGELOG }}

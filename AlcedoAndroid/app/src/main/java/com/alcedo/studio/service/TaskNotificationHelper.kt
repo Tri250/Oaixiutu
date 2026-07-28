@@ -6,10 +6,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.alcedo.studio.MainActivity
 import com.alcedo.studio.i18n.Strings
 
@@ -82,6 +84,16 @@ object TaskNotificationHelper {
 
     // ── Export notifications ──
 
+    private fun canPostNotifications(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
     fun notifyExportProgress(context: Context, current: Int, total: Int, fileName: String = "") {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = if (fileName.isNotBlank()) {
@@ -89,12 +101,15 @@ object TaskNotificationHelper {
         } else {
             String.format(Strings.current.notificationExportProgress, current, total)
         }
-        nm.notify(NOTIFICATION_ID_EXPORT, buildNotification(context, Strings.current.notificationExportTitle, msg, current, total))
+        if (canPostNotifications(context)) {
+            nm.notify(NOTIFICATION_ID_EXPORT, buildNotification(context, Strings.current.notificationExportTitle, msg, current, total))
+        }
     }
 
     fun notifyExportComplete(context: Context, successCount: Int, total: Int) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = String.format(Strings.current.notificationExportSuccess, successCount, total)
+        if (!canPostNotifications(context)) return
         nm.notify(NOTIFICATION_ID_EXPORT, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
             .setContentTitle(Strings.current.notificationExportComplete)
@@ -103,9 +118,13 @@ object TaskNotificationHelper {
             .setOngoing(false)
             .build())
         // Auto-cancel after 5 seconds
-        Handler(Looper.getMainLooper()).postDelayed({
-            nm.cancel(NOTIFICATION_ID_EXPORT)
-        }, 5000)
+        try {
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    nm.cancel(NOTIFICATION_ID_EXPORT)
+                } catch (_: Exception) { }
+            }, 5000)
+        } catch (_: Exception) { }
     }
 
     fun notifyExportFailed(context: Context, errorMessage: String) {
@@ -173,6 +192,7 @@ object TaskNotificationHelper {
 
     fun notifyModelDownloadComplete(context: Context, modelId: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!canPostNotifications(context)) return
         nm.notify(NOTIFICATION_ID_MODEL_DOWNLOAD, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
             .setContentTitle(Strings.current.notificationModelDownloadComplete)
@@ -180,9 +200,13 @@ object TaskNotificationHelper {
             .setProgress(0, 0, false)
             .setOngoing(false)
             .build())
-        Handler(Looper.getMainLooper()).postDelayed({
-            nm.cancel(NOTIFICATION_ID_MODEL_DOWNLOAD)
-        }, 3000)
+        try {
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    nm.cancel(NOTIFICATION_ID_MODEL_DOWNLOAD)
+                } catch (_: Exception) { }
+            }, 3000)
+        } catch (_: Exception) { }
     }
 
     fun notifyModelDownloadFailed(context: Context, modelId: String, error: String) {

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <include domain="sharedpref" path="."/>
+    <!-- Include only non-sensitive prefs -->
+    <include domain="sharedpref" path="alcedo_prefs.xml"/>
+    <!-- Exclude sensitive prefs: contains DB encryption key -->
+    <exclude domain="sharedpref" path="alcedo_secure.xml"/>
+    <!-- Exclude crash loop detection prefs -->
+    <exclude domain="sharedpref" path="alcedo_crash_loop.xml"/>
     <exclude domain="database" path="alcedo_sleeve.db"/>
     <exclude domain="file" path="thumbnails/"/>
 </full-backup-content>
