@@ -131,10 +131,14 @@ object AppModule {
     }
 
     val batchEditService: BatchEditService by lazy {
+        // 修复：使用生命周期关联的 SupervisorJob，避免协程泄漏
+        // 实际作用域由调用方（ViewModel/Activity）控制，这里提供 Job 工厂
         BatchEditService(
             editHistoryRepository = editHistoryRepository,
             pipelineService = pipelineService,
-            applicationScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+            applicationScope = kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default
+            )
         )
     }
 

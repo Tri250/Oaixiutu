@@ -27,6 +27,7 @@ class RenderService {
     @Volatile
     private var isShutdown = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val handlerLock = Any()
 
     private fun checkMemoryGuard(request: RenderRequest): Boolean {
         val runtime = Runtime.getRuntime()
@@ -70,7 +71,7 @@ class RenderService {
                 if (!checkMemoryGuard(request)) {
                     Log.e("RenderService", "Rejecting request ${request.id} due to insufficient memory")
                     if (!cancelFlag.get() && request.callback != null) {
-                        mainHandler.post {
+                        safePost {
                             request.callback?.invoke(false, request.pixels)
                         }
                     }
@@ -83,7 +84,7 @@ class RenderService {
                 } catch (e: OutOfMemoryError) {
                     Log.e("RenderService", "OOM while copying pixels for request ${request.id}", e)
                     if (!cancelFlag.get() && request.callback != null) {
-                        mainHandler.post {
+                        safePost {
                             request.callback?.invoke(false, request.pixels)
                         }
                     }
@@ -101,14 +102,14 @@ class RenderService {
                 // 修复: 回调应传递处理后的 resultPixels 而非原始 request.pixels
                 val callbackPixels = if (result && resultPixels != null) resultPixels else request.pixels
                 if (!cancelFlag.get() && request.callback != null) {
-                    mainHandler.post {
+                    safePost {
                         request.callback?.invoke(result, callbackPixels)
                     }
                 }
             } catch (e: Exception) {
                 Log.e("RenderService", "Render failed for request ${request.id}", e)
                 if (!cancelFlag.get() && request.callback != null) {
-                    mainHandler.post {
+                    safePost {
                         request.callback?.invoke(false, request.pixels)
                     }
                 }
@@ -137,6 +138,22 @@ class RenderService {
     fun shutdown() {
         isShutdown = true
         cancelAll()
+        // 修复：清除主线程 Handler 中待执行的回调，防止 shutdown 后仍执行已销毁 UI 的回调
+        synchronized(handlerLock) {
+            mainHandler.removeCallbacksAndMessages(null)
+        }
+    }
+
+    /**
+     * 安全地向主线程 post 回调；如果 service 已 shutdown 则直接忽略。
+     */
+    private fun safePost(block: () -> Unit) {
+        if (isShutdown) return
+        synchronized(handlerLock) {
+            if (!isShutdown) {
+                mainHandler.post { if (!isShutdown) block() }
+            }
+        }
     }
 
     private fun buildRenderParamsArray(params: com.alcedo.studio.data.model.PipelineParams): FloatArray {

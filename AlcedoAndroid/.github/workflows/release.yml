@@ -81,18 +81,15 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.android/build-cache
-          key: gradle-alcedo-${{ hashFiles('AlcedoAndroid/**/*.gradle.kts', 'AlcedoAndroid/**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-alcedo-
-            gradle-
+          # 启用 Gradle 内置缓存，替代独立的 actions/cache 步骤
+          cache-read-only: false
+          cache-cleanup: on-success
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
+          gradle-home-cache-cleanup: true
 
       - name: Grant execute permission
         working-directory: AlcedoAndroid
@@ -271,6 +268,7 @@ jobs:
             - **Build tag**: ${{ steps.resolve_tag.outputs.tag }}
             - **APK size**: ${{ steps.collect_apk.outputs.apk_size_mb }} MB
             - **Build date**: ${{ steps.release_meta.outputs.build_date }}
+            - **Signature status**: ${{ steps.verify_signing.outputs.signing_ok == 'true' && 'Verified' || 'Debug/Fallback' }}
 
             ## Changes
             ${{ steps.changelog.outputs.CHANGELOG }}

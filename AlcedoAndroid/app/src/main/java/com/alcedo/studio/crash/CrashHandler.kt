@@ -38,17 +38,26 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     private fun installMainLooperSafetyNet() {
         try {
             val handler = android.os.Handler(Looper.getMainLooper())
+            // 修复：限制安全网的最大捕获次数，防止无限循环导致主线程完全卡死（ANR）
+            val maxSafetyNetCatches = 10
+            var catchCount = 0
             handler.post {
-                while (true) {
+                while (catchCount < maxSafetyNetCatches) {
                     try {
                         Looper.loop()
                         break
                     } catch (e: Throwable) {
-                        Log.e(TAG, "Main looper exception caught by safety net, preventing crash loop", e)
+                        catchCount++
+                        Log.e(TAG, "Main looper exception caught by safety net ($catchCount/$maxSafetyNetCatches)", e)
                         try {
                             CrashReportService.reportCrash(Thread.currentThread(), e)
-                            CrashReportService.logEvent("main_looper_safety_net:${e.javaClass.simpleName}")
+                            CrashReportService.logEvent("main_looper_safety_net:${e.javaClass.simpleName}:$catchCount")
                         } catch (_: Throwable) {}
+                        if (catchCount >= maxSafetyNetCatches) {
+                            Log.e(TAG, "Safety net exceeded max catches — forcing process exit to prevent ANR")
+                            killProcess()
+                            return@post
+                        }
                     }
                 }
             }

@@ -128,6 +128,7 @@ object TaskNotificationHelper {
     }
 
     fun notifyExportFailed(context: Context, errorMessage: String) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID_EXPORT, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
@@ -146,6 +147,7 @@ object TaskNotificationHelper {
     // ── AI Rating notifications ──
 
     fun notifyAiRatingProgress(context: Context, current: Int, total: Int) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = String.format(Strings.current.notificationAiRatingProgress, current, total)
         nm.notify(NOTIFICATION_ID_AI_RATING, buildNotification(context, Strings.current.notificationAiRating, msg, current, total))
@@ -159,6 +161,7 @@ object TaskNotificationHelper {
     // ── AI Tagging notifications ──
 
     fun notifyAiTaggingProgress(context: Context, current: Int, total: Int) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = String.format(Strings.current.notificationAiTaggingProgress, current, total)
         nm.notify(NOTIFICATION_ID_AI_TAGGING, buildNotification(context, Strings.current.notificationAiTagging, msg, current, total))
@@ -172,6 +175,7 @@ object TaskNotificationHelper {
     // ── Import notifications ──
 
     fun notifyImportProgress(context: Context, current: Int, total: Int) {
+        if (!canPostNotifications(context)) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val msg = String.format(Strings.current.notificationImportProgress, current, total)
         nm.notify(NOTIFICATION_ID_IMPORT, buildNotification(context, Strings.current.notificationImageImport, msg, current, total))
