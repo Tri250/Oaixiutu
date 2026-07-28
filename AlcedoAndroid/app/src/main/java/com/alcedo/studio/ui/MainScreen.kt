@@ -98,7 +98,7 @@ import com.alcedo.studio.ui.theme.AlcedoGlass
 import com.alcedo.studio.ui.theme.AlcedoGradient
 import com.alcedo.studio.ui.theme.AlcedoStroke
 import com.alcedo.studio.ui.theme.AlcedoSpacing
-import com.alcedo.studio.ui.onboarding.OnboardingScreen
+// v1.4.6: OnboardingScreen 已取消，不再 import
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
 import com.alcedo.studio.ui.settings.AboutPage
@@ -219,23 +219,45 @@ fun MainScreen(
         }
     }
 
-    // 首次启动引导教程 – 修复：
-    // 1. prefs 用 LocalContext 而不是静态 AppModule.context
-    // 2. onboardingCompleted 用 mutableState 包装避免只读缓存
-    // 3. 🚨 最关键：只有引导页 DISABLE 时，隐私 Consent Dialog 才允许出现
-    //    因为 AlertDialog 是 Window 级 Popup，Z 轴最高，叠在引导页上面会导致 100% 点击被吞！
+    // v1.4.6: 取消首页引导，直接进入主界面
     val appContext = LocalContext.current.applicationContext
     val prefs = remember(appContext) { appContext.getSharedPreferences("alcedo_prefs", 0) }
-    var onboardingCompleted by remember(prefs) { mutableStateOf(prefs.getBoolean("onboarding_completed", false)) }
-    var showOnboarding by remember { mutableStateOf(!onboardingCompleted) }
 
-    if (showOnboarding) {
-        OnboardingScreen(onFinish = {
-            showOnboarding = false
-            onboardingCompleted = true
+    // 标记 onboarding 已完成，兼容旧版本升级
+    LaunchedEffect(Unit) {
+        if (!prefs.getBoolean("onboarding_completed", false)) {
             prefs.edit().putBoolean("onboarding_completed", true).apply()
-        })
-    } else {
+        }
+    }
+
+    // 媒体权限请求（原引导页中的逻辑，现在直接在主界面启动时请求）
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results.any { it.value }
+        android.util.Log.i("MainScreen", "Media permission result: granted=$granted, details=$results")
+    }
+
+    LaunchedEffect(Unit) {
+        val permissions = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+            else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        val needsRequest = permissions.any {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (needsRequest) {
+            runCatching { mediaPermissionLauncher.launch(permissions) }
+                .onFailure { e -> android.util.Log.w("MainScreen", "Media permission launch failed", e) }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
@@ -460,14 +482,10 @@ fun MainScreen(
         }
         }
     }
-    } // end else (onboarding)
 
     // 首次启动隐私同意弹窗
-    // 🚨 关键修复：引导页 ONBOARDING 显示期间，隐私 Consent Dialog 绝对禁止弹出！
-    //   AlertDialog 是 Window 级悬浮 Popup，Z-order 最高，会吞掉下层所有点击事件
-    //   → 用户会看到「引导页按钮 + 透明/半透明 Dialog 层」，但点击任何按钮都没反应！
-    //   这里用 !showOnboarding 作为门槛，等引导页 onFinish 后再顺序弹隐私同意。
-    if (!showOnboarding && showPrivacyDialog) {
+    // v1.4.6: 引导页已取消，隐私弹窗可直接弹出
+    if (showPrivacyDialog) {
         runCatching {
             PrivacyConsentDialog(
                 onDismiss = { showPrivacyDialog = false },
