@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +48,8 @@ class PipelineService @Inject constructor(
     private var pendingParams: AdjustmentParams = AdjustmentParams.DEFAULT
     private var dirty = false
 
+    private val json = Json { encodeDefaults = true }
+
     /** Open an image and create its pipeline. */
     suspend fun open(uri: android.net.Uri): Boolean = withContext(ThreadPool.compute) {
         close()
@@ -76,9 +82,14 @@ class PipelineService @Inject constructor(
     /** Apply a mask to the pipeline. */
     fun applyMask(mask: MaskRecord, coverage: Bitmap? = null): Boolean {
         if (pipelineHandle == 0L) return false
-        val json = """{"id":"${mask.id}","kind":"${mask.kind}","opacity":${mask.opacity}}"""
+        val maskJson: JsonObject = buildJsonObject {
+            put("id", mask.id)
+            put("kind", mask.kind.name)
+            put("opacity", mask.opacity)
+        }
+        val jsonStr = json.encodeToString(JsonObject.serializer(), maskJson)
         val ok = NdkSafeCall.call(default = false) {
-            AlcedoNativeBridge.nativeApplyMask(pipelineHandle, json, coverage)
+            AlcedoNativeBridge.nativeApplyMask(pipelineHandle, jsonStr, coverage)
         }
         if (ok) dirty = true
         return ok

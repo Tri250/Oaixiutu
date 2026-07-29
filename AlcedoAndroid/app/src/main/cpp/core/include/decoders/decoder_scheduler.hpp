@@ -45,9 +45,12 @@ class DecoderScheduler {
 
  private:
   ThreadPool                 pool_;
-  std::unique_ptr<RawDecoder>       raw_decoder_;
-  std::unique_ptr<ThumbnailDecoder> thumb_decoder_;
-  std::unique_ptr<MetadataDecoder>  meta_decoder_;
+  // Shared ownership: tasks capture copies of these shared_ptrs so the decoders
+  // remain alive for the duration of any in-flight task even if the scheduler
+  // itself is destroyed first.
+  std::shared_ptr<RawDecoder>       raw_decoder_;
+  std::shared_ptr<ThumbnailDecoder> thumb_decoder_;
+  std::shared_ptr<MetadataDecoder>  meta_decoder_;
 };
 
 }  // namespace alcedo

@@ -285,6 +285,7 @@ auto EditHistory::ToJSON() const -> nlohmann::json {
 }
 
 void EditHistory::FromJSON(const nlohmann::json& j) {
+  try {  // Wrap all j.at() calls; on failure reset to a default/empty state.
   if (!j.is_object() || !j.contains("history_id") || !j.contains("bound_image") ||
       !j.contains("added_time") || !j.contains("last_modified_time") ||
       !j.contains("default_version_id") || !j.contains("active_version_id") ||
@@ -333,6 +334,22 @@ void EditHistory::FromJSON(const nlohmann::json& j) {
   }
 
   EnsureDefaultVersion();
+  } catch (const std::exception& e) {
+    ALOGW("EditHistory::FromJSON: JSON parse failure: %s", e.what());
+    // Reset to a default/empty state so callers don't observe a half-parsed
+    // history with dangling version references.
+    history_id_             = history_id_t{};
+    bound_image_            = 0;
+    added_time_             = 0;
+    last_modified_time_     = 0;
+    version_order_.clear();
+    version_storage_.clear();
+    default_version_id_     = history_id_t{};
+    active_version_id_     = history_id_t{};
+    import_pipeline_params_ = nlohmann::json::object();
+    active_pipeline_params_ = std::nullopt;
+    EnsureDefaultVersion();
+  }
 }
 
 }  // namespace alcedo

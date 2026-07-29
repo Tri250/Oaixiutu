@@ -20,9 +20,17 @@ auto ThumbnailService::GetThumbnail(image_id_t image_id) -> std::shared_ptr<Imag
 
 void ThumbnailService::GenerateThumbnail(const std::shared_ptr<Image>& image, uint32_t target_size) {
   if (!image || !image->has_full_img_.load()) return;
+  // Hold the generation lock for the whole read-source -> write-thumbnail
+  // sequence so concurrent callers (or concurrent edits to the same image) do
+  // not race on the CPU data / thumbnail buffer. The atomic state flags are
+  // updated under the same lock to keep a consistent observable state.
+  std::lock_guard<std::mutex> lk(thumb_mtx_);
   image->thumb_state_.store(ThumbState::PENDING);
   auto& src = image->GetImageData().GetCPUData();
-  if (src.Width() == 0 || src.Height() == 0) return;
+  if (src.Width() == 0 || src.Height() == 0) {
+    image->thumb_state_.store(ThumbState::FAILED);
+    return;
+  }
   float scale = std::min(static_cast<float>(target_size) / src.Width(),
                          static_cast<float>(target_size) / src.Height());
   int tw = std::max(1, static_cast<int>(src.Width() * scale));

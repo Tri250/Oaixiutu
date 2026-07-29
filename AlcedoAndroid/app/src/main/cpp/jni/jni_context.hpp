@@ -30,7 +30,10 @@ struct JniAppContext {
   std::unique_ptr<DBController>                 db;
   std::shared_ptr<ImagePoolManager>            image_pool;
   std::unique_ptr<ProjectService>              project;
-  std::unique_ptr<DecoderScheduler>            decoder;
+  // Shared so JNI entry points can hold a copy while waiting on a decode
+  // future, keeping the scheduler (and its decoders) alive across the wait even
+  // if nativeShutdown runs concurrently.
+  std::shared_ptr<DecoderScheduler>            decoder;
   std::unique_ptr<PipelineAppService>          pipeline_svc;
   std::unique_ptr<ExportService>               exporter;
   std::unique_ptr<ThumbnailDiskCacheService>   thumb_cache;
@@ -45,6 +48,10 @@ struct JniAppContext {
 
   // Singleton accessor (created lazily by the bridge module on nativeInit).
   static JniAppContext* Get();
+  // Atomically get-or-create the singleton under a single lock. This avoids
+  // the TOCTOU race where two threads observe a null Get(), both call
+  // Create(), and one leaks the object created by the other.
+  static JniAppContext* GetOrCreate();
   static void Create();
   static void Destroy();
 };

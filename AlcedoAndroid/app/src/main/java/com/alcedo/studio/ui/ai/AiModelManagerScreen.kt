@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.ai
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,8 @@ fun AiModelManagerScreen(
     val s = Strings.res
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    BackHandler { onBack() }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = AlcedoColors.SurfaceBase,
@@ -91,7 +94,7 @@ fun AiModelManagerScreen(
                     isDefault = entry.asset.id == state.defaultClipId,
                     onDownload = { viewModel.download(entry.asset) },
                     onDelete = { viewModel.delete(entry.asset) },
-                    onSetDefault = {},
+                    onSetDefault = { viewModel.setDefaultModel(entry.asset) },
                 )
             }
         }
@@ -104,6 +107,7 @@ fun AiModelManagerScreen(
 
 @Composable
 private fun StorageSummaryCard(totalBytes: Long) {
+    val s = Strings.res
     Card(
         colors = CardDefaults.cardColors(containerColor = AlcedoColors.SurfaceRaised),
         modifier = Modifier.fillMaxWidth(),
@@ -113,12 +117,12 @@ private fun StorageSummaryCard(totalBytes: Long) {
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs),
         ) {
             Text(
-                text = "AI Model Storage",
+                text = s.aiModelStorage,
                 style = MaterialTheme.typography.titleSmall,
                 color = AlcedoColors.TextPrimary,
             )
             Text(
-                text = "Total: ${formatBytes(totalBytes)}",
+                text = "${s.totalLabel}: ${formatBytes(totalBytes)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = AlcedoColors.TextSecondary,
             )
@@ -126,7 +130,7 @@ private fun StorageSummaryCard(totalBytes: Long) {
                 progress = if (totalBytes > 0) (totalBytes.toFloat() / 2_000_000_000f).coerceIn(0f, 1f) else 0f,
             )
             Text(
-                text = "of 2 GB available",
+                text = s.ofXGbAvailable,
                 style = MaterialTheme.typography.labelSmall,
                 color = AlcedoColors.TextTertiary,
             )
@@ -236,18 +240,18 @@ private fun ModelCard(
                 horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingLg),
             ) {
                 Text(
-                    text = "Size: ${formatBytes(asset.sizeBytes)}",
+                    text = "${s.sizeLabel}: ${formatBytes(asset.sizeBytes)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = AlcedoColors.TextTertiary,
                 )
                 Text(
-                    text = "Version: ${asset.version}",
+                    text = "${s.version}: ${asset.version}",
                     style = MaterialTheme.typography.labelSmall,
                     color = AlcedoColors.TextTertiary,
                 )
                 if (asset.dimensions > 0) {
                     Text(
-                        text = "Dims: ${asset.dimensions}",
+                        text = "${s.dimsLabel}: ${asset.dimensions}",
                         style = MaterialTheme.typography.labelSmall,
                         color = AlcedoColors.TextTertiary,
                     )
@@ -257,7 +261,7 @@ private fun ModelCard(
             // Download progress
             if (entry.isDownloading) {
                 LinearProgressIndicator(
-                    progress = { 0.5f },
+                    progress = { entry.downloadFraction },
                     modifier = Modifier.fillMaxWidth(),
                     color = AlcedoColors.AccentBlue,
                 )
@@ -280,7 +284,7 @@ private fun ModelCard(
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(
-                            text = if (entry.isLoaded) "Active" else "Inactive",
+                            text = if (entry.isLoaded) s.active else s.inactive,
                             style = MaterialTheme.typography.bodySmall,
                             color = if (entry.isLoaded) AlcedoColors.Success else AlcedoColors.TextTertiary,
                         )

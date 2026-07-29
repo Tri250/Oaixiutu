@@ -61,15 +61,29 @@ class ModelDownloadService @Inject constructor(
                     }
                 }
             }
-            // Verify SHA-256.
-            val actualSha = sha256(tmp)
-            if (!actualSha.equals(asset.sha256, ignoreCase = true)) {
-                Log.w(TAG, "SHA mismatch for ${asset.id}: $actualSha != ${asset.sha256}")
+            // Verify SHA-256 only when a hash is provided (skip when empty).
+            if (asset.sha256.isNotEmpty()) {
+                val actualSha = sha256(tmp)
+                if (!actualSha.equals(asset.sha256, ignoreCase = true)) {
+                    Log.w(TAG, "SHA mismatch for ${asset.id}: $actualSha != ${asset.sha256}")
+                    tmp.delete()
+                    _progress.value = DownloadProgress(asset.id, 0, asset.sizeBytes, false, "sha_mismatch")
+                    return@runCatching false
+                }
+            }
+            // Move the temp file into place; fall back to copy+delete if rename fails.
+            if (!tmp.renameTo(destFile)) {
+                tmp.inputStream().use { input ->
+                    destFile.outputStream().use { output -> input.copyTo(output) }
+                }
                 tmp.delete()
-                _progress.value = DownloadProgress(asset.id, 0, asset.sizeBytes, false, "sha_mismatch")
+            }
+            // Verify the destination file exists and has content.
+            if (!destFile.exists() || destFile.length() == 0L) {
+                Log.w(TAG, "downloaded file missing or empty for ${asset.id}")
+                _progress.value = DownloadProgress(asset.id, 0, asset.sizeBytes, false, "write_failed")
                 return@runCatching false
             }
-            tmp.renameTo(destFile)
             _progress.value = DownloadProgress(asset.id, destFile.length(), asset.sizeBytes, true)
             true
         }.onFailure {

@@ -18,9 +18,11 @@ import javax.inject.Inject
 
 /**
  * Settings ViewModel. Manages privacy/feature toggles (persisted via
- * [PrivacyManager]), AI readiness reporting, native/GPU diagnostics, cache
- * management and built-in preset restoration. Privacy state is exposed
- * reactively so the Settings screen recomposes as the user flips toggles.
+ * [PrivacyManager]), general appearance/behaviour preferences (persisted via
+ * [PrivacyManager.appSettings]), AI readiness reporting, native/GPU
+ * diagnostics, cache management and built-in preset restoration. Privacy state
+ * is exposed reactively so the Settings screen recomposes as the user flips
+ * toggles.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -32,11 +34,13 @@ class SettingsViewModel @Inject constructor(
 
     data class SettingsUiState(
         val privacy: PrivacyManager.PrivacyState? = null,
+        val appSettings: PrivacyManager.AppSettings = PrivacyManager.AppSettings(),
         val nativeAvailable: Boolean = false,
         val nativeVersion: String = "",
         val gpuAvailable: Boolean = false,
         val cacheSizeBytes: Long = 0L,
         val isClearingCache: Boolean = false,
+        val isSweeping: Boolean = false,
         val isRestoringPresets: Boolean = false,
         val message: String? = null,
         val error: String? = null,
@@ -50,6 +54,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             privacyManager.state.collect { state ->
                 _uiState.update { it.copy(privacy = state) }
+            }
+        }
+        // Reactively mirror the persisted app settings (theme, view, gpu, ai, crash).
+        viewModelScope.launch {
+            privacyManager.appSettings.collect { settings ->
+                _uiState.update { it.copy(appSettings = settings) }
             }
         }
         // Snapshot native/GPU diagnostics once.
@@ -81,8 +91,50 @@ class SettingsViewModel @Inject constructor(
             .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
     }
 
+    fun setCrashReportEnabled(enabled: Boolean) = viewModelScope.launch {
+        runCatching { privacyManager.setCrashReportEnabled(enabled) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
     fun setConsent(given: Boolean) = viewModelScope.launch {
         runCatching { privacyManager.setConsent(given) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    // ---- App settings (appearance / behaviour) ---------------------------
+
+    fun setTheme(theme: String) = viewModelScope.launch {
+        runCatching { privacyManager.setTheme(theme) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setDefaultView(view: String) = viewModelScope.launch {
+        runCatching { privacyManager.setDefaultView(view) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setGpuBackend(backend: String) = viewModelScope.launch {
+        runCatching { privacyManager.setGpuBackend(backend) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setAiStrictness(strictness: Float) = viewModelScope.launch {
+        runCatching { privacyManager.setAiStrictness(strictness) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setApiKey(key: String) = viewModelScope.launch {
+        runCatching { privacyManager.setAiApiKey(key) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setAiEndpoint(endpoint: String) = viewModelScope.launch {
+        runCatching { privacyManager.setAiEndpoint(endpoint) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
+    fun setAiModel(model: String) = viewModelScope.launch {
+        runCatching { privacyManager.setAiModel(model) }
             .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
     }
 
@@ -105,10 +157,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun sweepOrphans() = viewModelScope.launch {
-        runCatching { tempFileManager.sweepOrphans() }
-            .onSuccess { refreshCacheSize() }
-            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    fun sweepOrphans() {
+        if (_uiState.value.isSweeping) return
+        _uiState.update { it.copy(isSweeping = true) }
+        viewModelScope.launch {
+            runCatching { tempFileManager.sweepOrphans() }
+                .onSuccess {
+                    refreshCacheSize()
+                    _uiState.update { it.copy(isSweeping = false, message = "Orphaned files swept") }
+                }
+                .onFailure { e -> _uiState.update { it.copy(isSweeping = false, error = e.message) } }
+        }
     }
 
     private fun refreshCacheSize() = viewModelScope.launch {

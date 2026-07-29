@@ -9,21 +9,19 @@ namespace alcedo {
 
 HistoryMgmtService::HistoryMgmtService(SleeveManager& sleeve) : sleeve_(sleeve) {}
 
-auto HistoryMgmtService::Undo(sl_element_id_t file_id) -> bool {
-  // Undo requires a WorkingVersion + PipelineExecutor context (managed by the
-  // pipeline/renderer layer). This service exposes history state; the actual
-  // undo/redo cursor movement is driven by PipelineAppService.
+auto HistoryMgmtService::Undo(sl_element_id_t file_id, PipelineAppService& pipeline_svc) -> bool {
+  // Previously this only reported whether the cursor *could* move without
+  // actually moving it. Now we drive the undo through the pipeline service's
+  // executor so the history change is actually applied to the pipeline state.
   auto history = GetHistory(file_id);
   if (!history) return false;
-  auto& version = history->GetActiveVersion();
-  return version.GetCursor() > 0;
+  return pipeline_svc.Undo(*history);
 }
 
-auto HistoryMgmtService::Redo(sl_element_id_t file_id) -> bool {
+auto HistoryMgmtService::Redo(sl_element_id_t file_id, PipelineAppService& pipeline_svc) -> bool {
   auto history = GetHistory(file_id);
   if (!history) return false;
-  auto& version = history->GetActiveVersion();
-  return version.GetCursor() < version.GetTransactionCount();
+  return pipeline_svc.Redo(*history);
 }
 
 auto HistoryMgmtService::GetHistory(sl_element_id_t file_id) -> std::shared_ptr<EditHistory> {

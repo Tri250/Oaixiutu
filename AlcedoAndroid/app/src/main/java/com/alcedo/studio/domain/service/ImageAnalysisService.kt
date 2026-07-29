@@ -26,7 +26,6 @@ class ImageAnalysisService @Inject constructor(
         if (!credentialService.hasActiveCredentials()) return@withContext null
         if (!profile.supportsVision) return@withContext null
         val base64 = encoder.encodeThumbnail(uri, 768) ?: return@withContext null
-        llmClient.injectedKey = credentialService.getApiKey(profile.id)
         llmClient.analyzeImage(imageId, base64, profile)
     }
 

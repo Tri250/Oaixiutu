@@ -44,17 +44,36 @@ JNIEXPORT jint JNICALL Java_com_alcedo_studio_ndk_Raw_nativeDecodeRaw(
 JNIEXPORT jint JNICALL Java_com_alcedo_studio_ndk_Raw_nativeDecodeRawAsync(
     JNIEnv* env, jobject /*thiz*/, jstring path_js) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx || !ctx->decoder || !ctx->image_pool) return -1;
+  if (!ctx) return -1;
   std::string path = alcedo::JStr(env, path_js);
-  // Hold the future without the global lock to avoid blocking other JNI calls.
-  std::future<alcedo::DecodeResult> fut;
+  // Capture shared ownership of the decoder under the lock, then release the
+  // lock while waiting on the future. This keeps the scheduler (and the
+  // decoders its tasks reference) alive for the duration of the wait even if a
+  // concurrent nativeShutdown drops the context's reference.
+  std::shared_ptr<alcedo::DecoderScheduler> decoder;
   {
     std::lock_guard<std::mutex> lk(ctx->mtx);
-    fut = ctx->decoder->ScheduleRawDecode(0, path);
+    decoder = ctx->decoder;
   }
-  auto result = fut.get();
+  if (!decoder) return -1;
+
+  auto fut = decoder->ScheduleRawDecode(0, path);
+  alcedo::DecodeResult result;
+  try {
+    result = fut.get();
+  } catch (const std::exception& e) {
+    ALOGW("nativeDecodeRawAsync: decode future failed for %s: %s", path.c_str(), e.what());
+    return -1;
+  }
   if (!result.success || !result.buffer) return -1;
+
+  // Re-check validity before accessing the image pool: it may have been torn
+  // down by a concurrent shutdown while we were waiting.
   std::lock_guard<std::mutex> lk(ctx->mtx);
+  if (!ctx->image_pool) {
+    ALOGW("nativeDecodeRawAsync: image pool unavailable after decode for %s", path.c_str());
+    return -1;
+  }
   auto image = std::make_shared<alcedo::Image>(path, alcedo::ImageType::DNG);
   image->image_data_ = std::move(*result.buffer);
   image->SetId(ctx->image_pool->GetCurrentID());

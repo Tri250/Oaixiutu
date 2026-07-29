@@ -61,25 +61,10 @@ fun UserAgreementScreen(
                 .padding(DesignTokens.spacingLg),
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
         ) {
-            AgreementSection("1. License", """
-                Alcedo Studio grants you a personal, non-exclusive license to use the
-                application for editing photographs. You may not reverse-engineer,
-                redistribute, or resell the software.
-            """.trimIndent())
-            AgreementSection("2. Acceptable Use", """
-                You agree to use the app only for lawful purposes and to respect the
-                intellectual property rights of others when editing and exporting images.
-            """.trimIndent())
-            AgreementSection("3. AI Features", """
-                AI-assisted features (culling, semantic search, captioning) are provided
-                as tools to assist your workflow. You remain responsible for the final
-                selection and editing decisions.
-            """.trimIndent())
-            AgreementSection("4. Disclaimer", """
-                The software is provided "as is" without warranty of any kind. The authors
-                are not liable for any data loss or damage arising from the use of the
-                application.
-            """.trimIndent())
+            AgreementSection(s.agreementLicenseTitle, s.agreementLicenseBody)
+            AgreementSection(s.agreementAcceptableUseTitle, s.agreementAcceptableUseBody)
+            AgreementSection(s.agreementAiFeaturesTitle, s.agreementAiFeaturesBody)
+            AgreementSection(s.agreementDisclaimerTitle, s.agreementDisclaimerBody)
         }
     }
 }

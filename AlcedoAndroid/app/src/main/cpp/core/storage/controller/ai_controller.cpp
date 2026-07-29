@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <utility>
 
 #include "utils/app_logging.hpp"
@@ -21,6 +22,20 @@ static auto escape_sql_string(const std::string& s) -> std::string {
   }
   out += '\'';
   return out;
+}
+
+// Copy a duckdb_value_varchar() result into `dst` and free the DuckDB-owned
+// buffer. Every duckdb_value_varchar() call returns a string the caller MUST
+// release with duckdb_free(); previously the returned pointers were assigned
+// into std::string fields and then leaked on every column of every row.
+static void AssignDuckdbString(std::string& dst, duckdb_result result, int col) {
+  char* v = duckdb_value_varchar(result, col, /*row=*/0);
+  if (v) {
+    dst = v;
+    duckdb_free(v);
+  } else {
+    dst.clear();
+  }
 }
 
 AiStorageController::AiStorageController(ConnectionGuard&& guard)
@@ -42,22 +57,24 @@ auto AiStorageController::Exec(const std::string& sql) -> bool {
 }
 
 void AiStorageController::UpsertUnderstanding(const AiImageUnderstandingRecord& rec) {
-  char sql[1024];
-  std::snprintf(sql, sizeof(sql),
-                "INSERT OR REPLACE INTO AiImageUnderstanding (file_id, task_id, provider_id, "
-                "model_id, prompt_profile_id, rendition_kind, caption, tags_json, scene, "
-                "confidence, active) VALUES (%u, %s, %s, %s, %s, %s, %s, %s, %s, %f, %s)",
-                rec.file_id,
-                escape_sql_string(rec.task_id).c_str(),
-                escape_sql_string(rec.provider_id).c_str(),
-                escape_sql_string(rec.model_id).c_str(),
-                escape_sql_string(rec.prompt_profile_id).c_str(),
-                escape_sql_string(rec.rendition_kind).c_str(),
-                escape_sql_string(rec.caption).c_str(),
-                escape_sql_string(rec.tags_json).c_str(),
-                escape_sql_string(rec.scene).c_str(),
-                rec.confidence,
-                rec.active ? "TRUE" : "FALSE");
+  // Build with std::string concatenation so arbitrarily long captions / tag
+  // blobs cannot overflow a fixed-size buffer (the previous char sql[1024]
+  // could be truncated or overrun by large JSON fields).
+  std::string sql =
+      "INSERT OR REPLACE INTO AiImageUnderstanding (file_id, task_id, provider_id, "
+      "model_id, prompt_profile_id, rendition_kind, caption, tags_json, scene, "
+      "confidence, active) VALUES (" +
+      std::to_string(rec.file_id) + ", " +
+      escape_sql_string(rec.task_id) + ", " +
+      escape_sql_string(rec.provider_id) + ", " +
+      escape_sql_string(rec.model_id) + ", " +
+      escape_sql_string(rec.prompt_profile_id) + ", " +
+      escape_sql_string(rec.rendition_kind) + ", " +
+      escape_sql_string(rec.caption) + ", " +
+      escape_sql_string(rec.tags_json) + ", " +
+      escape_sql_string(rec.scene) + ", " +
+      std::to_string(rec.confidence) + ", " +
+      (rec.active ? "TRUE" : "FALSE") + ")";
   Exec(sql);
 }
 
@@ -81,14 +98,14 @@ auto AiStorageController::SelectUnderstanding(sl_element_id_t file_id, const std
   }
   AiImageUnderstandingRecord rec;
   rec.file_id  = static_cast<sl_element_id_t>(duckdb_value_int64(result, 0, 0));
-  const char* v = duckdb_value_varchar(result, 1, 0); if (v) rec.task_id = v;
-  v = duckdb_value_varchar(result, 2, 0); if (v) rec.provider_id = v;
-  v = duckdb_value_varchar(result, 3, 0); if (v) rec.model_id = v;
-  v = duckdb_value_varchar(result, 4, 0); if (v) rec.prompt_profile_id = v;
-  v = duckdb_value_varchar(result, 5, 0); if (v) rec.rendition_kind = v;
-  v = duckdb_value_varchar(result, 6, 0); if (v) rec.caption = v;
-  v = duckdb_value_varchar(result, 7, 0); if (v) rec.tags_json = v;
-  v = duckdb_value_varchar(result, 8, 0); if (v) rec.scene = v;
+  AssignDuckdbString(rec.task_id, result, 1);
+  AssignDuckdbString(rec.provider_id, result, 2);
+  AssignDuckdbString(rec.model_id, result, 3);
+  AssignDuckdbString(rec.prompt_profile_id, result, 4);
+  AssignDuckdbString(rec.rendition_kind, result, 5);
+  AssignDuckdbString(rec.caption, result, 6);
+  AssignDuckdbString(rec.tags_json, result, 7);
+  AssignDuckdbString(rec.scene, result, 8);
   rec.confidence = duckdb_value_double(result, 9, 0);
   rec.active     = duckdb_value_boolean(result, 10, 0);
   duckdb_destroy_result(&result);
@@ -115,14 +132,14 @@ auto AiStorageController::SelectActiveUnderstanding(sl_element_id_t file_id)
   }
   AiImageUnderstandingRecord rec;
   rec.file_id  = static_cast<sl_element_id_t>(duckdb_value_int64(result, 0, 0));
-  const char* v = duckdb_value_varchar(result, 1, 0); if (v) rec.task_id = v;
-  v = duckdb_value_varchar(result, 2, 0); if (v) rec.provider_id = v;
-  v = duckdb_value_varchar(result, 3, 0); if (v) rec.model_id = v;
-  v = duckdb_value_varchar(result, 4, 0); if (v) rec.prompt_profile_id = v;
-  v = duckdb_value_varchar(result, 5, 0); if (v) rec.rendition_kind = v;
-  v = duckdb_value_varchar(result, 6, 0); if (v) rec.caption = v;
-  v = duckdb_value_varchar(result, 7, 0); if (v) rec.tags_json = v;
-  v = duckdb_value_varchar(result, 8, 0); if (v) rec.scene = v;
+  AssignDuckdbString(rec.task_id, result, 1);
+  AssignDuckdbString(rec.provider_id, result, 2);
+  AssignDuckdbString(rec.model_id, result, 3);
+  AssignDuckdbString(rec.prompt_profile_id, result, 4);
+  AssignDuckdbString(rec.rendition_kind, result, 5);
+  AssignDuckdbString(rec.caption, result, 6);
+  AssignDuckdbString(rec.tags_json, result, 7);
+  AssignDuckdbString(rec.scene, result, 8);
   rec.confidence = duckdb_value_double(result, 9, 0);
   rec.active     = duckdb_value_boolean(result, 10, 0);
   duckdb_destroy_result(&result);
@@ -130,22 +147,23 @@ auto AiStorageController::SelectActiveUnderstanding(sl_element_id_t file_id)
 }
 
 void AiStorageController::UpsertRating(const AiImageRatingRecord& rec) {
-  char sql[1024];
-  std::snprintf(sql, sizeof(sql),
-                "INSERT OR REPLACE INTO AiImageRating (file_id, task_id, provider_id, model_id, "
-                "prompt_profile_id, rendition_kind, rating, rubric_id, rubric_version, reasons, "
-                "active) VALUES (%u, %s, %s, %s, %s, %s, %d, %s, %s, %s, %s)",
-                rec.file_id,
-                escape_sql_string(rec.task_id).c_str(),
-                escape_sql_string(rec.provider_id).c_str(),
-                escape_sql_string(rec.model_id).c_str(),
-                escape_sql_string(rec.prompt_profile_id).c_str(),
-                escape_sql_string(rec.rendition_kind).c_str(),
-                rec.rating,
-                escape_sql_string(rec.rubric_id).c_str(),
-                escape_sql_string(rec.rubric_version).c_str(),
-                escape_sql_string(rec.reasons).c_str(),
-                rec.active ? "TRUE" : "FALSE");
+  // Build with std::string concatenation; the previous char sql[1024] could be
+  // overflowed by long reasons / rubric metadata.
+  std::string sql =
+      "INSERT OR REPLACE INTO AiImageRating (file_id, task_id, provider_id, model_id, "
+      "prompt_profile_id, rendition_kind, rating, rubric_id, rubric_version, reasons, "
+      "active) VALUES (" +
+      std::to_string(rec.file_id) + ", " +
+      escape_sql_string(rec.task_id) + ", " +
+      escape_sql_string(rec.provider_id) + ", " +
+      escape_sql_string(rec.model_id) + ", " +
+      escape_sql_string(rec.prompt_profile_id) + ", " +
+      escape_sql_string(rec.rendition_kind) + ", " +
+      std::to_string(rec.rating) + ", " +
+      escape_sql_string(rec.rubric_id) + ", " +
+      escape_sql_string(rec.rubric_version) + ", " +
+      escape_sql_string(rec.reasons) + ", " +
+      (rec.active ? "TRUE" : "FALSE") + ")";
   Exec(sql);
 }
 
@@ -169,15 +187,15 @@ auto AiStorageController::SelectRating(sl_element_id_t file_id, const std::strin
   }
   AiImageRatingRecord rec;
   rec.file_id   = static_cast<sl_element_id_t>(duckdb_value_int64(result, 0, 0));
-  const char* v = duckdb_value_varchar(result, 1, 0); if (v) rec.task_id = v;
-  v = duckdb_value_varchar(result, 2, 0); if (v) rec.provider_id = v;
-  v = duckdb_value_varchar(result, 3, 0); if (v) rec.model_id = v;
-  v = duckdb_value_varchar(result, 4, 0); if (v) rec.prompt_profile_id = v;
-  v = duckdb_value_varchar(result, 5, 0); if (v) rec.rendition_kind = v;
+  AssignDuckdbString(rec.task_id, result, 1);
+  AssignDuckdbString(rec.provider_id, result, 2);
+  AssignDuckdbString(rec.model_id, result, 3);
+  AssignDuckdbString(rec.prompt_profile_id, result, 4);
+  AssignDuckdbString(rec.rendition_kind, result, 5);
   rec.rating        = duckdb_value_int32(result, 6, 0);
-  v = duckdb_value_varchar(result, 7, 0); if (v) rec.rubric_id = v;
-  v = duckdb_value_varchar(result, 8, 0); if (v) rec.rubric_version = v;
-  v = duckdb_value_varchar(result, 9, 0); if (v) rec.reasons = v;
+  AssignDuckdbString(rec.rubric_id, result, 7);
+  AssignDuckdbString(rec.rubric_version, result, 8);
+  AssignDuckdbString(rec.reasons, result, 9);
   rec.active = duckdb_value_boolean(result, 10, 0);
   duckdb_destroy_result(&result);
   return rec;
@@ -203,15 +221,15 @@ auto AiStorageController::SelectActiveRating(sl_element_id_t file_id)
   }
   AiImageRatingRecord rec;
   rec.file_id   = static_cast<sl_element_id_t>(duckdb_value_int64(result, 0, 0));
-  const char* v = duckdb_value_varchar(result, 1, 0); if (v) rec.task_id = v;
-  v = duckdb_value_varchar(result, 2, 0); if (v) rec.provider_id = v;
-  v = duckdb_value_varchar(result, 3, 0); if (v) rec.model_id = v;
-  v = duckdb_value_varchar(result, 4, 0); if (v) rec.prompt_profile_id = v;
-  v = duckdb_value_varchar(result, 5, 0); if (v) rec.rendition_kind = v;
+  AssignDuckdbString(rec.task_id, result, 1);
+  AssignDuckdbString(rec.provider_id, result, 2);
+  AssignDuckdbString(rec.model_id, result, 3);
+  AssignDuckdbString(rec.prompt_profile_id, result, 4);
+  AssignDuckdbString(rec.rendition_kind, result, 5);
   rec.rating        = duckdb_value_int32(result, 6, 0);
-  v = duckdb_value_varchar(result, 7, 0); if (v) rec.rubric_id = v;
-  v = duckdb_value_varchar(result, 8, 0); if (v) rec.rubric_version = v;
-  v = duckdb_value_varchar(result, 9, 0); if (v) rec.reasons = v;
+  AssignDuckdbString(rec.rubric_id, result, 7);
+  AssignDuckdbString(rec.rubric_version, result, 8);
+  AssignDuckdbString(rec.reasons, result, 9);
   rec.active = duckdb_value_boolean(result, 10, 0);
   duckdb_destroy_result(&result);
   return rec;
@@ -236,9 +254,12 @@ auto AiStorageController::SelectFtsDocument(sl_element_id_t file_id) -> std::opt
     duckdb_destroy_result(&result);
     return std::nullopt;
   }
-  const char* body = duckdb_value_varchar(result, 0, 0);
   std::optional<std::string> out;
-  if (body) out = std::string(body);
+  char* body = duckdb_value_varchar(result, 0, 0);
+  if (body) {
+    out = std::string(body);
+    duckdb_free(body);  // duckdb_value_varchar result must be freed.
+  }
   duckdb_destroy_result(&result);
   return out;
 }

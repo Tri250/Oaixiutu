@@ -133,7 +133,7 @@ bool VulkanImage::Download(float* host_data) const {
   mb.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
   vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
                        VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
-  scope.~OneShotCompute();  // submit before mapping
+  scope.Submit();  // submit before mapping; destructor is now a no-op
   void* mapped = nullptr;
   if (vkMapMemory(dev, staging_memory_, 0, size, 0, &mapped) != VK_SUCCESS) return false;
   std::memcpy(host_data, mapped, static_cast<size_t>(size));

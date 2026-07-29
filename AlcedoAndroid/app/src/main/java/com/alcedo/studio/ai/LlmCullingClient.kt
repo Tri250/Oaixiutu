@@ -4,6 +4,7 @@ import android.util.Log
 import com.alcedo.studio.data.model.AiImageAnalysis
 import com.alcedo.studio.data.model.AiRating
 import com.alcedo.studio.data.model.ImageFlag
+import com.alcedo.studio.domain.service.AiCredentialStore
 import com.alcedo.studio.domain.service.AiProviderProfile
 import com.alcedo.studio.security.SecureHttpClient
 import com.alcedo.studio.utils.ThreadPool
@@ -30,10 +31,16 @@ import javax.inject.Singleton
  * (and Anthropic) vision endpoints via [SecureHttpClient], building a chat
  * completion with a base64 image and parsing the structured JSON response into
  * [AiRating] / [AiImageAnalysis]. Includes a robust prompt + fallback parser.
+ *
+ * API keys are resolved per-call from the encrypted [AiCredentialStore] (backed
+ * by EncryptedSharedPreferences / Android Keystore). The key is never held in a
+ * plaintext field, never written to logs, and only lives long enough to be
+ * placed in the Authorization header of the outgoing request.
  */
 @Singleton
 class LlmCullingClient @Inject constructor(
     private val httpClient: SecureHttpClient,
+    private val credentialStore: AiCredentialStore,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -65,19 +72,18 @@ class LlmCullingClient @Inject constructor(
         parseAnalysis(imageId, raw, profile)
     }
 
+    /**
+     * Resolve the API key for [profile] from the encrypted credential store.
+     * Returns null (and logs a warning that excludes the key itself) when no
+     * key is configured for the provider.
+     */
     private fun resolveKey(profile: AiProviderProfile): String? {
-        // Keys are stored per-provider in the credential store; the caller
-        // (AiRatingService) is expected to inject the key via the profile's
-        // description, but here we read it from a volatile field for simplicity.
-        return injectedKey ?: run {
-            Log.w(TAG, "no API key injected for ${profile.id}")
-            null
+        val key = credentialStore.getApiKey(profile.id)
+        if (key == null) {
+            Log.w(TAG, "no API key in credential store for provider ${profile.id}")
         }
+        return key
     }
-
-    /** API key injected by the service layer before each call. */
-    @Volatile
-    var injectedKey: String? = null
 
     private suspend fun callChat(
         profile: AiProviderProfile,
@@ -95,6 +101,8 @@ class LlmCullingClient @Inject constructor(
                 .post(body.toRequestBody("application/json".toMediaType()))
                 .build()
             httpClient.client.newCall(request).execute().use { resp ->
+                // Never log the request (it carries the API key) or the
+                // Authorization header; only surface the status code.
                 if (!resp.isSuccessful) {
                     Log.w(TAG, "LLM HTTP ${resp.code} for ${profile.id}")
                     return@use null

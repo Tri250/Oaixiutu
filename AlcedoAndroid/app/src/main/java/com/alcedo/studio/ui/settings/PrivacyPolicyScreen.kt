@@ -61,33 +61,11 @@ fun PrivacyPolicyScreen(
                 .padding(DesignTokens.spacingLg),
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
         ) {
-            PolicySection("1. Data Collection", """
-                Alcedo Studio processes images locally on your device. The app does not
-                transmit your photos to any server unless you explicitly enable cloud LLM
-                features in Settings. When cloud LLM is enabled, only a low-resolution
-                thumbnail (max 768px) and EXIF summary are sent to the configured LLM
-                provider for culling and analysis.
-            """.trimIndent())
-            PolicySection("2. On-Device AI", """
-                Semantic search (CLIP/SigLIP) and captioning run entirely on-device via
-                ONNX Runtime. Embeddings and captions are stored in the local app
-                database and never leave the device.
-            """.trimIndent())
-            PolicySection("3. Telemetry", """
-                Telemetry is opt-in and disabled by default. When enabled, only anonymous
-                usage statistics (feature usage counts, crash reports) are collected to
-                improve the app. No image content is ever sent with telemetry.
-            """.trimIndent())
-            PolicySection("4. Storage", """
-                Imported images remain in their original location. Alcedo creates
-                non-destructive edit metadata, thumbnails and AI models in app-private
-                storage. You can clear caches and manage storage from Settings.
-            """.trimIndent())
-            PolicySection("5. Your Rights", """
-                You may revoke consent at any time by disabling the toggles in Settings.
-                Deleting the app removes all locally stored data. Cloud-processed data
-                is subject to the respective LLM provider's privacy policy.
-            """.trimIndent())
+            PolicySection(s.privacyDataCollectionTitle, s.privacyDataCollectionBody)
+            PolicySection(s.privacyOnDeviceAiTitle, s.privacyOnDeviceAiBody)
+            PolicySection(s.privacyTelemetryTitle, s.privacyTelemetryBody)
+            PolicySection(s.privacyStorageTitle, s.privacyStorageBody)
+            PolicySection(s.privacyRightsTitle, s.privacyRightsBody)
         }
     }
 }

@@ -58,19 +58,38 @@ class SleeveService @Inject constructor(
     }
 
     suspend fun createFolder(parentPath: String, name: String): SleeveFolder = withContext(ThreadPool.database) {
-        if (nativeHandle != 0L) {
-            NdkSafeCall.run { AlcedoNativeBridge.nativeSleeveCreateFolder(nativeHandle, parentPath, name) }
-        }
         val folder = sleeveRepository.createFolder(parentPath, name)
+        if (nativeHandle != 0L) {
+            val nativeResult = NdkSafeCall.callOrNull<String> {
+                AlcedoNativeBridge.nativeSleeveCreateFolder(nativeHandle, parentPath, name)
+            }
+            if (nativeResult == null) {
+                Log.e(TAG, "nativeSleeveCreateFolder failed; rolling back Room change for $parentPath/$name")
+                runCatching { sleeveRepository.deleteElement(folder.sleevePath) }
+                    .onFailure { Log.w(TAG, "rollback failed", it) }
+                dentryCache.invalidateTree(parentPath)
+                throw IllegalStateException("nativeSleeveCreateFolder failed for $parentPath/$name")
+            }
+        }
         dentryCache.invalidateTree(parentPath)
         folder
     }
 
     suspend fun move(srcPath: String, destPath: String): Boolean = withContext(ThreadPool.database) {
-        if (nativeHandle != 0L) {
-            NdkSafeCall.run { AlcedoNativeBridge.nativeSleeveMoveElement(nativeHandle, srcPath, destPath) }
-        }
         val ok = sleeveRepository.moveElement(srcPath, destPath)
+        if (ok && nativeHandle != 0L) {
+            val nativeOk = NdkSafeCall.call(default = false) {
+                AlcedoNativeBridge.nativeSleeveMoveElement(nativeHandle, srcPath, destPath)
+            }
+            if (!nativeOk) {
+                Log.e(TAG, "nativeSleeveMoveElement failed; rolling back Room move $srcPath -> $destPath")
+                runCatching { sleeveRepository.moveElement(destPath, srcPath) }
+                    .onFailure { Log.w(TAG, "rollback failed", it) }
+                dentryCache.invalidateTree(PathResolver_parent(srcPath))
+                dentryCache.invalidateTree(PathResolver_parent(destPath))
+                return@withContext false
+            }
+        }
         if (ok) {
             dentryCache.invalidateTree(PathResolver_parent(srcPath))
             dentryCache.invalidateTree(PathResolver_parent(destPath))
@@ -80,7 +99,13 @@ class SleeveService @Inject constructor(
 
     suspend fun delete(path: String): Boolean = withContext(ThreadPool.database) {
         if (nativeHandle != 0L) {
-            NdkSafeCall.run { AlcedoNativeBridge.nativeSleeveDeleteElement(nativeHandle, path) }
+            val nativeOk = NdkSafeCall.call(default = false) {
+                AlcedoNativeBridge.nativeSleeveDeleteElement(nativeHandle, path)
+            }
+            if (!nativeOk) {
+                Log.e(TAG, "nativeSleeveDeleteElement failed for $path; skipping Room deletion to stay in sync")
+                return@withContext false
+            }
         }
         val ok = sleeveRepository.deleteElement(path)
         if (ok) dentryCache.invalidateTree(PathResolver_parent(path))

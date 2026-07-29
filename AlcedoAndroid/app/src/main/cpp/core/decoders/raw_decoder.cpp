@@ -3,6 +3,7 @@
 #include "decoders/raw_decoder.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <vector>
@@ -19,7 +20,10 @@ std::vector<uint8_t> ReadFile(const image_path_t& path) {
   std::ifstream ifs(path, std::ios::binary | std::ios::ate);
   if (!ifs) return {};
   const auto size = ifs.tellg();
-  if (size <= 0) return {};
+  // Bounds-check tellg(): reject negative (-1 on failure) or absurdly large
+  // sizes (> 500 MiB) to avoid a bogus allocation.
+  constexpr int64_t kMaxReadBytes = 500LL * 1024 * 1024;
+  if (size <= 0 || static_cast<int64_t>(size) > kMaxReadBytes) return {};
   ifs.seekg(0, std::ios::beg);
   std::vector<uint8_t> buf(static_cast<size_t>(size));
   ifs.read(reinterpret_cast<char*>(buf.data()), size);

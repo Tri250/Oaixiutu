@@ -147,9 +147,37 @@ object AlcedoNativeBridge {
     external fun nativeColorScienceMatrix(fromSpace: String, toSpace: String): FloatArray
     external fun nativeLensCorrectionProfile(lensId: String): String? // JSON profile
 
+    /**
+     * Throw [IllegalStateException] if the native library has not loaded. Call
+     * this (or go through [NdkSafeCall]) before invoking any `external fun`.
+     * Direct callers of native methods MUST call this, or [requireHandle], to
+     * avoid crashing the process when the native layer is unavailable.
+     */
+    fun requireLoaded() {
+        check(loaded) {
+            "Native library 'alcedo_native' not loaded" + (loadError?.let { ": $it" } ?: "")
+        }
+    }
+
+    /**
+     * Throw [IllegalArgumentException] if [handle] is the invalid (0) handle.
+     * Native functions treat 0 as "no object" and would otherwise produce a
+     * junk result or crash; validate handles before every native call that
+     * dereferences one.
+     */
+    fun requireHandle(handle: Long) {
+        require(handle != 0L) {
+            "Invalid native handle: 0 (object not allocated or already released)"
+        }
+    }
+
+    /** True when the library is loaded and [handle] is a usable (non-zero) handle. */
+    fun isValidHandle(handle: Long): Boolean = loaded && handle != 0L
+
     /** Convenience: apply [params] to a pipeline via JSON. */
     fun applyParams(pipeline: Long, params: AdjustmentParams): Boolean =
         NdkSafeCall.call(default = false) {
+            requireHandle(pipeline)
             nativeApplyAdjustments(pipeline, paramsToJson(params))
         }
 

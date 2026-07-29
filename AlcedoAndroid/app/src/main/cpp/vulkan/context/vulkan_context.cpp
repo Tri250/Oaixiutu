@@ -136,6 +136,14 @@ void VulkanContext::Shutdown() {
   physical_device_ = VK_NULL_HANDLE;
   compute_queue_   = VK_NULL_HANDLE;
 
+  // Destroy the debug messenger before the instance it depends on.
+  if (debug_messenger_ != VK_NULL_HANDLE && instance_ != VK_NULL_HANDLE) {
+    auto destroy_fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance_, "vkDestroyDebugUtilsMessengerEXT"));
+    if (destroy_fn) destroy_fn(instance_, debug_messenger_, nullptr);
+    debug_messenger_ = VK_NULL_HANDLE;
+  }
+
   if (instance_ != VK_NULL_HANDLE) {
     vkDestroyInstance(instance_, nullptr);
     instance_ = VK_NULL_HANDLE;
@@ -184,11 +192,15 @@ bool VulkanContext::CreateInstance() {
   VkResult res = vkCreateInstance(&ci, nullptr, &instance_);
   if (res != VK_SUCCESS) {
     ALOGE("vkCreateInstance failed: %d", static_cast<int>(res));
+    // Ensure no partially-initialized state lingers so callers/Shutdown observe
+    // a clean (destroyed) context rather than a dangling handle.
+    instance_ = VK_NULL_HANDLE;
     return false;
   }
 
   if (want_validation) {
-    // Best-effort debug messenger; ignore failure.
+    // Best-effort debug messenger. The handle is stored and torn down in
+    // Shutdown() rather than leaked for the process lifetime.
     VkDebugUtilsMessengerCreateInfoEXT dci{};
     dci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     dci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -201,8 +213,11 @@ bool VulkanContext::CreateInstance() {
         vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
     if (fn) {
       VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
-      fn(instance_, &dci, nullptr, &messenger);
-      // Messenger intentionally leaked for the process lifetime.
+      if (fn(instance_, &dci, nullptr, &messenger) == VK_SUCCESS) {
+        debug_messenger_ = messenger;
+      } else {
+        ALOGW("VulkanContext: debug messenger creation failed");
+      }
     }
   }
   return true;
@@ -316,24 +331,40 @@ VkCommandBuffer VulkanContext::BeginOneShotCompute() {
   ai.level             = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   ai.commandBufferCount = 1;
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  vkAllocateCommandBuffers(device_, &ai, &cmd);
+  if (vkAllocateCommandBuffers(device_, &ai, &cmd) != VK_SUCCESS) {
+    ALOGE("VulkanContext: vkAllocateCommandBuffers failed");
+    return VK_NULL_HANDLE;
+  }
 
   VkCommandBufferBeginInfo bi{};
   bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  vkBeginCommandBuffer(cmd, &bi);
+  if (vkBeginCommandBuffer(cmd, &bi) != VK_SUCCESS) {
+    ALOGE("VulkanContext: vkBeginCommandBuffer failed");
+    vkFreeCommandBuffers(device_, command_pool_, 1, &cmd);
+    return VK_NULL_HANDLE;
+  }
   return cmd;
 }
 
 void VulkanContext::EndAndSubmitOneShot(VkCommandBuffer cmd) {
-  vkEndCommandBuffer(cmd);
+  if (cmd == VK_NULL_HANDLE) return;
+  if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+    ALOGE("VulkanContext: vkEndCommandBuffer failed; command buffer dropped");
+    vkFreeCommandBuffers(device_, command_pool_, 1, &cmd);
+    return;
+  }
 
   std::lock_guard<std::mutex> lk(submit_mtx_);
   VkSubmitInfo si{};
   si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   si.commandBufferCount = 1;
   si.pCommandBuffers    = &cmd;
-  vkQueueSubmit(compute_queue_, 1, &si, VK_NULL_HANDLE);
+  if (vkQueueSubmit(compute_queue_, 1, &si, VK_NULL_HANDLE) != VK_SUCCESS) {
+    ALOGE("VulkanContext: vkQueueSubmit failed");
+    vkFreeCommandBuffers(device_, command_pool_, 1, &cmd);
+    return;
+  }
   vkQueueWaitIdle(compute_queue_);
   vkFreeCommandBuffers(device_, command_pool_, 1, &cmd);
 }
@@ -357,7 +388,17 @@ OneShotCompute::OneShotCompute(VulkanContext* ctx) : ctx_(ctx) {
   cmd_ = ctx_ ? ctx_->BeginOneShotCompute() : VK_NULL_HANDLE;
 }
 OneShotCompute::~OneShotCompute() {
-  if (ctx_ && cmd_ != VK_NULL_HANDLE) ctx_->EndAndSubmitOneShot(cmd_);
+  if (cmd_ != VK_NULL_HANDLE) {
+    if (ctx_) ctx_->EndAndSubmitOneShot(cmd_);
+    cmd_ = VK_NULL_HANDLE;
+  }
+}
+
+void OneShotCompute::Submit() {
+  if (ctx_ && cmd_ != VK_NULL_HANDLE) {
+    ctx_->EndAndSubmitOneShot(cmd_);
+    cmd_ = VK_NULL_HANDLE;
+  }
 }
 
 }  // namespace alcedo

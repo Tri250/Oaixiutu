@@ -55,9 +55,10 @@ JNIEXPORT jbyteArray JNICALL Java_com_alcedo_studio_ndk_Thumbnail_nativeGetThumb
   auto image = ctx->image_pool->GetImage(static_cast<alcedo::image_id_t>(image_id));
   if (!image || !image->has_thumbnail_.load()) return nullptr;
 
-  auto thumb = ctx->image_pool->GetImage(static_cast<alcedo::image_id_t>(image_id));
-  if (!thumb) return nullptr;
-  auto& mat = thumb->GetThumbnailMat();
+  // Reuse the already-resolved image handle; the previous code called
+  // GetImage() a second time with the same id, which was redundant (and
+  // incurred an extra lookup / shared_ptr atomic bump).
+  auto& mat = image->GetThumbnailMat();
   if (mat.Empty()) return nullptr;
   // Pack the float mat as RGBA8 for the UI (clamped to [0,1]).
   std::vector<uint8_t> bytes;

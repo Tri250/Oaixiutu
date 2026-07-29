@@ -49,7 +49,14 @@ JNIEXPORT jintArray JNICALL Java_com_alcedo_studio_ndk_Image_nativeImportBatch(
   std::vector<std::filesystem::path> paths;
   paths.reserve(count);
   for (jsize i = 0; i < count; ++i) {
-    auto js = static_cast<jstring>(env->GetObjectArrayElement(paths_js, i));
+    // GetObjectArrayElement may return null (Java allows null array slots);
+    // guard the static_cast<jstring> and the subsequent JStr dereference.
+    jobject element = env->GetObjectArrayElement(paths_js, i);
+    if (!element) {
+      ALOGW("nativeImportBatch: null path at index %d, skipping", i);
+      continue;
+    }
+    auto js = static_cast<jstring>(element);
     paths.emplace_back(alcedo::JStr(env, js));
     env->DeleteLocalRef(js);
   }

@@ -89,7 +89,7 @@ class SleeveRepositoryImpl @Inject constructor(
         db.insert("sleeve_elements", SQLiteDatabase.CONFLICT_REPLACE, cv)
         incrementChildCount(parent, 1)
         refresh()
-        return getFolder(path)!!
+        return getFolder(path) ?: throw NoSuchElementException("Folder not found: $path")
     }
 
     override suspend fun importFile(parentPath: String, uri: String, name: String): SleeveFile {
@@ -110,7 +110,7 @@ class SleeveRepositoryImpl @Inject constructor(
         db.insert("sleeve_elements", SQLiteDatabase.CONFLICT_REPLACE, cv)
         incrementChildCount(parent, 1)
         refresh()
-        return getFile(path)!!
+        return getFile(path) ?: throw NoSuchElementException("File not found: $path")
     }
 
     override suspend fun moveElement(srcPath: String, destPath: String): Boolean {

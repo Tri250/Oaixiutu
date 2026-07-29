@@ -23,10 +23,15 @@ JNIEXPORT jintArray JNICALL Java_com_alcedo_studio_ndk_Sleeve_nativeListFolder(
   auto* ctx = alcedo::JniAppContext::Get();
   if (!ctx || !ctx->project) return env->NewIntArray(0);
   std::string folder = alcedo::JStr(env, folder_js);
-  std::lock_guard<std::mutex> lk(ctx->mtx);
-
-  auto& fs = ctx->project->GetSleeveManager().GetFileSystem();
-  auto ids = fs.ListFolderContent(folder);
+  // Copy element ids out of the SleeveManager under the lock, then release
+  // before any JNI construction so a concurrent manager mutation cannot
+  // use-after-free the referenced storage.
+  std::vector<alcedo::sl_element_id_t> ids;
+  {
+    std::lock_guard<std::mutex> lk(ctx->mtx);
+    auto& fs = ctx->project->GetSleeveManager().GetFileSystem();
+    ids = fs.ListFolderContent(folder);
+  }
   std::vector<jint> out(ids.size());
   for (size_t i = 0; i < ids.size(); ++i) out[i] = static_cast<jint>(ids[i]);
   jintArray arr = env->NewIntArray(static_cast<jsize>(out.size()));
@@ -77,13 +82,17 @@ JNIEXPORT jintArray JNICALL Java_com_alcedo_studio_ndk_Sleeve_nativeFilterFolder
   if (!ctx || !ctx->project) return env->NewIntArray(0);
   std::string folder = alcedo::JStr(env, folder_js);
   std::string sql = alcedo::JStr(env, sql_js);
-  std::lock_guard<std::mutex> lk(ctx->mtx);
-
-  alcedo::SleeveFilterService svc(ctx->project->GetSleeveManager());
-  auto elems = svc.FilterFolder(folder, sql);
+  // Copy only the element ids we need out of the SleeveManager under the lock;
+  // do not hold shared_ptrs into its storage past the lock (the manager may be
+  // mutated concurrently, invalidating them).
   std::vector<jint> ids;
-  ids.reserve(elems.size());
-  for (auto& e : elems) ids.push_back(static_cast<jint>(e->element_id_));
+  {
+    std::lock_guard<std::mutex> lk(ctx->mtx);
+    alcedo::SleeveFilterService svc(ctx->project->GetSleeveManager());
+    auto elems = svc.FilterFolder(folder, sql);
+    ids.reserve(elems.size());
+    for (auto& e : elems) ids.push_back(static_cast<jint>(e->element_id_));
+  }
   jintArray arr = env->NewIntArray(static_cast<jsize>(ids.size()));
   env->SetIntArrayRegion(arr, 0, static_cast<jsize>(ids.size()), ids.data());
   return arr;
@@ -95,10 +104,12 @@ JNIEXPORT jintArray JNICALL Java_com_alcedo_studio_ndk_Sleeve_nativeSearchByText
   auto* ctx = alcedo::JniAppContext::Get();
   if (!ctx || !ctx->project) return env->NewIntArray(0);
   std::string query = alcedo::JStr(env, query_js);
-  std::lock_guard<std::mutex> lk(ctx->mtx);
-
-  alcedo::SleeveFilterService svc(ctx->project->GetSleeveManager());
-  auto ids = svc.SearchByText(query);
+  std::vector<alcedo::sl_element_id_t> ids;
+  {
+    std::lock_guard<std::mutex> lk(ctx->mtx);
+    alcedo::SleeveFilterService svc(ctx->project->GetSleeveManager());
+    ids = svc.SearchByText(query);
+  }
   std::vector<jint> out(ids.size());
   for (size_t i = 0; i < ids.size(); ++i) out[i] = static_cast<jint>(ids[i]);
   jintArray arr = env->NewIntArray(static_cast<jsize>(out.size()));
@@ -111,15 +122,32 @@ JNIEXPORT jstring JNICALL Java_com_alcedo_studio_ndk_Sleeve_nativeGetElementInfo
     JNIEnv* env, jobject /*thiz*/, jint element_id) {
   auto* ctx = alcedo::JniAppContext::Get();
   if (!ctx || !ctx->project) return env->NewStringUTF("{}");
-  std::lock_guard<std::mutex> lk(ctx->mtx);
-  auto& fs = ctx->project->GetSleeveManager().GetFileSystem();
-  auto elem = fs.Get(static_cast<alcedo::sl_element_id_t>(element_id));
-  if (!elem) return env->NewStringUTF("{}");
+  // Copy the element's scalar fields under the lock; build the JSON and the
+  // Java string afterwards so no reference into the SleeveManager is held past
+  // the lock (the manager may be mutated concurrently).
+  bool found = false;
+  alcedo::sl_element_id_t id = 0;
+  std::string name;
+  bool is_folder = false;
+  bool pinned = false;
+  {
+    std::lock_guard<std::mutex> lk(ctx->mtx);
+    auto& fs = ctx->project->GetSleeveManager().GetFileSystem();
+    auto elem = fs.Get(static_cast<alcedo::sl_element_id_t>(element_id));
+    if (elem) {
+      found     = true;
+      id        = elem->element_id_;
+      name      = elem->element_name_;
+      is_folder = (elem->type_ == alcedo::ElementType::FOLDER);
+      pinned    = elem->pinned_;
+    }
+  }
+  if (!found) return env->NewStringUTF("{}");
   nlohmann::json j;
-  j["id"] = elem->element_id_;
-  j["name"] = elem->element_name_;
-  j["type"] = elem->type_ == alcedo::ElementType::FOLDER ? "folder" : "file";
-  j["pinned"] = elem->pinned_;
+  j["id"] = id;
+  j["name"] = name;
+  j["type"] = is_folder ? "folder" : "file";
+  j["pinned"] = pinned;
   return env->NewStringUTF(j.dump().c_str());
 }
 

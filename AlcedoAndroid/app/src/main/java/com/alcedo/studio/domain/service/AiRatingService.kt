@@ -34,7 +34,6 @@ class AiRatingService @Inject constructor(
             val profile = credentialService.activeProfile()
             val rating = if (profile != null && credentialService.hasActiveCredentials()) {
                 val base64 = imageAnalysisEncoder.encodeThumbnail(uri, 768) ?: return@withContext null
-                llmClient.injectedKey = credentialService.getApiKey(profile.id)
                 llmClient.rateImage(imageId, base64, metadata, profile)
             } else {
                 heuristicRating(imageId, metadata)

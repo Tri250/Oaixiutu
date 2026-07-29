@@ -393,4 +393,121 @@ interface StringRes {
     val compareOverlay: String
     val before: String
     val after: String
+
+    // ---- Export (extensions) ----
+    val bitDepth: String
+    val resize: String
+    val maintainAspectRatio: String
+    val width: String
+    val height: String
+    val iccProfile: String
+    val metadataHandling: String
+    val defaultOutputDir: String
+
+    // ---- AI Rating (extensions) ----
+    val llmProvider: String
+    val strictness: String
+    val strictnessGenerous: String
+    val strictnessCritical: String
+    val analyzeImages: String
+    val analyzingImages: String
+    val analyzeHint: String
+    val applyRatingsToExif: String
+    val applyRatingsConfirm: String
+    val applying: String
+    val focus: String
+    val motion: String
+    val compShort: String
+    val motionBlur: String
+    val detail: String
+    val ratingDetails: String
+
+    // ---- AI Model Manager (extensions) ----
+    val aiModelStorage: String
+    val totalLabel: String
+    val ofXGbAvailable: String
+    val sizeLabel: String
+    val dimsLabel: String
+    val active: String
+    val inactive: String
+
+    // ---- Semantic generation (extensions) ----
+    val folderToScan: String
+    val defaultScanFolder: String
+    val model: String
+    val result: String
+    val stop: String
+    val startScan: String
+
+    // ---- Settings (extensions) ----
+    val defaultView: String
+    val showHistogram: String
+    val autoSaveInterval: String
+    val autoSaveIntervalValue: String
+    val gpuBackend: String
+    val vulkan: String
+    val cpu: String
+    val apiKey: String
+    val endpoint: String
+    val defaultStrictness: String
+    val privacy: String
+    val analytics: String
+    val analyticsDesc: String
+    val crashReports: String
+    val crashReportsDesc: String
+    val diagnostics: String
+    val themeLight: String
+    val themeSystem: String
+
+    // ---- About (extensions) ----
+    val appTagline: String
+    val versionCode: String
+    val buildInfo: String
+    val licenseGpl: String
+    val links: String
+    val github: String
+    val website: String
+    val thirdPartyLicenses: String
+    val aboutCreditsText: String
+
+    // ---- Privacy Policy ----
+    val privacyDataCollectionTitle: String
+    val privacyDataCollectionBody: String
+    val privacyOnDeviceAiTitle: String
+    val privacyOnDeviceAiBody: String
+    val privacyTelemetryTitle: String
+    val privacyTelemetryBody: String
+    val privacyStorageTitle: String
+    val privacyStorageBody: String
+    val privacyRightsTitle: String
+    val privacyRightsBody: String
+
+    // ---- User Agreement ----
+    val agreementLicenseTitle: String
+    val agreementLicenseBody: String
+    val agreementAcceptableUseTitle: String
+    val agreementAcceptableUseBody: String
+    val agreementAiFeaturesTitle: String
+    val agreementAiFeaturesBody: String
+    val agreementDisclaimerTitle: String
+    val agreementDisclaimerBody: String
+
+    // ---- Share panel ----
+    val copyPath: String
+    val share: String
+    val couldNotCopyPath: String
+    val noAppToOpenFile: String
+    val couldNotShareFile: String
+    val fileNoLongerExists: String
+
+    // ---- Manage space ----
+    val clearCacheDesc: String
+
+    // ---- Effects (extensions) ----
+    val threshold: String
+    val filmSimulations: String
+
+    // ---- Permissions ----
+    val permissionRationale: String
+    val grantAccess: String
 }

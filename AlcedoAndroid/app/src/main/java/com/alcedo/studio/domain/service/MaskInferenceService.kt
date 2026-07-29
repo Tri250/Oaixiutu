@@ -57,13 +57,23 @@ class MaskInferenceService @Inject constructor(
             "object" -> com.alcedo.studio.data.model.AiSubjectKind.OBJECT
             else -> com.alcedo.studio.data.model.AiSubjectKind.SUBJECT
         }
+        // Persist the coverage bitmap to a temp file before recycling so the
+        // mask data survives; set coveragePath to the temp file path.
+        val coveragePath = runCatching {
+            val tmp = java.io.File(
+                com.alcedo.studio.util.ContextProvider.requireContext().cacheDir,
+                "mask_${com.alcedo.studio.utils.IdGenerator.newId("cov")}.png",
+            )
+            tmp.outputStream().use { out -> coverage.compress(Bitmap.CompressFormat.PNG, 100, out) }
+            tmp.absolutePath
+        }.getOrNull()
         coverage.recycle()
         return com.alcedo.studio.data.model.AiSubjectMask(
             id = com.alcedo.studio.utils.IdGenerator.newId("mask"),
             versionId = versionId,
             name = subjectKind.replaceFirstChar { it.uppercase() },
             subjectKind = kind,
-            coveragePath = null,
+            coveragePath = coveragePath,
         )
     }
 

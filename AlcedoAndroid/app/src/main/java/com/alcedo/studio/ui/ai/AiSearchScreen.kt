@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.ai
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.Search
@@ -45,12 +47,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.ErrorDialog
@@ -79,23 +81,19 @@ private val SEARCH_SUGGESTIONS = listOf(
     "architecture details",
 )
 
-private val RECENT_SEARCHES = listOf(
-    "golden hour landscape",
-    "candid portrait",
-    "macro flower",
-)
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AiSearchScreen(
     onBack: () -> Unit,
     onOpenImage: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenModels: () -> Unit = {},
     viewModel: AiSearchViewModel = hiltViewModel(),
 ) {
     val s = Strings.res
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var queryFieldFocused by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -109,7 +107,7 @@ fun AiSearchScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* navigate to model settings */ }) {
+                    IconButton(onClick = onOpenModels) {
                         Icon(Icons.Outlined.Settings, contentDescription = s.settings, tint = AlcedoColors.TextTertiary)
                     }
                 },
@@ -145,8 +143,8 @@ fun AiSearchScreen(
                     },
                     trailingIcon = {
                         if (state.query.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.updateQuery(""); viewModel.search() }) {
-                                Text("✕", color = AlcedoColors.TextTertiary)
+                            IconButton(onClick = viewModel::clearQuery) {
+                                Icon(Icons.Outlined.Close, contentDescription = s.cancel, tint = AlcedoColors.TextTertiary)
                             }
                         }
                     },
@@ -161,7 +159,11 @@ fun AiSearchScreen(
             }
 
             // ---- Model status indicator ----
-            ModelStatusBar(isReady = true, modelName = "CLIP ViT-B/32")
+            ModelStatusBar(
+                isReady = state.modelStatus.isReady,
+                isDownloading = state.modelStatus.isDownloading,
+                modelName = state.modelStatus.modelName,
+            )
 
             // ---- Suggestions / recent searches (shown when idle) ----
             AnimatedVisibility(
@@ -176,18 +178,27 @@ fun AiSearchScreen(
                     verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
                 ) {
                     // Recent searches
-                    if (RECENT_SEARCHES.isNotEmpty()) {
-                        Text(
-                            text = "Recent Searches",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = AlcedoColors.TextTertiary,
-                        )
-                        RECENT_SEARCHES.forEach { recent ->
+                    if (state.recentSearches.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Recent Searches",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AlcedoColors.TextTertiary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = viewModel::clearRecentSearches) {
+                                Text(s.clearSelection, style = MaterialTheme.typography.labelSmall, color = AlcedoColors.TextTertiary)
+                            }
+                        }
+                        state.recentSearches.forEach { recent ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(DesignTokens.radiusSm))
-                                    .clickable { viewModel.updateQuery(recent); viewModel.search() }
+                                    .clickable { viewModel.searchRecent(recent) }
                                     .padding(vertical = DesignTokens.spacingXs),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
@@ -216,7 +227,7 @@ fun AiSearchScreen(
                     ) {
                         SEARCH_SUGGESTIONS.forEach { suggestion ->
                             AssistChip(
-                                onClick = { viewModel.updateQuery(suggestion); viewModel.search() },
+                                onClick = { viewModel.searchRecent(suggestion) },
                                 label = {
                                     Text(
                                         suggestion,
@@ -294,7 +305,7 @@ fun AiSearchScreen(
 }
 
 @Composable
-private fun ModelStatusBar(isReady: Boolean, modelName: String) {
+private fun ModelStatusBar(isReady: Boolean, isDownloading: Boolean, modelName: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -307,12 +318,20 @@ private fun ModelStatusBar(isReady: Boolean, modelName: String) {
             modifier = Modifier
                 .size(6.dp)
                 .background(
-                    if (isReady) AlcedoColors.Success else AlcedoColors.Warning,
+                    when {
+                        isReady -> AlcedoColors.Success
+                        isDownloading -> AlcedoColors.Warning
+                        else -> AlcedoColors.Danger
+                    },
                     RoundedCornerShape(3.dp),
                 ),
         )
         Text(
-            text = if (isReady) "$modelName • Ready" else "$modelName • Loading…",
+            text = when {
+                isReady -> "$modelName • Ready"
+                isDownloading -> "$modelName • Downloading…"
+                else -> "$modelName • Not downloaded"
+            },
             style = MaterialTheme.typography.labelSmall,
             color = AlcedoColors.TextTertiary,
         )
@@ -324,6 +343,7 @@ private fun SearchCard(
     result: AiSearchViewModel.SearchResult,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = AlcedoColors.SurfaceRaised),
@@ -332,18 +352,26 @@ private fun SearchCard(
             modifier = Modifier.padding(DesignTokens.spacingSm),
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXxs),
         ) {
-            // Thumbnail placeholder
+            // Thumbnail — prefer the decoded thumbnail path, fall back to the
+            // original URI. Shows a monogram placeholder while loading.
+            val thumbModel = result.image.thumbnailPath?.takeIf { it.isNotBlank() }
+                ?: result.image.originalUri
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
-                    .background(AlcedoColors.SurfaceElevated, RoundedCornerShape(DesignTokens.radiusSm)),
+                    .clip(RoundedCornerShape(DesignTokens.radiusSm))
+                    .background(AlcedoColors.SurfaceElevated),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = result.image.displayName.take(2).uppercase(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = AlcedoColors.TextTertiary,
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(thumbModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = result.image.displayName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
             Text(

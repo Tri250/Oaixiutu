@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alcedo.studio.data.model.Project
@@ -56,6 +59,7 @@ private fun ManageSpaceContent(
     val s = Strings.res
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isSweeping = state.isSweeping
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -83,21 +87,29 @@ private fun ManageSpaceContent(
                 color = AlcedoColors.TextPrimary,
             )
             Text(
-                text = "Clearing caches removes thumbnails, AI model caches and temporary render files. Your imported photos and edits are not affected.",
+                text = s.clearCacheDesc,
                 style = MaterialTheme.typography.bodyMedium,
                 color = AlcedoColors.TextSecondary,
             )
             Button(
                 onClick = { viewModel.clearCache() },
-                enabled = !state.isClearingCache,
+                enabled = !state.isClearingCache && !isSweeping,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(s.clearCache)
             }
             Button(
                 onClick = { viewModel.sweepOrphans() },
+                enabled = !isSweeping && !state.isClearingCache,
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                if (isSweeping) {
+                    CircularProgressIndicator(
+                        color = AlcedoColors.AccentBlue,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp).padding(end = DesignTokens.spacingSm),
+                    )
+                }
                 Text(s.sweepOrphans)
             }
             state.message?.let { msg ->
@@ -105,6 +117,7 @@ private fun ManageSpaceContent(
             }
             Button(
                 onClick = onFinish,
+                enabled = !state.isClearingCache && !isSweeping,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(s.done)

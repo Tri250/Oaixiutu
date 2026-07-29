@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,10 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +52,7 @@ fun SettingsScreen(
     onPrivacy: () -> Unit,
     onAgreement: () -> Unit,
     onManageSpace: () -> Unit,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -61,13 +61,9 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val languageManager = remember { LanguageManager() }
     val currentLanguage by languageManager.language.collectAsState(initial = Strings.language)
-    var selectedTheme by remember { mutableStateOf("Dark") }
-    var defaultView by remember { mutableStateOf("Grid") }
-    var gpuBackend by remember { mutableStateOf("Vulkan") }
-    var aiStrictness by remember { mutableStateOf(0.5f) }
-    var apiKey by remember { mutableStateOf("") }
-    var aiEndpoint by remember { mutableStateOf("") }
-    var aiModel by remember { mutableStateOf("") }
+    val appSettings = state.appSettings
+
+    BackHandler { onBack() }
 
     LaunchedEffect(currentLanguage) {
         Strings.setLanguage(currentLanguage)
@@ -100,10 +96,10 @@ fun SettingsScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.theme, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
-                    listOf("Dark", "Light", "System").forEach { theme ->
+                    listOf(s.themeDark, s.themeLight, s.themeSystem).forEach { theme ->
                         FilterChip(
-                            selected = selectedTheme == theme,
-                            onClick = { selectedTheme = theme },
+                            selected = appSettings.theme == theme,
+                            onClick = { viewModel.setTheme(theme) },
                             label = { Text(theme, style = MaterialTheme.typography.bodySmall) },
                         )
                     }
@@ -112,12 +108,12 @@ fun SettingsScreen(
             HorizontalDivider(color = AlcedoColors.Divider)
             // Default view
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Default View", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text(s.defaultView, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
-                    listOf("Grid", "List").forEach { view ->
+                    listOf(s.gridView, s.listView).forEach { view ->
                         FilterChip(
-                            selected = defaultView == view,
-                            onClick = { defaultView = view },
+                            selected = appSettings.defaultView == view,
+                            onClick = { viewModel.setDefaultView(view) },
                             label = { Text(view, style = MaterialTheme.typography.bodySmall) },
                         )
                     }
@@ -127,20 +123,20 @@ fun SettingsScreen(
 
         // ---- Editor ----
         SettingsSection(title = s.tabEditor) {
-            SettingsRow(label = "Show Histogram", value = "")
+            SettingsRow(label = s.showHistogram, value = "")
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Auto-save Interval", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
-                Text("30s", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
+                Text(s.autoSaveInterval, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text(s.autoSaveIntervalValue, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
             }
             HorizontalDivider(color = AlcedoColors.Divider)
             // GPU Backend
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("GPU Backend", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text(s.gpuBackend, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
                 Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
-                    listOf("Vulkan", "CPU").forEach { backend ->
+                    listOf(s.vulkan, s.cpu).forEach { backend ->
                         FilterChip(
-                            selected = gpuBackend == backend,
-                            onClick = { gpuBackend = backend },
+                            selected = appSettings.gpuBackend == backend,
+                            onClick = { viewModel.setGpuBackend(backend) },
                             label = { Text(backend, style = MaterialTheme.typography.bodySmall) },
                         )
                     }
@@ -151,25 +147,25 @@ fun SettingsScreen(
         // ---- AI ----
         SettingsSection(title = s.settingsAi) {
             OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text("API Key") },
+                value = appSettings.aiApiKey,
+                onValueChange = { viewModel.setApiKey(it) },
+                label = { Text(s.apiKey) },
                 placeholder = { Text("sk-...") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
-                value = aiEndpoint,
-                onValueChange = { aiEndpoint = it },
-                label = { Text("Endpoint") },
+                value = appSettings.aiEndpoint,
+                onValueChange = { viewModel.setAiEndpoint(it) },
+                label = { Text(s.endpoint) },
                 placeholder = { Text("https://api.openai.com/v1") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
-                value = aiModel,
-                onValueChange = { aiModel = it },
-                label = { Text("Model") },
+                value = appSettings.aiModel,
+                onValueChange = { viewModel.setAiModel(it) },
+                label = { Text(s.model) },
                 placeholder = { Text("gpt-4o") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -177,12 +173,12 @@ fun SettingsScreen(
             HorizontalDivider(color = AlcedoColors.Divider)
             // Default strictness
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Default Strictness", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
-                Text("${"%.0f%%".format(aiStrictness * 100)}", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
+                Text(s.defaultStrictness, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary, modifier = Modifier.weight(1f))
+                Text("${"%.0f%%".format(appSettings.aiStrictness * 100)}", style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary)
             }
             Slider(
-                value = aiStrictness,
-                onValueChange = { aiStrictness = it },
+                value = appSettings.aiStrictness,
+                onValueChange = { viewModel.setAiStrictness(it) },
                 colors = SliderDefaults.colors(
                     thumbColor = AlcedoColors.AccentBlue,
                     activeTrackColor = AlcedoColors.AccentBlue,
@@ -198,18 +194,18 @@ fun SettingsScreen(
         SettingsSection(title = s.settingsStorage) {
             SettingsRow(label = s.cacheSize, value = Project.formatBytes(state.cacheSizeBytes))
             ActionRow(label = s.clearCache, isLoading = state.isClearingCache, onClick = { viewModel.clearCache() })
-            ActionRow(label = s.sweepOrphans, onClick = { viewModel.sweepOrphans() })
+            ActionRow(label = s.sweepOrphans, isLoading = state.isSweeping, onClick = { viewModel.sweepOrphans() })
             ActionRow(label = s.manageSpace, onClick = onManageSpace)
         }
 
         // ---- Privacy ----
-        SettingsSection(title = "Privacy") {
-            ToggleRow("Analytics", "Send anonymous usage analytics", privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
-            ToggleRow("Crash Reports", "Automatically send crash reports", privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
+        SettingsSection(title = s.privacy) {
+            ToggleRow(s.analytics, s.analyticsDesc, privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
+            ToggleRow(s.crashReports, s.crashReportsDesc, privacy = state.privacy, getter = { it.crashReportEnabled }, setter = { viewModel.setCrashReportEnabled(it) })
         }
 
         // ---- Diagnostics ----
-        SettingsSection(title = s.nativeVersion) {
+        SettingsSection(title = s.diagnostics) {
             SettingsRow(label = s.nativeVersion, value = state.nativeVersion)
             SettingsRow(label = s.gpuAvailable, value = if (state.gpuAvailable) s.available else s.unavailable)
         }

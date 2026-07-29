@@ -26,6 +26,7 @@ class DBController {
   void InitializeDB();
   auto GetConnectionGuard() -> ConnectionGuard;
   auto IsInitialized() const -> bool { return initialized_; }
+  auto IsInErrorState() const -> bool { return in_error_state_; }
   auto GetDBPath() const -> const file_path_t& { return db_path_; }
 
  private:
@@ -33,8 +34,11 @@ class DBController {
   std::shared_ptr<std::recursive_mutex> db_lock_;
   file_path_t                           db_path_;
   bool                                  initialized_   = false;
+  // Set when schema init (or db open) fails; prevents further operations from
+  // handing out connections to a half-initialised database.
+  bool                                  in_error_state_ = false;
 
-  void RunSchemaInit(duckdb_connection conn);
+  auto RunSchemaInit(duckdb_connection conn) -> bool;
 };
 
 }  // namespace alcedo

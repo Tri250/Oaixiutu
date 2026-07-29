@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.editor
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.AdjustmentParams
 import com.alcedo.studio.data.model.AdjustmentParamsDelta
 import com.alcedo.studio.data.model.ColorLabel
+import com.alcedo.studio.data.model.CurvePoint
 import com.alcedo.studio.data.model.EditTransaction
 import com.alcedo.studio.data.model.ImageFlag
 import com.alcedo.studio.data.model.ImageItem
@@ -14,6 +16,7 @@ import com.alcedo.studio.data.model.Mask
 import com.alcedo.studio.data.model.MaskRecord
 import com.alcedo.studio.data.model.PipelinePreset
 import com.alcedo.studio.data.model.Version
+import com.alcedo.studio.data.model.WatermarkConfig
 import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.service.ExifEditorService
 import com.alcedo.studio.domain.service.HistoryMgmtService
@@ -67,6 +70,8 @@ class EditorViewModel @Inject constructor(
         val favoritePresets: List<PipelinePreset> = emptyList(),
         val masks: List<MaskRecord> = emptyList(),
         val exif: Map<String, String> = emptyMap(),
+        val watermark: WatermarkConfig = WatermarkConfig(),
+        val beforeBitmap: Bitmap? = null,
         val error: String? = null,
         val dirty: Boolean = false,
     )
@@ -121,6 +126,9 @@ class EditorViewModel @Inject constructor(
                 // The pipeline resets params to DEFAULT on open, so re-push the
                 // version's cumulative params so the preview matches saved state.
                 pipelineService.updateParams(baseline)
+                // Snapshot the unedited preview as the "before" bitmap for compare mode.
+                val initial = pipelineService.state.value.previewBitmap
+                _uiState.update { it.copy(beforeBitmap = initial) }
             } else {
                 _uiState.update { it.copy(error = it.error ?: "Open failed") }
             }
@@ -202,6 +210,15 @@ class EditorViewModel @Inject constructor(
             runCatching { historyService.undo(id) }
                 .onSuccess { reloadActiveVersionParams(id) }
                 .onFailure { e -> _uiState.update { it.copy(error = "Undo failed: ${e.message}") } }
+        }
+    }
+
+    fun redo() {
+        val id = imageId ?: return
+        viewModelScope.launch {
+            runCatching { historyService.redo(id) }
+                .onSuccess { reloadActiveVersionParams(id) }
+                .onFailure { e -> _uiState.update { it.copy(error = "Redo failed: ${e.message}") } }
         }
     }
 
@@ -333,6 +350,34 @@ class EditorViewModel @Inject constructor(
         runCatching { exifService.read(Uri.parse(item.originalUri)) }
             .onSuccess { exif -> _uiState.update { it.copy(exif = exif) } }
             .onFailure { /* EXIF is best-effort; leave empty. */ }
+    }
+
+    /** Update a single EXIF field in the in-memory map (written at export). */
+    fun setExifField(key: String, value: String) {
+        _uiState.update {
+            it.copy(exif = it.exif + (key to value), dirty = true)
+        }
+    }
+
+    /** Replace the master tone curve control points and push to the pipeline. */
+    fun setCurvePoints(points: List<CurvePoint>) {
+        val current = _uiState.value.params
+        val updated = current.copy(toneCurveMaster = points)
+        _uiState.update { it.copy(params = updated, dirty = updated != it.baselineParams) }
+        pipelineService.updateParams(updated)
+    }
+
+    /** Apply an LMT (.cube) file path to the pipeline as the active LUT. */
+    fun applyLmt(path: String) {
+        val current = _uiState.value.params
+        val updated = current.copy(lutPath = path, lutIntensity = 1f)
+        _uiState.update { it.copy(params = updated, dirty = updated != it.baselineParams) }
+        pipelineService.updateParams(updated)
+    }
+
+    /** Update the watermark config used by the editor's preview/export. */
+    fun setWatermarkConfig(config: WatermarkConfig) {
+        _uiState.update { it.copy(watermark = config, dirty = true) }
     }
 
     fun setRating(rating: Int) {

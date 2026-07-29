@@ -35,10 +35,12 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -122,6 +124,7 @@ fun MainScreen(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val context = LocalContext.current
 
     val showNavChrome = currentRoute in setOf(
         Routes.ALBUM, Routes.EDITOR, Routes.AI, Routes.SETTINGS,
@@ -203,6 +206,7 @@ fun MainScreen(
                             onOpenImage = { imageId ->
                                 navController.navigate(Routes.editorRoute(imageId))
                             },
+                            onOpenModels = { navController.navigate(Routes.AI_MODELS) },
                         )
                     }
                     composable(Routes.AI_RATING) {
@@ -219,7 +223,22 @@ fun MainScreen(
                             onAbout = { navController.navigate(Routes.ABOUT) },
                             onPrivacy = { navController.navigate(Routes.PRIVACY) },
                             onAgreement = { navController.navigate(Routes.AGREEMENT) },
-                            onManageSpace = { navController.navigate(Routes.PRIVACY) },
+                            onManageSpace = {
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent(context, com.alcedo.studio.ui.settings.ManageSpaceActivity::class.java),
+                                    )
+                                }
+                            },
+                            onBack = {
+                                navController.navigate(Routes.ALBUM) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
                         )
                     }
                     composable(

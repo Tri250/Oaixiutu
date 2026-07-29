@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -72,6 +73,10 @@ class ThumbnailService {
   void GenerateThumbnail(const std::shared_ptr<Image>& image, uint32_t target_size);
  private:
   ImageController& img_ctrl_;
+  // Serializes thumbnail generation. GenerateThumbnail reads the source CPU
+  // buffer and writes the thumbnail buffer / state flags of an image; without
+  // this guard concurrent generation or concurrent edits race on those buffers.
+  std::mutex thumb_mtx_;
 };
 
 // 5. Thumbnail disk cache.
@@ -91,8 +96,11 @@ class ThumbnailDiskCacheService {
 class HistoryMgmtService {
  public:
   HistoryMgmtService(SleeveManager& sleeve);
-  auto Undo(sl_element_id_t file_id) -> bool;
-  auto Redo(sl_element_id_t file_id) -> bool;
+  // Undo/redo now actually apply the history changes by driving the pipeline
+  // service's executor through the version's transaction list. Previously these
+  // only reported whether the cursor *could* move without moving it.
+  auto Undo(sl_element_id_t file_id, PipelineAppService& pipeline_svc) -> bool;
+  auto Redo(sl_element_id_t file_id, PipelineAppService& pipeline_svc) -> bool;
   auto GetHistory(sl_element_id_t file_id) -> std::shared_ptr<EditHistory>;
   auto GetVersionCount(sl_element_id_t file_id) -> size_t;
  private:
@@ -105,6 +113,17 @@ class PipelineAppService {
   PipelineAppService();
   auto Execute(const std::shared_ptr<Image>& image, const std::string& param_json)
       -> std::shared_ptr<Image>;
+  // Returns the long-lived PipelineExecutor owned by this service. Parameter
+  // import/export and render-region mutations must target this executor so
+  // state persists across calls instead of being applied to a throwaway object.
+  auto GetExecutor() -> std::shared_ptr<PipelineExecutor>;
+  // Apply / revert one transaction on the active version of the given history
+  // by replaying through the persistent executor. Returns false if the cursor
+  // cannot move or the executor is unavailable.
+  auto Undo(EditHistory& history) -> bool;
+  auto Redo(EditHistory& history) -> bool;
+ private:
+  std::shared_ptr<PipelineExecutor> executor_;
 };
 
 // 8. Sleeve filtering service.

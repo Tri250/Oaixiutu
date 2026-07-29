@@ -7,9 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,10 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.alcedo.studio.crash.CrashReportService
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.permission.rememberPermissionState
 import com.alcedo.studio.privacy.PrivacyConsentDialog
 import com.alcedo.studio.privacy.PrivacyManager
+import com.alcedo.studio.ui.MainScreen
 import com.alcedo.studio.ui.theme.AlcedoTheme
 import com.alcedo.studio.ui.theme.DesignTokens
 import dagger.hilt.android.AndroidEntryPoint
@@ -41,8 +41,7 @@ import javax.inject.Inject
 /**
  * Single-activity Compose host. Installs the system splash, gates the UI on the
  * first-run privacy consent and runtime media permissions, then renders the
- * Alcedo theme. The actual album/editor screens plug into this host as they are
- * added in subsequent batches; until then a minimal welcome view is shown.
+ * main navigation host (album/editor/AI/settings).
  *
  * Annotated [AndroidEntryPoint] so Hilt can inject [PrivacyManager].
  */
@@ -89,8 +88,9 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Top-level Compose host. Decides between three states:
- *  1. Loading — reading the persisted consent state.
+ * Top-level Compose host. Decides between four states:
+ *  1. Loading — reading the persisted consent state (bounded by a timeout so
+ *     a stalled DataStore read cannot wedge the app on a spinner).
  *  2. Consent gate — first-run privacy dialog shown when consent has not been
  *     recorded yet.
  *  3. Permission gate — runtime media permissions requested.
@@ -104,9 +104,20 @@ private fun AlcedoHost(
     // Collect the privacy state into a nullable local so we can distinguish the
     // initial loading state (null) from "consent declined" (a real PrivacyState).
     var consentState: PrivacyManager.PrivacyState? by remember { mutableStateOf(null) }
+    // Guard against a stalled DataStore read: if the persisted state is not
+    // available within the timeout, fall back to a "not consented" state so the
+    // user is not stuck on the loading spinner forever.
+    var timedOut by remember { mutableStateOf(false) }
     LaunchedEffect(privacyManager) {
         privacyManager.state.collect { state ->
             consentState = state
+            onConsentReady()
+        }
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(LOAD_STATE_TIMEOUT_MS)
+        if (consentState == null) {
+            timedOut = true
             onConsentReady()
         }
     }
@@ -129,13 +140,13 @@ private fun AlcedoHost(
         ) {
             val state = consentState
             when {
-                state == null -> LoadingState()
-                !state.consentGiven -> ConsentGate(privacyManager = privacyManager)
+                state == null && !timedOut -> LoadingState()
+                state == null || !state.consentGiven -> ConsentGate(privacyManager = privacyManager)
                 !permissionState.allGranted -> PermissionGate(
                     allGranted = permissionState.allGranted,
                     onRequest = { permissionState.launcher.launch(permissions.toTypedArray()) },
                 )
-                else -> WelcomeContent(privacyManager = privacyManager)
+                else -> MainScreen()
             }
         }
     }
@@ -171,65 +182,22 @@ private fun PermissionGate(
     allGranted: Boolean,
     onRequest: () -> Unit,
 ) {
+    val s = Strings.res
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
         modifier = Modifier.padding(DesignTokens.spacingLg),
     ) {
         Text(
-            text = "Alcedo needs media access to import and edit your photos.",
+            text = s.permissionRationale,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground,
         )
         Button(onClick = onRequest, enabled = !allGranted) {
-            Text("Grant access")
+            Text(s.grantAccess)
         }
     }
 }
 
-/**
- * Welcome placeholder rendered once consent and permissions are satisfied. This
- * view will be replaced by the album/editor NavHost in a subsequent batch; it
- * currently shows the privacy state so the first-run flow is verifiable.
- */
-@Composable
-private fun WelcomeContent(privacyManager: PrivacyManager) {
-    var state: PrivacyManager.PrivacyState? by remember { mutableStateOf(null) }
-    LaunchedEffect(privacyManager) { privacyManager.state.collect { state = it } }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
-        modifier = Modifier.padding(DesignTokens.spacingLg),
-    ) {
-        Text(
-            text = "Alcedo",
-            style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(DesignTokens.spacingMd))
-        Text(
-            text = "RAW photo editor — Android port",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(Modifier.height(DesignTokens.spacingLg))
-        val s = state
-        Text(
-            text = if (s == null) {
-                "Loading privacy state…"
-            } else {
-                buildString {
-                    appendLine("Consent: ${if (s.consentGiven) "given" else "declined"}")
-                    appendLine("Cloud LLM: ${if (s.cloudLlmAllowed) "allowed" else "off"}")
-                    appendLine("On-device AI: ${if (s.onDeviceAiAllowed) "allowed" else "off"}")
-                    appendLine("Telemetry: ${if (s.telemetryAllowed) "on" else "off"}")
-                }
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
+private const val LOAD_STATE_TIMEOUT_MS = 4_000L

@@ -82,11 +82,21 @@ bool VulkanKernelStream::Execute(VulkanContext* ctx, VulkanImage* input,
     if (set == VK_NULL_HANDLE) {
       ALOGW("VulkanKernelStream: descriptor set alloc failed for entry %zu", i);
       ctx->EndAndSubmitOneShot(cmd);
+      for (auto& kv : allocated_sets) {
+        vkFreeDescriptorSets(ctx->Device(), ctx->DescriptorPool(), 1, &kv.first);
+      }
       return false;
     }
     allocated_sets.emplace_back(set, layout);
     if (!current_src->BindToDescriptor(set, 0) || !current_dst->BindToDescriptor(set, 1)) {
+      ALOGW("VulkanKernelStream: BindToDescriptor failed for entry %zu", i);
       ctx->EndAndSubmitOneShot(cmd);
+      // Free every descriptor set allocated so far (including `set` above) to
+      // avoid leaking sets back into the shared pool.
+      for (auto& kv : allocated_sets) {
+        vkFreeDescriptorSets(ctx->Device(), ctx->DescriptorPool(), 1, &kv.first);
+      }
+      allocated_sets.clear();
       return false;
     }
 

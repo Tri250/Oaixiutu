@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -55,11 +56,19 @@ auto ImageLoader::Load(const std::filesystem::path& path) -> std::shared_ptr<Ima
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (f.is_open()) {
       auto size = f.tellg();
-      f.seekg(0, std::ios::beg);
-      std::vector<uint8_t> data(static_cast<size_t>(size));
-      f.read(reinterpret_cast<char*>(data.data()), size);
-      image->GetImageData().ReadFromVectorBuffer(std::move(data));
-      image->has_full_img_.store(true);
+      // Bounds-check tellg(): a negative (-1 on failure) or absurdly large
+      // value would drive a bogus allocation. Cap at 500 MiB.
+      constexpr int64_t kMaxReadBytes = 500LL * 1024 * 1024;
+      if (size < 0 || static_cast<int64_t>(size) > kMaxReadBytes) {
+        ALOGW("ImageLoader: refusing to read %s (tellg=%lld)", path.c_str(),
+              static_cast<long long>(size));
+      } else {
+        f.seekg(0, std::ios::beg);
+        std::vector<uint8_t> data(static_cast<size_t>(size));
+        f.read(reinterpret_cast<char*>(data.data()), size);
+        image->GetImageData().ReadFromVectorBuffer(std::move(data));
+        image->has_full_img_.store(true);
+      }
     }
   }
   return image;

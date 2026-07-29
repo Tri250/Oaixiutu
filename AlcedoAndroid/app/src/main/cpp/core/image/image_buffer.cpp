@@ -100,10 +100,12 @@ ImageBuffer& ImageBuffer::operator=(ImageBuffer&& other) noexcept {
   cpu_data_       = std::move(other.cpu_data_);
   gpu_data_       = std::move(other.gpu_data_);
   buffer_         = std::move(other.buffer_);
-  cpu_data_valid_ = other.cpu_data_valid_;
-  gpu_data_valid_ = other.gpu_data_valid_;
+  cpu_data_valid_.store(other.cpu_data_valid_.load());
+  gpu_data_valid_.store(other.gpu_data_valid_.load());
   buffer_valid_   = other.buffer_valid_;
-  other.cpu_data_valid_ = other.gpu_data_valid_ = other.buffer_valid_ = false;
+  other.cpu_data_valid_.store(false);
+  other.gpu_data_valid_.store(false);
+  other.buffer_valid_ = false;
   return *this;
 }
 
@@ -175,7 +177,7 @@ void ImageBuffer::CopyGPUDataTo(ImageBuffer& dst) const {
 ImageBuffer ImageBuffer::Clone() const {
   ImageBuffer c;
   c.cpu_data_ = cpu_data_.Clone();
-  c.cpu_data_valid_ = cpu_data_valid_;
+  c.cpu_data_valid_.store(cpu_data_valid_.load());
   if (buffer_) {
     c.buffer_ = std::make_unique<std::vector<uint8_t>>(*buffer_);
     c.buffer_valid_ = buffer_valid_;

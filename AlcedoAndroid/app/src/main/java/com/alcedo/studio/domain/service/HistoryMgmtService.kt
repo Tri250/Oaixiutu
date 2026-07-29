@@ -108,6 +108,25 @@ class HistoryMgmtService @Inject constructor(
         )
     }
 
+    /** Redo the last undone transaction on the active version (best-effort). */
+    suspend fun redo(imageId: String) = withContext(ThreadPool.database) {
+        val active = editHistoryRepository.getActiveVersion(imageId) ?: return@withContext
+        val txs = editHistoryRepository.getTransactions(active.id)
+        // Find the most recent UNDO marker; replay the original transaction it
+        // negated as a REDO marker so the version tree stays replayable.
+        val undoIdx = txs.indexOfLast { it.source == TransactionSource.UNDO }
+        if (undoIdx < 0 || undoIdx == 0) return@withContext
+        val undone = txs[undoIdx - 1]
+        editHistoryRepository.addTransaction(
+            undone.copy(
+                id = IdGenerator.newId("tx"),
+                timestamp = System.currentTimeMillis(),
+                label = "Redo: ${undone.label}",
+                source = TransactionSource.REDO,
+            ),
+        )
+    }
+
     /** Delete a version (and its transactions) from the tree. */
     suspend fun deleteVersion(imageId: String, versionId: String) = withContext(ThreadPool.database) {
         editHistoryRepository.deleteVersion(versionId)

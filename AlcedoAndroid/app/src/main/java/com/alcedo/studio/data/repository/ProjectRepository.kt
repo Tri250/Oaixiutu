@@ -141,7 +141,7 @@ class ProjectRepositoryImpl @Inject constructor(
         fun long(col: String): Long = c.getColumnIndex(col).takeIf { it >= 0 }?.let { c.getLong(it) } ?: 0L
         fun int(col: String): Int = c.getColumnIndex(col).takeIf { it >= 0 }?.let { c.getInt(it) } ?: 0
         return Project(
-            id = str("id")!!,
+            id = str("id") ?: "",
             name = str("name") ?: "",
             filePath = str("filePath") ?: "",
             rootSleeveId = str("rootSleeveId") ?: "",
