@@ -67,7 +67,7 @@ class PresetService @Inject constructor(
         name = name,
         category = category,
         adjustments = runCatching {
-            json.decodeFromString<AdjustmentParams>(adjustmentsJson)
+            json.decodeFromString(AdjustmentParams.serializer(), adjustmentsJson)
         }.getOrDefault(AdjustmentParams.DEFAULT),
         isBuiltIn = isBuiltIn,
         isFavorite = isFavorite,
@@ -79,7 +79,7 @@ class PresetService @Inject constructor(
         id = id,
         name = name,
         category = category,
-        adjustmentsJson = json.encodeToString<AdjustmentParams>(adjustments),
+        adjustmentsJson = json.encodeToString(AdjustmentParams.serializer(), adjustments),
         isBuiltIn = isBuiltIn,
         isFavorite = isFavorite,
         thumbnailPath = thumbnailPath,

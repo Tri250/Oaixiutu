@@ -16,6 +16,7 @@ import com.alcedo.studio.domain.service.HistoryMgmtService
 import com.alcedo.studio.domain.service.PipelineService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

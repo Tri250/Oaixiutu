@@ -57,7 +57,7 @@ class HistoryMgmtService @Inject constructor(
             imageId = imageId,
             parentId = null,
             name = "Original",
-            cumulativeParamsJson = json.encodeToString<AdjustmentParams>(AdjustmentParams.DEFAULT),
+            cumulativeParamsJson = json.encodeToString(AdjustmentParams.serializer(), AdjustmentParams.DEFAULT),
             isVirtualCopy = false,
         )
         editHistoryRepository.setActiveVersion(imageId, version.id)
@@ -82,7 +82,7 @@ class HistoryMgmtService @Inject constructor(
             )
             editHistoryRepository.addTransaction(transaction)
             val updated = active.cumulativeParams.applyDelta(delta)
-            editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(updated))
+            editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(AdjustmentParams.serializer(), updated))
             transaction
         }
 
@@ -93,7 +93,7 @@ class HistoryMgmtService @Inject constructor(
             imageId = imageId,
             parentId = active.id,
             name = name,
-            cumulativeParamsJson = json.encodeToString<AdjustmentParams>(active.cumulativeParams),
+            cumulativeParamsJson = json.encodeToString(AdjustmentParams.serializer(), active.cumulativeParams),
             isVirtualCopy = true,
         )
         editHistoryRepository.setActiveVersion(imageId, copy.id)

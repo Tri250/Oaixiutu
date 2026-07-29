@@ -3,6 +3,8 @@ package com.alcedo.studio.data.repository
 import com.alcedo.studio.data.dao.EditHistoryDao
 import com.alcedo.studio.data.local.EditTransactionEntity
 import com.alcedo.studio.data.local.EditVersionEntity
+import com.alcedo.studio.data.model.AdjustmentParams
+import com.alcedo.studio.data.model.AdjustmentParamsDelta
 import com.alcedo.studio.data.model.EditHistory
 import com.alcedo.studio.data.model.EditTransaction
 import com.alcedo.studio.data.model.TransactionSource

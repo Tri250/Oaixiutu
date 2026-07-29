@@ -82,7 +82,7 @@ class MaskService @Inject constructor() {
         opacity = mask.opacity,
         invert = mask.invert,
         feather = mask.feather,
-        serialisedPayload = json.encodeToString<Mask>(mask),
+        serialisedPayload = json.encodeToString(Mask.serializer(), mask),
     )
 
     /** Toggle a mask's enabled state, returning a copy. */
