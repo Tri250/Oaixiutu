@@ -16,6 +16,7 @@ import com.alcedo.studio.utils.IdGenerator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,9 +36,23 @@ class SleeveRepositoryImpl @Inject constructor(
     private val _tree = MutableStateFlow<SleeveTree>(emptyTree())
     private val treeFlow = _tree.asStateFlow()
 
-    init {
-        ensureRoot()
-        refresh()
+    // Lazy initialization flag: the root row and initial tree refresh are
+    // deferred until the first suspend access instead of running in the
+    // constructor (which previously did synchronous DB I/O on the injection
+    // thread and risked an ANR).
+    private val initialized = AtomicBoolean(false)
+
+    /**
+     * Ensure the root folder row exists and the in-memory tree has been loaded.
+     * Runs at most once; safe to call from any suspend method. [ensureRoot] uses
+     * CONFLICT_IGNORE so repeated calls are harmless, and [refresh] re-reads the
+     * table so the tree is current after the first access.
+     */
+    private fun ensureReady() {
+        if (initialized.compareAndSet(false, true)) {
+            ensureRoot()
+            refresh()
+        }
     }
 
     override fun observeChildren(folderPath: String): Flow<List<SleeveElement>> =
@@ -48,28 +63,33 @@ class SleeveRepositoryImpl @Inject constructor(
     override fun observeTree(): Flow<SleeveTree> = treeFlow
 
     override suspend fun listChildren(folderPath: String): List<SleeveElement> {
+        ensureReady()
         val path = PathResolver.normalise(folderPath)
         return queryChildren(path)
     }
 
     override suspend fun getTree(): SleeveTree {
+        ensureReady()
         refresh()
         return _tree.value
     }
 
     override suspend fun getFolder(folderPath: String): SleeveFolder? {
+        ensureReady()
         val path = PathResolver.normalise(folderPath)
         return db.query("SELECT * FROM sleeve_elements WHERE sleevePath = ? AND isFolder = 1 LIMIT 1", arrayOf(path))
             .use { c -> if (c.moveToFirst()) c.toFolder() else null }
     }
 
     override suspend fun getFile(sleevePath: String): SleeveFile? {
+        ensureReady()
         val path = PathResolver.normalise(sleevePath)
         return db.query("SELECT * FROM sleeve_elements WHERE sleevePath = ? AND isFolder = 0 LIMIT 1", arrayOf(path))
             .use { c -> if (c.moveToFirst()) c.toFile() else null }
     }
 
     override suspend fun createFolder(parentPath: String, name: String): SleeveFolder {
+        ensureReady()
         val now = System.currentTimeMillis()
         val parent = PathResolver.normalise(parentPath)
         val path = PathResolver.join(parent, name)
@@ -93,6 +113,7 @@ class SleeveRepositoryImpl @Inject constructor(
     }
 
     override suspend fun importFile(parentPath: String, uri: String, name: String): SleeveFile {
+        ensureReady()
         val now = System.currentTimeMillis()
         val parent = PathResolver.normalise(parentPath)
         val path = PathResolver.join(parent, name)
@@ -114,6 +135,7 @@ class SleeveRepositoryImpl @Inject constructor(
     }
 
     override suspend fun moveElement(srcPath: String, destPath: String): Boolean {
+        ensureReady()
         val src = PathResolver.normalise(srcPath)
         val dest = PathResolver.normalise(destPath)
         if (src == ROOT) return false
@@ -132,6 +154,7 @@ class SleeveRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteElement(path: String): Boolean {
+        ensureReady()
         val p = PathResolver.normalise(path)
         if (p == ROOT) return false
         // Delete element and any descendants.
@@ -151,15 +174,19 @@ class SleeveRepositoryImpl @Inject constructor(
         } else null
     }
 
-    override suspend fun countFolders(): Int =
-        db.query("SELECT COUNT(*) FROM sleeve_elements WHERE isFolder = 1").use {
+    override suspend fun countFolders(): Int {
+        ensureReady()
+        return db.query("SELECT COUNT(*) FROM sleeve_elements WHERE isFolder = 1").use {
             if (it.moveToFirst()) it.getInt(0) else 0
         }
+    }
 
-    override suspend fun countFiles(): Int =
-        db.query("SELECT COUNT(*) FROM sleeve_elements WHERE isFolder = 0").use {
+    override suspend fun countFiles(): Int {
+        ensureReady()
+        return db.query("SELECT COUNT(*) FROM sleeve_elements WHERE isFolder = 0").use {
             if (it.moveToFirst()) it.getInt(0) else 0
         }
+    }
 
     // ---- internals ----
 

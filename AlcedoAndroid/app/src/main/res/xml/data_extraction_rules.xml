@@ -3,9 +3,7 @@
     <cloud-backup>
         <include domain="sharedpref" path="." />
         <include domain="file" path="projects" />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="ai_credentials.xml" />
-        <exclude domain="sharedpref" path="privacy_settings.xml" />
+        <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
         <exclude domain="file" path="cache" />
         <exclude domain="file" path="models" />
         <exclude domain="file" path="thumbnails" />
@@ -13,7 +11,6 @@
     <device-transfer>
         <include domain="sharedpref" path="." />
         <include domain="file" path="projects" />
-        <exclude domain="database" path="." />
         <exclude domain="file" path="cache" />
         <exclude domain="file" path="models" />
         <exclude domain="file" path="thumbnails" />

@@ -474,4 +474,15 @@ object StringResourcesEn : StringRes {
 
     override val permissionRationale = "Alcedo needs media access to import and edit your photos."
     override val grantAccess = "Grant access"
+    override val openSettings = "Open Settings"
+    override val permissionPermanentlyDenied = "Permission was permanently denied. Please enable it in system settings."
+
+    override val privacyConsentTitle = "Privacy & Data Use"
+    override val privacyConsentBody = "Alcedo processes your photos on-device for editing and AI features. " +
+        "Optional cloud LLM features (culling, image analysis) send low-resolution " +
+        "thumbnails to a provider of your choice. " +
+        "No photos leave your device unless you enable cloud features.\n\n" +
+        "You can change these choices anytime in Settings > Privacy."
+    override val accept = "Accept"
+    override val decline = "Decline"
 }

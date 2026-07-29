@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.util.Log
+import com.alcedo.studio.crash.CrashReportService
 import com.alcedo.studio.data.local.SleeveDatabase
 import com.alcedo.studio.domain.service.GpuService
 import com.alcedo.studio.domain.service.PresetService
@@ -18,6 +19,7 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -52,6 +54,23 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
         // Make the app context available to non-Hilt utility classes BEFORE any
         // service touches them. This must happen first.
         ContextProvider.init(this)
+
+        // Install the crash handler in the MAIN process only. The handler was
+        // previously installed inside the :crash service process, which meant
+        // crashes in the main (UI) process were never caught. Installing here
+        // ensures main-process crashes are captured and written to disk.
+        if (isMainProcess()) {
+            CrashReportService.install(this)
+            // Gate crash capture on consent + the user's crash-report setting.
+            appScope.launch {
+                privacyManager.state.collect { state ->
+                    val crashEnabled = runCatching {
+                        privacyManager.appSettings.first().crashReportEnabled
+                    }.getOrDefault(true)
+                    CrashReportService.setEnabled(state.consentGiven && crashEnabled)
+                }
+            }
+        }
 
         // Native library load is best-effort: emulators and devices without the
         // declared Vulkan compute feature still boot, just with degraded paths.
@@ -110,6 +129,16 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
         super.onLowMemory()
         gpuService.onLowMemory()
         NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
+    }
+
+    /**
+     * True when this process is the main app process (not a declared child
+     * process such as `:crash`). Used to gate crash-handler installation so the
+     * handler is only installed where the UI runs.
+     */
+    private fun isMainProcess(): Boolean {
+        val processName = runCatching { Application.getProcessName() }.getOrNull() ?: return true
+        return !processName.contains(":")
     }
 
     companion object {

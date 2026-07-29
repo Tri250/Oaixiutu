@@ -33,6 +33,7 @@ captures/
 # Keystore
 *.jks
 *.keystore
+keystore.properties
 
 # Local config
 local.properties

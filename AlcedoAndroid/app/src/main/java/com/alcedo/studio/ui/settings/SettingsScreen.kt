@@ -201,7 +201,7 @@ fun SettingsScreen(
         // ---- Privacy ----
         SettingsSection(title = s.privacy) {
             ToggleRow(s.analytics, s.analyticsDesc, privacy = state.privacy, getter = { it.telemetryAllowed }, setter = { viewModel.setTelemetryAllowed(it) })
-            ToggleRow(s.crashReports, s.crashReportsDesc, privacy = state.privacy, getter = { it.crashReportEnabled }, setter = { viewModel.setCrashReportEnabled(it) })
+            ToggleRow(s.crashReports, s.crashReportsDesc, checked = appSettings.crashReportEnabled) { viewModel.setCrashReportEnabled(it) }
         }
 
         // ---- Diagnostics ----

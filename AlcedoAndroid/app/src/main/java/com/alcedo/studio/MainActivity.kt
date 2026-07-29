@@ -23,9 +23,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.alcedo.studio.crash.CrashReportService
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.permission.rememberPermissionState
@@ -57,9 +57,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Kick off the crash reporter in the dedicated :crash process. The
-        // service is sticky and self-foregrounds.
-        startCrashReporter()
+        // Crash reporting is now installed in AlcedoApplication.onCreate (main
+        // process) via CrashReportService.install; no foreground service is
+        // started here.
 
         // Hold the splash until the consent state has been read at least once.
         var consentReady = false
@@ -71,17 +71,6 @@ class MainActivity : ComponentActivity() {
                     privacyManager = privacyManager,
                     onConsentReady = { consentReady = true },
                 )
-            }
-        }
-    }
-
-    private fun startCrashReporter() {
-        runCatching {
-            val intent = android.content.Intent(this, CrashReportService::class.java)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
             }
         }
     }
@@ -125,8 +114,9 @@ private fun AlcedoHost(
     // Compose hooks must be called unconditionally; hoist the permission state
     // to the top so it survives every recomposition regardless of which gate is
     // currently active.
-    val permissions = remember { PermissionHelper.requiredMediaPermissions() }
+    val permissions = remember { PermissionHelper.allRequired() }
     val permissionState = rememberPermissionState(permissions)
+    val context = LocalContext.current
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -144,7 +134,9 @@ private fun AlcedoHost(
                 state == null || !state.consentGiven -> ConsentGate(privacyManager = privacyManager)
                 !permissionState.allGranted -> PermissionGate(
                     allGranted = permissionState.allGranted,
+                    permanentlyDenied = permissionState.permanentlyDenied,
                     onRequest = { permissionState.launcher.launch(permissions.toTypedArray()) },
+                    onOpenSettings = { PermissionHelper.openAppSettings(context) },
                 )
                 else -> MainScreen()
             }
@@ -180,7 +172,9 @@ private fun ConsentGate(privacyManager: PrivacyManager) {
 @Composable
 private fun PermissionGate(
     allGranted: Boolean,
+    permanentlyDenied: Boolean,
     onRequest: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val s = Strings.res
     Column(
@@ -189,13 +183,21 @@ private fun PermissionGate(
         modifier = Modifier.padding(DesignTokens.spacingLg),
     ) {
         Text(
-            text = s.permissionRationale,
+            text = if (permanentlyDenied) s.permissionPermanentlyDenied else s.permissionRationale,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Button(onClick = onRequest, enabled = !allGranted) {
-            Text(s.grantAccess)
+        if (permanentlyDenied) {
+            // The user selected "Don't ask again"; the only path forward is the
+            // system settings page.
+            Button(onClick = onOpenSettings) {
+                Text(s.openSettings)
+            }
+        } else {
+            Button(onClick = onRequest, enabled = !allGranted) {
+                Text(s.grantAccess)
+            }
         }
     }
 }

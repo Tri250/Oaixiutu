@@ -473,4 +473,14 @@ object StringResourcesZhCn : StringRes {
 
     override val permissionRationale = "Alcedo 需要媒体访问权限以导入和编辑您的照片。"
     override val grantAccess = "授予访问权限"
+    override val openSettings = "打开设置"
+    override val permissionPermanentlyDenied = "权限已被永久拒绝，请在系统设置中手动开启。"
+
+    override val privacyConsentTitle = "隐私与数据使用"
+    override val privacyConsentBody = "Alcedo 在设备本地处理您的照片以进行编辑和 AI 功能。" +
+        "可选的云端大模型功能（筛选、图像分析）会将低分辨率缩略图发送到您选择的提供商。" +
+        "除非您启用云端功能，否则照片不会离开您的设备。\n\n" +
+        "您可以随时在“设置 > 隐私”中更改这些选项。"
+    override val accept = "接受"
+    override val decline = "拒绝"
 }

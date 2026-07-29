@@ -512,4 +512,12 @@ interface StringRes {
     // ---- Permissions ----
     val permissionRationale: String
     val grantAccess: String
+    val openSettings: String
+    val permissionPermanentlyDenied: String
+
+    // ---- Privacy consent dialog ----
+    val privacyConsentTitle: String
+    val privacyConsentBody: String
+    val accept: String
+    val decline: String
 }

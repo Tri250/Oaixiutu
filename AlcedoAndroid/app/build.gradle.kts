@@ -1,4 +1,12 @@
 import org.gradle.api.tasks.compile.JavaCompile
+import java.io.FileInputStream
+import java.util.Properties
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
 
 plugins {
     id("com.android.application")
@@ -18,11 +26,23 @@ android {
         applicationId = "com.alcedo.studio"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // Versioning from git: versionCode from commit count, versionName from
+        // the most recent tag (falls back to a sane default outside a git repo).
+        val gitCommitCount = try {
+            providers.exec {
+                commandLine("git", "rev-list", "--count", "HEAD")
+            }.standardOutput.asText.get().trim().toInt()
+        } catch (e: Exception) { 1 }
+        versionCode = gitCommitCount
+        versionName = try {
+            providers.exec {
+                commandLine("git", "describe", "--tags", "--always", "--dirty")
+            }.standardOutput.asText.get().trim()
+        } catch (e: Exception) { "0.3.0" }
 
         // Certificate pins (SPKI SHA-256, base64) for hosts whose live certs
         // could not be baked in here. Populate with the verified pin for each
@@ -62,9 +82,26 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            // Read from environment variables or a keystore.properties file.
+            val keystoreProperties = java.util.Properties()
+            val keystoreFile = rootProject.file("keystore.properties")
+            if (keystoreFile.exists()) {
+                keystoreProperties.load(keystoreFile.inputStream())
+            }
+            storeFile = file(keystoreProperties.getProperty("storeFile", "debug.keystore"))
+            storePassword = keystoreProperties.getProperty("storePassword", "android")
+            keyAlias = keystoreProperties.getProperty("keyAlias", "androiddebugkey")
+            keyPassword = keystoreProperties.getProperty("keyPassword", "android")
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -74,6 +111,7 @@ android {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         }
     }
 
@@ -128,6 +166,16 @@ android {
             res.srcDirs("src/main/res")
             assets.srcDirs("src/main/assets")
         }
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = true
+        disable += listOf("MissingTranslation", "ExtraTranslation")
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 

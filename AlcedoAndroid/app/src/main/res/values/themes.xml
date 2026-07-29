@@ -5,14 +5,11 @@
         via AlcedoTheme; this XML theme only needs to set up a deep-black
         window background and a no-action-bar Material3 parent so the system
         splash, status bar and back gesture behave correctly before Compose
-        takes over the surface.
+        takes over the surface. Status / navigation bar colours are left to
+        Compose (enableEdgeToEdge) so they adapt to the active theme.
     -->
     <style name="Theme.AlcedoStudio" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/alcedo_pure_black</item>
-        <item name="android:statusBarColor">@color/alcedo_pure_black</item>
-        <item name="android:navigationBarColor">@color/alcedo_obsidian</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
     <!--

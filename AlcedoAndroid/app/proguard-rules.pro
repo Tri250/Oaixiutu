@@ -57,3 +57,30 @@
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;
 }
+
+# Security Crypto
+-keep class androidx.security.crypto.** { *; }
+-keep class com.google.crypto.tink.** { *; }
+
+# Application class
+-keep class com.alcedo.studio.AlcedoApplication { *; }
+
+# Room DAO implementations
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep @androidx.room.Dao class * { *; }
+
+# Okio
+-keep class okio.** { *; }
+-dontwarn okio.**
+
+# Kotlin metadata
+-keepattributes RuntimeVisibleAnnotations, RuntimeInvisibleAnnotations, Signature, InnerClasses, EnclosingMethod
+
+# DocumentFile
+-keep class androidx.documentfile.** { *; }
+
+# DataStore
+-keep class androidx.datastore.** { *; }
+
+# Splash Screen
+-keep class androidx.core.splashscreen.** { *; }

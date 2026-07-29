@@ -1,14 +1,12 @@
 package com.alcedo.studio.crash
 
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import android.util.Log
-import androidx.core.app.NotificationChannelCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -17,11 +15,21 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Crash report collector service. Runs in a dedicated `:crash` process (declared
- * in the manifest) so a JVM crash in the main process can still be recorded.
- * Installs a global [Thread.UncaughtExceptionHandler] that writes a stack trace
- * to the app's crash log directory, then re-throws to the previous handler so
- * the OS shows its native dialog.
+ * Crash report collector. The global [Thread.UncaughtExceptionHandler] is
+ * installed in the MAIN process from
+ * [com.alcedo.studio.AlcedoApplication.onCreate] via [install]; it writes a
+ * scrubbed, size-limited stack trace to the app's crash log directory, then
+ * re-throws to the previous handler so the OS shows its native dialog.
+ *
+ * Previously the handler was installed inside this service's `:crash` process,
+ * which meant crashes in the main process were never caught. The handler now
+ * lives in the main process (where the UI runs) and writes crash files directly
+ * to disk — no foreground service is required.
+ *
+ * This class also exposes static helpers ([reportFiles], [clearReports]) used
+ * by the diagnostics screen. The manifest still declares it as a (non-foreground)
+ * service in a dedicated `:crash` process, but crash capture is handled entirely
+ * by the file-based handler installed in the main process.
  *
  * Privacy: crash capture is gated by [enabled] (set from the user's consent /
  * telemetry decision via [setEnabled] at app startup). When disabled, no crash
@@ -29,126 +37,25 @@ import java.util.Locale
  * API keys, bearer tokens) before being written, size-limited to
  * [MAX_REPORT_BYTES], and the on-disk log directory is pruned to
  * [MAX_REPORT_FILES] / [MAX_TOTAL_BYTES].
- *
- * The actual crash file is consumed by the settings / diagnostics screen on
- * next launch.
  */
 class CrashReportService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        installHandler()
-        startForegroundIfNeeded()
-        Log.i(TAG, "CrashReportService ready in pid=${Process.myPid()} process=\"${getProcessNameCompat()}\" enabled=$enabled")
+        Log.i(TAG, "CrashReportService created in pid=${Process.myPid()} process=\"${getProcessNameCompat()}\" enabled=$enabled")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // The service is sticky: even if killed, restart it so crashes keep
-        // being captured. No intent payload is expected.
-        return START_STICKY
+        // File-based crash reporting is handled by the handler installed in the
+        // main process; this service does not need to run persistently and is
+        // not started as a foreground service.
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    /** Install the global uncaught-exception handler, chained after [previous]. */
-    private fun installHandler() {
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            // Never let the handler itself throw and mask the original crash.
-            runCatching { writeCrashReport(thread, throwable) }
-            previous?.uncaughtException(thread, throwable)
-        }
-    }
-
-    private fun startForegroundIfNeeded() {
-        val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-            .setName("Crash reporter")
-            .setDescription("Captures crash diagnostics in the background.")
-            .build()
-        NotificationManagerCompat.from(this).createNotificationChannel(channel)
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Alcedo")
-            .setContentText("Crash reporter running")
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-    }
-
-    private fun writeCrashReport(thread: Thread, throwable: Throwable) {
-        // Privacy gate: only capture when the user has consented (the app sets
-        // this from PrivacyManager at startup). If consent was never given, the
-        // crash is allowed to propagate without being recorded.
-        if (!enabled) {
-            Log.w(TAG, "crash capture disabled (no consent); not writing report")
-            return
-        }
-        val dir = File(filesDir, "crashlogs").apply { mkdirs() }
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val file = File(dir, "crash_$timestamp.txt")
-        val sw = StringWriter()
-        PrintWriter(sw).use { pw ->
-            pw.println("Alcedo crash report")
-            pw.println("====================")
-            pw.println("Time: ${Date()}")
-            pw.println("Thread: ${thread.name} (id=${thread.id})")
-            pw.println("Process: ${getProcessNameCompat()}")
-            pw.println("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
-            pw.println("Android: ${Build.VERSION.RELEASE} (sdk=${Build.VERSION.SDK_INT})")
-            pw.println("Abi: ${Build.SUPPORTED_ABIS.joinToString(",")}")
-            pw.println()
-            pw.println("Stack trace:")
-            throwable.printStackTrace(pw)
-        }
-        // Scrub secrets, then enforce a per-report size cap so a runaway stack
-        // trace can't fill the disk or exfiltrate credentials embedded in it.
-        val raw = scrub(sw.toString())
-        val capped = if (raw.length > MAX_REPORT_CHARS) {
-            raw.substring(0, MAX_REPORT_CHARS) + "\n...[truncated]\n"
-        } else {
-            raw
-        }
-        file.writeText(capped)
-        pruneOldReports(dir)
-        Log.w(TAG, "Crash report written to ${file.absolutePath}")
-    }
-
-    /** Remove secrets (API keys, bearer tokens, auth headers) from [text]. */
-    private fun scrub(text: String): String {
-        var s = REDACT_HEADER.replace(text) { "${it.groupValues[1]}=<redacted>" }
-        s = REDACT_BEARER.replace(s, "Bearer <redacted>")
-        s = REDACT_OPENAI.replace(s, "sk-<redacted>")
-        return s
-    }
-
-    /** Keep at most [MAX_REPORT_FILES] / [MAX_TOTAL_BYTES] of crash logs. */
-    private fun pruneOldReports(dir: File) {
-        val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".txt") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: return
-        var kept = 0
-        var totalBytes = 0L
-        files.forEach { f ->
-            totalBytes += f.length()
-            kept++
-            if (kept > MAX_REPORT_FILES || totalBytes > MAX_TOTAL_BYTES) {
-                runCatching { f.delete() }
-            }
-        }
-    }
-
-    private fun getProcessNameCompat(): String =
-        // Application.getProcessName() is the public API on API 28+ (minSdk = 29).
-        runCatching { android.app.Application.getProcessName() }.getOrNull() ?: "unknown"
-
     companion object {
         private const val TAG = "CrashReportService"
-        private const val CHANNEL_ID = "alcedo_crash"
-        private const val NOTIFICATION_ID = 0xCA01
 
         /** Per-report size cap (~256 KB). */
         private const val MAX_REPORT_BYTES = 256L * 1024L
@@ -176,6 +83,90 @@ class CrashReportService : Service() {
         fun setEnabled(consentAndTelemetryAllowed: Boolean) {
             enabled = consentAndTelemetryAllowed
         }
+
+        /**
+         * Install the global uncaught-exception handler in the calling process.
+         * Must be called from [com.alcedo.studio.AlcedoApplication.onCreate]
+         * in the MAIN process so main-process crashes are captured. The handler
+         * writes a scrubbed crash report to disk, then delegates to the previous
+         * handler so the OS shows its native dialog.
+         */
+        fun install(context: Context) {
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            val appContext = context.applicationContext
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                // Never let the handler itself throw and mask the original crash.
+                runCatching { writeCrashReport(appContext, thread, throwable) }
+                previous?.uncaughtException(thread, throwable)
+            }
+            Log.i(TAG, "UncaughtExceptionHandler installed in pid=${Process.myPid()}")
+        }
+
+        private fun writeCrashReport(context: Context, thread: Thread, throwable: Throwable) {
+            // Privacy gate: only capture when the user has consented (the app sets
+            // this from PrivacyManager at startup). If consent was never given, the
+            // crash is allowed to propagate without being recorded.
+            if (!enabled) {
+                Log.w(TAG, "crash capture disabled (no consent); not writing report")
+                return
+            }
+            val dir = File(context.filesDir, "crashlogs").apply { mkdirs() }
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val file = File(dir, "crash_$timestamp.txt")
+            val sw = StringWriter()
+            PrintWriter(sw).use { pw ->
+                pw.println("Alcedo crash report")
+                pw.println("====================")
+                pw.println("Time: ${Date()}")
+                pw.println("Thread: ${thread.name} (id=${thread.id})")
+                pw.println("Process: ${getProcessNameCompat()}")
+                pw.println("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+                pw.println("Android: ${Build.VERSION.RELEASE} (sdk=${Build.VERSION.SDK_INT})")
+                pw.println("Abi: ${Build.SUPPORTED_ABIS.joinToString(",")}")
+                pw.println()
+                pw.println("Stack trace:")
+                throwable.printStackTrace(pw)
+            }
+            // Scrub secrets, then enforce a per-report size cap so a runaway stack
+            // trace can't fill the disk or exfiltrate credentials embedded in it.
+            val raw = scrub(sw.toString())
+            val capped = if (raw.length > MAX_REPORT_CHARS) {
+                raw.substring(0, MAX_REPORT_CHARS) + "\n...[truncated]\n"
+            } else {
+                raw
+            }
+            file.writeText(capped)
+            pruneOldReports(dir)
+            Log.w(TAG, "Crash report written to ${file.absolutePath}")
+        }
+
+        /** Remove secrets (API keys, bearer tokens, auth headers) from [text]. */
+        private fun scrub(text: String): String {
+            var s = REDACT_HEADER.replace(text) { "${it.groupValues[1]}=<redacted>" }
+            s = REDACT_BEARER.replace(s, "Bearer <redacted>")
+            s = REDACT_OPENAI.replace(s, "sk-<redacted>")
+            return s
+        }
+
+        /** Keep at most [MAX_REPORT_FILES] / [MAX_TOTAL_BYTES] of crash logs. */
+        private fun pruneOldReports(dir: File) {
+            val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".txt") }
+                ?.sortedByDescending { it.lastModified() }
+                ?: return
+            var kept = 0
+            var totalBytes = 0L
+            files.forEach { f ->
+                totalBytes += f.length()
+                kept++
+                if (kept > MAX_REPORT_FILES || totalBytes > MAX_TOTAL_BYTES) {
+                    runCatching { f.delete() }
+                }
+            }
+        }
+
+        private fun getProcessNameCompat(): String =
+            // Application.getProcessName() is the public API on API 28+ (minSdk = 29).
+            runCatching { android.app.Application.getProcessName() }.getOrNull() ?: "unknown"
 
         /** All crash report files on disk, oldest first. */
         fun reportFiles(filesDir: File): List<File> {

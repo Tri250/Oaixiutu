@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -19,7 +17,7 @@
     <uses-feature
         android:name="android.hardware.vulkan.compute"
         android:version="1"
-        android:required="true" />
+        android:required="false" />
     <uses-feature
         android:name="android.hardware.vulkan.level"
         android:version="1"
@@ -36,11 +34,12 @@
         android:supportsRtl="true"
         android:largeHeap="true"
         android:hardwareAccelerated="true"
+        android:manageSpaceActivity=".ui.settings.ManageSpaceActivity"
         android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true"
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.AlcedoStudio"
-        tools:targetApi="34">
+        tools:targetApi="35">
 
         <activity
             android:name=".MainActivity"
@@ -58,6 +57,7 @@
                 <category android:name="android.intent.category.OPENABLE" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <meta-data android:name="android.window.LayoutInDisplayCutoutMode" android:value="shortEdges" />
         </activity>
 
         <activity
@@ -75,6 +75,7 @@
         <service
             android:name=".crash.CrashReportService"
             android:exported="false"
+            android:foregroundServiceType="dataSync"
             android:process=":crash" />
 
         <provider
