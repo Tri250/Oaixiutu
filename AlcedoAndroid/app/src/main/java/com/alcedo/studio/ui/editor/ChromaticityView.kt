@@ -169,4 +169,4 @@ private fun computeChromaXY(bitmap: Bitmap?): List<Pair<Float, Float>> {
     return samples
 }
 
-private fun linearize(c: Double): Double = if (c <= 0.04045) c / 12.92 else kotlin.math.pow((c + 0.055) / 1.055, 2.4)
+private fun linearize(c: Double): Double = if (c <= 0.04045) c / 12.92 else pow((c + 0.055) / 1.055, 2.4)
