@@ -80,7 +80,7 @@ class CrashReportService : Service() {
         var enabled: Boolean = false
 
         /** Update the consent-gated crash-capture flag (call from app startup). */
-        fun setEnabled(consentAndTelemetryAllowed: Boolean) {
+        fun setConsentAndTelemetry(consentAndTelemetryAllowed: Boolean) {
             enabled = consentAndTelemetryAllowed
         }
 

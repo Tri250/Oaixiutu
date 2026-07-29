@@ -67,7 +67,7 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
                     val crashEnabled = runCatching {
                         privacyManager.appSettings.first().crashReportEnabled
                     }.getOrDefault(true)
-                    CrashReportService.setEnabled(state.consentGiven && crashEnabled)
+                    CrashReportService.setConsentAndTelemetry(state.consentGiven && crashEnabled)
                 }
             }
         }
