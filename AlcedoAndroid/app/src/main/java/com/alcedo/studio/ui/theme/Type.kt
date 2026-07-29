@@ -7,99 +7,115 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Alcedo typography. Optimized for Chinese photographers with larger font sizes
- * for CJK readability, while maintaining the compact, technical feel of a
- * professional editor. A mono family is used for numeric/slider readouts.
+ * Alcedo typography. Inspired by RapidRAW's typography system:
+ * - Display and headline levels use **bold** weight with text-shadow-shiny glow
+ * - Body and label levels use normal/medium weight for readability
+ * - Optimized for CJK with larger font sizes and more generous line heights
  *
- * Key changes for CJK: CJK characters are inherently more complex than Latin,
- * requiring slightly larger minimum sizes and more generous line heights.
+ * RapidRAW typography mapping:
+ *   displayLarge → text-5xl bold + text-shadow-shiny
+ *   display      → text-3xl bold + text-shadow-shiny
+ *   headline     → text-2xl bold + text-shadow-shiny
+ *   title        → text-xl bold + text-shadow-shiny
+ *   heading      → text-base semibold
+ *   body         → text-sm normal (secondary color)
+ *   label        → text-sm medium (secondary color)
+ *   small        → text-xs normal (secondary color)
  */
 val AlcedoTypography = Typography(
+    // ---- Display level: RapidRAW displayLarge (text-5xl bold + shiny) ----
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Light,
-        fontSize = 32.sp,
-        lineHeight = 42.sp,          // 40→42: more breathing room for CJK
+        fontWeight = FontWeight.Bold,              // RapidRAW: bold (was Light)
+        fontSize = 48.sp,                         // text-5xl ≈ 48sp (was 32sp)
+        lineHeight = 56.sp,
         letterSpacing = (-0.5).sp,
     ),
+    // ---- Display level: RapidRAW display (text-3xl bold + shiny) ----
     displayMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Light,
-        fontSize = 26.sp,
-        lineHeight = 36.sp,          // 34→36: CJK line height
+        fontWeight = FontWeight.Bold,              // RapidRAW: bold (was Light)
+        fontSize = 30.sp,                         // text-3xl ≈ 30sp (was 26sp)
+        lineHeight = 40.sp,
         letterSpacing = (-0.25).sp,
     ),
+    // ---- Headline level: RapidRAW headline (text-2xl bold + shiny) ----
     headlineLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
-        lineHeight = 30.sp,          // 28→30: CJK line height
+        fontWeight = FontWeight.Bold,              // RapidRAW: bold (was SemiBold)
+        fontSize = 24.sp,                         // text-2xl ≈ 24sp (was 22sp)
+        lineHeight = 32.sp,
     ),
+    // ---- Headline level: RapidRAW title (text-xl bold + shiny) ----
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp,            // 19→20: round number, better CJK
-        lineHeight = 26.sp,          // 24→26: CJK line height
+        fontWeight = FontWeight.Bold,              // RapidRAW: bold (was SemiBold)
+        fontSize = 20.sp,                         // text-xl ≈ 20sp
+        lineHeight = 28.sp,
     ),
+    // ---- Title level: RapidRAW heading (text-base semibold) ----
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = DesignTokens.fontHeader,
-        lineHeight = 24.sp,          // 22→24: CJK needs more vertical space
+        fontWeight = FontWeight.SemiBold,          // RapidRAW: semibold
+        fontSize = DesignTokens.fontHeader,        // text-base ≈ 16sp
+        lineHeight = 24.sp,
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.Medium,            // RapidRAW: medium
         fontSize = DesignTokens.fontTitle,
-        lineHeight = 22.sp,          // 20→22: CJK line height
+        lineHeight = 22.sp,
         letterSpacing = 0.1.sp,
     ),
     titleSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,            // 13→14: CJK minimum readable
-        lineHeight = 20.sp,          // 18→20: CJK line height
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
     ),
+    // ---- Body level: RapidRAW body (text-sm normal, secondary) ----
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = DesignTokens.fontBody,
-        lineHeight = 20.sp,          // 18→20: CJK line height
-        letterSpacing = 0.15.sp,     // 0.2→0.15: slightly tighter for CJK
+        fontWeight = FontWeight.Normal,            // RapidRAW: normal
+        fontSize = DesignTokens.fontBody,          // text-sm ≈ 14sp
+        lineHeight = 20.sp,
+        letterSpacing = 0.15.sp,
     ),
     bodyMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,            // 12→13: CJK minimum body size
-        lineHeight = 18.sp,          // 16→18: CJK line height
-        letterSpacing = 0.2.sp,      // 0.25→0.2: slightly tighter for CJK
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.2.sp,
     ),
     bodySmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = DesignTokens.fontCaption,
-        lineHeight = 16.sp,          // 14→16: CJK needs more line height
+        fontSize = DesignTokens.fontCaption,        // text-xs ≈ 12sp
+        lineHeight = 16.sp,
     ),
+    // ---- Label level: RapidRAW label (text-sm medium, secondary) ----
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,            // 13→14: CJK minimum label size
-        lineHeight = 20.sp,          // 18→20: CJK line height
-        letterSpacing = 0.3.sp,      // 0.4→0.3: slightly tighter for CJK
+        fontWeight = FontWeight.Medium,            // RapidRAW: medium
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.3.sp,
     ),
     labelMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
-        lineHeight = 17.sp,          // 16→17: CJK line height
-        letterSpacing = 0.4.sp,      // 0.5→0.4: slightly tighter for CJK
+        lineHeight = 17.sp,
+        letterSpacing = 0.4.sp,
     ),
+    // ---- Small level: RapidRAW small (text-xs normal, secondary) ----
     labelSmall = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,            // 10→11: CJK minimum readable label
-        lineHeight = 15.sp,          // 13→15: CJK line height
-        letterSpacing = 0.4.sp,      // 0.5→0.4: slightly tighter for CJK
+        fontWeight = FontWeight.Normal,            // RapidRAW: normal (was Medium)
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        letterSpacing = 0.4.sp,
     ),
 )
 
@@ -107,8 +123,8 @@ val AlcedoTypography = Typography(
 val AlcedoMonoStyle = TextStyle(
     fontFamily = FontFamily.Monospace,
     fontWeight = FontWeight.Medium,
-    fontSize = 13.sp,                // 12→13: larger for CJK readability
-    lineHeight = 18.sp,              // 16→18: CJK line height
+    fontSize = 13.sp,
+    lineHeight = 18.sp,
     letterSpacing = 0.sp,
 )
 
@@ -116,8 +132,8 @@ val AlcedoMonoStyle = TextStyle(
 val AlcedoPanelCaption = TextStyle(
     fontFamily = FontFamily.SansSerif,
     fontWeight = FontWeight.Normal,
-    fontSize = 11.sp,                // 10→11: CJK minimum readable
-    lineHeight = 15.sp,              // 13→15: CJK line height
-    letterSpacing = 0.25.sp,         // 0.3→0.25: slightly tighter for CJK
+    fontSize = 11.sp,
+    lineHeight = 15.sp,
+    letterSpacing = 0.25.sp,
     color = AlcedoColors.TextTertiary,
 )

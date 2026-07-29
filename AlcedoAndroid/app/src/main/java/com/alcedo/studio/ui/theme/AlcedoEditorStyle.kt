@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Editor-specific style helpers shared across the editor panels: panel section
- * headers, divider lines and labeled value rows. These keep the dense editor UI
- * visually consistent with the desktop app.
+ * headers, divider lines and labeled value rows. Updated to use RapidRAW-inspired
+ * neutral darks and accent colors.
  */
 object AlcedoEditorStyle {
     val panelPadding = PaddingValues(
@@ -37,7 +37,7 @@ object AlcedoEditorStyle {
         @Composable get() = MaterialTheme.colorScheme.outlineVariant
 
     val activeTrackColor: Color
-        @Composable get() = MaterialTheme.colorScheme.primary
+        @Composable get() = AlcedoTheme.extendedColors.accent    // RapidRAW: accent = white (dark)
 }
 
 @Composable
@@ -65,7 +65,7 @@ fun PanelSectionHeader(
         Text(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelMedium,
-            color = AlcedoColors.TextTertiary,
+            color = AlcedoTheme.extendedColors.accent,  // RapidRAW: accent for section headers
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -89,13 +89,13 @@ fun LabeledValue(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = AlcedoColors.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,  // TextSecondary
             modifier = Modifier.weight(1f),
         )
         Text(
             text = value,
             style = AlcedoMonoStyle,
-            color = AlcedoColors.TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,  // TextPrimary
         )
     }
 }
@@ -110,6 +110,6 @@ fun ColorSwatch(
         modifier = modifier
             .size(size)
             .background(color, ThumbnailShape)
-            .border(DesignTokens.dividerThickness, AlcedoColors.Outline, ThumbnailShape),
+            .border(DesignTokens.dividerThickness, AlcedoTheme.extendedColors.borderColor, ThumbnailShape),
     )
 }

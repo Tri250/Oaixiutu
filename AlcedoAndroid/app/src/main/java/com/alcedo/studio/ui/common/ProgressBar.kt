@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.ui.theme.AlcedoColors
+import com.alcedo.studio.ui.theme.AlcedoTheme
 import com.alcedo.studio.ui.theme.DesignTokens
 
 /** A determinate linear progress bar matching the Alcedo editor aesthetic. */
@@ -30,8 +31,8 @@ fun LinearProgressBar(
     progress: Float,
     modifier: Modifier = Modifier,
     height: Dp = DesignTokens.sliderTrackHeight,
-    trackColor: Color = AlcedoColors.Ash.copy(alpha = 0.18f),
-    progressColor: Color = AlcedoColors.AccentBlue,
+    trackColor: Color = AlcedoTheme.extendedColors.sliderTrackInactive,
+    progressColor: Color = AlcedoTheme.extendedColors.accent,
 ) {
     Canvas(
         modifier = modifier
@@ -60,7 +61,7 @@ fun LinearProgressBar(
 fun IndeterminateProgressBar(
     modifier: Modifier = Modifier,
     height: Dp = DesignTokens.sliderTrackHeight,
-    color: Color = AlcedoColors.AccentBlue,
+    color: Color = AlcedoTheme.extendedColors.accent,
 ) {
     val transition = rememberInfiniteTransition(label = "indeterminate")
     val progress by transition.animateFloat(
@@ -79,7 +80,7 @@ fun IndeterminateProgressBar(
     ) {
         val barHeight = size.height
         drawRoundRect(
-            color = AlcedoColors.Ash.copy(alpha = 0.18f),
+            color = AlcedoTheme.extendedColors.sliderTrackInactive,
             size = size,
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(barHeight / 2),
         )
@@ -104,8 +105,8 @@ fun CircularProgressBar(
     progress: Float,
     modifier: Modifier = Modifier,
     strokeWidth: Dp = 4.dp,
-    progressColor: Color = AlcedoColors.AccentBlue,
-    trackColor: Color = AlcedoColors.Ash.copy(alpha = 0.18f),
+    progressColor: Color = AlcedoTheme.extendedColors.accent,
+    trackColor: Color = AlcedoTheme.extendedColors.sliderTrackInactive,
 ) {
     Canvas(modifier = modifier) {
         val stroke = strokeWidth.toPx()

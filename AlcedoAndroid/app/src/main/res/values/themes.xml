@@ -9,7 +9,7 @@
         Compose (enableEdgeToEdge) so they adapt to the active theme.
     -->
     <style name="Theme.AlcedoStudio" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/alcedo_pure_black</item>
+        <item name="android:windowBackground">@color/alcedo_bg_primary</item>
     </style>
 
     <!--
@@ -18,6 +18,6 @@
         and only override what the splash API requires.
     -->
     <style name="Theme.AlcedoStudio.Splash" parent="Theme.AlcedoStudio">
-        <item name="android:windowBackground">@color/alcedo_pure_black</item>
+        <item name="android:windowBackground">@color/alcedo_bg_primary</item>
     </style>
 </resources>

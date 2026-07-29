@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.AlcedoMonoStyle
+import com.alcedo.studio.ui.theme.AlcedoTheme
 import com.alcedo.studio.ui.theme.DesignTokens
 
 /**
@@ -109,9 +110,9 @@ fun AdjustmentSlider(
                 .fillMaxWidth()
                 .semantics { contentDescription = "$label slider" },
             colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = AlcedoColors.Ash.copy(alpha = 0.18f),
+                thumbColor = AlcedoTheme.extendedColors.accent,           // RapidRAW: white accent (dark)
+                activeTrackColor = AlcedoTheme.extendedColors.accent,     // RapidRAW: white accent
+                inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 disabledThumbColor = AlcedoColors.TextDisabled,
                 disabledActiveTrackColor = AlcedoColors.TextDisabled,
             ),
@@ -162,7 +163,7 @@ fun AdjustmentSliderSimple(
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = AlcedoColors.Ash.copy(alpha = 0.18f),
+                    inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 ),
             )
         } else {
@@ -174,7 +175,7 @@ fun AdjustmentSliderSimple(
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = AlcedoColors.Ash.copy(alpha = 0.18f),
+                    inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 ),
             )
         }

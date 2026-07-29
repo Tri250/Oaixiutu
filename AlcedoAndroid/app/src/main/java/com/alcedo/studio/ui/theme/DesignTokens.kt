@@ -5,10 +5,14 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Alcedo design tokens. Centralised spacing, sizing, motion and typography-rhythm
- * constants used across the dark, professional photography editor theme.
+ * constants inspired by RapidRAW's minimal, photography-first design philosophy.
  *
- * Optimized for Chinese photographers: larger touch targets, clearer typography,
- * smoother animations with proper easing curves for a premium feel.
+ * Key RapidRAW design principles applied:
+ * - Generous corner radii (15dp large radius) for a soft, modern feel
+ * - Smooth 400ms color transitions for theme switching
+ * - 150ms transform transitions for interactive feedback
+ * - Shiny shadow for display text (luminous glow effect)
+ * - Optimized for Chinese photographers with larger touch targets and clearer typography
  */
 object DesignTokens {
     // ---- Spacing (4pt grid) ----
@@ -22,12 +26,12 @@ object DesignTokens {
     val spacingXxl = 32.dp
     val spacingHuge = 48.dp
 
-    // ---- Corner radius ----
+    // ---- Corner radius (RapidRAW-inspired: more generous) ----
     val radiusXs = 2.dp
     val radiusSm = 4.dp
-    val radiusMd = 8.dp
-    val radiusLg = 12.dp
-    val radiusXl = 16.dp
+    val radiusMd = 8.dp                          // RapidRAW --radius-md: 8px
+    val radiusLg = 15.dp                         // RapidRAW --radius-lg: 15px (was 12dp)
+    val radiusXl = 20.dp                         // Slightly more generous
     val radiusPill = 24.dp
 
     // ---- Elevation (shadows are subtle in a dark theme) ----
@@ -37,10 +41,19 @@ object DesignTokens {
     val elevationHigh = 6.dp
     val elevationOverlay = 12.dp
 
+    // ---- RapidRAW-inspired shadow tokens ----
+    // --shadow-shiny: 0 0 24px rgba(255, 255, 255, 0.12)
+    const val shadowShinyBlur = 24f
+    const val shadowShinyAlpha = 0.12f
+
+    // Text shadow for display headings: 0 0 18px rgba(255, 255, 255, 0.35)
+    const val textShadowShinyBlur = 18f
+    const val textShadowShinyAlpha = 0.35f
+
     // ---- Component sizing ----
     val touchTargetMin = 48.dp
-    val sliderTrackHeight = 6.dp       // 4dp→6dp: thicker track for easier thumb targeting
-    val sliderThumbRadius = 10.dp      // 9dp→10dp: larger thumb for precise dragging
+    val sliderTrackHeight = 6.dp
+    val sliderThumbRadius = 10.dp
     val thumbnailMinSize = 80.dp
     val thumbnailMaxSize = 320.dp
     val panelWidthCompact = 320.dp
@@ -54,11 +67,20 @@ object DesignTokens {
     val controlSpacing = 8.dp
 
     // ---- Motion durations (ms) ----
-    // Optimized for a premium, fluid feel with proper easing
-    const val motionFast = 150         // 120→150: slightly more generous for tactile feedback
-    const val motionNormal = 250       // 220→250: smoother page transitions
-    const val motionSlow = 380         // 360→380: more deliberate expand/collapse
-    const val motionPanel = 300        // 280→300: panel switch with breathing room
+    // RapidRAW-inspired: 150ms for transforms, 400ms for color transitions
+    const val motionFast = 150                   // RapidRAW slider thumb transform: 150ms
+    const val motionNormal = 250                 // Page transitions
+    const val motionSlow = 380                   // Expand/collapse
+    const val motionPanel = 300                  // Panel switch
+
+    // RapidRAW color transition: 400ms ease-in-out for color/bg/border
+    const val colorTransitionMs = 400            // RapidRAW .enable-color-transitions: 0.4s
+    const val colorTransitionEasing = "ease-in-out"  // RapidRAW uses ease-in-out
+
+    // Slider-specific: RapidRAW uses 150ms transform + 400ms background-color
+    const val sliderTransformMs = 150            // RapidRAW slider thumb scale
+    const val sliderColorMs = 400                // RapidRAW slider thumb color
+    const val sliderScaleActive = 1.1f           // RapidRAW scale-110 on active
 
     // ---- Histogram / scope sizing ----
     val histogramHeight = 80.dp
@@ -66,10 +88,10 @@ object DesignTokens {
 
     // ---- Font scale helpers ----
     // Enlarged for CJK readability: Chinese characters need slightly more space
-    val fontCaption = 12.sp            // 11sp→12sp: minimum readable size for CJK
-    val fontBody = 14.sp               // 13sp→14sp: comfortable reading size
-    val fontTitle = 16.sp              // 15sp→16sp: clear section titles
-    val fontHeader = 18.sp             // 17sp→18sp: prominent panel headers
+    val fontCaption = 12.sp
+    val fontBody = 14.sp
+    val fontTitle = 16.sp
+    val fontHeader = 18.sp
 }
 
 /** Common alpha values used for layered dark surfaces. */
@@ -79,5 +101,5 @@ object AlphaTokens {
     const val surfaceSelected = 0.16f
     const val disabled = 0.38f
     const val hint = 0.55f
-    const val trackInactive = 0.22f    // 0.18→0.22: slightly more visible inactive track
+    const val trackInactive = 0.22f
 }
