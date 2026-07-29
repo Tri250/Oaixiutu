@@ -96,9 +96,9 @@ void HsLocalToneVulkanOp::SetGlobalParams(OperatorParams& params) const {
   params.tone_mapping_.highlight_amount_ = highlight_amount_;
   params.tone_mapping_.clarity_amount_   = clarity_amount_;
   params.tone_mapping_.local_radius_     = radius_;
-  params.tone_mapping_.shadows_operator_present_    = shadow_amount_ != 0.0f;
-  params.tone_mapping_.highlights_operator_present_ = highlight_amount_ != 0.0f;
-  params.tone_mapping_.clarity_operator_present_    = clarity_amount_ != 0.0f;
+  params.tone_mapping_.slider_input_.shadows_operator_present_    = shadow_amount_ != 0.0f;
+  params.tone_mapping_.slider_input_.highlights_operator_present_ = highlight_amount_ != 0.0f;
+  params.tone_mapping_.slider_input_.clarity_operator_present_    = clarity_amount_ != 0.0f;
 }
 
 void HsLocalToneVulkanOp::EnableGlobalParams(OperatorParams& params, bool enable) {
