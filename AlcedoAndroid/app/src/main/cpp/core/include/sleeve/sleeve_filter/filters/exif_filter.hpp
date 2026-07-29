@@ -24,7 +24,7 @@ struct FilterableMetadata {
   bool           has_attachment_ = false;
 };
 
-class ExifFilter : public ValueFilter<FilterableMetadata> {
+class ExifFilter : public SleeveFilter, public ValueFilter<FilterableMetadata> {
  public:
   FilterType   type_ = FilterType::EXIF;
   ElementOrder order_ = ElementOrder::ASC;

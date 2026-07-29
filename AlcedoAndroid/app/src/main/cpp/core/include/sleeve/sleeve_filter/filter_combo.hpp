@@ -37,7 +37,11 @@ enum class CompareOp {
   STARTS_WITH, ENDS_WITH, BETWEEN, REGEX,
 };
 
-using FilterValue = std::variant<std::monostate, int64_t, double, bool, std::string, std::time_t>;
+// NOTE: std::time_t is intentionally omitted — on 64-bit Linux/Android it is
+// the same type as int64_t (both are `long`), so including both in the variant
+// causes a "type occurs more than once" compile error. Time values are stored
+// as int64_t and converted at the call site.
+using FilterValue = std::variant<std::monostate, int64_t, double, bool, std::string>;
 
 struct FieldCondition {
   FilterField                field_;
@@ -62,12 +66,12 @@ class FilterSQLCompiler {
   };
   static auto Compile(const FilterNode& node) -> std::string;
   static auto CompileWithParams(const FilterNode& node) -> Result;
+  static auto ValueToSQL(const FilterValue& v) -> std::string;
  private:
   static auto CompileNode(const FilterNode& node) -> std::string;
   static auto GenerateConditionString(const FieldCondition& cond) -> std::string;
   static auto FieldToColumn(FilterField field) -> std::string;
   static auto CompareToSQL(CompareOp op) -> std::string;
-  static auto ValueToSQL(const FilterValue& v) -> std::string;
 };
 
 class FilterCombo {

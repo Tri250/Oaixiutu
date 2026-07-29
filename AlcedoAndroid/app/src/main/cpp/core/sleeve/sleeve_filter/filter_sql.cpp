@@ -62,7 +62,6 @@ auto FilterSQLCompiler::ValueToSQL(const FilterValue& v) -> std::string {
     return oss.str();
   }
   if (std::holds_alternative<bool>(v)) return std::get<bool>(v) ? "1" : "0";
-  if (std::holds_alternative<std::time_t>(v)) return std::to_string(static_cast<int64_t>(v));
   if (std::holds_alternative<std::string>(v)) {
     // Escape single quotes.
     std::string s = std::get<std::string>(v);
