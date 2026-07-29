@@ -55,7 +55,6 @@ class AiServiceImpl @Inject constructor(
             SemanticSearchResult(
                 imageId = imageId,
                 score = score,
-                modelId = asset.id,
             )
         }
     }
