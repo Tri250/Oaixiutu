@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "sleeve/sleeve_element/sleeve_element.hpp"
+#include "sleeve/sleeve_element/sleeve_file.hpp"
 #include "sleeve/sleeve_filter/filter_combo.hpp"
 #include "type/type.hpp"
 
