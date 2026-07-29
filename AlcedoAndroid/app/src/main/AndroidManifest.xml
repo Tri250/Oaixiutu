@@ -10,6 +10,7 @@
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -76,9 +77,7 @@
 
         <service
             android:name=".crash.CrashReportService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:process=":crash" />
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

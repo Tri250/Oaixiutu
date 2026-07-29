@@ -105,13 +105,20 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
         super.onTrimMemory(level)
         when (level) {
             TRIM_MEMORY_RUNNING_LOW,
-            TRIM_MEMORY_RUNNING_CRITICAL,
-            TRIM_MEMORY_COMPLETE -> {
-                // Aggressive: drop caches across all layers.
+            TRIM_MEMORY_RUNNING_CRITICAL -> {
+                // Moderate: drop caches but keep the engine alive.
                 gpuService.onLowMemory()
                 NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
                 tempFileManager.cleanupAll()
-                nativeShutdown()
+            }
+            TRIM_MEMORY_COMPLETE -> {
+                // Aggressive: the process is likely about to be killed. Save
+                // native state but do NOT call nativeShutdown — the engine
+                // may still be needed if the user returns to the app.
+                gpuService.onLowMemory()
+                NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
+                NdkSafeCall.run { com.alcedo.studio.ndk.Bridge.nativeSaveAll() }
+                tempFileManager.cleanupAll()
             }
             TRIM_MEMORY_MODERATE, TRIM_MEMORY_BACKGROUND -> {
                 NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }

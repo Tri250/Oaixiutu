@@ -30,7 +30,11 @@ object PermissionHelper {
     /** Permissions required for reading media (version-aware). */
     fun requiredMediaPermissions(): List<String> = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
-            listOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.ACCESS_MEDIA_LOCATION,
+            )
         else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 

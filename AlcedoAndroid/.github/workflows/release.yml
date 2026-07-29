@@ -9,18 +9,19 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., 1.6.11)'
+        description: 'Release version (e.g., 1.6.12)'
         required: true
-        default: '1.6.11'
+        default: '1.6.12'
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
     name: Build Release APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -37,9 +38,38 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0 ndk;27.0.12077973'
 
-      - name: Install NDK
-        run: sdkmanager "ndk;27.0.12077973" "platforms;android-35" "build-tools;35.0.0"
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Verify NDK installation
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_SDK_ROOT/ndk/" || echo "NDK directory not found at default path"
+          # Try to locate NDK
+          NDK_PATH=$(find "$ANDROID_SDK_ROOT" -maxdepth 2 -name "ndk" -type d 2>/dev/null | head -1)
+          if [ -n "$NDK_PATH" ]; then
+            echo "NDK found at: $NDK_PATH"
+            ls -la "$NDK_PATH/"
+          fi
+
+      - name: Create local.properties
+        run: |
+          NDK_DIR=$(find "$ANDROID_SDK_ROOT" -maxdepth 3 -name "27.0.12077973" -type d 2>/dev/null | head -1)
+          if [ -z "$NDK_DIR" ]; then
+            NDK_DIR=$(find "$ANDROID_SDK_ROOT" -maxdepth 3 -name "ndk" -type d 2>/dev/null | head -1)
+            if [ -n "$NDK_DIR" ]; then
+              NDK_DIR=$(ls -d "$NDK_DIR"/*/ 2>/dev/null | head -1)
+            fi
+          fi
+          echo "Using NDK: $NDK_DIR"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          if [ -n "$NDK_DIR" ]; then
+            echo "ndk.dir=$NDK_DIR" >> local.properties
+          fi
+          cat local.properties
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -55,10 +85,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APK
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-          NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/27.0.12077973
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace --info 2>&1 | tail -200
+
+      - name: List APK outputs
+        run: |
+          echo "=== APK outputs ==="
+          find app/build/outputs -name "*.apk" -exec ls -lh {} \; 2>/dev/null || echo "No APK found"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -66,6 +98,7 @@ jobs:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
+          if-no-files-found: warn
 
       - name: Upload mapping file
         uses: actions/upload-artifact@v4
@@ -73,40 +106,56 @@ jobs:
           name: mapping
           path: app/build/outputs/mapping/release/mapping.txt
           retention-days: 90
+          if-no-files-found: warn
 
       - name: Build summary
+        if: always()
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          APK=$(find app/build/outputs -name "*.apk" 2>/dev/null | head -1)
           if [ -n "$APK" ]; then
-            echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
             echo "- **APK**: \`$(basename $APK)\`" >> $GITHUB_STEP_SUMMARY
             echo "- **Size**: $(du -h "$APK" | cut -f1)" >> $GITHUB_STEP_SUMMARY
-            echo "- **Version**: $(git describe --tags --always 2>/dev/null || echo unknown)" >> $GITHUB_STEP_SUMMARY
-            echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: Build failed or no APK produced" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "- **Version**: $(git describe --tags --always 2>/dev/null || echo unknown)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Get version info
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            INPUT_VERSION="${{ github.event.inputs.version }}"
+            # Ensure version has 'v' prefix for tag
+            if [[ "$INPUT_VERSION" != v* ]]; then
+              INPUT_VERSION="v$INPUT_VERSION"
+            fi
+            echo "VERSION=$INPUT_VERSION" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=$INPUT_VERSION" >> $GITHUB_OUTPUT
+            echo "IS_RELEASE=true" >> $GITHUB_OUTPUT
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "IS_RELEASE=true" >> $GITHUB_OUTPUT
           else
-            # Use git describe for branch pushes
             VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.3.0")
             echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=" >> $GITHUB_OUTPUT
+            echo "IS_RELEASE=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Release
-        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        if: steps.version.outputs.IS_RELEASE == 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ steps.version.outputs.VERSION }}
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', steps.version.outputs.VERSION) }}
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -115,6 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     timeout-minutes: 10
+    if: always() && needs.build.result != 'skipped'
 
     steps:
       - name: Checkout
@@ -128,9 +178,11 @@ jobs:
 
       - name: Verify APK structure
         run: |
-          ls -la ./apk/
+          echo "=== APK Files ==="
+          ls -la ./apk/ || echo "No APK files found"
           for apk in ./apk/*.apk; do
-            echo "=== $apk ==="
+            [ -f "$apk" ] || continue
+            echo "=== $(basename $apk) ==="
             unzip -l "$apk" | grep -E "lib/arm64-v8a/|classes\.dex|AndroidManifest\.xml|resources\.arsc" || true
             echo "APK size: $(du -h "$apk" | cut -f1)"
           done
@@ -138,32 +190,35 @@ jobs:
       - name: Verify native library symbols
         run: |
           for apk in ./apk/*.apk; do
-            echo "=== Native libs in $apk ==="
+            [ -f "$apk" ] || continue
+            echo "=== Native libs in $(basename $apk) ==="
             unzip -l "$apk" | grep "lib/arm64-v8a/libalcedo" || echo "WARNING: alcedo_native not found!"
           done
 
       - name: Verify APK signing
         run: |
           for apk in ./apk/*.apk; do
-            echo "=== Signing info for $apk ==="
+            [ -f "$apk" ] || continue
+            echo "=== Signing info for $(basename $apk) ==="
             if command -v apksigner &>/dev/null; then
               apksigner verify --print-certs "$apk" 2>&1 || true
             elif command -v jarsigner &>/dev/null; then
               jarsigner -verify -verbose:summary -certs "$apk" 2>&1 | tail -5 || true
             else
-              echo "apksigner/jarsigner not available; skipping signature verification"
-              # Basic check: APK must contain a META-INF signature block
+              echo "apksigner/jarsigner not available; checking META-INF signature block"
               unzip -l "$apk" | grep -E "META-INF/.*\.(RSA|SF|MF)" || echo "WARNING: No signing metadata found!"
             fi
           done
 
-      - name: Verify verification summary
+      - name: Verification summary
+        if: always()
         run: |
           echo "## Verification Summary" >> $GITHUB_STEP_SUMMARY
           for apk in ./apk/*.apk; do
+            [ -f "$apk" ] || continue
             echo "- **APK**: \`$(basename $apk)\` ($(du -h "$apk" | cut -f1))" >> $GITHUB_STEP_SUMMARY
-            NATIVE_COUNT=$(unzip -l "$apk" | grep -c "lib/arm64-v8a/" || true)
+            NATIVE_COUNT=$(unzip -l "$apk" | grep -c "lib/arm64-v8a/" || echo "0")
             echo "- **Native libs**: $NATIVE_COUNT" >> $GITHUB_STEP_SUMMARY
-            DEX_COUNT=$(unzip -l "$apk" | grep -c "classes.*\.dex" || true)
+            DEX_COUNT=$(unzip -l "$apk" | grep -c "classes.*\.dex" || echo "0")
             echo "- **DEX files**: $DEX_COUNT" >> $GITHUB_STEP_SUMMARY
           done
