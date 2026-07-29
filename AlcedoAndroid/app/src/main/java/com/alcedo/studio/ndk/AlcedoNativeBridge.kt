@@ -12,7 +12,7 @@ import com.alcedo.studio.data.model.AdjustmentParams
  * filesystem, RAW processing, export, thumbnails, edit history and scopes.
  *
  * All native methods are implemented in the C++ jni_*.cpp translation units
- * under separate per-module bridge classes (Bridge, Raw, Pipeline, Editor,
+ * separate per-module bridge classes (Bridge, Raw, Pipeline,
  * Sleeve, Image, Ai, Export, Scope, History, Thumbnail). This object
  * delegates to those internal classes so callers see a single facade.
  *
@@ -538,16 +538,32 @@ object AlcedoNativeBridge {
         sb.append("\"vibrance\":").append(params.vibrance).append(',')
         sb.append("\"clarity\":").append(params.clarity).append(',')
         sb.append("\"sharpen\":").append(params.sharpen).append(',')
+        // ---- HLS (lift / gamma / gain) ----
+        sb.append("\"liftHue\":").append(params.liftHue).append(',')
+        sb.append("\"liftSat\":").append(params.liftSat).append(',')
+        sb.append("\"liftLum\":").append(params.liftLum).append(',')
+        sb.append("\"gammaHue\":").append(params.gammaHue).append(',')
+        sb.append("\"gammaSat\":").append(params.gammaSat).append(',')
+        sb.append("\"gammaLum\":").append(params.gammaLum).append(',')
+        sb.append("\"gainHue\":").append(params.gainHue).append(',')
+        sb.append("\"gainSat\":").append(params.gainSat).append(',')
+        sb.append("\"gainLum\":").append(params.gainLum).append(',')
+        // ---- Geometry ----
         sb.append("\"rotation\":").append(params.rotation).append(',')
         sb.append("\"perspectiveH\":").append(params.perspectiveH).append(',')
         sb.append("\"perspectiveV\":").append(params.perspectiveV).append(',')
+        // ---- Effects ----
         sb.append("\"filmGrainAmount\":").append(params.filmGrainAmount).append(',')
+        sb.append("\"filmGrainSize\":").append(params.filmGrainSize).append(',')
         sb.append("\"halationAmount\":").append(params.halationAmount).append(',')
         sb.append("\"lutIntensity\":").append(params.lutIntensity).append(',')
+        sb.append("\"lutPath\":\"").append(params.lutPath).append("\",")
+        // ---- Display ----
         sb.append("\"displayTransform\":\"").append(params.displayTransform).append("\",")
         sb.append("\"outputColorSpace\":\"").append(params.outputColorSpace).append("\",")
         sb.append("\"displayEotf\":\"").append(params.displayEotf).append("\",")
         sb.append("\"peakLuminanceNits\":").append(params.peakLuminanceNits).append(',')
+        // ---- RAW ----
         sb.append("\"rawDemosaic\":\"").append(params.rawDemosaic).append("\",")
         sb.append("\"rawBlackLevel\":").append(params.rawBlackLevel).append(',')
         sb.append("\"rawWhitePoint\":").append(params.rawWhitePoint).append(',')

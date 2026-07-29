@@ -533,24 +533,50 @@ class EditorViewModel @Inject constructor(
      */
     private fun buildDelta(baseline: AdjustmentParams, current: AdjustmentParams): AdjustmentParamsDelta {
         val overrides = LinkedHashMap<String, String>()
+        // ---- Basic tone ----
         if (current.exposure != baseline.exposure) overrides["exposure"] = current.exposure.toString()
         if (current.contrast != baseline.contrast) overrides["contrast"] = current.contrast.toString()
         if (current.highlights != baseline.highlights) overrides["highlights"] = current.highlights.toString()
         if (current.shadows != baseline.shadows) overrides["shadows"] = current.shadows.toString()
         if (current.whites != baseline.whites) overrides["whites"] = current.whites.toString()
         if (current.blacks != baseline.blacks) overrides["blacks"] = current.blacks.toString()
+        // ---- Color ----
         if (current.temperature != baseline.temperature) overrides["temperature"] = current.temperature.toString()
         if (current.tint != baseline.tint) overrides["tint"] = current.tint.toString()
         if (current.saturation != baseline.saturation) overrides["saturation"] = current.saturation.toString()
         if (current.vibrance != baseline.vibrance) overrides["vibrance"] = current.vibrance.toString()
         if (current.clarity != baseline.clarity) overrides["clarity"] = current.clarity.toString()
         if (current.sharpen != baseline.sharpen) overrides["sharpen"] = current.sharpen.toString()
+        // ---- HLS (lift / gamma / gain) ----
+        if (current.liftHue != baseline.liftHue) overrides["liftHue"] = current.liftHue.toString()
+        if (current.liftSat != baseline.liftSat) overrides["liftSat"] = current.liftSat.toString()
+        if (current.liftLum != baseline.liftLum) overrides["liftLum"] = current.liftLum.toString()
+        if (current.gammaHue != baseline.gammaHue) overrides["gammaHue"] = current.gammaHue.toString()
+        if (current.gammaSat != baseline.gammaSat) overrides["gammaSat"] = current.gammaSat.toString()
+        if (current.gammaLum != baseline.gammaLum) overrides["gammaLum"] = current.gammaLum.toString()
+        if (current.gainHue != baseline.gainHue) overrides["gainHue"] = current.gainHue.toString()
+        if (current.gainSat != baseline.gainSat) overrides["gainSat"] = current.gainSat.toString()
+        if (current.gainLum != baseline.gainLum) overrides["gainLum"] = current.gainLum.toString()
+        // ---- Geometry ----
         if (current.rotation != baseline.rotation) overrides["rotation"] = current.rotation.toString()
         if (current.perspectiveH != baseline.perspectiveH) overrides["perspectiveH"] = current.perspectiveH.toString()
         if (current.perspectiveV != baseline.perspectiveV) overrides["perspectiveV"] = current.perspectiveV.toString()
+        // ---- Effects ----
         if (current.filmGrainAmount != baseline.filmGrainAmount) overrides["filmGrainAmount"] = current.filmGrainAmount.toString()
+        if (current.filmGrainSize != baseline.filmGrainSize) overrides["filmGrainSize"] = current.filmGrainSize.toString()
         if (current.halationAmount != baseline.halationAmount) overrides["halationAmount"] = current.halationAmount.toString()
         if (current.lutIntensity != baseline.lutIntensity) overrides["lutIntensity"] = current.lutIntensity.toString()
+        // ---- RAW ----
+        if (current.rawNoiseReduction != baseline.rawNoiseReduction) overrides["rawNoiseReduction"] = current.rawNoiseReduction.toString()
+        // ---- Display / LUT path (string fields) ----
+        if (current.displayTransform != baseline.displayTransform) overrides["displayTransform"] = current.displayTransform
+        if (current.outputColorSpace != baseline.outputColorSpace) overrides["outputColorSpace"] = current.outputColorSpace
+        if (current.displayEotf != baseline.displayEotf) overrides["displayEotf"] = current.displayEotf
+        if (current.peakLuminanceNits != baseline.peakLuminanceNits) overrides["peakLuminanceNits"] = current.peakLuminanceNits.toString()
+        if (current.rawDemosaic != baseline.rawDemosaic) overrides["rawDemosaic"] = current.rawDemosaic
+        if (current.rawBlackLevel != baseline.rawBlackLevel) overrides["rawBlackLevel"] = current.rawBlackLevel.toString()
+        if (current.rawWhitePoint != baseline.rawWhitePoint) overrides["rawWhitePoint"] = current.rawWhitePoint.toString()
+        if (current.lutPath != baseline.lutPath) overrides["lutPath"] = current.lutPath
         return AdjustmentParamsDelta(overrides)
     }
 

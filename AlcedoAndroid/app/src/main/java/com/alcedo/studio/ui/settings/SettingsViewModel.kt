@@ -96,6 +96,11 @@ class SettingsViewModel @Inject constructor(
             .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
     }
 
+    fun setAnalyticsEnabled(enabled: Boolean) = viewModelScope.launch {
+        runCatching { privacyManager.setAnalyticsEnabled(enabled) }
+            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+    }
+
     fun setConsent(given: Boolean) = viewModelScope.launch {
         runCatching { privacyManager.setConsent(given) }
             .onFailure { e -> _uiState.update { it.copy(error = e.message) } }

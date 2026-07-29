@@ -66,6 +66,9 @@ class MainActivity : ComponentActivity() {
         var consentReady = false
         splash.setKeepOnScreenCondition { !consentReady }
 
+        // Handle external image intents on cold start (e.g. opening a JPG from a file manager).
+        intent?.let { handleImageIntent(it) }
+
         setContent {
             AlcedoTheme {
                 AlcedoHost(
