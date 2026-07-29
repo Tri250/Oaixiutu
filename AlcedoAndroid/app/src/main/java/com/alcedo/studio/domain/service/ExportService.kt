@@ -134,6 +134,18 @@ class ExportService @Inject constructor(
                             outFile.delete()
                             return@withContext finish(request, ultraFile, start)
                         } else {
+                            // Try native UltraHDR export as fallback
+                            if (!ultraOk || !ultraFile.exists() || ultraFile.length() == 0L) {
+                                val nativeUltraOk = NdkSafeCall.call(default = false) {
+                                    com.alcedo.studio.ndk.Export.nativeExportUltraHdr(0, 0, ultraFile.absolutePath, cfg.quality)
+                                }
+                                if (nativeUltraOk && ultraFile.exists() && ultraFile.length() > 0L) {
+                                    if (bitmap !== finalBitmap) bitmap.recycle()
+                                    finalBitmap.recycle()
+                                    outFile.delete()
+                                    return@withContext finish(request, ultraFile, start)
+                                }
+                            }
                             Log.w(TAG, "UltraHDR write failed; falling back to SDR JPEG")
                         }
                     }
@@ -189,7 +201,12 @@ class ExportService @Inject constructor(
             ExportFormat.PNG -> Bitmap.CompressFormat.PNG
             ExportFormat.WEBP -> Bitmap.CompressFormat.WEBP
             ExportFormat.TIFF -> {
-                Log.w(TAG, "TIFF encoding not supported on Android; degrading to PNG. Output: ${outFile.name}")
+                // Try native TIFF export first; fall back to PNG if unavailable
+                val nativeOk = NdkSafeCall.call(default = false) {
+                    com.alcedo.studio.ndk.Export.nativeExportTiff(0, outFile.absolutePath)
+                }
+                if (nativeOk) return true
+                Log.w(TAG, "Native TIFF export failed; degrading to PNG. Output: ${outFile.name}")
                 Bitmap.CompressFormat.PNG
             }
         }

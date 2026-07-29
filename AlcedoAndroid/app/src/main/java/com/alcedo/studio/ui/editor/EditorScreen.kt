@@ -53,8 +53,15 @@ import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ConfirmDialog
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.ErrorDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Switch
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
+import com.alcedo.studio.ui.editor.CompositionGuide
+import com.alcedo.studio.ui.editor.CompositionOverlay
+import com.alcedo.studio.ui.editor.FocusModeState
+import com.alcedo.studio.ui.editor.rememberFocusModeState
+import com.alcedo.studio.ui.editor.ScopeAnalyzer
 
 /** The five primary bottom-panel tabs. */
 private enum class EditorTab(val labelKey: (com.alcedo.studio.i18n.StringRes) -> String) {
@@ -76,6 +83,8 @@ private enum class SecondaryPanel(val title: (com.alcedo.studio.i18n.StringRes) 
     LMT({ it.panelLmt }),
     WATERMARK({ it.panelWatermark }),
     INSPECTOR({ it.inspector }),
+    COMPOSITION({ it.panelComposition }),
+    FOCUS_PEAKING({ it.panelFocusPeaking }),
 }
 
 /**
@@ -107,6 +116,8 @@ fun EditorScreen(
     var overflowOpen by remember { mutableStateOf(false) }
     var versionMenuOpen by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
+    var compositionGuide by remember { mutableStateOf(CompositionGuide.NONE) }
+    val focusModeState = rememberFocusModeState()
 
     // Open the requested image once.
     androidx.compose.runtime.LaunchedEffect(imageId) {
@@ -233,6 +244,25 @@ fun EditorScreen(
                     colorSpace = state.params.outputColorSpace,
                     modifier = Modifier.align(Alignment.TopStart).padding(DesignTokens.spacingSm),
                 )
+                // Composition guide overlay
+                if (compositionGuide != CompositionGuide.NONE) {
+                    CompositionOverlay(
+                        guideType = compositionGuide,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                // Focus peaking overlay indicator
+                if (focusModeState.enabled) {
+                    Icon(
+                        imageVector = Icons.Outlined.FiberManualRecord,
+                        contentDescription = "Focus peaking",
+                        tint = focusModeState.overlayColor,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(DesignTokens.spacingSm)
+                            .size(12.dp),
+                    )
+                }
                 // Render indicator
                 if (pipelineState.isRendering) {
                     Icon(
@@ -265,6 +295,9 @@ fun EditorScreen(
                             panel = secondaryPanel,
                             state = state,
                             viewModel = viewModel,
+                            compositionGuide = compositionGuide,
+                            onCompositionGuideChange = { compositionGuide = it },
+                            focusModeState = focusModeState,
                             modifier = Modifier.weight(1f),
                         )
                     } else {
@@ -361,7 +394,7 @@ private fun EditorTabContent(
             }
             EditorTab.DISPLAY -> {
                 DisplayTransformPanel(params = params, onUpdate = onUpdate)
-                WaveformScope(
+                ScopeAnalyzer(
                     bitmap = previewBitmap,
                     modifier = Modifier.fillMaxWidth().height(DesignTokens.scopeHeight),
                 )
@@ -382,6 +415,9 @@ private fun EditorPanelContent(
     panel: SecondaryPanel,
     state: EditorViewModel.EditorUiState,
     viewModel: EditorViewModel,
+    compositionGuide: CompositionGuide,
+    onCompositionGuideChange: (CompositionGuide) -> Unit,
+    focusModeState: FocusModeState,
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
@@ -399,6 +435,9 @@ private fun EditorPanelContent(
                 onAddRadial = { viewModel.addRadialMask(0.5f, 0.5f, 0.3f, 0.3f) },
                 onAddLinear = { viewModel.addLinearMask(0.2f, 0.5f, 0.8f, 0.5f) },
                 onAddLuminance = { viewModel.addLuminanceMask(0f, 0.5f) },
+                onAddSubject = { viewModel.addSubjectMask() },
+                onAddSky = { viewModel.addSkyMask() },
+                onAddBackground = { viewModel.addBackgroundMask() },
                 onToggle = { viewModel.toggleMask(it) },
                 onRemove = { viewModel.removeMask(it) },
             )
@@ -426,6 +465,46 @@ private fun EditorPanelContent(
                 onConfigChange = { viewModel.setWatermarkConfig(it) },
             )
             SecondaryPanel.INSPECTOR -> ImageInspectorPanel(image = state.image, exif = state.exif)
+            SecondaryPanel.COMPOSITION -> Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs),
+            ) {
+                CompositionGuide.entries.forEach { guide ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onCompositionGuideChange(guide) }
+                            .padding(horizontal = DesignTokens.spacingMd, vertical = DesignTokens.spacingSm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = guide.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (compositionGuide == guide) AlcedoColors.AccentBlue else AlcedoColors.TextSecondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+            SecondaryPanel.FOCUS_PEAKING -> Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(Strings.res.focusPeaking, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary, modifier = Modifier.weight(1f))
+                    Switch(checked = focusModeState.enabled, onCheckedChange = { focusModeState.toggle() }, modifier = Modifier.size(32.dp))
+                }
+                AdjustmentSlider(
+                    label = Strings.res.sensitivity,
+                    value = focusModeState.sensitivity,
+                    defaultValue = 0.5f,
+                    range = 0f..1f,
+                    onValueChange = { focusModeState.sensitivity = it },
+                )
+            }
         }
     }
 }

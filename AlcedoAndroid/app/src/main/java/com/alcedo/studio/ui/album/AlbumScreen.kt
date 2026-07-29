@@ -68,6 +68,9 @@ import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.ErrorDialog
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
+import com.alcedo.studio.storage.PhotoPickerHelper
+import com.alcedo.studio.storage.rememberImagePicker
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Full album browser. Composes a top app bar with search, sort and filter
@@ -120,6 +123,12 @@ fun AlbumScreen(
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) viewModel.import(uris)
     }
+
+    // Photo picker (AndroidX Photo Picker, falls back to GET_CONTENT)
+    val photoPicker = rememberImagePicker(maxItems = 50) { uris ->
+        if (uris.isNotEmpty()) viewModel.import(uris)
+    }
+    val isPhotoPickerAvailable = remember { PhotoPickerHelper.isPhotoPickerAvailable(LocalContext.current) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -205,7 +214,13 @@ fun AlbumScreen(
                         modifier = Modifier.width(220.dp).fillMaxHeight(),
                         onSelectFolder = { viewModel.setFolder(it) },
                         onCreateFolder = { showCreateFolderDialog = true },
-                        onImport = { importLauncher.launch(arrayOf("image/*")) },
+                        onImport = {
+                            if (isPhotoPickerAvailable) {
+                                photoPicker.launch(PhotoPickerHelper.imageOnly())
+                            } else {
+                                importLauncher.launch(arrayOf("image/*"))
+                            }
+                        },
                     )
                 }
 
@@ -253,7 +268,13 @@ fun AlbumScreen(
                                     title = s.emptyAlbumTitle,
                                     subtitle = s.emptyAlbumSubtitle,
                                     actionText = s.import,
-                                    onAction = { importLauncher.launch(arrayOf("image/*")) },
+                                    onAction = {
+                                        if (isPhotoPickerAvailable) {
+                                            photoPicker.launch(PhotoPickerHelper.imageOnly())
+                                        } else {
+                                            importLauncher.launch(arrayOf("image/*"))
+                                        }
+                                    },
                                     modifier = Modifier.align(Alignment.Center),
                                 )
                             }

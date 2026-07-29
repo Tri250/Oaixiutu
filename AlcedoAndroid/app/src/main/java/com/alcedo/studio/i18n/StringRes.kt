@@ -121,6 +121,8 @@ interface StringRes {
     val panelLensCorrection: String
     val panelLmt: String
     val panelWatermark: String
+    val panelComposition: String
+    val panelFocusPeaking: String
     val undo: String
     val redo: String
     val reset: String
@@ -272,6 +274,7 @@ interface StringRes {
     val maskLuminance: String
     val maskSubject: String
     val maskSky: String
+    val maskBackground: String
     val opacity: String
     val feather: String
     val invert: String
@@ -418,6 +421,8 @@ interface StringRes {
     val applyRatingsConfirm: String
     val applying: String
     val focus: String
+    val focusPeaking: String
+    val sensitivity: String
     val motion: String
     val compShort: String
     val motionBlur: String

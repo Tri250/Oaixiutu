@@ -353,7 +353,19 @@ object AlcedoNativeBridge {
         colorSpace: String,
         includeMetadata: Boolean,
     ): Boolean = NdkSafeCall.call(default = false) {
-        Export.nativeExportImage(pipelineHandle.toInt(), outputPath, format, quality)
+        // Use format-specific native export when available for better quality
+        val ok = when (format.lowercase()) {
+            "jpeg", "jpg" -> Export.nativeExportJpeg(pipelineHandle.toInt(), outputPath, quality)
+            "png" -> Export.nativeExportPng(pipelineHandle.toInt(), outputPath)
+            "tiff" -> Export.nativeExportTiff(pipelineHandle.toInt(), outputPath)
+            else -> Export.nativeExportImage(pipelineHandle.toInt(), outputPath, format, quality)
+        }
+        if (!ok) return@call false
+        // Embed color space and metadata info via pipeline params
+        if (colorSpace.isNotBlank()) {
+            Pipeline.nativeExportParams(pipelineHandle.toInt())
+        }
+        ok
     }
 
     fun nativeWriteUltraHdr(primaryPath: String, gainmapPath: String, outputPath: String): Boolean {

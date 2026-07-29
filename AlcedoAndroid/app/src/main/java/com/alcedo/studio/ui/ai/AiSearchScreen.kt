@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +48,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +73,7 @@ import com.alcedo.studio.ui.common.ErrorDialog
 import com.alcedo.studio.ui.common.ShimmerBox
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
+import com.alcedo.studio.ui.ai.SemanticGenerationDialog
 
 private val SEARCH_SUGGESTIONS = listOf(
     "sunset at the beach",
@@ -92,6 +97,8 @@ fun AiSearchScreen(
 ) {
     val s = Strings.res
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showSemanticDialog by remember { mutableStateOf(false) }
+    var semanticImageId by remember { mutableStateOf("") }
 
     BackHandler { onBack() }
 
@@ -109,6 +116,9 @@ fun AiSearchScreen(
                 actions = {
                     IconButton(onClick = onOpenModels) {
                         Icon(Icons.Outlined.Settings, contentDescription = s.settings, tint = AlcedoColors.TextTertiary)
+                    }
+                    IconButton(onClick = { showSemanticDialog = true }) {
+                        Icon(Icons.Outlined.AutoAwesome, contentDescription = "Generate Tags", tint = AlcedoColors.TextTertiary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -300,6 +310,14 @@ fun AiSearchScreen(
             title = s.error,
             message = err,
             onDismiss = viewModel::dismissError,
+        )
+    }
+
+    if (showSemanticDialog) {
+        SemanticGenerationDialog(
+            uri = android.net.Uri.parse(semanticImageId),
+            imageId = semanticImageId,
+            onDismiss = { showSemanticDialog = false },
         )
     }
 }

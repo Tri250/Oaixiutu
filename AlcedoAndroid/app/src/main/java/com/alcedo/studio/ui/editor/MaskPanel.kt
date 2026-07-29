@@ -59,6 +59,7 @@ fun MaskPanel(
     onAddLuminance: () -> Unit,
     onAddSubject: () -> Unit = {},
     onAddSky: () -> Unit = {},
+    onAddBackground: () -> Unit = {},
     onToggle: (MaskRecord) -> Unit,
     onRemove: (String) -> Unit,
     onUpdateMaskParam: (String, String, Float) -> Unit = { _, _, _ -> },
@@ -86,6 +87,7 @@ fun MaskPanel(
         ) {
             MaskAddButton(s.maskSubject, Icons.Outlined.Tune, onAddSubject, Modifier.weight(1f))
             MaskAddButton(s.maskSky, Icons.Outlined.Tune, onAddSky, Modifier.weight(1f))
+            MaskAddButton(s.maskBackground, Icons.Outlined.Tune, onAddBackground, Modifier.weight(1f))
         }
 
         SectionHeader(title = s.masks + " (${masks.size})")

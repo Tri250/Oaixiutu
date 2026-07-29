@@ -111,6 +111,7 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
                 gpuService.onLowMemory()
                 NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
                 tempFileManager.cleanupAll()
+                nativeShutdown()
             }
             TRIM_MEMORY_MODERATE, TRIM_MEMORY_BACKGROUND -> {
                 NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
@@ -129,6 +130,18 @@ class AlcedoApplication : Application(), ComponentCallbacks2 {
         super.onLowMemory()
         gpuService.onLowMemory()
         NdkSafeCall.run { AlcedoNativeBridge.nativeOnLowMemory() }
+    }
+
+    /**
+     * Persist native data and release native resources. Called from
+     * [onTrimMemory] at TRIM_MEMORY_COMPLETE and from the process
+     * shutdown hook to prevent data loss.
+     */
+    fun nativeShutdown() {
+        if (AlcedoNativeBridge.isLoaded) {
+            NdkSafeCall.run { com.alcedo.studio.ndk.Bridge.nativeSaveAll() }
+            NdkSafeCall.run { AlcedoNativeBridge.nativeShutdown() }
+        }
     }
 
     /**

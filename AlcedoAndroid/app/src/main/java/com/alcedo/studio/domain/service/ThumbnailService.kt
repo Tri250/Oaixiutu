@@ -74,6 +74,31 @@ class ThumbnailService @Inject constructor(
         withContext(ThreadPool.thumbnail) {
             val results = mutableMapOf<String, String>()
             _batch.value = Pending(uris.size, 0)
+            // Try native batch thumbnail generation first
+            val nativeUris = uris.map { it.toString() }.toTypedArray()
+            val nativeOk = NdkSafeCall.call(default = false) {
+                AlcedoNativeBridge.nativeGenerateThumbnailBatch(
+                    nativeUris, size, "",
+                    object : com.alcedo.studio.ndk.ThumbnailListener {
+                        override fun onThumbnailReady(index: Int, uri: String, outputPath: String) {
+                            results[uri] = outputPath.ifBlank { uri }
+                        }
+                        override fun onThumbnailFailed(index: Int, uri: String, error: String) {
+                            Log.w(TAG, "Native batch thumb failed for $uri: $error")
+                        }
+                        override fun onBatchProgress(completed: Int, total: Int) {
+                            _batch.value = Pending(total, completed)
+                        }
+                        override fun onBatchComplete(success: Boolean) {}
+                    },
+                )
+            }
+            if (nativeOk && results.size == uris.size) {
+                _batch.value = null
+                return@withContext results
+            }
+            // Fallback to Kotlin one-by-one generation
+            results.clear()
             uris.forEachIndexed { index, uri ->
                 runCatching {
                     val path = generateForUri(uri, uri.lastPathSegment ?: "thumb_$index", size)

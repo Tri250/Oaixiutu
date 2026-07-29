@@ -205,6 +205,38 @@ class PipelineService @Inject constructor(
         _state.value = PipelineState()
     }
 
+    /** Export the current pipeline params as JSON for sharing/preset. */
+    fun exportParams(): String? {
+        if (pipelineHandle == 0L) return null
+        return NdkSafeCall.call(default = null as String?) {
+            com.alcedo.studio.ndk.Pipeline.nativeExportParams(pipelineHandle.toInt())
+        }
+    }
+
+    /** Import pipeline params from a JSON string. */
+    fun importParams(json: String): Boolean {
+        if (pipelineHandle == 0L) return false
+        return NdkSafeCall.call(default = false) {
+            com.alcedo.studio.ndk.Pipeline.nativeImportParams(pipelineHandle.toInt(), json)
+            true
+        }
+    }
+
+    /** Set the render region for partial rendering (performance optimization). */
+    fun setRenderRegion(x: Int, y: Int, scaleX: Float, scaleY: Float, refW: Int, refH: Int) {
+        if (pipelineHandle == 0L) return
+        NdkSafeCall.run {
+            com.alcedo.studio.ndk.Pipeline.nativeSetRenderRegion(pipelineHandle.toInt(), x, y, scaleX, scaleY, refW, refH)
+        }
+    }
+
+    /** Set render resolution mode: fullRes for export, reduced for preview. */
+    fun setRenderRes(fullRes: Boolean, maxSide: Int = 2048) {
+        NdkSafeCall.run {
+            com.alcedo.studio.ndk.Pipeline.nativeSetRenderRes(fullRes, maxSide)
+        }
+    }
+
     companion object {
         private const val TAG = "PipelineService"
     }
