@@ -46,9 +46,9 @@ auto ImageLoader::Load(const std::filesystem::path& path) -> std::shared_ptr<Ima
       type == ImageType::NEF || type == ImageType::DNG) {
     // Decode RAW via the raw decoder.
     RawDecoder decoder;
-    auto buffer = decoder.Decode(path);
-    if (buffer && !buffer->Empty()) {
-      image->LoadOriginalData(std::move(*buffer));
+    auto result = decoder.Decode(path, image->image_id_, DecodeType::RAW);
+    if (result.success && result.buffer && !result.buffer->Empty()) {
+      image->LoadOriginalData(std::move(*result.buffer));
       image->has_full_img_.store(true);
     }
   } else {
@@ -97,7 +97,7 @@ auto ImageLoader::LoadThumbnail(const std::filesystem::path& path, uint32_t max_
             }
           }
         }
-        image->GetThumbnailBuffer() = FloatMat(std::move(thumb));
+        image->GetThumbnailBuffer().GetCPUData() = std::move(thumb);
         image->has_thumbnail_.store(true);
         image->thumb_state_.store(ThumbState::READY);
       }
