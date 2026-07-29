@@ -1,6 +1,6 @@
 // AlcedoAndroid - DCacheManager implementation (LRU dentry cache).
 // SPDX-License-Identifier: GPL-3.0-only
-#include "dentry_cache_manager.hpp"
+#include "sleeve/dentry_cache_manager.hpp"
 
 #include <utility>
 

@@ -1,13 +1,13 @@
 // AlcedoAndroid - SleeveView implementation.
 // Read-only sorted/filtered view over a folder's contents.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "sleeve_view.hpp"
+#include "sleeve/sleeve_view.hpp"
 
 #include <algorithm>
 #include <utility>
 
 #include "sleeve/sleeve_element/sleeve_file.hpp"
-#include "sleeve_filesystem.hpp"
+#include "sleeve/sleeve_filesystem.hpp"
 #include "utils/app_logging.hpp"
 
 namespace alcedo {

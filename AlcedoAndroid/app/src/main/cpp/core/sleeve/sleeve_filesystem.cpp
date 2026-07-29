@@ -1,7 +1,7 @@
 // AlcedoAndroid - FileSystem (sleeve_filesystem) implementation.
 // Higher-level sleeve filesystem over a StorageService.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "sleeve_filesystem.hpp"
+#include "sleeve/sleeve_filesystem.hpp"
 
 #include <algorithm>
 #include <cctype>

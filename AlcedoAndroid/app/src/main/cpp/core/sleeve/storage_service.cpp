@@ -1,6 +1,6 @@
 // AlcedoAndroid - StorageService (sleeve-side facade) implementation.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "storage_service.hpp"
+#include "sleeve/storage_service.hpp"
 
 #include <utility>
 

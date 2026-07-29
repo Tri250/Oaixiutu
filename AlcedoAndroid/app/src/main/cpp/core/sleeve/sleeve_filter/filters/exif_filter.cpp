@@ -1,6 +1,6 @@
 // AlcedoAndroid - ExifFilter implementation.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "exif_filter.hpp"
+#include "sleeve/sleeve_filter/filters/exif_filter.hpp"
 
 #include <cstdio>
 #include <sstream>

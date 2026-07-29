@@ -1,12 +1,12 @@
 // AlcedoAndroid - SleeveManager implementation.
 // Top-level sleeve manager owning StorageService + FileSystem.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "sleeve_manager.hpp"
+#include "sleeve/sleeve_manager.hpp"
 
 #include <utility>
 
 #include "sleeve/sleeve_element/sleeve_file.hpp"
-#include "sleeve_view.hpp"
+#include "sleeve/sleeve_view.hpp"
 #include "utils/app_logging.hpp"
 
 namespace alcedo {

@@ -1,7 +1,7 @@
 // AlcedoAndroid - PathResolver implementation.
 // Resolves sleeve paths to SleeveElement pointers using an LRU directory cache.
 // SPDX-License-Identifier: GPL-3.0-only
-#include "path_resolver.hpp"
+#include "sleeve/path_resolver.hpp"
 
 #include <algorithm>
 #include <sstream>

@@ -1,6 +1,6 @@
 // AlcedoAndroid - SleeveBase implementation (in-memory element tree).
 // SPDX-License-Identifier: GPL-3.0-only
-#include "sleeve_base.hpp"
+#include "sleeve/sleeve_base.hpp"
 
 #include <algorithm>
 #include <functional>
