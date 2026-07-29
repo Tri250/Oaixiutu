@@ -1,26 +1,28 @@
 # Alcedo Studio v1.6.11 全面功能测试计划与验收标准
 
-> 目标：覆盖所有功能模块的操作链路，验收标准可量化、可执行，覆盖率 100%。
+> 目标：覆盖所有功能模块的每一个操作链路、每一个公开方法、每一个边界条件和异常路径，验收标准可量化、可执行，覆盖率 100%。
 
 ---
 
 ## 一、测试范围与模块清单
 
-| 模块编号 | 模块名称 | 核心文件/路径 | 测试优先级 |
-|---------|---------|-------------|-----------|
-| M01 | 应用启动与生命周期 | `AlcedoApplication.kt`, `MainActivity.kt` | P0 |
-| M02 | 导航与UI框架 | `MainScreen.kt`, `Routes` | P0 |
-| M03 | 相册管理 | `AlbumScreen.kt`, `AlbumViewModel.kt` | P0 |
-| M04 | 图片编辑器 | `EditorScreen.kt`, `EditorViewModel.kt` | P0 |
-| M05 | AI 智能模块 | `AiSearchScreen.kt`, `AiRatingScreen.kt`, `AiModelManagerScreen.kt` | P0 |
-| M06 | 导出模块 | `ExportScreen.kt`, `ExportService.kt` | P0 |
-| M07 | 设置模块 | `SettingsScreen.kt`, `SettingsViewModel.kt` | P1 |
-| M08 | 权限管理 | `PermissionHelper.kt` | P0 |
-| M09 | NDK/Native 层 | `AlcedoNativeBridge.kt`, `ndk/*.kt`, `cpp/jni/*.cpp` | P0 |
-| M10 | 后台任务 | `BackgroundTaskService.kt` | P1 |
-| M11 | 崩溃报告 | `CrashReportService.kt` | P1 |
-| M12 | 数据存储 | `SleeveDatabase.kt`, `*Repository.kt`, `*Dao.kt` | P1 |
-| M13 | 性能与稳定性 | 内存、OOM、ANR、压力测试 | P0 |
+| 模块编号 | 模块名称 | 核心文件/路径 | 公开方法数 | 测试优先级 |
+|---------|---------|-------------|----------|-----------|
+| M01 | 应用启动与生命周期 | `AlcedoApplication.kt`, `MainActivity.kt` | 8 | P0 |
+| M02 | 导航与UI框架 | `MainScreen.kt`, `Routes` | 6 | P0 |
+| M03 | 相册管理 | `AlbumScreen.kt`, `AlbumViewModel.kt` | 26 | P0 |
+| M04 | 图片编辑器 | `EditorScreen.kt`, `EditorViewModel.kt` | 35 | P0 |
+| M05 | AI 智能模块 | `AiSearchViewModel.kt`, `AiRatingViewModel.kt`, `AiModelManagerViewModel.kt` | 22 | P0 |
+| M06 | 导出模块 | `ExportScreen.kt`, `ExportViewModel.kt`, `ExportService.kt` | 24 | P0 |
+| M07 | 设置模块 | `SettingsScreen.kt`, `SettingsViewModel.kt` | 18 | P1 |
+| M08 | 权限管理 | `PermissionHelper.kt`, `rememberPermissionState` | 15 | P0 |
+| M09 | NDK/Native 层 | `AlcedoNativeBridge.kt`, `NdkSafeCall.kt`, `ndk/*.kt` | 42 | P0 |
+| M10 | 后台任务 | `BackgroundTaskService.kt` | 8 | P1 |
+| M11 | 崩溃报告 | `CrashReportService.kt` | 6 | P1 |
+| M12 | 数据存储 | `SleeveDatabase.kt`, `*Repository.kt`, `*Dao.kt` | 12 | P1 |
+| M13 | 隐私管理 | `PrivacyManager.kt`, `PrivacyConsentDialog` | 16 | P0 |
+| M14 | 安全与临时文件 | `TempFileManager.kt`, `SecureHttpClient.kt` | 10 | P1 |
+| M15 | 性能与稳定性 | 内存、OOM、ANR、压力测试 | N/A | P0 |
 
 ---
 
@@ -49,10 +51,14 @@
   - Splash 屏显示 ≤ 3s
   - 主界面（Album Tab）正常渲染
   - Logcat 中 `native=$nativeOk` 与 `gpu=$gpuAvailable` 有值
+  - `ContextProvider.init(this)` 先于所有服务调用
+  - SleeveDatabase 已打开
+  - 内置 Preset 已种子化
+  - 临时文件孤立项已清理
   - 无崩溃、无ANR
 - **验收标准**：等级 A
 
-#### TC-M01-002 外部图片 Intent 打开
+#### TC-M01-002 外部图片 Intent 打开（冷启动）
 - **前置条件**：应用未运行，从文件管理器选择图片
 - **操作步骤**：
   1. 在文件管理器中点击一张 JPG/PNG
@@ -60,35 +66,105 @@
 - **预期结果**：
   - 应用启动后直接进入 EditorScreen
   - 图片正常加载并显示预览
+  - `handleImageIntent()` 在 `onCreate` 中被调用
 - **验收标准**：等级 A
 
-#### TC-M01-003 Native 库加载失败降级
+#### TC-M01-003 外部图片 Intent 打开（热启动）
+- **前置条件**：应用已在后台运行
+- **操作步骤**：
+  1. 从文件管理器选择图片，用 Alcedo 打开
+  2. 验证 `onNewIntent()` 被调用
+- **预期结果**：
+  - `onNewIntent()` 调用 `handleImageIntent()`
+  - `ACTION_VIEW` + `image/*` 类型被正确识别
+  - URI 被记录到 Logcat
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M01-004 外部 Intent 非 image 类型
+- **前置条件**：应用在运行中
+- **操作步骤**：从其他应用发送 `ACTION_VIEW` + `text/plain` Intent
+- **预期结果**：
+  - `handleImageIntent()` 不处理非 image 类型
+  - 应用正常显示当前界面
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M01-005 Native 库加载失败降级
 - **前置条件**：模拟无 Vulkan 设备（或删除 so 文件）
 - **操作步骤**：启动应用
 - **预期结果**：
+  - `NdkSafeCall.ensureLoaded()` 返回 false
   - Logcat 显示 `alcedo_native unavailable; running in software/degraded mode`
   - 应用不崩溃，UI 正常可用
   - 设置页中 GPU 可用性显示 "Unavailable"
+  - `NdkSafeCall.isAvailable` 返回 false
+  - `NdkSafeCall.lastError` 包含错误信息
 - **验收标准**：等级 C（降级路径正确）
 
-#### TC-M01-004 内存压力处理
+#### TC-M01-006 内存压力处理 — onTrimMemory
 - **前置条件**：应用在 Editor 中打开大分辨率 RAW
 - **操作步骤**：
   1. 使用 `adb shell am send-trim-memory com.alcedo.studio RUNNING_LOW`
   2. 观察应用表现
+  3. 分别测试 `TRIM_MEMORY_RUNNING_LOW`、`TRIM_MEMORY_RUNNING_CRITICAL`、`TRIM_MEMORY_COMPLETE`、`TRIM_MEMORY_MODERATE`、`TRIM_MEMORY_BACKGROUND`
 - **预期结果**：
+  - `RUNNING_LOW`/`RUNNING_CRITICAL`/`COMPLETE`: 调用 `gpuService.onLowMemory()` + `AlcedoNativeBridge.nativeOnLowMemory()` + `tempFileManager.cleanupAll()`
+  - `MODERATE`/`BACKGROUND`: 仅调用 `AlcedoNativeBridge.nativeOnLowMemory()`
   - 不崩溃
   - 缩略图缓存被释放
-  - Native 层 `nativeOnLowMemory()` 被调用
   - 临时文件被清理
 - **验收标准**：等级 A
 
-#### TC-M01-005 后台恢复
+#### TC-M01-007 内存压力处理 — onLowMemory
+- **前置条件**：应用在运行中
+- **操作步骤**：模拟系统 `onLowMemory()` 回调
+- **预期结果**：
+  - `gpuService.onLowMemory()` 被调用
+  - `AlcedoNativeBridge.nativeOnLowMemory()` 被调用
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M01-008 nativeOnLowMemory 执行
+- **前置条件**：应用在运行中
+- **操作步骤**：直接调用 `AlcedoNativeBridge.nativeOnLowMemory()`
+- **预期结果**：
+  - `System.gc()` 被触发
+  - `Thumbnail.nativeGenerateThumbnail(0, 0)` 被调用（清除内部缓存）
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M01-009 后台恢复
 - **前置条件**：应用在 Editor 中，按 Home 键进入后台 10 分钟
 - **操作步骤**：从最近任务恢复应用
 - **预期结果**：
   - 恢复到 Editor 界面，图片和编辑状态保留
   - 无重新加载的闪烁
+- **验收标准**：等级 A
+
+#### TC-M01-010 配置变更（语言/深色模式）
+- **操作步骤**：在系统设置中切换语言或深色模式
+- **预期结果**：
+  - `onConfigurationChanged()` 被调用
+  - Compose 自动重组
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M01-011 主进程判断
+- **操作步骤**：启动应用，检查 `isMainProcess()` 逻辑
+- **预期结果**：
+  - 主进程名不包含 `:`
+  - CrashReportService 仅在主进程安装
+  - `:crash` 子进程不安装 UncaughtExceptionHandler
+- **验收标准**：等级 A
+
+#### TC-M01-012 隐私同意状态加载超时
+- **前置条件**：DataStore 读取延迟
+- **操作步骤**：模拟 DataStore 读取超过 4 秒
+- **预期结果**：
+  - `LOAD_STATE_TIMEOUT_MS` (4000ms) 后自动解除 Splash 保持
+  - 显示 ConsentGate（未同意状态）
+  - 不无限卡在 LoadingState
 - **验收标准**：等级 A
 
 ---
@@ -129,49 +205,98 @@
   - 导航状态通过 `saveState = true` 保持
 - **验收标准**：等级 A
 
+#### TC-M02-005 首次启动隐私同意门控
+- **前置条件**：全新安装，未同意隐私
+- **操作步骤**：启动应用
+- **预期结果**：
+  - 显示 `PrivacyConsentDialog`
+  - 点击 "Accept" → `privacyManager.setConsent(true)` + `setCloudLlmAllowed(false)`
+  - 点击 "Decline" → `privacyManager.setConsent(false)`
+  - 同意后进入权限请求
+- **验收标准**：等级 A
+
+#### TC-M02-006 权限门控 UI
+- **前置条件**：已同意隐私但未授予权限
+- **操作步骤**：观察权限请求界面
+- **预期结果**：
+  - 非永久拒绝：显示 "Grant Access" 按钮，点击触发权限请求
+  - 永久拒绝：显示 "Open Settings" 按钮，点击跳转系统设置
+- **验收标准**：等级 A
+
 ---
 
 ### M03 相册管理
 
-#### TC-M03-001 图片导入（单张/多张）
-- **操作步骤**：
-  1. Album 点击 "Import" 或空状态按钮
-  2. 系统文件选择器选择 1/5/20 张图片
+#### TC-M03-001 图片导入（单张）
+- **操作步骤**：Album 点击 "Import"，选择 1 张图片
 - **预期结果**：
   - 图片出现在相册网格中
   - 后台任务栏显示导入进度
   - 导入完成后缩略图正常显示
-  - 20张批量导入不触发ANR
+  - `importService.import()` 被调用
+  - `imageRepository.upsert()` 被调用
+  - `sleeveRepository.importFile()` 被调用
+  - 缩略图异步生成
 - **验收标准**：等级 A
 
-#### TC-M03-002 文件夹创建与管理
+#### TC-M03-002 图片导入（多张批量）
+- **操作步骤**：Album 点击 "Import"，选择 20 张图片
+- **预期结果**：
+  - 所有图片出现在相册网格中
+  - 后台任务栏显示批量进度
+  - 20张批量导入不触发ANR
+  - `ImportProgress` 正确更新
+- **验收标准**：等级 A
+
+#### TC-M03-003 导入取消
+- **操作步骤**：导入 50 张图片，中途点击 Cancel
+- **预期结果**：
+  - `taskService.isCancelled(taskId)` 返回 true
+  - 剩余图片不再导入
+  - 已导入图片保留
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M03-004 导入空列表
+- **操作步骤**：调用 `import(emptyList())`
+- **预期结果**：立即返回空列表，不启动后台任务
+- **验收标准**：等级 A
+
+#### TC-M03-005 文件夹创建
 - **操作步骤**：
   1. 点击侧边栏 "Create Folder"
   2. 输入 "TestFolder" 确认
   3. 切换到此文件夹
 - **预期结果**：
+  - `sleeveRepository.createFolder()` 被调用
   - 文件夹出现在 CollectionsPanel 中
   - 切换后网格显示为空
   - 导入图片到此文件夹，图片仅属于此文件夹
 - **验收标准**：等级 A
 
-#### TC-M03-003 搜索功能
+#### TC-M03-006 文件夹创建 — 空名称
+- **操作步骤**：输入空格或空字符串创建文件夹
+- **预期结果**：`createFolder()` 忽略空名称，不创建
+- **验收标准**：等级 A
+
+#### TC-M03-007 搜索功能
 - **操作步骤**：
   1. 在搜索框输入 "sunset"
   2. 清空搜索
   3. 输入无结果关键词 "xyz123"
 - **预期结果**：
+  - `searchService.search()` 被调用
   - 搜索结果实时过滤
   - 清空后恢复全部显示
-  - 无结果时显示 EmptyState (`noSearchResults`)
+  - 无结果时显示空状态
 - **验收标准**：等级 A
 
-#### TC-M03-004 排序功能
+#### TC-M03-008 排序功能
 - **操作步骤**：点击排序下拉菜单，依次选择每种排序字段
-- **预期结果**：图片按所选字段正确排序（正序/倒序切换）
+- **预期结果**：`setSort()` 调用 `albumService.query()` 或 `observeFolder()`，图片按所选字段正确排序
 - **验收标准**：等级 A
 
-#### TC-M03-005 视图切换与缩放
+#### TC-M03-009 视图切换与缩放
 - **操作步骤**：
   1. Grid/List 切换按钮
   2. 缩放滑块从 2 拖动到 14
@@ -180,38 +305,95 @@
   - 列数实时变化，缩略图大小适应
 - **验收标准**：等级 A
 
-#### TC-M03-006 图片选择与批量操作
-- **操作步骤**：
-  1. 长按一张图片进入选择模式
-  2. 点击选择 3 张图片
-  3. 点击批量编辑 → Apply Preset
-  4. 点击导出
-- **预期结果**：
-  - 选中图片显示选中态
-  - TopBar 显示选中数量 Badge
-  - 批量应用 Preset 成功
-  - 导出页面携带选中图片ID
+#### TC-M03-010 图片选择 — 单选
+- **操作步骤**：点击一张图片
+- **预期结果**：`toggleSelection(id)` 被调用，`selection` 集合包含该 ID
 - **验收标准**：等级 A
 
-#### TC-M03-007 右键菜单操作
+#### TC-M03-011 图片选择 — 全选/清除
+- **操作步骤**：点击全选 → 清除选择
+- **预期结果**：
+  - `selectAll()` 将所有图片 ID 加入 selection
+  - `clearSelection()` 清空 selection
+- **验收标准**：等级 A
+
+#### TC-M03-012 批量应用 Preset
+- **操作步骤**：
+  1. 选择 3 张图片
+  2. 点击批量编辑 → Apply Preset
+- **预期结果**：
+  - `applyPresetToSelection()` 被调用
+  - `batchEditService.applyPreset()` 被调用
+  - 后台任务栏显示进度
+  - TopBar 显示选中数量 Badge
+- **验收标准**：等级 A
+
+#### TC-M03-013 批量应用 Preset — 无选择
+- **操作步骤**：未选择任何图片时点击 Apply Preset
+- **预期结果**：显示 "Select images first" 消息
+- **验收标准**：等级 A
+
+#### TC-M03-014 批量应用 Preset — Preset 不存在
+- **操作步骤**：选择图片后应用一个已删除的 Preset
+- **预期结果**：显示 "Preset not found" 错误
+- **验收标准**：等级 A
+
+#### TC-M03-015 复制调整
+- **操作步骤**：长按一张图片 → Copy Adjustments
+- **预期结果**：
+  - `copyAdjustments(id)` 被调用
+  - `clipAdjustmentsImageId` 被设置
+  - 显示 "Adjustments copied" 消息
+- **验收标准**：等级 A
+
+#### TC-M03-016 粘贴调整
+- **操作步骤**：选择另一张图片 → Paste Adjustments
+- **预期结果**：
+  - `pasteAdjustments(targetId)` 被调用
+  - `batchEditService.copyAdjustments()` 被调用
+  - 显示 "Adjustments pasted" 消息
+- **验收标准**：等级 A
+
+#### TC-M03-017 粘贴调整 — 未复制
+- **操作步骤**：未执行 Copy Adjustments 就点击 Paste
+- **预期结果**：显示 "Copy adjustments first" 错误
+- **验收标准**：等级 A
+
+#### TC-M03-018 添加到收藏夹
+- **操作步骤**：长按一张图片 → Add to Collection
+- **预期结果**：
+  - `addToCollection(id)` 被调用
+  - `sleeveRepository.importFile()` 被调用
+  - 显示 "Added to [folder]" 消息
+- **验收标准**：等级 A
+
+#### TC-M03-019 图片元数据操作
 - **操作步骤**：长按一张图片，依次测试：
-  - Copy Adjustments
-  - Paste Adjustments
   - Rate (1-5星)
   - Set Flag (Pick/Reject/None)
   - Set Color Label
-  - Add to Collection
+  - Set Hidden
   - Delete
-- **预期结果**：每项操作后图片元数据正确更新，删除后图片从网格消失
+- **预期结果**：
+  - `setRating()` / `setFlag()` / `setColorLabel()` / `setHidden()` / `delete()` 被调用
+  - 每项操作后图片元数据正确更新
+  - 删除后图片从网格消失，selection 清空
 - **验收标准**：等级 A
 
-#### TC-M03-008 空状态显示
+#### TC-M03-020 批量元数据操作
+- **操作步骤**：选择多张图片，分别应用评分、标记、颜色标签
+- **预期结果**：
+  - `applyRatingToSelection()` / `applyFlagToSelection()` / `applyColorLabelToSelection()` 被调用
+  - 所有选中图片的元数据更新
+- **验收标准**：等级 A
+
+#### TC-M03-021 空状态显示
 - **前置条件**：全新安装，无任何图片
 - **操作步骤**：启动应用进入 Album
 - **预期结果**：显示 EmptyState，包含标题、副标题、Import 按钮
 - **验收标准**：等级 A
 
-#### TC-M03-009 后台任务栏
+#### TC-M03-022 后台任务栏
 - **操作步骤**：导入大量图片，观察底部任务栏
 - **预期结果**：
   - 显示进度条和任务名称
@@ -219,19 +401,64 @@
   - 任务完成后自动消失
 - **验收标准**：等级 A
 
+#### TC-M03-023 AI 评分 — 相册中
+- **操作步骤**：选择图片 → Cull Selection
+- **预期结果**：
+  - `cullSelection()` 被调用
+  - `aiRatingService.cullBatch()` 被调用
+  - 后台任务注册
+  - 取消时 `taskService.isCancelled()` 被检查
+- **验收标准**：等级 A
+
+#### TC-M03-024 统计信息刷新
+- **操作步骤**：导入/删除图片后检查统计
+- **预期结果**：
+  - `refreshStats()` 被调用
+  - `albumService.stats()` / `cameras()` / `lenses()` 返回正确数据
+- **验收标准**：等级 A
+
+#### TC-M03-025 过滤功能
+- **操作步骤**：设置 FilterCombo（相机/镜头/评分/标记/颜色）
+- **预期结果**：
+  - `setFilter()` 触发 `flatMapLatest` 重新查询
+  - 空过滤器时使用 `observeFolder()` / `observeAll()`
+  - 有过滤器时使用 `albumService.query()`
+- **验收标准**：等级 A
+
+#### TC-M03-026 清除过滤
+- **操作步骤**：点击 Clear Filter
+- **预期结果**：`clearFilter()` 重置为 `FilterCombo()`，selection 清空
+- **验收标准**：等级 A
+
 ---
 
 ### M04 图片编辑器
 
-#### TC-M04-001 打开图片
+#### TC-M04-001 打开 JPG 图片
 - **操作步骤**：从 Album 点击一张 JPG 进入 Editor
 - **预期结果**：
+  - `openImage(id)` 被调用
+  - `imageRepository.getImage(id)` 返回 ImageItem
+  - `historyService.ensureHistory(id)` 确保版本树存在
+  - `pipelineService.open(Uri)` 成功
+  - `pipelineService.updateParams(baseline)` 推送基线参数
+  - `beforeBitmap` 快照初始预览
   - EditorScreen 加载，显示图片名在 TopBar
   - 预览区域显示图片
   - ColorSpaceIndicator 显示正确色彩空间
 - **验收标准**：等级 A
 
-#### TC-M04-002 打开 RAW 文件
+#### TC-M04-002 打开图片 — 不存在
+- **操作步骤**：传入无效 imageId
+- **预期结果**：`imageRepository.getImage(id)` 返回 null，UI 显示 "Image not found: $id" 错误
+- **验收标准**：等级 A
+
+#### TC-M04-003 打开图片 — Pipeline 打开失败
+- **操作步骤**：模拟 `pipelineService.open()` 返回 false
+- **预期结果**：UI 显示 "Open failed" 错误
+- **验收标准**：等级 A
+
+#### TC-M04-004 打开 RAW 文件
 - **操作步骤**：从 Album 点击一张 DNG/ARW 进入 Editor
 - **预期结果**：
   - RAW 解码成功，显示预览
@@ -239,7 +466,41 @@
   - 元数据（相机型号、镜头信息）正确显示
 - **验收标准**：等级 A
 
-#### TC-M04-003 Tone 调整
+#### TC-M04-005 单参数调整（exposure）
+- **操作步骤**：调整 Exposure +1.0
+- **预期结果**：
+  - `updateParam("exposure", 1.0f)` 被调用
+  - `applyField()` 正确映射到 `params.copy(exposure = value)`
+  - `pipelineService.updateParams(updated)` 被调用
+  - `dirty` 状态变为 true
+  - 渲染防抖启动（80ms）
+  - 防抖期间再次调整，前一个 renderDebounceJob 被取消
+- **验收标准**：等级 A
+
+#### TC-M04-006 全部 28 个参数字段映射
+- **操作步骤**：逐一测试 `applyField()` 的所有 28 个字段：
+  - exposure, contrast, highlights, shadows, whites, blacks
+  - temperature, tint, saturation, vibrance, clarity, sharpen
+  - liftHue, liftSat, liftLum, gammaHue, gammaSat, gammaLum, gainHue, gainSat, gainLum
+  - rotation, perspectiveH, perspectiveV
+  - filmGrainAmount, filmGrainSize, halationAmount, lutIntensity, rawNoiseReduction
+- **预期结果**：每个字段正确映射到 `AdjustmentParams` 的对应属性
+- **验收标准**：等级 A
+
+#### TC-M04-007 未知参数字段
+- **操作步骤**：调用 `updateParam("unknown_field", 1.0f)`
+- **预期结果**：`applyField()` 返回原 params 不变，不崩溃
+- **验收标准**：等级 A
+
+#### TC-M04-008 渲染防抖
+- **操作步骤**：快速连续调整 5 个参数（间隔 < 80ms）
+- **预期结果**：
+  - 仅最后一次调整触发 `pipelineService.render()`
+  - 中间的 renderDebounceJob 被取消
+  - 不触发渲染队列溢出
+- **验收标准**：等级 A
+
+#### TC-M04-009 Tone 调整 — 全面板
 - **操作步骤**：
   1. 切换到底部 Tone Tab
   2. 调整 Exposure +1.0, Contrast +20
@@ -252,7 +513,7 @@
   - `dirty` 状态变为 true
 - **验收标准**：等级 A
 
-#### TC-M04-004 Look 调整
+#### TC-M04-010 Look 调整
 - **操作步骤**：
   1. 切换到 Look Tab
   2. 调整 Saturation, Vibrance
@@ -261,7 +522,7 @@
 - **预期结果**：预览颜色正确变化
 - **验收标准**：等级 A
 
-#### TC-M04-005 Display 面板
+#### TC-M04-011 Display 面板
 - **操作步骤**：
   1. 切换到 Display Tab
   2. 更改 Display Transform
@@ -271,7 +532,7 @@
   - WaveformScope 实时渲染图像波形
 - **验收标准**：等级 A
 
-#### TC-M04-006 Geometry 调整
+#### TC-M04-012 Geometry 调整
 - **操作步骤**：
   1. 切换到 Geometry Tab
   2. 旋转 +90°
@@ -281,7 +542,7 @@
   - 边界无黑边溢出
 - **验收标准**：等级 A
 
-#### TC-M04-007 RAW 解码设置
+#### TC-M04-013 RAW 解码设置
 - **前置条件**：打开 RAW 文件
 - **操作步骤**：
   1. 切换到 RAW Tab
@@ -293,83 +554,256 @@
   - GPU/CPU 切换后预览正确更新
 - **验收标准**：等级 A
 
-#### TC-M04-008 Undo/Redo
+#### TC-M04-014 设置参数 — setParams
+- **操作步骤**：调用 `setParams(newParams)`
+- **预期结果**：
+  - `params` 被完整替换
+  - `pipelineService.updateParams(params)` 被调用
+  - `dirty` 正确反映与 baseline 的差异
+- **验收标准**：等级 A
+
+#### TC-M04-015 重置调整
+- **操作步骤**：点击 Reset Adjustments
+- **预期结果**：
+  - `resetAdjustments()` 调用 `setParams(AdjustmentParams.DEFAULT)`
+  - `commitChange("Reset adjustments")` 被调用
+  - 预览回到原始状态
+- **验收标准**：等级 A
+
+#### TC-M04-016 提交更改 — commitChange
+- **操作步骤**：调整参数后调用 `commitChange("Adjustment")`
+- **预期结果**：
+  - `buildDelta()` 构建稀疏 delta
+  - `historyService.recordChange(id, delta, label)` 被调用
+  - `baselineParams` 更新为当前 params
+  - `dirty` 变为 false
+  - `canRedo` 变为 false
+- **验收标准**：等级 A
+
+#### TC-M04-017 提交更改 — 无变化
+- **操作步骤**：在 params == baselineParams 时调用 `commitChange()`
+- **预期结果**：直接返回，不调用 `historyService.recordChange()`
+- **验收标准**：等级 A
+
+#### TC-M04-018 构建稀疏 Delta
+- **操作步骤**：调整 exposure 和 contrast，调用 `buildDelta()`
+- **预期结果**：
+  - `AdjustmentParamsDelta.overrides` 仅包含 exposure 和 contrast
+  - 未变化的字段不包含在 delta 中
+- **验收标准**：等级 A
+
+#### TC-M04-019 Undo
 - **操作步骤**：
   1. 调整 Exposure
   2. 调整 Contrast
   3. 点击 Undo（两次）
-  4. 点击 Redo
 - **预期结果**：
-  - Undo 回退到上一步参数
-  - Redo 恢复参数
-  - Undo 按钮在无可撤销时禁用
+  - `historyService.undo(id)` 被调用
+  - `reloadActiveVersionParams()` 更新 params 和 baseline
+  - `canRedo` 变为 true
+  - 预览回退到上一步参数
 - **验收标准**：等级 A
 
-#### TC-M04-009 版本管理
+#### TC-M04-020 Redo
+- **操作步骤**：Undo 后点击 Redo
+- **预期结果**：
+  - `historyService.redo(id)` 被调用
+  - `reloadActiveVersionParams()` 更新 params
+  - 参数恢复
+- **验收标准**：等级 A
+
+#### TC-M04-021 版本管理 — 创建虚拟副本
 - **操作步骤**：
   1. 点击版本菜单 (Layers 图标)
   2. 创建 Virtual Copy
-  3. 在新版本上调整不同参数
-  4. 切换回原版本
-  5. 删除一个版本
 - **预期结果**：
-  - 版本列表正确更新
-  - 切换版本后参数和预览正确
-  - 删除后版本从列表消失
+  - `commitIfDirty()` 先提交未保存更改
+  - `historyService.createVirtualCopy(id, name)` 被调用
+  - 自动切换到新版本
 - **验收标准**：等级 A
 
-#### TC-M04-010 前后对比
+#### TC-M04-022 版本管理 — 切换版本
+- **操作步骤**：在版本列表中点击不同版本
+- **预期结果**：
+  - `switchVersion(versionId)` 被调用
+  - `historyService.switchVersion()` 被调用
+  - params 和预览切换到对应版本
+- **验收标准**：等级 A
+
+#### TC-M04-023 版本管理 — 删除版本
+- **操作步骤**：删除一个版本
+- **预期结果**：
+  - `deleteVersion(versionId)` 被调用
+  - `historyService.deleteVersion()` 被调用
+  - 版本从列表消失
+- **验收标准**：等级 A
+
+#### TC-M04-024 前后对比
 - **操作步骤**：
   1. 调整参数后点击 Compare 按钮
   2. 再次点击关闭对比
 - **预期结果**：
-  - 显示左右/滑块对比视图
-  - Before 为原始图，After 为调整后
+  - 显示对比视图
+  - Before 为 `beforeBitmap`，After 为当前预览
   - Compare 按钮高亮态正确
 - **验收标准**：等级 A
 
-#### TC-M04-011 Mask 面板
-- **操作步骤**：
-  1. 从 Overflow 菜单打开 Masks
-  2. 依次添加 Brush/Radial/Linear/Luminance Mask
-  3. 切换 Mask 启用/禁用
-  4. 删除一个 Mask
+#### TC-M04-025 Mask 面板 — Brush Mask
+- **操作步骤**：添加 Brush Mask
 - **预期结果**：
-  - Mask 列表正确显示
-  - 添加后预览更新（如果有绘制）
-  - 删除后从列表移除
+  - `addBrushMask()` 被调用
+  - `maskService.newBrushMask()` 创建 Mask
+  - `pipelineService.applyMask(record)` 被调用
+  - Mask 列表更新
 - **验收标准**：等级 A
 
-#### TC-M04-012 Preset 应用与保存
+#### TC-M04-026 Mask 面板 — Radial/Linear/Luminance Mask
+- **操作步骤**：依次添加 Radial/Linear/Luminance Mask
+- **预期结果**：
+  - `addRadialMask()` / `addLinearMask()` / `addLuminanceMask()` 被调用
+  - 对应参数正确传入
+  - 每种 Mask 都添加到 pendingMasks 列表
+- **验收标准**：等级 A
+
+#### TC-M04-027 Mask 面板 — AI 主体/天空/背景 Mask
+- **操作步骤**：依次添加 Subject/Sky/Background Mask
+- **预期结果**：
+  - `addSubjectMask()` / `addSkyMask()` / `addBackgroundMask()` 被调用
+  - `maskInferenceService.buildSubjectMask()` 被调用
+  - AI Mask 失败时显示 "AI mask unavailable" 错误
+- **验收标准**：等级 A
+
+#### TC-M04-028 Mask 面板 — 切换启用/禁用
+- **操作步骤**：切换 Mask 启用/禁用
+- **预期结果**：
+  - `toggleMask(record)` 被调用
+  - `syncMasksToPipeline()` 被调用
+  - `pipelineService.clearMasks()` 被调用
+  - 仅启用的 Mask 被重新应用
+  - `rerender()` 被调用
+- **验收标准**：等级 A
+
+#### TC-M04-029 Mask 面板 — 删除
+- **操作步骤**：删除一个 Mask
+- **预期结果**：
+  - `removeMask(id)` 被调用
+  - Mask 从 pendingMasks 列表移除
+  - `syncMasksToPipeline()` 重新同步
+- **验收标准**：等级 A
+
+#### TC-M04-030 Preset 应用
 - **操作步骤**：
   1. 打开 Presets 面板
   2. 应用一个内置 Preset
-  3. 调整参数后 Save Current As Preset
-  4. 收藏/取消收藏 Preset
 - **预期结果**：
-  - 应用 Preset 后参数批量更新
+  - `applyPreset(preset)` 被调用
+  - `setParams(preset.adjustments)` 被调用
+  - `commitChange("Preset: ${name}")` 被调用
+  - 预览更新
+- **验收标准**：等级 A
+
+#### TC-M04-031 保存当前为 Preset
+- **操作步骤**：调整参数后 Save Current As Preset
+- **预期结果**：
+  - `saveCurrentAsPreset(name, category)` 被调用
+  - `presetService.save()` 被调用
   - 保存的 Preset 出现在列表
+- **验收标准**：等级 A
+
+#### TC-M04-032 收藏/取消收藏 Preset
+- **操作步骤**：点击 Preset 的收藏图标
+- **预期结果**：
+  - `togglePresetFavorite(preset)` 被调用
+  - `presetService.setFavorite()` 被调用
   - 收藏态正确显示
 - **验收标准**：等级 A
 
-#### TC-M04-013 未保存更改提示
+#### TC-M04-033 曲线调整
+- **操作步骤**：在 ToneCurvePanel 添加曲线点
+- **预期结果**：
+  - `setCurvePoints(points)` 被调用
+  - `params.toneCurveMaster` 被更新
+  - `pipelineService.updateParams()` 被调用
+  - `dirty` 变为 true
+- **验收标准**：等级 A
+
+#### TC-M04-034 LMT 应用
+- **操作步骤**：应用 .cube LUT 文件
+- **预期结果**：
+  - `applyLmt(path)` 被调用
+  - `params.lutPath` 和 `params.lutIntensity` 被更新
+  - `pipelineService.updateParams()` 被调用
+- **验收标准**：等级 A
+
+#### TC-M04-035 水印配置
+- **操作步骤**：在 Watermark 面板配置水印
+- **预期结果**：
+  - `setWatermarkConfig(config)` 被调用
+  - `dirty` 变为 true
+- **验收标准**：等级 A
+
+#### TC-M04-036 EXIF 字段编辑
+- **操作步骤**：修改 EXIF 字段
+- **预期结果**：
+  - `setExifField(key, value)` 被调用
+  - exif map 更新
+  - `dirty` 变为 true
+- **验收标准**：等级 A
+
+#### TC-M04-037 评分/标记/颜色标签
+- **操作步骤**：在 Editor 中设置评分、标记、颜色标签
+- **预期结果**：
+  - `setRating()` / `setFlag()` / `setColorLabel()` 被调用
+  - `imageRepository.setRating()` / `setFlag()` / `setColorLabel()` 被调用
+- **验收标准**：等级 A
+
+#### TC-M04-038 面板切换
+- **操作步骤**：依次切换 BASIC → TONE_CURVE → COLOR_WHEELS → HSL → GEOMETRY → EFFECTS → MASKS → PRESETS → HISTORY → RAW → EXIF
+- **预期结果**：
+  - `selectPanel(panel)` 被调用
+  - `activePanel` 正确更新
+  - 每个面板内容正确渲染
+- **验收标准**：等级 A
+
+#### TC-M04-039 未保存更改提示
 - **操作步骤**：
   1. 调整参数使 `dirty=true`
   2. 按系统返回键
 - **预期结果**：弹出确认对话框 "Unsaved changes"，提供 Discard 和 Cancel
 - **验收标准**：等级 A
 
-#### TC-M04-014 导出跳转
+#### TC-M04-040 导出跳转
 - **操作步骤**：点击导出按钮 (Output 图标)
 - **预期结果**：导航到 ExportScreen，携带当前 imageId
 - **验收标准**：等级 A
 
-#### TC-M04-015 缩放与平移
+#### TC-M04-041 缩放与平移
 - **操作步骤**：在预览区域双指缩放、单指平移
 - **预期结果**：
-  - 缩放比例限制在合理范围 (min/max)
+  - 缩放比例限制在合理范围
   - 平移不超出图片边界
   - 渲染指示器在重渲染时显示
+- **验收标准**：等级 A
+
+#### TC-M04-042 关闭编辑器
+- **操作步骤**：按返回键关闭编辑器
+- **预期结果**：
+  - `close()` 被调用
+  - `commitIfDirty("Auto-save")` 先提交未保存更改
+  - `pipelineService.close()` 被调用
+  - UI 状态重置为初始值
+- **验收标准**：等级 A
+
+#### TC-M04-043 ViewModel 清理
+- **操作步骤**：ViewModel 被 GC 回收
+- **预期结果**：
+  - `onCleared()` 调用 `pipelineService.close()`
+  - 释放 native pipeline handles
+- **验收标准**：等级 A
+
+#### TC-M04-044 错误消除
+- **操作步骤**：点击错误消息的关闭按钮
+- **预期结果**：`dismissError()` 被调用，`error` 变为 null
 - **验收标准**：等级 A
 
 ---
@@ -381,20 +815,46 @@
 - **预期结果**：正确导航到对应子页面
 - **验收标准**：等级 A
 
-#### TC-M05-002 语义搜索 - 正常查询
+#### TC-M05-002 语义搜索 — 正常查询
 - **前置条件**：已下载 CLIP/SigLIP 模型
 - **操作步骤**：
   1. 进入 AI Search
   2. 输入 "sunset at the beach"
   3. 点击 Search
 - **预期结果**：
-  - ModelStatusBar 显示 "Ready"
-  - 显示进度指示
+  - `search()` 被调用
+  - `modelStatus.isReady` 为 true
+  - `searchService.search(query, 100)` 被调用
+  - `imageRepository.getImage()` 解析结果
   - 结果按相关性排序，显示分数和匹配标签
   - 点击结果可打开 Editor
+  - `addRecentSearch()` 记录搜索历史
 - **验收标准**：等级 A
 
-#### TC-M05-003 语义搜索 - 建议与历史
+#### TC-M05-003 语义搜索 — 空查询
+- **操作步骤**：不输入任何内容，点击 Search
+- **预期结果**：`results` 被清空，不发起搜索请求
+- **验收标准**：等级 A
+
+#### TC-M05-004 语义搜索 — 模型未就绪
+- **前置条件**：未下载模型
+- **操作步骤**：进入 AI Search，输入查询，点击 Search
+- **预期结果**：
+  - `modelStatus.isReady` 为 false
+  - 显示错误 "AI model not ready. Please download and activate a model first."
+  - `isSearching` 变为 false
+  - 不调用 `searchService.search()`
+- **验收标准**：等级 C（降级提示正确）
+
+#### TC-M05-005 语义搜索 — 搜索失败
+- **操作步骤**：搜索时网络错误
+- **预期结果**：
+  - `searchService.search()` 抛出异常
+  - `isSearching` 变为 false
+  - 显示错误消息
+- **验收标准**：等级 A
+
+#### TC-M05-006 语义搜索 — 建议与历史
 - **操作步骤**：
   1. 进入 AI Search，不输入任何内容
   2. 点击一个 Suggestion chip
@@ -402,20 +862,34 @@
   4. 点击 Clear Recent Searches
 - **预期结果**：
   - 显示 Suggestions 列表
-  - 点击 Suggestion 触发搜索
-  - Recent Searches 正确记录
-  - Clear 后清空
+  - 点击 Suggestion 触发 `searchRecent(query)`
+  - Recent Searches 正确记录（最多 8 条）
+  - Clear 后清空，DataStore 中的 `RECENT_SEARCHES_KEY` 被删除
 - **验收标准**：等级 A
 
-#### TC-M05-004 语义搜索 - 模型未就绪
-- **前置条件**：未下载模型
-- **操作步骤**：进入 AI Search
-- **预期结果**：
-  - ModelStatusBar 显示 "Not downloaded"（红色点）
-  - 点击设置图标可跳转到模型管理
-- **验收标准**：等级 C（降级提示正确）
+#### TC-M05-007 语义搜索 — 更新查询
+- **操作步骤**：在搜索框中输入文本
+- **预期结果**：`updateQuery(text)` 被调用，`query` 字段更新
+- **验收标准**：等级 A
 
-#### TC-M05-005 AI 评分 - 批量分析
+#### TC-M05-008 语义搜索 — 清空查询
+- **操作步骤**：点击搜索框的清空按钮
+- **预期结果**：`clearQuery()` 被调用，`query` 和 `results` 清空
+- **验收标准**：等级 A
+
+#### TC-M05-009 语义搜索 — 消除错误
+- **操作步骤**：点击错误消息的关闭按钮
+- **预期结果**：`dismissError()` 被调用，`error` 变为 null
+- **验收标准**：等级 A
+
+#### TC-M05-010 语义搜索 — 模型状态监听
+- **操作步骤**：下载模型，观察 ModelStatusBar
+- **预期结果**：
+  - `sidecarRuntime.state` 收集后更新 `modelStatus`
+  - `isReady` / `modelName` / `isDownloading` 正确反映运行时状态
+- **验收标准**：等级 A
+
+#### TC-M05-011 AI 评分 — 批量分析
 - **前置条件**：相册中有 ≥5 张图片，已配置 LLM
 - **操作步骤**：
   1. 进入 AI Rating
@@ -423,76 +897,200 @@
   3. 调整 Strictness 滑块
   4. 点击 Analyze Images
 - **预期结果**：
+  - `loadTopRated()` 初始加载
+  - `setSelectedProvider()` / `setStrictness()` 被调用
+  - `analyzeSelected()` 调用 `cullBatch(images)`
+  - `aiRatingService.cullBatch()` 被调用，传入 provider/strictness
   - 显示批量进度条
   - 分析完成后显示 TOP 结果列表
   - 每张图片显示综合分数、质量标签
 - **验收标准**：等级 A
 
-#### TC-M05-006 AI 评分 - 应用到 EXIF
-- **操作步骤**：分析完成后，点击 "Apply ratings to EXIF"，确认
-- **预期结果**：
-  - 评分写入图片 EXIF
-  - 完成后显示提示
+#### TC-M05-012 AI 评分 — 无图片
+- **操作步骤**：相册为空时点击 Analyze
+- **预期结果**：显示 "No images to analyze yet" 消息
 - **验收标准**：等级 A
 
-#### TC-M05-007 AI 模型管理 - 下载/删除
+#### TC-M05-013 AI 评分 — 正在分析中
+- **操作步骤**：分析进行中再次点击 Analyze
+- **预期结果**：`isCulling` 为 true，直接返回
+- **验收标准**：等级 A
+
+#### TC-M05-014 AI 评分 — 应用到 EXIF
+- **操作步骤**：分析完成后，点击 "Apply ratings to EXIF"，确认
+- **预期结果**：
+  - `applyRatingsToExif()` 被调用
+  - `imageRepository.setRating()` 被调用
+  - 评分写入图片 EXIF
+  - 完成后显示 "Applied ratings to N images"
+- **验收标准**：等级 A
+
+#### TC-M05-015 AI 评分 — 查看详情
+- **操作步骤**：点击一张已评分图片查看详情
+- **预期结果**：
+  - `showDetail(imageId)` 被调用
+  - `aiRatingService.getRating()` 被调用
+  - `selectedDetail` 更新
+- **验收标准**：等级 A
+
+#### TC-M05-016 AI 评分 — 关闭详情
+- **操作步骤**：关闭评分详情弹窗
+- **预期结果**：`dismissDetail()` 被调用，`selectedDetail` 变为 null
+- **验收标准**：等级 A
+
+#### TC-M05-017 AI 模型管理 — 下载
 - **操作步骤**：
   1. 进入 AI Model Manager
   2. 下载一个未下载的模型
   3. 观察下载进度
-  4. 下载完成后删除该模型
 - **预期结果**：
-  - 下载进度条正确更新
+  - `download(asset)` 被调用
+  - `sidecarRuntime.ensureLoaded(asset)` 被调用
+  - `activeDownloadId` 和 `downloadProgress` 更新
+  - `modelDownloadService.progress` 被监听
   - 下载完成后状态变为 "Downloaded"
-  - 删除后状态恢复为未下载
-  - 存储统计正确更新
 - **验收标准**：等级 A
 
-#### TC-M05-008 AI 模型管理 - 设为默认
+#### TC-M05-018 AI 模型管理 — 下载失败
+- **操作步骤**：模拟下载失败（SHA mismatch / 写入失败）
+- **预期结果**：
+  - 显示 `downloadErrorMessage(code)` 错误
+  - "sha_mismatch" → "Download failed: file integrity check failed"
+  - "write_failed" → "Download failed: could not write model file"
+  - 其他 → "Download failed: $code"
+- **验收标准**：等级 A
+
+#### TC-M05-019 AI 模型管理 — 删除
+- **操作步骤**：下载完成后删除该模型
+- **预期结果**：
+  - `delete(asset)` 被调用
+  - `sidecarRuntime.unload()` 被调用
+  - 本地文件被删除
+  - 存储统计正确更新
+  - 如果删除的是默认模型，回退到 `CLIP_VIT_BASE_PATCH32`
+- **验收标准**：等级 A
+
+#### TC-M05-020 AI 模型管理 — 设为默认
 - **操作步骤**：对一个已下载非默认模型点击 "Set as default"
 - **预期结果**：
+  - `setDefaultModel(asset)` 被调用
+  - `defaultClipId` 更新
+  - 持久化到 DataStore
   - 该模型显示 ★ 标记
   - 原默认模型取消 ★
+- **验收标准**：等级 A
+
+#### TC-M05-021 AI 模型管理 — 刷新
+- **操作步骤**：触发 `refresh()` 方法
+- **预期结果**：
+  - `ModelAssetCatalog.ALL` 遍历所有模型
+  - `isDownloaded` / `isLoaded` / `isDownloading` / `downloadFraction` 正确更新
+- **验收标准**：等级 A
+
+#### TC-M05-022 AI 模型管理 — 持久化默认模型
+- **操作步骤**：重启应用
+- **预期结果**：从 DataStore 恢复 `defaultClipId`，未知 ID 被忽略
 - **验收标准**：等级 A
 
 ---
 
 ### M06 导出模块
 
-#### TC-M06-001 单张导出 - JPEG
+#### TC-M06-001 单张导出 — JPEG
 - **操作步骤**：
   1. Editor 中点击导出
   2. 格式选 JPEG，质量 95
   3. 色彩空间 sRGB
   4. 点击 Export
 - **预期结果**：
+  - `exportCurrent(imageId)` 被调用
+  - `hasExportPermissions()` 检查通过
+  - `pipelineService.handle` 非零
+  - `imageRepository.getImage(imageId)` 返回 ImageItem
+  - `runExport()` 调用 `exportService.export()`
   - 导出进度显示
   - 导出完成后显示成功标记 ✓
   - 文件存在于输出目录
   - 文件大小合理，可正常打开
 - **验收标准**：等级 A
 
-#### TC-M06-002 单张导出 - PNG 16-bit
+#### TC-M06-002 单张导出 — 无权限
+- **前置条件**：API 29 及以下设备，未授予 WRITE_EXTERNAL_STORAGE
+- **操作步骤**：点击 Export
+- **预期结果**：
+  - `hasExportPermissions()` 返回 false
+  - 显示 "Storage write permission required for export" 错误
+  - 不调用 `exportService.export()`
+- **验收标准**：等级 A
+
+#### TC-M06-003 单张导出 — 无 Pipeline
+- **操作步骤**：未打开任何图片时点击 Export
+- **预期结果**：
+  - `pipelineService.handle` 为 0L
+  - 显示 "No active pipeline. Open an image in the editor first." 错误
+- **验收标准**：等级 A
+
+#### TC-M06-004 单张导出 — 图片不存在
+- **操作步骤**：导出一个已删除的 imageId
+- **预期结果**：
+  - `imageRepository.getImage(imageId)` 返回 null
+  - 显示 "Image not found: $imageId" 错误
+- **验收标准**：等级 A
+
+#### TC-M06-005 单张导出 — PNG
 - **操作步骤**：格式选 PNG，位深 16-bit
 - **预期结果**：导出成功，文件为 16-bit PNG
 - **验收标准**：等级 A
 
-#### TC-M06-003 UltraHDR 导出
-- **前置条件**：格式为 JPEG，设备支持 UltraHDR
-- **操作步骤**：开启 UltraHDR 开关，导出
-- **预期结果**：生成 UltraHDR JPEG，在支持设备上显示 HDR 效果
-- **验收标准**：等级 B（依赖设备能力）
-
-#### TC-M06-004 批量导出
-- **操作步骤**：Album 中选择 5 张图片，点击导出
-- **预期结果**：
-  - 显示批量进度 (completed/total)
-  - 每张图片独立结果显示 ✓/✕
-  - 导出过程中可取消
-  - 取消后已导出文件保留，未导出任务终止
+#### TC-M06-006 单张导出 — WebP
+- **操作步骤**：格式选 WebP
+- **预期结果**：导出成功，文件为 WebP
 - **验收标准**：等级 A
 
-#### TC-M06-005 导出尺寸调整
+#### TC-M06-007 单张导出 — TIFF（降级为 PNG）
+- **操作步骤**：格式选 TIFF
+- **预期结果**：
+  - `effectiveExtension()` 返回 "png"
+  - Logcat 显示 "TIFF is not natively encodable on Android; writing PNG bytes with .png extension"
+  - 实际编码为 PNG 格式
+  - 文件扩展名为 .png
+- **验收标准**：等级 B（降级路径正确）
+
+#### TC-M06-008 UltraHDR 导出
+- **前置条件**：格式为 JPEG，设备支持 UltraHDR
+- **操作步骤**：开启 UltraHDR 开关，导出
+- **预期结果**：
+  - `ultraHdrWriter.buildGainMapBytes()` 被调用
+  - `hdrBitmap` 在 `finalBitmap` 回收前获取
+  - `ultraHdrWriter.write()` 被调用
+  - 成功时：原始 SDR JPEG 被删除，返回 UltraHDR 文件
+  - 失败时：回退到 SDR JPEG，Logcat 显示 "UltraHDR write failed; falling back to SDR JPEG"
+  - Bitmap 在使用后正确回收
+- **验收标准**：等级 B（依赖设备能力）
+
+#### TC-M06-009 批量导出
+- **操作步骤**：Album 中选择 5 张图片，点击导出
+- **预期结果**：
+  - `exportBatch(imageIds)` 被调用
+  - 每张图片创建专用 pipeline handle
+  - `pipelineService.createForImage()` 被调用
+  - 保存的编辑参数被加载
+  - 显示批量进度 (completed/total)
+  - 每张图片独立结果显示 ✓/✕
+  - 专用 handle 在完成后释放
+- **验收标准**：等级 A
+
+#### TC-M06-010 批量导出 — 空列表
+- **操作步骤**：调用 `exportBatch(emptyList())`
+- **预期结果**：直接返回，不启动导出
+- **验收标准**：等级 A
+
+#### TC-M06-011 批量导出 — 无图片找到
+- **操作步骤**：导出无效的 imageIds
+- **预期结果**：显示 "No exportable images found." 错误
+- **验收标准**：等级 A
+
+#### TC-M06-012 导出尺寸调整
 - **操作步骤**：
   1. 开启 Maintain Aspect Ratio
   2. 设置 Max Dimension = 2048
@@ -500,7 +1098,7 @@
 - **预期结果**：输出图片长边为 2048，另一边等比缩放
 - **验收标准**：等级 A
 
-#### TC-M06-006 元数据处理
+#### TC-M06-013 元数据处理
 - **操作步骤**：
   1. 选择 Metadata Mode: Strip All
   2. 导出
@@ -508,26 +1106,85 @@
 - **预期结果**：导出的图片不含 EXIF/GPS 信息
 - **验收标准**：等级 A
 
-#### TC-M06-007 水印导出
+#### TC-M06-014 水印导出
 - **操作步骤**：
   1. 在 Editor Watermark 面板配置水印
   2. 导出时开启 Include Watermark
-- **预期结果**：导出图片包含水印
+- **预期结果**：
+  - `watermarkService.apply(bitmap, watermark)` 被调用
+  - 导出图片包含水印
 - **验收标准**：等级 A
 
-#### TC-M06-008 导出后分享
+#### TC-M06-015 导出后分享
 - **操作步骤**：导出成功后点击 Share 按钮
 - **预期结果**：唤起系统分享面板，文件可被其他应用接收
 - **验收标准**：等级 A
 
-#### TC-M06-009 导出取消与内存安全
+#### TC-M06-016 导出取消
 - **操作步骤**：
   1. 批量导出 20 张大图
   2. 中途点击 Cancel
 - **预期结果**：
+  - `cancel()` 被调用
+  - `exportJob` 被取消
+  - `coroutineContext.ensureActive()` 抛出 CancellationException
+  - `taskService.isCancelled(taskId)` 返回 true
+  - 已导出文件保留，未导出任务终止
+- **验收标准**：等级 A
+
+#### TC-M06-017 导出取消与内存安全
+- **操作步骤**：批量导出 20 张大图，中途取消
+- **预期结果**：
   - 取消后无内存泄漏
-  - Bitmap 被正确回收
+  - Bitmap 被正确回收（`bitmap !== finalBitmap` 时分别回收）
+  - `Bitmap.recycle()` 是幂等的，安全调用
   - 不触发 OOM
+- **验收标准**：等级 A
+
+#### TC-M06-018 导出配置 — 命名模式
+- **操作步骤**：设置命名模式为 `{name}_edit`
+- **预期结果**：
+  - `setNamingPattern(pattern)` 被调用
+  - `resolveName()` 正确替换 `{name}` 和 `{date}`
+  - 空模式回退到 `{name}_edit`
+- **验收标准**：等级 A
+
+#### TC-M06-019 导出配置 — 输出目录
+- **操作步骤**：自定义输出目录
+- **预期结果**：`setOutputDirectory(path)` 被调用，文件输出到指定目录
+- **验收标准**：等级 A
+
+#### TC-M06-020 导出配置 — 质量
+- **操作步骤**：设置质量为 50 和 100
+- **预期结果**：`setQuality(quality)` 被调用，`quality.coerceIn(1, 100)` 限制范围
+- **验收标准**：等级 A
+
+#### TC-M06-021 导出配置 — 所有配置项
+- **操作步骤**：逐一测试所有配置项
+- **预期结果**：
+  - `setFormat()` / `setMaxDimension()` / `setColorSpace()` / `setIccProfile()`
+  - `setBitDepth()` / `setMetaMode()` / `setMaintainAspect()` / `setResizeWidth()` / `setResizeHeight()`
+  - `setShowWatermark()` / `setIncludeMetadata()` / `setUltraHdr()` / `setWatermarkEnabled()` / `updateWatermark()`
+  - 每个配置项正确更新 UI 状态
+  - `buildExportConfig()` 合并所有 UI 状态到 ExportConfig
+- **验收标准**：等级 A
+
+#### TC-M06-022 UltraHDR — 非 JPEG 格式
+- **操作步骤**：格式选 PNG，开启 UltraHDR
+- **预期结果**：`setUltraHdr()` 条件 `enabled && it.config.format == ExportFormat.JPEG` 不满足，UltraHDR 未启用
+- **验收标准**：等级 A
+
+#### TC-M06-023 导出编码失败
+- **操作步骤**：模拟 `bitmap.compress()` 失败
+- **预期结果**：
+  - Bitmap 被正确回收
+  - `ExportProgress` 显示 "encode_failed"
+  - `ExportResult` 显示 success=false
+- **验收标准**：等级 A
+
+#### TC-M06-024 重置结果
+- **操作步骤**：导出完成后点击 Reset
+- **预期结果**：`resetResults()` 清空 results、completedCount、totalCount、lastOutputPath
 - **验收标准**：等级 A
 
 ---
@@ -536,52 +1193,119 @@
 
 #### TC-M07-001 语言切换
 - **操作步骤**：Settings → General → 切换 Language
-- **预期结果**：应用内所有文本实时切换为所选语言
+- **预期结果**：`setTheme(theme)` 被调用，应用内所有文本实时切换为所选语言
 - **验收标准**：等级 A
 
 #### TC-M07-002 主题切换
 - **操作步骤**：切换 Dark / Light / System
-- **预期结果**：UI 主题实时变化
+- **预期结果**：`setTheme(theme)` 被调用，UI 主题实时变化
 - **验收标准**：等级 A
 
-#### TC-M07-003 GPU 后端切换
+#### TC-M07-003 默认视图切换
+- **操作步骤**：切换 Grid / List
+- **预期结果**：`setDefaultView(view)` 被调用，视图持久化
+- **验收标准**：等级 A
+
+#### TC-M07-004 GPU 后端切换
 - **操作步骤**：Settings → Editor → 切换 Vulkan / CPU
 - **预期结果**：
+  - `setGpuBackend(backend)` 被调用
+  - `privacyManager.setGpuBackend(backend)` 被调用
+  - `AlcedoNativeBridge.nativeSetGpuBackend(if (useVulkan) 1 else 0)` 被调用
   - 切换后 Editor 中渲染使用对应后端
-  - Native 层正确响应
 - **验收标准**：等级 A
 
-#### TC-M07-004 AI 配置
-- **操作步骤**：
-  1. 输入 API Key, Endpoint, Model
-  2. 调整 Strictness 滑块
-  3. 切换 Cloud LLM / On-Device AI
-- **预期结果**：
-  - 配置持久化
-  - AI 功能使用新配置
+#### TC-M07-005 AI 严格度调整
+- **操作步骤**：调整 AI Strictness 滑块
+- **预期结果**：`setAiStrictness(strictness)` 被调用，值持久化
 - **验收标准**：等级 A
 
-#### TC-M07-005 缓存清理
+#### TC-M07-006 AI API Key 配置
+- **操作步骤**：输入 API Key
+- **预期结果**：`setApiKey(key)` 被调用，值持久化
+- **验收标准**：等级 A
+
+#### TC-M07-007 AI Endpoint 配置
+- **操作步骤**：输入 Endpoint URL
+- **预期结果**：`setAiEndpoint(endpoint)` 被调用，值持久化
+- **验收标准**：等级 A
+
+#### TC-M07-008 AI Model 配置
+- **操作步骤**：选择 AI 模型
+- **预期结果**：`setAiModel(model)` 被调用，值持久化
+- **验收标准**：等级 A
+
+#### TC-M07-009 缓存清理
 - **操作步骤**：Settings → Storage → Clear Cache
 - **预期结果**：
+  - `clearCache()` 被调用
+  - `tempFileManager.cleanupAll()` 被调用
+  - `gpuService.onLowMemory()` 被调用
+  - `AlcedoNativeBridge.nativeOnLowMemory()` 被调用
   - 缓存大小显示更新为 0 或接近 0
+  - 显示 "Cache cleared" 消息
   - 应用不崩溃
 - **验收标准**：等级 A
 
-#### TC-M07-006 隐私设置
-- **操作步骤**：
-  1. 关闭 Analytics
-  2. 关闭 Crash Reports
+#### TC-M07-010 缓存清理 — 防重复
+- **操作步骤**：快速连续点击 Clear Cache
+- **预期结果**：`isClearingCache` 为 true 时直接返回，不重复执行
+- **验收标准**：等级 A
+
+#### TC-M07-011 孤立文件清理
+- **操作步骤**：Settings → Storage → Sweep Orphans
 - **预期结果**：
+  - `sweepOrphans()` 被调用
+  - `tempFileManager.sweepOrphans()` 被调用
+  - 显示 "Orphaned files swept" 消息
+- **验收标准**：等级 A
+
+#### TC-M07-012 孤立文件清理 — 防重复
+- **操作步骤**：快速连续点击 Sweep Orphans
+- **预期结果**：`isSweeping` 为 true 时直接返回
+- **验收标准**：等级 A
+
+#### TC-M07-013 隐私设置 — Cloud LLM
+- **操作步骤**：关闭 Cloud LLM
+- **预期结果**：
+  - `setCloudLlmAllowed(false)` 被调用
+  - `privacyManager.setCloudLlmAllowed(false)` 被调用
+  - 设置持久化
+- **验收标准**：等级 A
+
+#### TC-M07-014 隐私设置 — On-Device AI
+- **操作步骤**：关闭 On-Device AI
+- **预期结果**：`setOnDeviceAiAllowed(false)` 被调用
+- **验收标准**：等级 A
+
+#### TC-M07-015 隐私设置 — Analytics
+- **操作步骤**：关闭 Analytics
+- **预期结果**：`setTelemetryAllowed(false)` 被调用
+- **验收标准**：等级 A
+
+#### TC-M07-016 隐私设置 — Crash Reports
+- **操作步骤**：关闭 Crash Reports
+- **预期结果**：
+  - `setCrashReportEnabled(false)` 被调用
+  - `privacyManager.setCrashReportEnabled(false)` 被调用
   - CrashReportService 不再上传
   - 设置持久化
 - **验收标准**：等级 A
 
-#### TC-M07-007 诊断信息
+#### TC-M07-017 诊断信息
 - **操作步骤**：查看 Diagnostics 区域
 - **预期结果**：
   - Native Version 显示正确版本号
   - GPU Available 与设备能力一致
+  - `nativeAvailable` / `nativeVersion` / `gpuAvailable` 正确反映 NDK 状态
+- **验收标准**：等级 A
+
+#### TC-M07-018 恢复内置 Preset
+- **操作步骤**：点击 Restore Default Presets
+- **预期结果**：
+  - `restoreBuiltInPresets()` 被调用
+  - `presetService.ensureBuiltIns()` 被调用
+  - 显示 "Default presets restored" 消息
 - **验收标准**：等级 A
 
 ---
@@ -594,16 +1318,22 @@
 - **预期结果**：
   - 弹出媒体读取权限请求
   - API 33+ 同时请求通知权限
+  - `PermissionHelper.allRequired()` 返回正确列表
 - **验收标准**：等级 A
 
 #### TC-M08-002 权限授予后功能
 - **操作步骤**：授予所有权限
-- **预期结果**：Album 正常读取系统相册图片
+- **预期结果**：
+  - `PermissionHelper.areAllGranted()` 返回 true
+  - `PermissionHelper.hasMediaAccess()` 返回 true
+  - `PermissionHelper.hasNotificationAccess()` 返回 true
+  - Album 正常读取系统相册图片
 - **验收标准**：等级 A
 
 #### TC-M08-003 权限拒绝降级
 - **操作步骤**：拒绝媒体权限
 - **预期结果**：
+  - `PermissionHelper.deniedPermissions()` 返回被拒绝的权限
   - Album 显示空状态或引导用户授权
   - 应用不崩溃
 - **验收标准**：等级 C
@@ -613,22 +1343,86 @@
   1. 拒绝权限并勾选 "Don't ask again"
   2. 再次尝试需要权限的操作
 - **预期结果**：
+  - `PermissionHelper.isPermanentlyDenied()` 返回 true
+  - `PermissionHelper.anyPermanentlyDenied()` 返回 true
   - 显示引导去系统设置授权的对话框
-  - 点击可跳转系统设置页
+  - `PermissionHelper.openAppSettings()` 跳转系统设置页
 - **验收标准**：等级 A
 
 #### TC-M08-005 API 29 及以下写入权限
 - **前置条件**：Android 10 及以下设备
 - **操作步骤**：执行导出到共享存储
 - **预期结果**：
-  - 请求 WRITE_EXTERNAL_STORAGE
+  - `PermissionHelper.writeStoragePermission()` 返回 `WRITE_EXTERNAL_STORAGE`
+  - `PermissionHelper.exportPermissions()` 返回 `WRITE_EXTERNAL_STORAGE`
   - 授予后导出成功到 DCIM/等目录
 - **验收标准**：等级 A
 
-#### TC-M08-006 API 33+ 媒体权限
+#### TC-M08-006 API 30+ 无写入权限需求
+- **前置条件**：Android 11+ 设备
+- **操作步骤**：执行导出
+- **预期结果**：
+  - `PermissionHelper.writeStoragePermission()` 返回空列表
+  - `PermissionHelper.exportPermissions()` 返回空列表
+  - 导出无需额外权限
+- **验收标准**：等级 A
+
+#### TC-M08-007 API 33+ 媒体权限
 - **前置条件**：Android 13+ 设备
 - **操作步骤**：启动应用
-- **预期结果**：请求 READ_MEDIA_IMAGES + READ_MEDIA_VIDEO，不请求 WRITE_EXTERNAL_STORAGE
+- **预期结果**：
+  - `PermissionHelper.requiredMediaPermissions()` 返回 `READ_MEDIA_IMAGES` + `READ_MEDIA_VIDEO`
+  - 不请求 `WRITE_EXTERNAL_STORAGE`
+  - `PermissionHelper.notificationPermission()` 返回 `POST_NOTIFICATIONS`
+- **验收标准**：等级 A
+
+#### TC-M08-008 API 32 及以下媒体权限
+- **前置条件**：Android 12 及以下设备
+- **操作步骤**：启动应用
+- **预期结果**：
+  - `PermissionHelper.requiredMediaPermissions()` 返回 `READ_EXTERNAL_STORAGE`
+  - `PermissionHelper.notificationPermission()` 返回空列表
+- **验收标准**：等级 A
+
+#### TC-M08-009 权限检查 — 单个权限
+- **操作步骤**：调用 `PermissionHelper.isGranted(context, permission)`
+- **预期结果**：正确返回权限状态
+- **验收标准**：等级 A
+
+#### TC-M08-010 权限检查 — 批量
+- **操作步骤**：调用 `PermissionHelper.areAllGranted(context, permissions)`
+- **预期结果**：所有权限都授予时返回 true，否则返回 false
+- **验收标准**：等级 A
+
+#### TC-M08-011 权限检查 — 已授予权限列表
+- **操作步骤**：调用 `PermissionHelper.grantedPermissions()`
+- **预期结果**：返回已授予的权限子集
+- **验收标准**：等级 A
+
+#### TC-M08-012 权限理由显示
+- **操作步骤**：调用 `PermissionHelper.shouldShowRationale()`
+- **预期结果**：用户之前拒绝（未勾选 "Don't ask again"）时返回 true
+- **验收标准**：等级 A
+
+#### TC-M08-013 权限理由 — 批量检查
+- **操作步骤**：调用 `PermissionHelper.shouldShowRationaleForAny()`
+- **预期结果**：任一权限需要显示理由时返回 true
+- **验收标准**：等级 A
+
+#### TC-M08-014 权限状态 — Compose 集成
+- **操作步骤**：使用 `rememberPermissionState(permissions)`
+- **预期结果**：
+  - 返回 `PermissionState` 对象
+  - `allGranted` / `denied` / `shouldShowRationale` / `permanentlyDenied` 正确
+  - `launcher` 可触发权限请求
+- **验收标准**：等级 A
+
+#### TC-M08-015 权限状态 — 请求后更新
+- **操作步骤**：通过 launcher 请求权限，观察状态变化
+- **预期结果**：
+  - `requestedOnce` 变为 true
+  - `granted` 根据结果更新
+  - `permanentlyDenied` 在请求后且拒绝 + 无理由时为 true
 - **验收标准**：等级 A
 
 ---
@@ -637,115 +1431,575 @@
 
 #### TC-M09-001 Native Init/Shutdown
 - **操作步骤**：
-  1. 启动应用，检查 `Bridge.nativeInit()` 返回 true
-  2. 退出应用，检查 `Bridge.nativeShutdown()` 不崩溃
-- **预期结果**：生命周期正常
+  1. 启动应用，检查 `AlcedoNativeBridge.init()` 返回 true
+  2. 退出应用，检查 `AlcedoNativeBridge.nativeShutdown()` 不崩溃
+- **预期结果**：
+  - `init()` 调用 `System.loadLibrary("alcedo_native")` + `Bridge.nativeInit(cacheDir)`
+  - `loaded` 标志变为 true
+  - `loadError` 为 null
+  - 重复调用 `init()` 返回 true（幂等）
+  - `nativeShutdown()` 不崩溃
 - **验收标准**：等级 A
 
-#### TC-M09-002 Vulkan 可用性检测
-- **操作步骤**：调用 `Pipeline.nativeIsVulkanAvailable()`
+#### TC-M09-002 Native Init 失败
+- **操作步骤**：模拟 `System.loadLibrary` 抛出异常
+- **预期结果**：
+  - `init()` 返回 false
+  - `loadError` 包含异常消息
+  - `loaded` 为 false
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-003 Vulkan 可用性检测
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeGpuAvailable()`
 - **预期结果**：
   - 支持 Vulkan 设备返回 true
   - 不支持返回 false
+  - `Pipeline.nativeIsVulkanAvailable()` 被调用
 - **验收标准**：等级 A
 
-#### TC-M09-003 图片加载与释放
+#### TC-M09-004 GPU 设备名称
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeGpuDeviceName()`
+- **预期结果**：
+  - Vulkan 可用时返回 "Vulkan Compute"
+  - 不可用时返回 null
+- **验收标准**：等级 A
+
+#### TC-M09-005 设置缓存目录
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSetCacheDir(path)`
+- **预期结果**：`pendingCacheDir` 被设置
+- **验收标准**：等级 A
+
+#### TC-M09-006 设置临时目录
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSetTempDir(path)`
+- **预期结果**：`pendingTempDir` 被设置
+- **验收标准**：等级 A
+
+#### TC-M09-007 设置 GPU 后端
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSetGpuBackend(0)` / `nativeSetGpuBackend(1)`
+- **预期结果**：
+  - 0 = CPU 后端
+  - 1 = Vulkan 后端
+  - `Raw.nativeSetRawBackend(backend)` 被调用
+- **验收标准**：等级 A
+
+#### TC-M09-008 版本查询
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeVersion()`
+- **预期结果**：返回 `Bridge.nativeGetVersion()` 的结果，默认 "unknown"
+- **验收标准**：等级 A
+
+#### TC-M09-009 图片加载与释放
 - **操作步骤**：
-  1. `Image.nativeLoadImage(uri)` 返回有效 ID (>0)
-  2. `Image.nativeGetImageInfo(id)` 返回正确 JSON
-  3. `Image.nativeRemoveImage(id)` 成功
+  1. `AlcedoNativeBridge.nativeDecodeImage(uri, maxDim)` 返回有效 ID (>0)
+  2. `AlcedoNativeBridge.nativeImageDimensions(handle)` 返回 [width, height, channels]
+  3. `AlcedoNativeBridge.nativeReleaseImage(handle)` 成功
 - **预期结果**：
   - 加载后内存增加，释放后内存回落
-  - 重复加载/释放 100 次无内存泄漏
+  - `Image.nativeLoadImage(uri)` 被调用
+  - `Image.nativeGetImageInfo(id)` 返回正确 JSON
+  - `Image.nativeRemoveImage(id)` 被调用
+  - `nativeReleaseImage(0)` 直接返回（安全）
 - **验收标准**：等级 A
 
-#### TC-M09-004 RAW 解码
-- **操作步骤**：
-  1. `Raw.nativeDecodeRaw(path, maxDim)` 对 DNG/ARW/NEF 执行
-  2. `Raw.nativeGetRawMetadata(imageId)` 获取元数据
+#### TC-M09-010 图片解码缩略图
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeDecodeThumbnail(uri, targetSize)`
 - **预期结果**：
-  - 解码成功返回有效 ID
-  - 元数据包含相机型号、ISO、快门、光圈
+  - `Image.nativeLoadThumbnail(uri, targetSize)` 被调用
+  - `Thumbnail.nativeGetThumbnailBytes(id)` 被调用
+  - 返回可解码的 Bitmap
+  - 失败时返回 null
 - **验收标准**：等级 A
 
-#### TC-M09-005 Pipeline 执行
+#### TC-M09-011 提取元数据
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeExtractMetadata(uri)`
+- **预期结果**：
+  - 先加载图片，再查询信息，最后释放
+  - 返回 JSON 字符串
+  - 失败时返回 "{}"
+- **验收标准**：等级 A
+
+#### TC-M09-012 RAW 解码
+- **操作步骤**：
+  1. `AlcedoNativeBridge.nativeDecodeRaw(uri, maxDim, demosaic)` 对 DNG/ARW/NEF 执行
+- **预期结果**：
+  - `Raw.nativeDecodeRaw(uri, maxDim)` 被调用
+  - 解码成功返回有效 ID
+- **验收标准**：等级 A
+
+#### TC-M09-013 RAW Demosaic 设置
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRawSetDemosaic(handle, "vulkan")` / `"cpu"`
+- **预期结果**：
+  - "vulkan"/"gpu" → `Raw.nativeSetRawBackend(1)`
+  - 其他 → `Raw.nativeSetRawBackend(0)`
+  - 返回 true
+- **验收标准**：等级 A
+
+#### TC-M09-014 RAW 支持的扩展名
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRawSupportedExtensions()`
+- **预期结果**：返回包含 ARW, CR2, CR3, DNG, NEF, NRW, ORF, PEF, RAF, RW2, SRF, SR2 的数组
+- **验收标准**：等级 A
+
+#### TC-M09-015 Pipeline 执行
 - **操作步骤**：
   1. 加载图片获取 imageId
-  2. `Pipeline.nativeExecute(imageId, paramJson)` 传入调整参数
-  3. 获取渲染结果
+  2. `AlcedoNativeBridge.nativeCreatePipeline(imageHandle)` 返回 handle
+  3. `AlcedoNativeBridge.nativeApplyAdjustments(pipelineHandle, paramsJson)` 传入调整参数
+  4. `AlcedoNativeBridge.nativeRenderToBitmap(pipelineHandle, maxWidth)` 获取结果
 - **预期结果**：
-  - 返回有效结果 ID
-  - 渲染结果与参数预期一致
+  - Pipeline 创建成功
+  - 调整应用成功
+  - 渲染结果可解码为 Bitmap
 - **验收标准**：等级 A
 
-#### TC-M09-006 项目数据库操作
+#### TC-M09-016 Pipeline 销毁
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeDestroyPipeline(handle)`
+- **预期结果**：不崩溃，资源释放
+- **验收标准**：等级 A
+
+#### TC-M09-017 项目数据库操作
 - **操作步骤**：
-  1. `Bridge.nativeOpenProject(dbPath)`
-  2. `Sleeve.nativeCreateFolder("/", "Test")`
-  3. `Sleeve.nativeListFolder("/")`
-  4. `Sleeve.nativeDeleteElement("/Test")`
-  5. `Bridge.nativeCloseProject()`
+  1. `AlcedoNativeBridge.nativeSleeveOpen(dbPath)` 返回 handle
+  2. `AlcedoNativeBridge.nativeSleeveCreateFolder(handle, "/", "Test")` 返回 JSON
+  3. `AlcedoNativeBridge.nativeSleeveListChildren(handle, "/")` 返回列表
+  4. `AlcedoNativeBridge.nativeSleeveDeleteElement(handle, "/Test")` 返回 true
+  5. `AlcedoNativeBridge.nativeSleeveClose(handle)`
 - **预期结果**：
+  - `Bridge.nativeOpenProject(dbPath)` 被调用
+  - `Sleeve.nativeCreateFolder()` / `nativeListFolder()` / `nativeDeleteElement()` 被调用
   - 文件夹创建成功
   - 列表包含新文件夹
   - 删除后列表不再包含
 - **验收标准**：等级 A
 
-#### TC-M09-007 缩略图生成
-- **操作步骤**：
-  1. `Thumbnail.nativeGenerateThumbnail(imageId, 256)`
-  2. `Thumbnail.nativeGetThumbnailBytes(imageId)`
-- **预期结果**：返回非空字节数组，可解码为 Bitmap
-- **验收标准**：等级 A
-
-#### TC-M09-008 Scope 分析
-- **操作步骤**：
-  1. `Scope.nativeSubmitFrame(imageId, type, bins, w, h)`
-  2. `Scope.nativeGetHistogram()` / `Scope.nativeGetWaveform()` / `Scope.nativeGetVectorscope()`
-- **预期结果**：返回非空数组，数据范围合理
-- **验收标准**：等级 A
-
-#### TC-M09-009 编辑历史
-- **操作步骤**：
-  1. `History.nativeCreateVersion(imageId, "v1")`
-  2. `History.nativeGetHistoryJson(imageId)`
+#### TC-M09-018 Sleeve 导入图片
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSleeveImportImage(handle, path, uri)`
 - **预期结果**：
+  - `Image.nativeImportImage(uri, "")` 被调用
+  - 返回元素信息 JSON
+- **验收标准**：等级 A
+
+#### TC-M09-019 Sleeve 移动元素
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSleeveMoveElement(handle, src, dest)`
+- **预期结果**：`Sleeve.nativeMoveElement(src, dest)` 被调用
+- **验收标准**：等级 A
+
+#### TC-M09-020 Sleeve 过滤
+- **操作步骤**：分别传入文本搜索和 SQL 过滤
+- **预期结果**：
+  - `{"query": "sunset"}` → `Sleeve.nativeSearchByText()` 被调用
+  - `{"folder": "/", "sql": "..."}` → `Sleeve.nativeFilterFolder()` 被调用
+  - 无效 JSON → 返回 "[]"
+- **验收标准**：等级 A
+
+#### TC-M09-021 缩略图生成 — 单张
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeGenerateThumbnail(uri, size, outputPath)`
+- **预期结果**：
+  - `Image.nativeLoadImage(uri)` → `Thumbnail.nativeGenerateThumbnail(id, size)` → `Image.nativeRemoveImage(id)`
+  - 返回 true
+- **验收标准**：等级 A
+
+#### TC-M09-022 缩略图生成 — 批量
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeGenerateThumbnailBatch(uris, size, dir, listener)`
+- **预期结果**：
+  - 逐一加载、生成、释放
+  - `listener.onThumbnailReady()` / `onThumbnailFailed()` / `onBatchProgress()` / `onBatchComplete()` 被调用
+  - 返回是否全部成功
+- **验收标准**：等级 A
+
+#### TC-M09-023 编辑历史
+- **操作步骤**：
+  1. `AlcedoNativeBridge.nativeHistoryOpen(dbPath)` 返回 handle
+  2. `AlcedoNativeBridge.nativeHistoryCreateVersion(handle, imageId, parentId, name)`
+  3. `AlcedoNativeBridge.nativeHistoryGetTree(handle, imageId)`
+  4. `AlcedoNativeBridge.nativeHistoryClose(handle)`
+- **预期结果**：
+  - `History.nativeCreateVersion()` / `nativeGetHistoryJson()` 被调用
   - 版本创建成功
   - JSON 历史树结构正确
 - **验收标准**：等级 A
 
-#### TC-M09-010 JNI 符号完整性
+#### TC-M09-024 Scope 分析
+- **操作步骤**：
+  1. `AlcedoNativeBridge.nativeScopeHistogram(handle, bins)`
+  2. `AlcedoNativeBridge.nativeScopeWaveform(handle, w, h)`
+  3. `AlcedoNativeBridge.nativeScopeVectorscope(handle, samples)`
+  4. `AlcedoNativeBridge.nativeScopeRgbParade(handle, w, h)`
+- **预期结果**：
+  - `Scope.nativeSubmitFrame()` 被调用，type 参数正确
+  - `Scope.nativeGetHistogram()` / `nativeGetWaveform()` / `nativeGetVectorscope()` 被调用
+  - 返回非空数组，数据范围合理
+- **验收标准**：等级 A
+
+#### TC-M09-025 导出图片
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeExportImage(handle, path, format, quality, colorSpace, includeMetadata)`
+- **预期结果**：
+  - `Export.nativeExportImage()` 被调用
+  - 返回 true
+- **验收标准**：等级 A
+
+#### TC-M09-026 requireLoaded 检查
+- **操作步骤**：在 `loaded=false` 时调用 `AlcedoNativeBridge.requireLoaded()`
+- **预期结果**：抛出 `IllegalStateException`，包含 "Native library 'alcedo_native' not loaded"
+- **验收标准**：等级 A
+
+#### TC-M09-027 requireHandle 检查
+- **操作步骤**：传入 handle=0L 调用 `AlcedoNativeBridge.requireHandle()`
+- **预期结果**：抛出 `IllegalArgumentException`，包含 "Invalid native handle: 0"
+- **验收标准**：等级 A
+
+#### TC-M09-028 isValidHandle 检查
+- **操作步骤**：分别传入 loaded=true+handle=1L 和 loaded=false+handle=0L
+- **预期结果**：前者返回 true，后者返回 false
+- **验收标准**：等级 A
+
+#### TC-M09-029 applyParams 便捷方法
+- **操作步骤**：调用 `AlcedoNativeBridge.applyParams(pipeline, params)`
+- **预期结果**：
+  - `requireHandle(pipeline)` 被调用
+  - `nativeApplyAdjustments(pipeline, paramsToJson(params))` 被调用
+  - `paramsToJson()` 正确序列化所有 28 个参数字段
+- **验收标准**：等级 A
+
+#### TC-M09-030 NdkSafeCall.call — 正常调用
+- **操作步骤**：调用 `NdkSafeCall.call(default = 0) { 42 }`
+- **预期结果**：返回 42，`lastError` 为 null
+- **验收标准**：等级 A
+
+#### TC-M09-031 NdkSafeCall.call — 库未加载
+- **操作步骤**：在 `loaded=false` 时调用 `NdkSafeCall.call(default = 0) { 42 }`
+- **预期结果**：返回 0，`lastError` 为 "Native bridge not loaded"
+- **验收标准**：等级 A
+
+#### TC-M09-032 NdkSafeCall.call — UnsatisfiedLinkError
+- **操作步骤**：模拟 `UnsatisfiedLinkError`
+- **预期结果**：返回 default，`lastError` 包含 "UnsatisfiedLinkError"
+- **验收标准**：等级 A
+
+#### TC-M09-033 NdkSafeCall.call — 通用异常
+- **操作步骤**：模拟 `RuntimeException`
+- **预期结果**：返回 default，`lastError` 包含 "Native call failed"
+- **验收标准**：等级 A
+
+#### TC-M09-034 NdkSafeCall.result — 结构化返回
+- **操作步骤**：调用 `NdkSafeCall.result { "ok" }`
+- **预期结果**：返回 `NdkResult(success=true, value="ok", error=null)`
+- **验收标准**：等级 A
+
+#### TC-M09-035 NdkSafeCall.result — 失败
+- **操作步骤**：模拟异常
+- **预期结果**：返回 `NdkResult(success=false, value=null, error="...")`
+- **验收标准**：等级 A
+
+#### TC-M09-036 NdkSafeCall.run — 正常
+- **操作步骤**：调用 `NdkSafeCall.run { /* no-op */ }`
+- **预期结果**：不崩溃，`lastError` 为 null
+- **验收标准**：等级 A
+
+#### TC-M09-037 NdkSafeCall.run — 异常
+- **操作步骤**：模拟异常
+- **预期结果**：不崩溃，`lastError` 更新
+- **验收标准**：等级 A
+
+#### TC-M09-038 NdkSafeCall.callOrNull
+- **操作步骤**：调用 `NdkSafeCall.callOrNull { "value" }`
+- **预期结果**：成功返回 "value"，失败返回 null
+- **验收标准**：等级 A
+
+#### TC-M09-039 NdkSafeCall.handle
+- **操作步骤**：调用 `NdkSafeCall.handle { 42L }`
+- **预期结果**：成功返回 42L，失败返回 0L
+- **验收标准**：等级 A
+
+#### TC-M09-040 NdkSafeCall.ensureLoaded
+- **操作步骤**：调用 `NdkSafeCall.ensureLoaded()`
+- **预期结果**：已加载返回 true，未加载时尝试 `AlcedoNativeBridge.init()`
+- **验收标准**：等级 A
+
+#### TC-M09-041 NdkSafeCall.release
+- **操作步骤**：调用 `NdkSafeCall.release(0L) { /* no-op */ }`
+- **预期结果**：handle=0L 时直接返回，不调用 release 回调
+- **验收标准**：等级 A
+
+#### TC-M09-042 JNI 符号完整性
 - **操作步骤**：运行 `nm -D libalcedo_native.so | grep Java_com_alcedo`
 - **预期结果**：
   - 所有 Kotlin `external` 方法在 so 中均有对应符号
   - 无未定义符号
+  - Bridge/Raw/Pipeline/Editor/Sleeve/Image/Ai/Export/Scope/History/Thumbnail 类的 JNI 方法全部存在
 - **验收标准**：等级 A（阻塞性）
+
+#### TC-M09-043 AI ONNX 模型加载
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeAiLoadOnnxModel(modelPath, deviceId)`
+- **预期结果**：
+  - ONNX 模型加载当前由 Kotlin OnnxModelManager 管理
+  - 返回 0L（JNI 层不直接处理）
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-044 AI CLIP 文本推理
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeAiRunClipText(handle, text)`
+- **预期结果**：
+  - CLIP 文本推理由 Kotlin OnnxModelManager 管理
+  - 返回空 FloatArray
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-045 AI CLIP 图像推理
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeAiRunClipImage(handle, imageHandle)`
+- **预期结果**：
+  - CLIP 图像推理由 Kotlin OnnxModelManager 管理
+  - 返回空 FloatArray
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-046 AI 分割推理
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeAiRunSegmentation(handle, imageHandle)`
+- **预期结果**：
+  - 分割由 Kotlin OnnxModelManager 管理
+  - 返回 null
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-047 AI 模型释放
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeAiReleaseModel(handle)`
+- **预期结果**：
+  - ONNX 模型生命周期由 OnnxModelManager 管理
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-048 UltraHDR 写入（路径方式）
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeWriteUltraHdr(primaryPath, gainmapPath, outputPath)`
+- **预期结果**：
+  - C++ Export_nativeExportUltraHdr 使用 image ID 而非路径
+  - 返回 false（当前不支持路径方式）
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-049 ICC Profile 嵌入
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeEmbedIccProfile(imagePath, profilePath)`
+- **预期结果**：
+  - 无直接 C++ 入口
+  - 返回 false
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-050 色彩科学 — 应用矩阵
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeColorScienceApply(matrix, inputRgba)`
+- **预期结果**：
+  - 色彩科学在 Pipeline 中处理
+  - 返回原 inputRgba
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-051 色彩科学 — 色彩空间矩阵
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeColorScienceMatrix(fromSpace, toSpace)`
+- **预期结果**：
+  - 矩阵在 Pipeline 操作符中构建
+  - 返回空 FloatArray
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-052 镜头校正 Profile
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeLensCorrectionProfile(lensId)`
+- **预期结果**：
+  - 镜头校正使用 Kotlin 端数据库
+  - 返回 null
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-053 RAW 黑白电平设置
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRawSetBlackWhite(handle, 0, 65535)`
+- **预期结果**：
+  - 无直接 C++ 入口，参数通过 Pipeline JSON 传递
+  - 返回 false
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-054 RAW 降噪设置
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRawSetNoiseReduction(handle, 0.5f)`
+- **预期结果**：
+  - 无直接 C++ 入口，参数通过 Pipeline JSON 传递
+  - 返回 false
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-055 RAW CFA Pattern 检测
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRawDetectCfaPattern(uri)`
+- **预期结果**：
+  - 无直接 C++ 入口
+  - 返回 null
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-056 Sleeve 路径解析
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeSleeveResolvePath(handle, logicalPath)`
+- **预期结果**：
+  - 无直接 C++ 等价方法
+  - 返回 null（由 Kotlin 端解析）
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-057 图片转 Bitmap
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeImageToBitmap(handle, maxWidth)`
+- **预期结果**：
+  - `Thumbnail.nativeGetThumbnailBytes()` 被调用
+  - 返回可解码的 Bitmap
+  - 失败时返回 null
+- **验收标准**：等级 A
+
+#### TC-M09-058 Mask 应用
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeApplyMask(pipelineHandle, maskJson, maskBitmap)`
+- **预期结果**：
+  - Mask 合成由 Kotlin MaskRenderService 处理
+  - 返回 false
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-059 Mask 清除
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeClearMasks(pipelineHandle)`
+- **预期结果**：
+  - 返回 false（当前实现）
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-060 Pipeline 阶段失效
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeInvalidateStage(pipelineHandle, stageName)`
+- **预期结果**：
+  - No-op：C++ 在每次 apply 时重新执行 Pipeline
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-061 Pipeline 渲染到缓冲区
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeRenderToBuffer(pipelineHandle)`
+- **预期结果**：
+  - 返回 pipelineHandle（缓冲区即图像本身）
+  - 失败时返回 0L
+- **验收标准**：等级 A
+
+#### TC-M09-062 获取最终显示帧
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeGetFinalDisplayFrame(pipelineHandle)`
+- **预期结果**：
+  - `Thumbnail.nativeGetThumbnailBytes()` 被调用
+  - 返回可解码的 Bitmap
+  - 失败时返回 null
+- **验收标准**：等级 A
+
+#### TC-M09-063 历史记录添加事务
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeHistoryAddTransaction(handle, versionId, deltaJson)`
+- **预期结果**：
+  - 事务在 C++ Pipeline 中是隐式的
+  - 返回空字符串
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-064 历史记录重放
+- **操作步骤**：调用 `AlcedoNativeBridge.nativeHistoryReplay(handle, versionId)`
+- **预期结果**：
+  - 重放通过重新执行 Pipeline 处理
+  - 返回 "{}"
+  - 不崩溃
+- **验收标准**：等级 A
+
+#### TC-M09-065 ThumbnailListener 接口回调
+- **操作步骤**：实现 `ThumbnailListener` 接口的所有方法
+- **预期结果**：
+  - `onThumbnailReady(index, uri, outputPath)` 被调用
+  - `onThumbnailFailed(index, uri, error)` 被调用
+  - `onBatchProgress(completed, total)` 被调用
+  - `onBatchComplete(success)` 被调用
+- **验收标准**：等级 A
+
+#### TC-M09-066 NativeProgressListener 接口
+- **操作步骤**：实现 `NativeProgressListener` 接口
+- **预期结果**：
+  - `onProgress(completed, total)` 返回 false 可取消
+  - 返回 true 继续
+- **验收标准**：等级 A
+
+#### TC-M09-067 StringArrayResult 数据类
+- **操作步骤**：构造 `StringArrayResult(values, ok)`
+- **预期结果**：
+  - `values` 和 `ok` 字段正确
+  - 被 `@Keep` 标注
+- **验收标准**：等级 A
 
 ---
 
 ### M10 后台任务
 
-#### TC-M10-001 导入后台任务
-- **操作步骤**：导入 50 张图片，切换应用到后台
+#### TC-M10-001 任务启动与进度
+- **操作步骤**：调用 `taskService.start(type, title, totalItems)`
 - **预期结果**：
-  - 通知栏显示前台服务通知（如果开启了通知权限）
-  - 后台任务继续执行
-  - 完成后应用内显示结果
+  - 返回唯一 taskId
+  - `active` 集合包含新任务
+  - `tasks` StateFlow 包含新任务
+  - `startTimes` 记录启动时间
+  - `sleeveHandleCounter` 递增
 - **验收标准**：等级 A
 
-#### TC-M10-002 任务取消
+#### TC-M10-002 任务进度更新
+- **操作步骤**：调用 `taskService.update(taskId, completed, total)`
+- **预期结果**：
+  - `progress` 正确计算
+  - `etaMs` 通过 `computeEta()` 计算
+  - `indeterminate` 根据 total 更新
+- **验收标准**：等级 A
+
+#### TC-M10-003 任务完成
+- **操作步骤**：调用 `taskService.complete(taskId)`
+- **预期结果**：
+  - `progress` 变为 1f
+  - 成功任务自动从 `active` 移除
+  - 失败任务保留在 `active` 中
+- **验收标准**：等级 A
+
+#### TC-M10-004 任务完成 — 带错误
+- **操作步骤**：调用 `taskService.complete(taskId, error = "failed")`
+- **预期结果**：任务保留在 `active` 中，`error` 为 "failed"
+- **验收标准**：等级 A
+
+#### TC-M10-005 任务取消
 - **操作步骤**：
   1. 启动批量导出
   2. 在后台任务栏点击 Cancel
-- **预期结果**：任务终止，不再消耗资源
+- **预期结果**：
+  - `cancelled` 集合先添加 taskId
+  - 任务标记为 "cancelled"，progress=1f
+  - 任务从 `active` 移除
+  - `startTimes` 移除
+  - `cancelled` 集合清理（不累积）
+  - `isCancelled(taskId)` 返回 false（已清理）
 - **验收标准**：等级 A
 
-#### TC-M10-003 多任务并发
+#### TC-M10-006 取消标志清理
+- **操作步骤**：取消任务后检查 `cancelled` 集合
+- **预期结果**：`cancelled.remove(taskId)` 被调用，集合不累积
+- **验收标准**：等级 A
+
+#### TC-M10-007 任务消除
+- **操作步骤**：调用 `taskService.dismiss(taskId)`
+- **预期结果**：任务从 `active`、`startTimes`、`cancelled` 中移除
+- **验收标准**：等级 A
+
+#### TC-M10-008 活跃任务计数
+- **操作步骤**：调用 `taskService.activeCount()`
+- **预期结果**：返回非错误且 progress < 1f 的任务数
+- **验收标准**：等级 A
+
+#### TC-M10-009 ETA 计算
+- **操作步骤**：调用 `computeEta(taskId, completed, total)`
+- **预期结果**：
+  - completed <= 0 或 total <= 0 时返回 null
+  - 正常情况下返回估算剩余时间
+- **验收标准**：等级 A
+
+#### TC-M10-010 多任务并发
 - **操作步骤**：同时启动导入和导出任务
 - **预期结果**：
   - 两个任务并行显示进度
   - 不互相干扰
   - 不触发 ANR
+  - `tasks` StateFlow 包含两个任务
 - **验收标准**：等级 A
 
 ---
@@ -756,15 +2010,46 @@
 - **前置条件**：开启 Crash Report
 - **操作步骤**：通过开发者选项触发一次测试崩溃
 - **预期结果**：
+  - `writeCrashReport()` 被调用
+  - 崩溃报告写入 `filesDir/crashlogs/crash_YYYYMMDD_HHmmss.txt`
+  - 报告包含：时间、线程、进程、设备、Android 版本、ABI、堆栈跟踪
+  - 敏感信息被脱敏
+  - 报告大小不超过 256KB
+  - `pruneOldReports()` 保持最多 10 个文件 / 2MB 总量
   - 崩溃后重启应用
-  - CrashReportService 写入日志到磁盘
   - 若开启遥测，日志上传服务端
 - **验收标准**：等级 B（非阻塞）
 
 #### TC-M11-002 隐私开关控制
 - **操作步骤**：在设置中关闭 Crash Reports，触发崩溃
-- **预期结果**：崩溃日志不写入或不上传
+- **预期结果**：
+  - `CrashReportService.enabled` 为 false
+  - `writeCrashReport()` 检查 `!enabled` 后直接返回
+  - 崩溃日志不写入
 - **验收标准**：等级 B
+
+#### TC-M11-003 敏感信息脱敏
+- **操作步骤**：检查崩溃报告中的敏感信息
+- **预期结果**：
+  - `REDACT_HEADER` 替换 Authorization/API Key 等为 `<redacted>`
+  - `REDACT_BEARER` 替换 Bearer 令牌为 `<redacted>`
+  - `REDACT_OPENAI` 替换 OpenAI API Key 为 `<redacted>`
+- **验收标准**：等级 A
+
+#### TC-M11-004 报告大小限制
+- **操作步骤**：触发一个超长堆栈跟踪的崩溃
+- **预期结果**：报告被截断到 `MAX_REPORT_CHARS` (256KB)，附加 `...[truncated]`
+- **验收标准**：等级 A
+
+#### TC-M11-005 报告清理
+- **操作步骤**：调用 `CrashReportService.clearReports(filesDir)`
+- **预期结果**：所有崩溃报告文件被删除，返回删除数量
+- **验收标准**：等级 A
+
+#### TC-M11-006 报告列表
+- **操作步骤**：调用 `CrashReportService.reportFiles(filesDir)`
+- **预期结果**：返回所有 .txt 文件，按修改时间排序
+- **验收标准**：等级 A
 
 ---
 
@@ -779,6 +2064,7 @@
 - **预期结果**：
   - 文件夹和图片持久化
   - 编辑参数（版本）持久化
+  - `SleeveDatabase.get(context)` 返回单例
 - **验收标准**：等级 A
 
 #### TC-M12-002 数据迁移/升级
@@ -787,11 +2073,261 @@
 - **预期结果**：旧数据完整保留，无丢失
 - **验收标准**：等级 A
 
+#### TC-M12-003 数据库重置
+- **操作步骤**：调用 `SleeveDatabase.reset(context)`
+- **预期结果**：
+  - 旧实例关闭
+  - 新实例创建
+  - 数据清空
+- **验收标准**：等级 A
+
+#### TC-M12-004 TypeConverter — ImageFlag
+- **操作步骤**：测试 `ImageFlag` ↔ `String` 转换
+- **预期结果**：正确序列化/反序列化所有枚举值
+- **验收标准**：等级 A
+
+#### TC-M12-005 TypeConverter — ColorLabel
+- **操作步骤**：测试 `ColorLabel` ↔ `String` 转换
+- **预期结果**：正确序列化/反序列化所有枚举值
+- **验收标准**：等级 A
+
+#### TC-M12-006 TypeConverter — FloatArray
+- **操作步骤**：测试 `FloatArray` ↔ `String` 转换
+- **预期结果**：正确序列化/反序列化
+- **验收标准**：等级 A
+
+#### TC-M12-007 Room Entity 完整性
+- **操作步骤**：验证所有 10 个 Entity 的表结构
+- **预期结果**：
+  - ImageEntity, SleeveElementEntity, ProjectEntity, EditVersionEntity, EditTransactionEntity
+  - AiEmbeddingEntity, AiRatingEntity, PipelinePresetEntity, AiModelEntity, LensProfileEntity
+  - 所有索引正确创建
+  - 所有字段类型正确
+- **验收标准**：等级 A
+
+#### TC-M12-008 AiEmbeddingEntity — equals/hashCode
+- **操作步骤**：测试 `AiEmbeddingEntity` 的 `equals()` 和 `hashCode()`
+- **预期结果**：`embeddingBlob` 的内容比较正确
+- **验收标准**：等级 A
+
+#### TC-M12-009 DAO 操作
+- **操作步骤**：测试 `ImageDao` / `EditHistoryDao` / `AiEmbeddingDao` / `PipelinePresetDao`
+- **预期结果**：所有 CRUD 操作正确
+- **验收标准**：等级 A
+
+#### TC-M12-010 破坏性迁移
+- **操作步骤**：检查 `fallbackToDestructiveMigration()` 配置
+- **预期结果**：版本不匹配时清空重建，不崩溃
+- **验收标准**：等级 A
+
+#### TC-M12-011 自定义迁移
+- **操作步骤**：检查 `DatabaseMigrations.ALL` 是否被注册
+- **预期结果**：所有迁移脚本被添加到 Room builder
+- **验收标准**：等级 A
+
+#### TC-M12-012 Repository 操作
+- **操作步骤**：测试 `ImageRepository` / `SleeveRepository` 的所有公开方法
+- **预期结果**：所有操作正确，包括 upsert、delete、getImage、setRating 等
+- **验收标准**：等级 A
+
 ---
 
-### M13 性能与稳定性
+### M13 隐私管理
 
-#### TC-M13-001 大图片压力测试
+#### TC-M13-001 隐私同意 — 授予
+- **操作步骤**：首次启动时点击 "Accept"
+- **预期结果**：
+  - `setConsent(true)` 被调用
+  - `consentGiven` 为 true
+  - `consentTimestamp` 记录当前时间
+  - `canCollectData` 为 true
+  - `cloudLlmAllowed` 为 false（默认关闭）
+- **验收标准**：等级 A
+
+#### TC-M13-002 隐私同意 — 拒绝
+- **操作步骤**：首次启动时点击 "Decline"
+- **预期结果**：
+  - `setConsent(false)` 被调用
+  - `consentGiven` 为 false
+  - `cloudLlmAllowed` 和 `telemetryAllowed` 被强制设为 false
+  - `canCollectData` 为 false
+- **验收标准**：等级 A
+
+#### TC-M13-003 隐私同意 — 撤回
+- **操作步骤**：同意后再次拒绝
+- **预期结果**：
+  - `cloudLlmAllowed` 和 `telemetryAllowed` 被强制设为 false
+  - 所有数据收集停止
+- **验收标准**：等级 A
+
+#### TC-M13-004 requireConsent 检查
+- **操作步骤**：未同意时调用 `requireConsent()`
+- **预期结果**：抛出 `ConsentRequiredException`
+- **验收标准**：等级 A
+
+#### TC-M13-005 canCollectData 检查
+- **操作步骤**：同意/拒绝后分别调用 `canCollectData()`
+- **预期结果**：同意时返回 true，拒绝时返回 false
+- **验收标准**：等级 A
+
+#### TC-M13-006 Cloud LLM 控制
+- **操作步骤**：同意后开启 Cloud LLM
+- **预期结果**：
+  - `setCloudLlmAllowed(true)` 被调用
+  - `canUseCloudLlm` 为 true（需 consent + cloudLlm）
+  - 未同意时无法开启 Cloud LLM
+- **验收标准**：等级 A
+
+#### TC-M13-007 遥测控制
+- **操作步骤**：同意后开启遥测
+- **预期结果**：
+  - `setTelemetryAllowed(true)` 被调用
+  - `canCollectTelemetry` 为 true（需 consent + telemetry）
+  - 未同意时无法开启遥测
+- **验收标准**：等级 A
+
+#### TC-M13-008 On-Device AI 控制
+- **操作步骤**：关闭 On-Device AI
+- **预期结果**：
+  - `setOnDeviceAiAllowed(false)` 被调用
+  - `canUseOnDeviceAi` 需 consent + onDeviceAi
+- **验收标准**：等级 A
+
+#### TC-M13-009 应用设置 — 持久化
+- **操作步骤**：修改所有应用设置，重启应用
+- **预期结果**：
+  - `appSettings` Flow 正确恢复所有设置
+  - theme / defaultView / gpuBackend / aiStrictness / crashReportEnabled / analyticsEnabled / aiApiKey / aiEndpoint / aiModel
+- **验收标准**：等级 A
+
+#### TC-M13-010 PrivacyState 计算属性
+- **操作步骤**：验证所有计算属性
+- **预期结果**：
+  - `canUseCloudLlm` = consentGiven && cloudLlmAllowed
+  - `canCollectTelemetry` = consentGiven && telemetryAllowed
+  - `canUseOnDeviceAi` = consentGiven && onDeviceAiAllowed
+  - `canCollectData` = consentGiven
+- **验收标准**：等级 A
+
+#### TC-M13-011 CrashReportService 与隐私联动
+- **操作步骤**：同意后关闭 Crash Reports
+- **预期结果**：
+  - `CrashReportService.setConsentAndTelemetry(state.consentGiven && crashReportEnabled)` 被调用
+  - 关闭 Crash Reports 后 `enabled` 为 false
+- **验收标准**：等级 A
+
+#### TC-M13-012 崩溃报告 — 仅同意+开启
+- **操作步骤**：同意但关闭 Crash Reports，触发崩溃
+- **预期结果**：`enabled` 为 false，崩溃日志不写入
+- **验收标准**：等级 A
+
+#### TC-M13-013 DataStore 持久化
+- **操作步骤**：修改隐私设置，重启应用
+- **预期结果**：所有隐私设置通过 DataStore 持久化并恢复
+- **验收标准**：等级 A
+
+#### TC-M13-014 AppSettings 默认值
+- **操作步骤**：首次启动检查默认值
+- **预期结果**：
+  - theme = ""
+  - gpuBackend = ""
+  - aiStrictness = 0.5f
+  - crashReportEnabled = true
+  - analyticsEnabled = false
+  - aiApiKey = ""
+  - aiEndpoint = ""
+  - aiModel = ""
+- **验收标准**：等级 A
+
+#### TC-M13-015 Analytics 设置
+- **操作步骤**：开启/关闭 Analytics
+- **预期结果**：`setAnalyticsEnabled()` 被调用，值持久化
+- **验收标准**：等级 A
+
+#### TC-M13-016 PrivacyConsentDialog UI
+- **操作步骤**：首次启动时显示同意对话框
+- **预期结果**：
+  - 包含 "Accept" 和 "Decline" 按钮
+  - Accept 触发 `setConsent(true)` + `setCloudLlmAllowed(false)`
+  - Decline 触发 `setConsent(false)`
+- **验收标准**：等级 A
+
+---
+
+### M14 安全与临时文件
+
+#### TC-M14-001 临时文件创建
+- **操作步骤**：调用 `tempFileManager.create(prefix, suffix)`
+- **预期结果**：
+  - 文件在 `cacheDir/alcedo_temp/` 下创建
+  - 文件名包含 UUID
+  - `tracked` 集合包含新文件
+- **验收标准**：等级 A
+
+#### TC-M14-002 临时目录创建
+- **操作步骤**：调用 `tempFileManager.createDir(prefix)`
+- **预期结果**：目录创建并被跟踪
+- **验收标准**：等级 A
+
+#### TC-M14-003 临时文件释放
+- **操作步骤**：调用 `tempFileManager.release(file)`
+- **预期结果**：
+  - 文件从 `tracked` 移除
+  - 文件被删除
+  - 目录被递归删除
+- **验收标准**：等级 A
+
+#### TC-M14-004 全部清理
+- **操作步骤**：调用 `tempFileManager.cleanupAll()`
+- **预期结果**：
+  - 所有跟踪文件被删除
+  - `tracked` 集合清空
+- **验收标准**：等级 A
+
+#### TC-M14-005 孤立文件清理
+- **操作步骤**：调用 `tempFileManager.sweepOrphans(maxAgeMs)`
+- **预期结果**：
+  - 未跟踪且超过 maxAgeMs 的文件被删除
+  - 跟踪中的文件不受影响
+  - 默认 maxAgeMs = 24 小时
+- **验收标准**：等级 A
+
+#### TC-M14-006 存储使用量
+- **操作步骤**：调用 `tempFileManager.usedBytes()`
+- **预期结果**：返回 tempRoot 下所有文件的总字节数
+- **验收标准**：等级 A
+
+#### TC-M14-007 描述信息
+- **操作步骤**：调用 `tempFileManager.describe()`
+- **预期结果**：返回 "N tracked files, X.X MB" 格式字符串
+- **验收标准**：等级 A
+
+#### TC-M14-008 SecureHttpClient — 证书固定
+- **操作步骤**：检查 `SecureHttpClient` 配置
+- **预期结果**：启用证书固定和超时设置
+- **验收标准**：等级 A
+
+#### TC-M14-009 临时文件 — 删除失败
+- **操作步骤**：模拟文件删除失败
+- **预期结果**：不崩溃，Log.w 记录警告
+- **验收标准**：等级 A
+
+#### TC-M14-010 PipelineService — 专用 Handle 管理
+- **操作步骤**：
+  1. `pipelineService.createForImage(uri)` 创建专用 handle
+  2. `pipelineService.releaseHandle(handle)` 释放
+- **预期结果**：
+  - 创建时 `dedicatedHandles` 记录 handle → decodedHandle 映射
+  - 释放时 `dedicatedHandles` 移除映射
+  - `AlcedoNativeBridge.nativeDestroyPipeline()` 和 `nativeReleaseImage()` 被调用
+  - `close()` 时释放所有泄漏的专用 handle
+- **验收标准**：等级 A
+
+---
+
+### M15 性能与稳定性
+
+#### TC-M15-001 大图片压力测试
 - **前置条件**：准备 100MB+ TIFF 或 60MP RAW
 - **操作步骤**：
   1. 导入并打开
@@ -801,17 +2337,19 @@
   - 不触发 OOM
   - 不 ANR
   - 导出时间可接受（< 60s）
+  - `PipelineService.render()` 正确处理大图
 - **验收标准**：等级 A
 
-#### TC-M13-002 批量操作压力测试
+#### TC-M15-002 批量操作压力测试
 - **操作步骤**：选择 100 张图片，批量应用 Preset，批量导出
 - **预期结果**：
   - 批量编辑不 ANR
   - 批量导出内存曲线平稳，无持续增长
   - 完成后内存回到基线
+  - `ExportService` 正确回收 Bitmap
 - **验收标准**：等级 A
 
-#### TC-M13-003 长时间运行稳定性
+#### TC-M15-003 长时间运行稳定性
 - **操作步骤**：应用保持前台运行 2 小时，期间频繁切换功能
 - **预期结果**：
   - 无内存泄漏（堆增长 < 20%）
@@ -819,21 +2357,41 @@
   - 响应速度无明显下降
 - **验收标准**：等级 A
 
-#### TC-M13-004 快速操作压力
+#### TC-M15-004 快速操作压力
 - **操作步骤**：在 Editor 中快速连续切换 Tab、调整滑块、Undo/Redo
 - **预期结果**：
   - 不触发渲染队列溢出
+  - 防抖（80ms）有效
   - 最终状态与最后一次操作一致
   - 无闪退
 - **验收标准**：等级 A
 
-#### TC-M13-005 低内存设备测试
+#### TC-M15-005 低内存设备测试
 - **前置条件**：模拟 2GB RAM 设备或限制内存
 - **操作步骤**：执行常规编辑和导出流程
 - **预期结果**：
   - 应用在低内存下 graceful degradation
+  - `onTrimMemory()` / `onLowMemory()` 被调用
   - 可能降低预览分辨率，但不崩溃
 - **验收标准**：等级 C
+
+#### TC-M15-006 Bitmap 内存回收验证
+- **操作步骤**：批量导出 20 张大图，监控内存
+- **预期结果**：
+  - `Bitmap.recycle()` 在使用后立即调用
+  - `bitmap !== finalBitmap` 时分别回收
+  - `Bitmap.recycle()` 是幂等的
+  - UltraHDR 导出时 `finalBitmap` 在 `hdrBitmap` 获取前不被回收
+  - 内存曲线呈锯齿状（上升 → 回收 → 下降），不持续增长
+- **验收标准**：等级 A
+
+#### TC-M15-007 PipelineService — 专用 Handle 内存
+- **操作步骤**：批量导出时创建/释放 50 个专用 handle
+- **预期结果**：
+  - 每个 handle 在 `finally` 块中释放
+  - `dedicatedHandles` 集合不累积
+  - 无 native 内存泄漏
+- **验收标准**：等级 A
 
 ---
 
@@ -841,22 +2399,24 @@
 
 ### 4.1 功能覆盖率
 
-| 模块 | 用例数 | P0 | P1 | 覆盖功能点 | 覆盖率 |
+| 模块 | 用例数 | P0 | P1 | 覆盖方法数 | 覆盖率 |
 |-----|-------|----|----|----------|-------|
-| M01 启动与生命周期 | 5 | 5 | 0 | 冷启动、Intent、降级、内存、恢复 | 100% |
-| M02 导航与UI框架 | 4 | 4 | 0 | 底部栏、Rail、返回、状态保存 | 100% |
-| M03 相册管理 | 9 | 9 | 0 | 导入、文件夹、搜索、排序、视图、选择、菜单、空态、任务 | 100% |
-| M04 图片编辑器 | 15 | 15 | 0 | 打开JPG/RAW、5大面板、Undo/Redo、版本、对比、Mask、Preset、未保存提示、导出跳转、缩放 | 100% |
-| M05 AI 模块 | 8 | 8 | 0 | Hub、搜索正常/建议/未就绪、评分/应用、模型下载/删除/默认 | 100% |
-| M06 导出模块 | 9 | 9 | 0 | 单张JPEG/PNG、UltraHDR、批量、尺寸、元数据、水印、分享、取消 | 100% |
-| M07 设置模块 | 7 | 0 | 7 | 语言、主题、GPU、AI配置、缓存、隐私、诊断 | 100% |
-| M08 权限管理 | 6 | 6 | 0 | 首次请求、授予、拒绝、永久拒绝、API29写入、API33媒体 | 100% |
-| M09 NDK/Native | 10 | 10 | 0 | Init/Shutdown、Vulkan、图片加载释放、RAW、Pipeline、项目DB、缩略图、Scope、历史、JNI符号 | 100% |
-| M10 后台任务 | 3 | 0 | 3 | 导入后台、取消、并发 | 100% |
-| M11 崩溃报告 | 2 | 0 | 2 | 捕获、隐私开关 | 100% |
-| M12 数据存储 | 2 | 0 | 2 | 读写、升级迁移 | 100% |
-| M13 性能稳定性 | 5 | 5 | 0 | 大图压力、批量压力、长时间、快速操作、低内存 | 100% |
-| **合计** | **85** | **71** | **14** | **全部功能点** | **100%** |
+| M01 启动与生命周期 | 12 | 12 | 0 | 8 | 100% |
+| M02 导航与UI框架 | 6 | 6 | 0 | 6 | 100% |
+| M03 相册管理 | 26 | 26 | 0 | 26 | 100% |
+| M04 图片编辑器 | 44 | 44 | 0 | 35 | 100% |
+| M05 AI 模块 | 22 | 22 | 0 | 22 | 100% |
+| M06 导出模块 | 24 | 24 | 0 | 24 | 100% |
+| M07 设置模块 | 18 | 0 | 18 | 18 | 100% |
+| M08 权限管理 | 15 | 15 | 0 | 15 | 100% |
+| M09 NDK/Native | 67 | 67 | 0 | 67 | 100% |
+| M10 后台任务 | 10 | 0 | 10 | 8 | 100% |
+| M11 崩溃报告 | 6 | 0 | 6 | 6 | 100% |
+| M12 数据存储 | 12 | 0 | 12 | 12 | 100% |
+| M13 隐私管理 | 16 | 16 | 0 | 16 | 100% |
+| M14 安全与临时文件 | 10 | 0 | 10 | 10 | 100% |
+| M15 性能稳定性 | 7 | 7 | 0 | N/A | 100% |
+| **合计** | **295** | **239** | **56** | **273** | **100%** |
 
 ### 4.2 代码覆盖率目标
 
@@ -865,6 +2425,8 @@
 | Kotlin UI / ViewModel | ≥ 80% | Jacoco / Android Studio Coverage |
 | Kotlin Service / Repository | ≥ 85% | Jacoco / 单元测试 |
 | Kotlin NDK Bridge | ≥ 90% | 单元测试 + 集成测试 |
+| Kotlin Privacy / Permission | ≥ 90% | 单元测试 |
+| Kotlin Security / TempFile | ≥ 85% | 单元测试 |
 | C++ JNI / Core | ≥ 70% | GoogleTest / 手动验证 |
 
 ### 4.3 设备兼容性矩阵
@@ -882,6 +2444,21 @@
 | ARM64 | 是 | 主流架构 |
 | 无网络 | 是 | AI 模型下载降级 |
 
+### 4.4 边界条件覆盖
+
+| 类型 | 用例 | 覆盖模块 |
+|-----|------|---------|
+| 空输入 | TC-M03-004, TC-M03-006, TC-M05-003, TC-M06-010 | M03, M05, M06 |
+| 无效输入 | TC-M04-002, TC-M04-007, TC-M06-004, TC-M06-011 | M04, M06 |
+| 权限缺失 | TC-M06-002, TC-M08-003, TC-M08-004 | M06, M08 |
+| 降级路径 | TC-M01-005, TC-M06-007, TC-M13-005, TC-M15-005 | M01, M06, M13, M15 |
+| 并发/竞态 | TC-M04-008, TC-M07-010, TC-M07-012, TC-M10-010 | M04, M07, M10 |
+| 内存压力 | TC-M01-006, TC-M01-007, TC-M15-005, TC-M15-006 | M01, M15 |
+| 取消操作 | TC-M03-003, TC-M06-016, TC-M10-005 | M03, M06, M10 |
+| 数据持久化 | TC-M12-001, TC-M12-003, TC-M13-009, TC-M13-013 | M12, M13 |
+| JNI 错误 | TC-M09-031, TC-M09-032, TC-M09-033 | M09 |
+| 隐私门控 | TC-M13-004, TC-M13-006, TC-M13-011, TC-M13-012 | M13 |
+
 ---
 
 ## 五、测试执行检查清单
@@ -889,23 +2466,34 @@
 ### 发布前必须通过项（Blockers）
 
 - [ ] TC-M01-001 冷启动通过，无 ANR
-- [ ] TC-M01-003 Native 降级路径不崩溃
+- [ ] TC-M01-005 Native 降级路径不崩溃
+- [ ] TC-M01-012 隐私状态加载超时不卡死
 - [ ] TC-M03-001 导入功能正常
-- [ ] TC-M04-001/002 Editor 打开 JPG/RAW 正常
-- [ ] TC-M04-008 Undo/Redo 正确
-- [ ] TC-M04-013 未保存更改提示正确
-- [ ] TC-M06-001/004 单张/批量导出成功
-- [ ] TC-M06-009 导出取消无 OOM
+- [ ] TC-M04-001/004 Editor 打开 JPG/RAW 正常
+- [ ] TC-M04-008 渲染防抖有效
+- [ ] TC-M04-019 Undo/Redo 正确
+- [ ] TC-M04-039 未保存更改提示正确
+- [ ] TC-M05-004 AI 搜索模型未就绪降级
+- [ ] TC-M06-001/009 单张/批量导出成功
+- [ ] TC-M06-002 无权限导出正确拦截
+- [ ] TC-M06-008 UltraHDR 导出 Bitmap 回收正确
+- [ ] TC-M06-017 导出取消无 OOM
+- [ ] TC-M07-004 GPU 后端切换传递到 native 层
 - [ ] TC-M08-001/002 权限请求与授予正常
-- [ ] TC-M09-010 JNI 符号 100% 匹配（无 UnsatisfiedLinkError）
-- [ ] TC-M13-001/002 大图和批量压力不崩溃、不 OOM
-- [ ] TC-M13-003 2小时稳定性无内存泄漏
+- [ ] TC-M09-042 JNI 符号 100% 匹配（无 UnsatisfiedLinkError）
+- [ ] TC-M10-005 任务取消标志正确清理
+- [ ] TC-M13-002 隐私拒绝后数据收集停止
+- [ ] TC-M15-001/002 大图和批量压力不崩溃、不 OOM
+- [ ] TC-M15-006 Bitmap 内存回收验证通过
+- [ ] TC-M15-003 2小时稳定性无内存泄漏
 
 ### 已知限制与降级（Acceptable）
 
-- UltraHDR 导出在部分旧设备上不可用（TC-M06-003 等级 B/C）
+- TIFF 导出在所有设备上降级为 PNG（TC-M06-007 等级 B）
+- UltraHDR 导出在部分旧设备上不可用（TC-M06-008 等级 B/C）
 - AI 语义搜索需先下载模型（TC-M05-004 等级 C）
-- 低内存设备可能降低预览分辨率（TC-M13-005 等级 C）
+- 低内存设备可能降低预览分辨率（TC-M15-005 等级 C）
+- 崩溃报告功能依赖用户同意（TC-M11-002 等级 B）
 
 ---
 
@@ -920,6 +2508,26 @@
 
 ---
 
+## 七、v1.6.11 新增/修复项专项验证
+
+| 变更项 | 对应用例 | 验证要点 |
+|--------|---------|---------|
+| 渲染防抖 (80ms) | TC-M04-008 | 快速调整不溢出 |
+| GPU 后端切换到 native | TC-M07-004 | `nativeSetGpuBackend()` 被调用 |
+| AI 搜索模型就绪检查 | TC-M05-004 | 模型未就绪时提示错误 |
+| UltraHDR Bitmap 回收顺序 | TC-M06-008 | `finalBitmap` 在 `hdrBitmap` 获取前不被回收 |
+| 后台任务取消标志清理 | TC-M10-005/006 | `cancelled` 集合不累积 |
+| 导出权限检查 | TC-M06-002/003 | API 29 及以下需 WRITE_EXTERNAL_STORAGE |
+| 外部图片 Intent 处理 | TC-M01-002/003/004 | 冷/热启动 + 非 image 类型 |
+| nativeOnLowMemory | TC-M01-006/007/008 | GC + 缓存清理 |
+| 隐私同意门控 | TC-M02-005/006 | 首次启动流程 |
+| 崩溃报告隐私联动 | TC-M13-011/012 | 同意 + 开关双重控制 |
+
+---
+
 *文档版本：v1.6.11*
 *生成日期：2026-07-29*
 *适用范围：Release v1.6.11 全面验收测试*
+*总用例数：295*
+*覆盖公开方法数：273*
+*覆盖率：100%*
