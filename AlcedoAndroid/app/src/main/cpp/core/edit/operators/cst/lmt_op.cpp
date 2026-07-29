@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <sstream>
 #include "image/image_buffer.hpp"
 #include "utils/app_logging.hpp"
 namespace alcedo {
