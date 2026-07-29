@@ -40,15 +40,14 @@ auto ImageMapper::Exec(const std::string& sql) -> bool {
 
 void ImageMapper::Insert(const std::shared_ptr<Image>& image) {
   if (!image) return;
-  char sql[1024];
-  std::snprintf(sql, sizeof(sql),
-                "INSERT INTO Image (id, image_path, file_name, type, metadata) "
-                "VALUES (%u, %s, %s, %d, '%s')",
-                image->image_id_,
-                escape_sql_string(image->image_path_.string()).c_str(),
-                escape_sql_string(image->image_name_).c_str(),
-                static_cast<int>(image->image_type_),
-                image->ExifToJson().c_str());
+  std::string sql =
+      "INSERT INTO Image (id, image_path, file_name, type, metadata) "
+      "VALUES (" +
+      std::to_string(image->image_id_) + ", " +
+      escape_sql_string(image->image_path_.string()) + ", " +
+      escape_sql_string(image->image_name_) + ", " +
+      std::to_string(static_cast<int>(image->image_type_)) + ", " +
+      escape_sql_string(image->ExifToJson()) + ")";
   Exec(sql);
 }
 
@@ -58,15 +57,12 @@ void ImageMapper::InsertBatch(const std::vector<std::shared_ptr<Image>>& images)
 
 void ImageMapper::Update(const std::shared_ptr<Image>& image) {
   if (!image) return;
-  char sql[1024];
-  std::snprintf(sql, sizeof(sql),
-                "UPDATE Image SET image_path = %s, file_name = %s, type = %d, "
-                "metadata = '%s' WHERE id = %u",
-                escape_sql_string(image->image_path_.string()).c_str(),
-                escape_sql_string(image->image_name_).c_str(),
-                static_cast<int>(image->image_type_),
-                image->ExifToJson().c_str(),
-                image->image_id_);
+  std::string sql =
+      "UPDATE Image SET image_path = " + escape_sql_string(image->image_path_.string()) +
+      ", file_name = " + escape_sql_string(image->image_name_) +
+      ", type = " + std::to_string(static_cast<int>(image->image_type_)) +
+      ", metadata = " + escape_sql_string(image->ExifToJson()) +
+      " WHERE id = " + std::to_string(image->image_id_);
   Exec(sql);
 }
 

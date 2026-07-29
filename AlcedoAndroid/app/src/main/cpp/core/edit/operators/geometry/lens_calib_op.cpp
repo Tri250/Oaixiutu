@@ -49,12 +49,43 @@ void LensCalibOp::Apply(std::shared_ptr<ImageBuffer> input) {
   }
   src = std::move(out);
 }
-void LensCalibOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void LensCalibOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto LensCalibOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o["enabled"] = runtime_.valid_; return o;
 }
 void LensCalibOp::SetParams(const nlohmann::json& params) {
-  (void)params;  // runtime params resolved from lensfun DB by the pipeline
+  // Store the supplied calibration params into the runtime struct so Apply()
+  // can use them directly (the lensfun-DB pipeline path still works via
+  // SetRuntimeParams, but JSON-supplied params no longer get dropped).
+  runtime_.rectilinear_only_ = params.value("rectilinear_only", runtime_.rectilinear_only_);
+  runtime_.focal_px_   = params.value("focal_length", params.value("focal_px", runtime_.focal_px_));
+  runtime_.center_x_   = params.value("center_x", runtime_.center_x_);
+  runtime_.center_y_   = params.value("center_y", runtime_.center_y_);
+  runtime_.crop_factor_ = params.value("crop_factor", runtime_.crop_factor_);
+  runtime_.scale_x_    = params.value("scale_x", runtime_.scale_x_);
+  runtime_.scale_y_    = params.value("scale_y", runtime_.scale_y_);
+  bool has_distortion = false;
+  if (params.contains("radial_k") && params["radial_k"].is_array()) {
+    const auto& arr = params["radial_k"];
+    for (int i = 0; i < 6 && i < (int)arr.size(); ++i)
+      runtime_.radial_k_[i] = arr[i].get<float>();
+    has_distortion = true;
+  }
+  if (params.contains("tangential_p") && params["tangential_p"].is_array()) {
+    const auto& arr = params["tangential_p"];
+    for (int i = 0; i < 2 && i < (int)arr.size(); ++i)
+      runtime_.tangential_p_[i] = arr[i].get<float>();
+    has_distortion = true;
+  }
+  if (params.contains("enabled")) {
+    runtime_.valid_ = params["enabled"].get<bool>();
+  } else if (has_distortion || params.contains("focal_length") || params.contains("focal_px")) {
+    runtime_.valid_ = true;
+  }
 }
 void LensCalibOp::SetGlobalParams(OperatorParams& params) const {
   params.lens_calib_runtime_params_ = runtime_;

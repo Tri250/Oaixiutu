@@ -41,7 +41,11 @@ void FilmGrainOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b += n * amount;
   });
 }
-void FilmGrainOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void FilmGrainOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto FilmGrainOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   o["enabled"]      = enabled_;

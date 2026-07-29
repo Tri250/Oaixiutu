@@ -78,7 +78,8 @@ class AiSidecarRuntimeService @Inject constructor(
         val path = localPathFor(asset).absolutePath
         val deviceId = if (asset.kind == AiModelKind.MASK_SEGMENT) OnnxModelManager.DEVICE_CPU
         else OnnxModelManager.DEVICE_NNAPI
-        val handle = onnxModelManager.loadModel(path, deviceId)
+        // Pass the asset id so handleFor(asset.id) resolves to this session.
+        val handle = onnxModelManager.loadModel(path, deviceId, asset.id)
         if (handle != 0L) {
             _state.value = _state.value.copy(
                 loadedModelIds = _state.value.loadedModelIds + asset.id,

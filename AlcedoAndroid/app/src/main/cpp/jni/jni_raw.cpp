@@ -126,9 +126,12 @@ JNIEXPORT jstring JNICALL Java_com_alcedo_studio_ndk_Raw_nativeGetRawMetadata(
 JNIEXPORT void JNICALL Java_com_alcedo_studio_ndk_Raw_nativeSetWhiteBalance(
     JNIEnv* /*env*/, jobject /*thiz*/, jint /*image_id*/, jfloat cct, jfloat tint) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx) return;
+  if (!ctx || !ctx->pipeline_svc) return;
   std::lock_guard<std::mutex> lk(ctx->mtx);
-  auto executor = alcedo::CreatePipelineExecutor();
+  // Use the persistent pipeline executor owned by the app service so the white
+  // balance params survive (a freshly CreatePipelineExecutor() instance would
+  // be destroyed at end of scope and the params would be lost).
+  auto executor = ctx->pipeline_svc->GetExecutor();
   if (!executor) return;
   auto& params = executor->GetGlobalParams();
   params.color_temp_enabled_ = true;

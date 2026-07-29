@@ -137,12 +137,15 @@ class ImageBuffer {
   // CPU access.
   FloatMat&       GetCPUData() { return cpu_data_; }
   const FloatMat& GetCPUData() const { return cpu_data_; }
-  std::vector<uint8_t>& GetBuffer() { return buffer_; }
+  std::vector<uint8_t>& GetBuffer() {
+    if (!buffer_) buffer_ = std::make_unique<std::vector<uint8_t>>();
+    return *buffer_;
+  }
 
   int  Width() const { return cpu_data_.Width(); }
   int  Height() const { return cpu_data_.Height(); }
   int  Channels() const { return cpu_data_.Channels(); }
-  bool Empty() const { return cpu_data_.Empty() && buffer_.empty(); }
+  bool Empty() const { return cpu_data_.Empty() && (!buffer_ || buffer_->empty()); }
 
   // GPU access.
   GpuImageWrapper&       GetGPUData() { return gpu_data_; }

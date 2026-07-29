@@ -30,7 +30,13 @@ class ClipModelInference @Inject constructor(
     suspend fun ensureReady(): Boolean {
         val asset = sidecarRuntime.defaultClipAsset()
         val ok = sidecarRuntime.ensureLoaded(asset)
-        if (ok) loadedModelPath = sidecarRuntime.localPathFor(asset).absolutePath
+        if (ok) {
+            loadedModelPath = sidecarRuntime.localPathFor(asset).absolutePath
+            // Load the full CLIP vocab bundled next to the model so text
+            // queries tokenize correctly instead of relying on the compact
+            // built-in subset.
+            if (!tokenizer.hasFullVocab) tokenizer.loadDefaultVocab()
+        }
         return ok
     }
 

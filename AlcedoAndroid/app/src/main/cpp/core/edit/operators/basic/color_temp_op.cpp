@@ -61,7 +61,11 @@ void ColorTempOp::Apply(std::shared_ptr<ImageBuffer> input) {
   });
 }
 
-void ColorTempOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void ColorTempOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 
 auto ColorTempOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;

@@ -75,7 +75,11 @@ void LmtOp::Apply(std::shared_ptr<ImageBuffer> input) {
     }
   });
 }
-void LmtOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void LmtOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto LmtOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   o["lut_path"] = lut_path_.string();

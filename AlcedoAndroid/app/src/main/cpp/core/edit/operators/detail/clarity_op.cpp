@@ -48,7 +48,11 @@ void ClarityOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r *= scale; p.g *= scale; p.b *= scale;
   });
 }
-void ClarityOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void ClarityOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto ClarityOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = offset_; o["radius"] = radius_; return o;
 }

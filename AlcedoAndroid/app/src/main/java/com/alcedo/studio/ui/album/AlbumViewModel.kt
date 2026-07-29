@@ -20,6 +20,7 @@ import com.alcedo.studio.domain.repository.SleeveRepository
 import com.alcedo.studio.domain.service.AiRatingService
 import com.alcedo.studio.domain.service.AlbumBrowseService
 import com.alcedo.studio.domain.service.BackgroundTaskService
+import com.alcedo.studio.domain.service.BatchEditService
 import com.alcedo.studio.domain.service.ImportService
 import com.alcedo.studio.domain.service.PresetService
 import com.alcedo.studio.domain.service.SearchService
@@ -58,6 +59,7 @@ class AlbumViewModel @Inject constructor(
     private val taskService: BackgroundTaskService,
     private val sleeveRepository: SleeveRepository,
     private val presetService: PresetService,
+    private val batchEditService: BatchEditService,
 ) : ViewModel() {
 
     data class AlbumUiState(
@@ -78,6 +80,7 @@ class AlbumViewModel @Inject constructor(
         val isCulling: Boolean = false,
         val isCreatingFolder: Boolean = false,
         val topRated: List<AiRating> = emptyList(),
+        val clipAdjustmentsImageId: String? = null,
         val message: String? = null,
         val error: String? = null,
     )
@@ -203,6 +206,52 @@ class AlbumViewModel @Inject constructor(
             .onFailure { e -> emitError(e) }
     }
 
+    // ---- Copy / paste adjustments ----------------------------------------
+
+    /**
+     * Copy the active adjustment params of [id] into an in-memory clipboard so
+     * they can be pasted onto other images via [pasteAdjustments].
+     */
+    fun copyAdjustments(id: String) {
+        _uiState.update { it.copy(clipAdjustmentsImageId = id, message = "Adjustments copied") }
+    }
+
+    /**
+     * Paste the clipboard source's adjustments onto [targetId] by recording a
+     * copy transaction through [BatchEditService]. No-op when nothing has been
+     * copied yet.
+     */
+    fun pasteAdjustments(targetId: String) = viewModelScope.launch {
+        val sourceId = _uiState.value.clipAdjustmentsImageId
+        if (sourceId == null) {
+            _uiState.update { it.copy(error = "Copy adjustments first") }
+            return@launch
+        }
+        runCatching { batchEditService.copyAdjustments(sourceId, listOf(targetId)) }
+            .onSuccess {
+                _uiState.update { it.copy(message = "Adjustments pasted") }
+                refreshStats()
+            }
+            .onFailure { e -> emitError(e) }
+    }
+
+    /**
+     * Add the image [id] to the current collection folder (or the default
+     * import folder when none is selected) by importing it into the sleeve.
+     */
+    fun addToCollection(id: String) = viewModelScope.launch {
+        val img = imageRepository.getImage(id)
+        if (img == null) {
+            _uiState.update { it.copy(error = "Image not found") }
+            return@launch
+        }
+        val collectionPath = folderPath.value ?: SleeveConstants.DEFAULT_IMPORT_FOLDER
+        val name = "${img.displayName}.${img.fileExtension}"
+        runCatching { sleeveRepository.importFile(collectionPath, img.originalUri, name) }
+            .onSuccess { _uiState.update { it.copy(message = "Added to \"$collectionPath\"") } }
+            .onFailure { e -> emitError(e) }
+    }
+
     /** Apply a metadata action to every selected image. */
     fun applyRatingToSelection(rating: Int) = applyToSelection { setRating(it, rating) }
     fun applyFlagToSelection(flag: ImageFlag) = applyToSelection { setFlag(it, flag) }
@@ -221,9 +270,9 @@ class AlbumViewModel @Inject constructor(
         _uiState.update { it.copy(isImporting = true) }
         viewModelScope.launch {
             val dest = folderPath.value ?: SleeveConstants.DEFAULT_IMPORT_FOLDER
-            runCatching { importService.import(uris, dest) }
+            runCatching { importService.import(uris, dest, taskId) }
                 .onSuccess { imported ->
-                    taskService.update(taskId, uris.size, uris.size)
+                    taskService.update(taskId, imported.size, uris.size)
                     taskService.complete(taskId)
                     refreshStats()
                 }
@@ -249,16 +298,18 @@ class AlbumViewModel @Inject constructor(
             val items = mutableListOf<Pair<Uri, String>>()
             val metadata = mutableMapOf<String, Map<String, String>>()
             ids.forEach { id ->
+                // Abort building the work list if the user cancelled the task.
+                if (taskService.isCancelled(taskId)) return@launch
                 val img = imageRepository.getImage(id) ?: return@forEach
                 items += Uri.parse(img.originalUri) to id
                 metadata[id] = buildMetadata(img)
             }
             runCatching {
-                aiRatingService.cullBatch(items, metadata) { completed, t ->
+                aiRatingService.cullBatch(items, metadata, taskId = taskId) { completed, t ->
                     taskService.update(taskId, completed, t)
                 }
             }.onSuccess { ratings ->
-                taskService.complete(taskId)
+                taskService.complete(taskId, if (taskService.isCancelled(taskId)) "cancelled" else null)
                 _uiState.update { it.copy(topRated = ratings.sortedByDescending { r -> r.overallScore }) }
                 refreshStats()
             }.onFailure { e ->
@@ -324,8 +375,9 @@ class AlbumViewModel @Inject constructor(
     // ---- Batch preset -----------------------------------------------------
 
     /**
-     * Apply [presetId] to the current selection. The album is a browser, so the
-     * preset is resolved and queued for the selection; pixel-level rendering is
+     * Apply [presetId] to the current selection. Resolves the preset and writes
+     * its adjustments as a batch edit transaction per image (via
+     * [BatchEditService]), so the change is persisted to edit history and
      * applied at edit/export time. Surfaces a confirmation with the count.
      */
     fun applyPresetToSelection(presetId: String) = viewModelScope.launch {
@@ -334,14 +386,28 @@ class AlbumViewModel @Inject constructor(
             _uiState.update { it.copy(message = "Select images first") }
             return@launch
         }
-        runCatching { presetService.get(presetId) }
-            .onSuccess { preset ->
-                val name = preset?.name ?: "Preset"
-                _uiState.update {
-                    it.copy(message = "Applied \"$name\" to ${selection.size} image${if (selection.size == 1) "" else "s"}")
-                }
+        val preset = runCatching { presetService.get(presetId) }.getOrNull()
+        if (preset == null) {
+            _uiState.update { it.copy(error = "Preset not found") }
+            return@launch
+        }
+        val totalCount = selection.size
+        val taskId = taskService.start(BackgroundTaskType.BATCH_EDIT, "Applying \"${preset.name}\"", totalCount)
+        runCatching {
+            val ids = selection.toList()
+            val applied = batchEditService.applyPreset(ids, preset.adjustments, "Preset: ${preset.name}")
+            taskService.update(taskId, applied, totalCount)
+            applied
+        }.onSuccess { applied ->
+            taskService.complete(taskId)
+            _uiState.update {
+                it.copy(message = "Applied \"${preset.name}\" to $applied of $totalCount image${if (totalCount == 1) "" else "s"}")
             }
-            .onFailure { e -> emitError(e) }
+            refreshStats()
+        }.onFailure { e ->
+            taskService.complete(taskId, e.message)
+            emitError(e)
+        }
     }
 
     // ---- Background tasks -------------------------------------------------

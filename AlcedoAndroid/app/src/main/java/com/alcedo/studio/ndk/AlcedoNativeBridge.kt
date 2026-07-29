@@ -75,6 +75,7 @@ object AlcedoNativeBridge {
     external fun nativeCreatePipeline(imageHandle: Long): Long // returns pipeline handle
     external fun nativeApplyAdjustments(pipelineHandle: Long, paramsJson: String): Boolean
     external fun nativeApplyMask(pipelineHandle: Long, maskJson: String, maskBitmap: Bitmap?): Boolean
+    external fun nativeClearMasks(pipelineHandle: Long): Boolean
     external fun nativeRenderToBitmap(pipelineHandle: Long, maxWidth: Int): Bitmap?
     external fun nativeRenderToBuffer(pipelineHandle: Long): Long // pixel buffer handle
     external fun nativeDestroyPipeline(pipelineHandle: Long)

@@ -51,10 +51,14 @@ class GpuPipelineRenderer {
         surface = null
     }
 
-    /** Force a re-render of the current pipeline. */
+    /**
+     * Mark the display stage dirty so the native layer re-renders the next
+     * frame. Despite the legacy name this is an invalidation request, not a
+     * frame capture — use [captureFrame] to retrieve a bitmap.
+     */
     fun invalidate() {
         if (pipelineHandle == 0L) return
-        NdkSafeCall.run { AlcedoNativeBridge.nativeGetFinalDisplayFrame(pipelineHandle) }
+        NdkSafeCall.run { AlcedoNativeBridge.nativeInvalidateStage(pipelineHandle, "DisplayTransform") }
     }
 
     /** Push updated [params] through the pipeline. */

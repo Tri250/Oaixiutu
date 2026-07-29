@@ -15,7 +15,11 @@ void BlackOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b = p.b - bp * (1.0f - p.b);
   });
 }
-void BlackOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void BlackOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto BlackOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = black_point_; return o;
 }

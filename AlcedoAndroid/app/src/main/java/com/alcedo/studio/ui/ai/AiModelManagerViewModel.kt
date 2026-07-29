@@ -1,18 +1,29 @@
 package com.alcedo.studio.ui.ai
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.AiModelAsset
 import com.alcedo.studio.domain.service.AiSidecarRuntimeService
 import com.alcedo.studio.domain.service.ModelAssetCatalog
 import com.alcedo.studio.domain.service.ModelDownloadService
+import com.alcedo.studio.util.ContextProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+private val Context.aiModelPrefsDataStore: DataStore<Preferences> by preferencesDataStore(name = "alcedo_ai_models")
+private val DEFAULT_CLIP_MODEL_KEY = stringPreferencesKey("default_clip_model_id")
 
 /**
  * AI model manager ViewModel. Surfaces the model catalogue ([ModelAssetCatalog])
@@ -46,8 +57,19 @@ class AiModelManagerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ModelUiState())
     val uiState: StateFlow<ModelUiState> = _uiState.asStateFlow()
 
+    private val dataStore: DataStore<Preferences>?
+        get() = runCatching { ContextProvider.requireContext().aiModelPrefsDataStore }.getOrNull()
+
     init {
         refresh()
+        // Restore the persisted default CLIP model so the user's choice survives
+        // process restarts. Unknown ids (e.g. a since-deleted model) are ignored.
+        viewModelScope.launch {
+            val persistedId = runCatching { dataStore?.data?.first()?.get(DEFAULT_CLIP_MODEL_KEY) }.getOrNull()
+            if (persistedId != null && ModelAssetCatalog.ALL.any { it.id == persistedId }) {
+                _uiState.update { it.copy(defaultClipId = persistedId) }
+            }
+        }
         // Mirror load/download state from the sidecar runtime.
         viewModelScope.launch {
             sidecarRuntime.state.collect { runtime ->
@@ -114,9 +136,11 @@ class AiModelManagerViewModel @Inject constructor(
                     sidecarRuntime.localPathFor(asset).delete()
                 }
             }.onSuccess {
-                // If the deleted model was the default, fall back to the catalogue default.
+                // If the deleted model was the default, fall back to the catalogue default
+                // and clear the persisted preference so the stale id isn't restored.
                 if (_uiState.value.defaultClipId == asset.id) {
                     _uiState.update { it.copy(defaultClipId = ModelAssetCatalog.CLIP_VIT_BASE_PATCH32.id) }
+                    runCatching { dataStore?.edit { it.remove(DEFAULT_CLIP_MODEL_KEY) } }
                 }
                 refresh()
             }.onFailure { e ->
@@ -128,6 +152,9 @@ class AiModelManagerViewModel @Inject constructor(
     /** Mark [asset] as the default CLIP model for semantic search. */
     fun setDefaultModel(asset: AiModelAsset) {
         _uiState.update { it.copy(defaultClipId = asset.id) }
+        viewModelScope.launch {
+            runCatching { dataStore?.edit { it[DEFAULT_CLIP_MODEL_KEY] = asset.id } }
+        }
     }
 
     fun dismissError() {

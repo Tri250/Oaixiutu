@@ -1,7 +1,9 @@
 package com.alcedo.studio.ui.export
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.alcedo.studio.data.model.AdjustmentParams
 import com.alcedo.studio.data.model.ExportConfig
 import com.alcedo.studio.data.model.ExportFormat
 import com.alcedo.studio.data.model.ImageItem
@@ -10,8 +12,11 @@ import com.alcedo.studio.data.model.BackgroundTaskType
 import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.service.BackgroundTaskService
 import com.alcedo.studio.domain.service.ExportService
+import com.alcedo.studio.domain.service.HistoryMgmtService
 import com.alcedo.studio.domain.service.PipelineService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +36,7 @@ class ExportViewModel @Inject constructor(
     private val pipelineService: PipelineService,
     private val imageRepository: ImageRepository,
     private val taskService: BackgroundTaskService,
+    private val historyService: HistoryMgmtService,
 ) : ViewModel() {
 
     data class ExportUiState(
@@ -66,6 +72,9 @@ class ExportViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ExportUiState())
     val uiState: StateFlow<ExportUiState> = _uiState.asStateFlow()
+
+    /** The coroutine running the current export loop, so [cancel] can interrupt it. */
+    private val exportJob = MutableStateFlow<Job?>(null)
 
     /** Live export progress from the service. */
     val serviceProgress: StateFlow<ExportService.ExportProgress?> = exportService.progress
@@ -149,39 +158,52 @@ class ExportViewModel @Inject constructor(
             _uiState.update { it.copy(error = "No active pipeline. Open an image in the editor first.") }
             return
         }
-        viewModelScope.launch {
+        startExport {
             val item = imageRepository.getImage(imageId) ?: run {
                 _uiState.update { it.copy(error = "Image not found: $imageId") }
-                return@launch
+                return@startExport
             }
-            runExport(listOf(item to handle))
+            runExport(listOf(item), dedicatedHandles = false)
         }
     }
 
     /**
-     * Batch export a set of image ids. Each image is exported through the
-     * shared pipeline handle opened in turn; images without an open pipeline are
-     * reported as failed.
+     * Batch export a set of image ids. Each image gets its OWN dedicated
+     * pipeline handle (created from that image's URI), its saved edit state is
+     * loaded from history and applied, then it is rendered and exported. This
+     * avoids exporting every image with the currently-open image's pipeline.
      */
     fun exportBatch(imageIds: List<String>) {
         if (imageIds.isEmpty()) return
-        viewModelScope.launch {
-            val handle = pipelineService.handle
-            val items = imageIds.mapNotNull { id -> imageRepository.getImage(id)?.let { it to handle } }
+        startExport {
+            val items = imageIds.mapNotNull { id -> imageRepository.getImage(id) }
             if (items.isEmpty()) {
-                _uiState.update { it.copy(error = "No exportable images (pipeline not open).") }
-                return@launch
+                _uiState.update { it.copy(error = "No exportable images found.") }
+                return@startExport
             }
-            runExport(items)
+            runExport(items, dedicatedHandles = true)
         }
     }
 
-    private suspend fun runExport(items: List<Pair<ImageItem, Long>>) {
-        val cfg = _uiState.value.config
+    private fun startExport(block: suspend () -> Unit) {
+        // Cancel any in-flight export before starting a new one.
+        exportJob.value?.cancel()
+        val job = viewModelScope.launch { block() }
+        exportJob.value = job
+    }
+
+    /**
+     * @param dedicatedHandles when true, a fresh off-screen pipeline is created
+     *  per image (loaded with that image's saved edit state) so batch export
+     *  does not reuse the editor's open-image handle. When false, the editor's
+     *  shared handle is used (single export of the open image).
+     */
+    private suspend fun runExport(items: List<ImageItem>, dedicatedHandles: Boolean) {
+        val cfg = buildExportConfig()
         val total = items.size
         val taskId = taskService.start(
             BackgroundTaskType.EXPORT,
-            if (total == 1) "Exporting ${items.first().first.displayName}" else "Exporting $total images",
+            if (total == 1) "Exporting ${items.first().displayName}" else "Exporting $total images",
             total,
         )
         _uiState.update {
@@ -189,38 +211,84 @@ class ExportViewModel @Inject constructor(
         }
 
         val results = mutableListOf<ExportResult>()
-        items.forEachIndexed { index, (item, handle) ->
-            val request = ExportService.ExportRequest(
-                imageId = item.id,
-                displayName = item.displayName,
-                pipelineHandle = handle,
-                config = cfg,
-            )
-            val path = runCatching { exportService.export(request) }.getOrNull()
-            val success = path != null
-            results += ExportResult(item.id, item.displayName, path, success, if (!success) "export_failed" else null)
+        items.forEachIndexed { index, item ->
+            // Cooperative cancellation: abort early if the job was cancelled.
+            ensureActive()
+            if (taskService.isCancelled(taskId)) break
+
+            val handle = if (dedicatedHandles) {
+                val h = runCatching { pipelineService.createForImage(Uri.parse(item.originalUri)) }.getOrDefault(0L)
+                if (h != 0L) {
+                    // Load this image's saved cumulative params and apply them.
+                    val params = runCatching { historyService.getActiveVersion(item.id)?.cumulativeParams }
+                        .getOrNull() ?: AdjustmentParams.DEFAULT
+                    pipelineService.applyParamsToHandle(h, params)
+                }
+                h
+            } else {
+                pipelineService.handle
+            }
+
+            try {
+                val path = if (handle == 0L) {
+                    null
+                } else {
+                    val request = ExportService.ExportRequest(
+                        imageId = item.id,
+                        displayName = item.displayName,
+                        pipelineHandle = handle,
+                        config = cfg,
+                    )
+                    runCatching { exportService.export(request) }.getOrNull()
+                }
+                val success = path != null
+                results += ExportResult(item.id, item.displayName, path, success, if (!success) "export_failed" else null)
+            } finally {
+                if (dedicatedHandles && handle != 0L) pipelineService.releaseHandle(handle)
+            }
+
             taskService.update(taskId, index + 1, total)
             _uiState.update {
                 it.copy(
                     completedCount = index + 1,
                     results = results.toList(),
-                    lastOutputPath = path ?: it.lastOutputPath,
+                    lastOutputPath = results.lastOrNull { p -> p.success }?.outputPath ?: it.lastOutputPath,
                 )
             }
         }
 
+        val cancelled = taskService.isCancelled(taskId)
         val failures = results.count { !it.success }
-        taskService.complete(taskId, if (failures == total) "all_failed" else null)
+        taskService.complete(taskId, if (cancelled) "cancelled" else if (failures == total) "all_failed" else null)
         _uiState.update {
             it.copy(
                 isExporting = false,
-                error = if (failures > 0) "$failures of $total exports failed" else null,
+                error = when {
+                    cancelled -> null
+                    failures > 0 -> "$failures of $total exports failed"
+                    else -> null
+                },
             )
         }
     }
 
+    /** Merge the UI-state-only export fields into the [ExportConfig] sent to the service. */
+    private fun buildExportConfig(): ExportConfig {
+        val s = _uiState.value
+        return s.config.copy(
+            bitDepth = s.bitDepth,
+            metaMode = s.metaMode.name,
+            maintainAspect = s.maintainAspect,
+            resizeWidth = s.resizeWidth.toIntOrNull() ?: 0,
+            resizeHeight = s.resizeHeight.toIntOrNull() ?: 0,
+            iccProfile = s.iccProfile,
+        )
+    }
+
+    /** Cancel the running export loop (if any) and reset the exporting flag. */
     fun cancel() {
-        // The export loop checks progress cooperatively; mark the UI as stopped.
+        exportJob.value?.cancel()
+        exportJob.value = null
         _uiState.update { it.copy(isExporting = false) }
     }
 

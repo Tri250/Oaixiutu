@@ -27,7 +27,11 @@ void VibranceOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b = lum + (p.b - lum) * (1.0f + amount);
   });
 }
-void VibranceOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void VibranceOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto VibranceOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = vibrance_offset_; return o;
 }

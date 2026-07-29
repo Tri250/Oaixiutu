@@ -39,7 +39,12 @@ class ClipInferenceEngine @Inject constructor(
     suspend fun ensureReady(): Boolean {
         val asset = sidecarRuntime.defaultClipAsset()
         val ok = sidecarRuntime.ensureLoaded(asset)
-        if (ok) clipAsset = asset
+        if (ok) {
+            clipAsset = asset
+            // Replace the compact fallback vocab with the full CLIP vocab
+            // bundled next to the model, so queries tokenize accurately.
+            if (!tokenizer.hasFullVocab) tokenizer.loadDefaultVocab()
+        }
         return ok
     }
 

@@ -82,17 +82,23 @@ object PermissionHelper {
     /**
      * True when [permission] is permanently denied: not granted AND the system
      * will no longer show the permission dialog (rationale returns false after a
-     * prior request). NOTE: this is also false on the very first launch before
-     * any request has been made, so only treat it as "permanently denied" after
-     * a [rememberPermissionLauncher] request has returned at least once.
+     * prior request). A granted permission is never "denied" even though its
+     * rationale is false, and a null activity can't be evaluated, so both return
+     * false here. NOTE: on the very first launch (before any request) rationale
+     * is also false, so only treat this as truly permanent after a
+     * [rememberPermissionLauncher] request has returned at least once.
      */
-    fun isPermanentlyDenied(activity: Activity?, permission: String): Boolean =
-        !shouldShowRationale(activity, permission)
+    fun isPermanentlyDenied(activity: Activity?, permission: String): Boolean {
+        if (activity == null) return false
+        // A granted permission is not denied, regardless of the rationale flag.
+        if (isGranted(activity, permission)) return false
+        return !shouldShowRationale(activity, permission)
+    }
 
     /** True when ANY of the [permissions] (all ungranted) is permanently denied. */
     fun anyPermanentlyDenied(activity: Activity?, context: Context, permissions: List<String>): Boolean {
         val denied = deniedPermissions(context, permissions)
-        return denied.any { !shouldShowRationale(activity, it) }
+        return denied.any { isPermanentlyDenied(activity, it) }
     }
 
     /**

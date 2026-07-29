@@ -20,6 +20,7 @@ import com.alcedo.studio.data.model.WatermarkConfig
 import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.service.ExifEditorService
 import com.alcedo.studio.domain.service.HistoryMgmtService
+import com.alcedo.studio.domain.service.MaskInferenceService
 import com.alcedo.studio.domain.service.MaskService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.domain.service.PresetService
@@ -48,6 +49,7 @@ class EditorViewModel @Inject constructor(
     private val historyService: HistoryMgmtService,
     private val presetService: PresetService,
     private val maskService: MaskService,
+    private val maskInferenceService: MaskInferenceService,
     private val exifService: ExifEditorService,
     private val imageRepository: ImageRepository,
     savedStateHandle: SavedStateHandle,
@@ -323,6 +325,33 @@ class EditorViewModel @Inject constructor(
     fun addLuminanceMask(min: Float, max: Float) =
         addMask(maskService.newLuminanceMask(activeVersionIdOrEmpty(), min, max))
 
+    /** Run AI segmentation for the whole subject and add it as a mask. */
+    fun addSubjectMask() = addAiSubjectMask("subject")
+
+    /** Run AI segmentation to isolate the sky and add it as a mask. */
+    fun addSkyMask() = addAiSubjectMask("sky")
+
+    /** Run AI segmentation to isolate the background and add it as a mask. */
+    fun addBackgroundMask() = addAiSubjectMask("background")
+
+    private fun addAiSubjectMask(subjectKind: String) {
+        val item = _uiState.value.image ?: return
+        val versionId = activeVersionIdOrEmpty()
+        viewModelScope.launch {
+            runCatching {
+                maskInferenceService.buildSubjectMask(Uri.parse(item.originalUri), versionId, subjectKind)
+            }.onSuccess { mask ->
+                if (mask != null) {
+                    addMask(mask)
+                } else {
+                    _uiState.update { it.copy(error = "AI mask unavailable for '$subjectKind'") }
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = "AI mask failed: ${e.message}") }
+            }
+        }
+    }
+
     private fun addMask(mask: Mask) {
         val record = maskService.toRecord(mask)
         pendingMasks.add(record)
@@ -332,15 +361,29 @@ class EditorViewModel @Inject constructor(
     }
 
     fun toggleMask(record: MaskRecord) {
-        // Toggle is a UI-side concern over the local list; pipeline re-applies on rerender.
         pendingMasks = pendingMasks.map { if (it.id == record.id) it.copy(enabled = !it.enabled) else it }.toMutableList()
         _uiState.update { it.copy(masks = pendingMasks.toList()) }
-        rerender()
+        syncMasksToPipeline()
     }
 
     fun removeMask(id: String) {
         pendingMasks.removeAll { it.id == id }
         _uiState.update { it.copy(masks = pendingMasks.toList()) }
+        syncMasksToPipeline()
+    }
+
+    /**
+     * Re-sync the local mask set to the native pipeline. The native layer has no
+     * per-mask remove/toggle, so we clear and re-apply only the enabled masks so
+     * toggles and removals actually take effect in the rendered preview (a plain
+     * [rerender] only re-applies adjustments, not masks).
+     */
+    private fun syncMasksToPipeline() {
+        pipelineService.clearMasks()
+        pendingMasks.filter { it.enabled }.forEach { record ->
+            runCatching { pipelineService.applyMask(record) }
+                .onFailure { e -> _uiState.update { it.copy(error = "Mask re-apply failed: ${e.message}") } }
+        }
         rerender()
     }
 

@@ -268,6 +268,8 @@ object StringResourcesZhCn : StringRes {
     override val whiteBalance = "白平衡"
     override val flash = "闪光灯"
     override val dimensions = "尺寸"
+    override val description = "描述"
+    override val copyright = "版权"
 
     override val history = "历史"
     override val versions = "版本"

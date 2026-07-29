@@ -27,9 +27,8 @@ void ExposureOp::Apply(std::shared_ptr<ImageBuffer> input) {
 }
 
 void ExposureOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
-  // Stage 0 of the fused basic kernel; the actual dispatch is performed by the
-  // pipeline's VulkanKernelStream using the "basic" program. Here we just
-  // ensure the GPU image is present and up to date.
+  input->SyncToCPU();
+  Apply(input);
   input->SyncToGPU();
 }
 

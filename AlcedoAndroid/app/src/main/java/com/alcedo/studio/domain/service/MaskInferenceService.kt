@@ -44,8 +44,10 @@ class MaskInferenceService @Inject constructor(
         } finally {
             decodeService.release(decoded)
         }
-        // Fallback: produce a centre-weighted radial coverage mask.
-        fallbackCoverage(uri)
+        // Fallback: derive a content-aware coverage mask from pixel luminance so
+        // the heuristic at least tracks the image instead of a fixed shape.
+        Log.w(TAG, "nativeAiRunSegmentation unavailable; using luminance heuristic for '$subjectKind'")
+        fallbackCoverage(uri, subjectKind)
     }
 
     /** Build an [AiSubjectMask] tied to [versionId] from a segmentation result. */
@@ -99,22 +101,69 @@ class MaskInferenceService @Inject constructor(
         return out
     }
 
-    private suspend fun fallbackCoverage(uri: Uri): Bitmap? {
+    /**
+     * Content-aware fallback coverage mask. Instead of a fixed radial gradient,
+     * the coverage is derived from the image's per-pixel luminance and the
+     * requested [subjectKind] so the heuristic at least tracks the actual image
+     * content when the segmentation model is unavailable.
+     */
+    private suspend fun fallbackCoverage(uri: Uri, subjectKind: String): Bitmap? {
         val bmp = BitmapDecoder.decodeThumbnail(ContextProvider.requireContext(), uri, 256) ?: return null
         val w = bmp.width
         val h = bmp.height
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8)
         val pixels = IntArray(w * h)
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        // Per-pixel luminance (Rec. 709) and image mean.
+        val lum = FloatArray(w * h)
+        var sum = 0.0
+        for (i in pixels.indices) {
+            val px = pixels[i]
+            val r = ((px shr 16) and 0xFF) / 255f
+            val g = ((px shr 8) and 0xFF) / 255f
+            val b = (px and 0xFF) / 255f
+            val l = 0.2126f * r + 0.7152f * g + 0.0722f * b
+            lum[i] = l
+            sum += l
+        }
+        val mean = (sum / pixels.size.coerceAtLeast(1)).toFloat()
+
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8)
+        val outPx = IntArray(w * h)
+        val kind = subjectKind.lowercase()
         for (y in 0 until h) {
+            val ny = if (h > 1) y / (h - 1f) else 0f
+            val cy = kotlin.math.abs(ny - 0.5f) * 2f
             for (x in 0 until w) {
-                val dx = (x - w / 2f) / (w / 2f)
-                val dy = (y - h / 2f) / (h / 2f)
-                val r = kotlin.math.sqrt(dx * dx + dy * dy)
-                val a = ((1f - r.coerceIn(0f, 1f)) * 255f).toInt().coerceIn(0, 255)
-                pixels[y * w + x] = (a shl 24)
+                val i = y * w + x
+                val l = lum[i]
+                val nx = if (w > 1) x / (w - 1f) else 0f
+                val cx = kotlin.math.abs(nx - 0.5f) * 2f
+                val centreDist = kotlin.math.sqrt(cx * cx + cy * cy)
+                val a: Float = when (kind) {
+                    "sky" -> {
+                        // Sky is typically bright and in the upper portion of the frame.
+                        val brightness = ((l - mean) / (1f - mean + 1e-3f)).coerceIn(0f, 1f)
+                        val topBias = 1f - ny
+                        brightness * 0.6f + topBias * 0.4f
+                    }
+                    "background" -> {
+                        // Background tends to be away from the centre and low contrast.
+                        val edge = centreDist.coerceIn(0f, 1f)
+                        val flatness = 1f - (kotlin.math.abs(l - mean) / (mean + 1e-3f)).coerceIn(0f, 1f)
+                        edge * 0.6f + flatness * 0.4f
+                    }
+                    else -> {
+                        // subject/object: central region with strong deviation from the mean.
+                        val centrality = (1f - centreDist).coerceIn(0f, 1f)
+                        val contrast = (kotlin.math.abs(l - mean) / (mean + 1e-3f)).coerceIn(0f, 1f)
+                        centrality * 0.6f + contrast * 0.4f
+                    }
+                }
+                outPx[i] = ((a.coerceIn(0f, 1f) * 255f).toInt() shl 24)
             }
         }
-        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        out.setPixels(outPx, 0, w, 0, 0, w, h)
         bmp.recycle()
         return out
     }

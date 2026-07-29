@@ -11,11 +11,13 @@ namespace alcedo {
 // ---- NodeStorageHandler ----
 
 NodeStorageHandler::NodeStorageHandler(
-    std::unordered_map<sl_element_id_t, std::shared_ptr<SleeveElement>>& storage)
-    : storage_(storage) {}
+    std::unordered_map<sl_element_id_t, std::shared_ptr<SleeveElement>>& storage,
+    std::mutex& storage_lock)
+    : storage_(storage), storage_lock_(storage_lock) {}
 
 void NodeStorageHandler::AddToStorage(std::shared_ptr<SleeveElement> new_element) {
   if (!new_element) return;
+  std::lock_guard<std::mutex> lock(storage_lock_);
   storage_[new_element->element_id_] = std::move(new_element);
 }
 
@@ -28,12 +30,14 @@ void NodeStorageHandler::EnsureChildrenLoaded(std::shared_ptr<SleeveFolder> fold
 }
 
 auto NodeStorageHandler::GetElement(sl_element_id_t id) -> std::shared_ptr<SleeveElement> {
+  std::lock_guard<std::mutex> lock(storage_lock_);
   auto it = storage_.find(id);
   if (it == storage_.end()) return nullptr;
   return it->second;
 }
 
 void NodeStorageHandler::GarbageCollect() {
+  std::lock_guard<std::mutex> lock(storage_lock_);
   for (auto it = storage_.begin(); it != storage_.end();) {
     auto& elem = it->second;
     if (!elem) {
@@ -51,7 +55,7 @@ void NodeStorageHandler::GarbageCollect() {
 // ---- StorageService ----
 
 StorageService::StorageService(std::filesystem::path db_path)
-    : db_path_(std::move(db_path)), node_handler_(storage_) {
+    : db_path_(std::move(db_path)), node_handler_(storage_, live_state_lock_) {
   ALOGI("StorageService initialised with db=%s", db_path_.c_str());
 }
 

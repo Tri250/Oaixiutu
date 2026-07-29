@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "nn/safetensors.hpp"
 #include "utils/app_logging.hpp"
@@ -72,6 +73,7 @@ auto AiRatingInference::Infer(const std::shared_ptr<Image>& image) -> AiRatingRe
       static_cast<double>(w) * h / 10000.0)));
 
   // Pass 1: accumulate luminance for mean + variance (contrast) + sum of squares.
+  std::vector<float> lum_samples;
   double sum_lum = 0.0;
   double sum_lum_sq = 0.0;
   size_t lum_count = 0;

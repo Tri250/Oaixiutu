@@ -297,6 +297,14 @@ fun AlbumScreen(
                             image = contextMenuImage,
                             offset = contextMenuOffset,
                             onDismiss = { contextMenuImage = null },
+                            onCopyAdjustments = {
+                                contextMenuImage?.let { viewModel.copyAdjustments(it.id) }
+                                contextMenuImage = null
+                            },
+                            onPasteAdjustments = {
+                                contextMenuImage?.let { viewModel.pasteAdjustments(it.id) }
+                                contextMenuImage = null
+                            },
                             onRate = { rating ->
                                 contextMenuImage?.let { viewModel.setRating(it.id, rating) }
                                 contextMenuImage = null
@@ -307,6 +315,10 @@ fun AlbumScreen(
                             },
                             onSetColorLabel = { label ->
                                 contextMenuImage?.let { viewModel.setColorLabel(it.id, label) }
+                                contextMenuImage = null
+                            },
+                            onAddToCollection = {
+                                contextMenuImage?.let { viewModel.addToCollection(it.id) }
                                 contextMenuImage = null
                             },
                             onDelete = {

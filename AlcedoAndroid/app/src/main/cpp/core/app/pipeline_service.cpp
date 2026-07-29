@@ -35,11 +35,12 @@ auto PipelineAppService::Execute(const std::shared_ptr<Image>& image, const std:
   if (!params.is_discarded()) {
     executor->ImportPipelineParams(params);
   }
-  // Apply the pipeline to the image's working buffer.
-  auto input = std::make_shared<ImageBuffer>(image->GetImageData());
+  // Apply the pipeline to a clone of the image's working buffer so the
+  // original pixels are preserved for future re-renders.
+  auto input = std::make_shared<ImageBuffer>(image->GetImageData().Clone());
   auto output = executor->Apply(input);
   if (output) {
-    image->LoadOriginalData(std::move(*output));
+    image->SetImageData(std::move(*output));
   }
   return image;
 }

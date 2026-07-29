@@ -22,6 +22,11 @@ bool SafetensorsReader::Open(const std::string& path) {
     ALOGE("SafetensorsReader: cannot open %s", path.c_str());
     return false;
   }
+  // Record total file size for bounds checking on tensor reads.
+  file_.seekg(0, std::ios::end);
+  file_size_ = file_.tellg();
+  file_.seekg(0, std::ios::beg);
+  if (file_size_ < 0) file_size_ = 0;
   // Read 8-byte little-endian header length.
   uint64_t header_len = 0;
   file_.read(reinterpret_cast<char*>(&header_len), 8);
@@ -97,6 +102,16 @@ auto SafetensorsReader::ReadTensor(const std::string& name, std::vector<uint8_t>
   if (!opened_) return false;
   auto info = GetTensorInfo(name);
   if (!info) return false;
+  if (info->data_offset < 0 || info->data_length < 0) return false;
+  // Bounds check: the tensor byte range must lie within the file.
+  int64_t abs_start = data_start_ + info->data_offset;
+  if (file_size_ > 0 && (abs_start > file_size_ || info->data_length > file_size_ - abs_start)) {
+    ALOGE("SafetensorsReader: tensor '%s' range [%lld, %lld) exceeds file size %lld",
+          name.c_str(), static_cast<long long>(abs_start),
+          static_cast<long long>(abs_start + info->data_length),
+          static_cast<long long>(file_size_));
+    return false;
+  }
   out_data.resize(static_cast<size_t>(info->data_length));
   file_.clear();
   file_.seekg(data_start_ + info->data_offset, std::ios::beg);

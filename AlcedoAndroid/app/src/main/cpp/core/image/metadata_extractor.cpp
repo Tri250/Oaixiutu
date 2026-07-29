@@ -43,9 +43,9 @@ uint32_t ReadU32(const uint8_t* p, bool little) {
   return little ? (uint32_t(p[0]) | (uint32_t(p[1]) << 8) | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24))
                 : (uint32_t(p[3]) | (uint32_t(p[2]) << 8) | (uint32_t(p[1]) << 16) | (uint32_t(p[0]) << 24));
 }
-float ReadRational(const uint8_t* base, uint32_t offset, bool little) {
+float ReadRational(const uint8_t* base, uint32_t offset, size_t buf_len, bool little) {
+  if (offset + 8 > buf_len) return 0.0f;
   const uint8_t* p = base + offset;
-  if (offset + 8 > 0xFFFFFFFF) return 0.0f;
   uint32_t num = ReadU32(p, little);
   uint32_t den = ReadU32(p + 4, little);
   return den ? float(num) / float(den) : 0.0f;
@@ -81,14 +81,32 @@ void ParseIFD(const uint8_t* base, size_t buf_len, uint32_t ifd_off, bool little
       case kModel:           meta.camera_model = ReadAscii(base, value_off, count2, little, buf_len); break;
       case kLensMake:        meta.lens_make = ReadAscii(base, value_off, count2, little, buf_len); break;
       case kLensModel:       meta.lens_model = ReadAscii(base, value_off, count2, little, buf_len); break;
-      case kImageWidth:      meta.width_px = (count2 == 1) ? value_off : (int)ReadU16(base + value_off, little); break;
-      case kImageHeight:     meta.height_px = (count2 == 1) ? value_off : (int)ReadU16(base + value_off, little); break;
-      case kBitsPerSample:   meta.bit_depth = (count2 == 1) ? value_off : (int)ReadU16(base + value_off, little); break;
+      case kImageWidth:
+        if (count2 == 1) {
+          meta.width_px = value_off;
+        } else if (value_off + 2 <= buf_len) {
+          meta.width_px = (int)ReadU16(base + value_off, little);
+        }
+        break;
+      case kImageHeight:
+        if (count2 == 1) {
+          meta.height_px = value_off;
+        } else if (value_off + 2 <= buf_len) {
+          meta.height_px = (int)ReadU16(base + value_off, little);
+        }
+        break;
+      case kBitsPerSample:
+        if (count2 == 1) {
+          meta.bit_depth = value_off;
+        } else if (value_off + 2 <= buf_len) {
+          meta.bit_depth = (int)ReadU16(base + value_off, little);
+        }
+        break;
       case kDateTime:        meta.capture_time = ReadAscii(base, value_off, count2, little, buf_len); break;
-      case kFocalLength:     meta.focal_length_mm = ReadRational(base, value_off, little); break;
+      case kFocalLength:     meta.focal_length_mm = ReadRational(base, value_off, buf_len, little); break;
       case kFocalLength35mm: meta.focal_length_35mm = (float)(short)value_off; break;
-      case kExposureTime:    meta.exposure_time_s = ReadRational(base, value_off, little); break;
-      case kFNumber:         meta.aperture_f = ReadRational(base, value_off, little); break;
+      case kExposureTime:    meta.exposure_time_s = ReadRational(base, value_off, buf_len, little); break;
+      case kFNumber:         meta.aperture_f = ReadRational(base, value_off, buf_len, little); break;
       case kISOSpeedRatings: meta.iso = (float)(short)value_off; break;
       case kColorSpace:      meta.color_space = (value_off == 1) ? "sRGB" : "Untagged"; break;
       case kOrientation:     meta.orientation = std::to_string(value_off & 0xFFFF); break;

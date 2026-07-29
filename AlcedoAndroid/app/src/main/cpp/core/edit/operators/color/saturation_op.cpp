@@ -16,7 +16,11 @@ void SaturationOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b = lum + (p.b - lum) * s;
   });
 }
-void SaturationOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void SaturationOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto SaturationOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = saturation_offset_; return o;
 }

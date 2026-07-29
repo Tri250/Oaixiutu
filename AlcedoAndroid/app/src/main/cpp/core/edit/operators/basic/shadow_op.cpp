@@ -26,7 +26,11 @@ void ShadowOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r += off * m; p.g += off * m; p.b += off * m;
   });
 }
-void ShadowOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void ShadowOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto ShadowOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = shadow_offset_; return o;
 }

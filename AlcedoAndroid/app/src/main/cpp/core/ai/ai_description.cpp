@@ -129,10 +129,10 @@ auto AiDescriptionInference::Infer(const std::shared_ptr<Image>& image) -> AiDes
   result.caption = brightness_desc + " with " + tone_desc;
   result.tags    = {dom_color, key_desc};
   result.scene   = model_loaded ? "static" : "heuristic";
-  // Heuristics are approximate; a loaded model implies richer available data
-  // even though we can't run the forward pass here, so confidence is a bit
-  // higher than the pure no-model heuristic.
-  result.confidence = model_loaded ? 0.45 : 0.30;
+  // The forward pass is never actually run in this C++ build (the NN runtime
+  // is dispatched via JNI), so the heuristic is the real source of the caption.
+  // Be honest: confidence is low regardless of whether the model file opened.
+  result.confidence = 0.15;
 
   ALOGI("AiDescription: heuristic caption=\"%s\" (brightness=%.3f, warmth=%.3f)",
         result.caption.c_str(), brightness, warmth);

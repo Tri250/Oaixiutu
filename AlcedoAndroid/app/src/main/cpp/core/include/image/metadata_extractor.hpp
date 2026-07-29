@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 
+#include "image/image.hpp"
 #include "image/metadata.hpp"
 #include "json.hpp"
 #include "type/type.hpp"

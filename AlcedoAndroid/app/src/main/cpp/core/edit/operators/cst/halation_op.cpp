@@ -65,7 +65,11 @@ void HalationOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b += g * redshift_[2];
   });
 }
-void HalationOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void HalationOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto HalationOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   o["enabled"]        = enabled_;

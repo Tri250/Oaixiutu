@@ -89,7 +89,6 @@ auto DecoderScheduler::DecodeNow(image_id_t id, const image_path_t& path, Decode
     case DecodeType::SLEEVE_LOADING:
     case DecodeType::REGULAR:        return meta_decoder_->Decode(path, id, type);
   }
-  return meta_decoder_->Decode(path, id, type);
 }
 
 void DecoderScheduler::Shutdown() { pool_.Shutdown(); }

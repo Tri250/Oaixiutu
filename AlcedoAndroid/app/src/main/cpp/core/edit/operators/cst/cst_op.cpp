@@ -15,7 +15,11 @@ void CstOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r = r; p.g = g; p.b = b;
   });
 }
-void CstOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void CstOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto CstOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; nlohmann::json arr = nlohmann::json::array();
   for (int i = 0; i < 9; ++i) arr.push_back(matrix_[i]);

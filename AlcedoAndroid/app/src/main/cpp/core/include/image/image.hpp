@@ -31,6 +31,7 @@ class Image {
   std::atomic<bool>     has_raw_color_context_{false};
 
   ImageBuffer           image_data_;
+  ImageBuffer           processed_data_;
   ImageBuffer           thumbnail_;
   ImageType             image_type_ = ImageType::DEFAULT;
 
@@ -65,6 +66,11 @@ class Image {
   ImageBuffer&       GetImageData() { return image_data_; }
   ImageBuffer&       GetThumbnailBuffer() { return thumbnail_; }
   FloatMat&          GetThumbnailMat() { return thumbnail_.GetCPUData(); }
+
+  // Processed (rendered) result buffer, kept separate from the original image
+  // data so re-rendering always starts from the untouched source pixels.
+  void               SetImageData(ImageBuffer buf) { processed_data_ = std::move(buf); }
+  ImageBuffer&       GetProcessedData() { return processed_data_; }
 
   void               SetId(image_id_t image_id);
   void               SetExifDisplayMetaData(ExifDisplayMetaData&& exif_display);

@@ -93,6 +93,7 @@ class ThumbnailDiskCacheService {
 };
 
 // 6. Edit history management (undo/redo/branch).
+class PipelineAppService;  // forward decl: used by HistoryMgmtService below
 class HistoryMgmtService {
  public:
   HistoryMgmtService(SleeveManager& sleeve);

@@ -32,6 +32,7 @@ class ImportService @Inject constructor(
     private val sleeveRepository: SleeveRepository,
     private val decodeService: DecodeService,
     private val thumbnailService: ThumbnailService,
+    private val taskService: BackgroundTaskService,
 ) {
 
     data class ImportProgress(
@@ -44,8 +45,18 @@ class ImportService @Inject constructor(
     private val _progress = MutableStateFlow(ImportProgress(0, 0, null))
     val progress: StateFlow<ImportProgress> = _progress.asStateFlow()
 
-    /** Import a batch of [uris] into [destFolderPath]. Returns the imported images. */
-    suspend fun import(uris: List<Uri>, destFolderPath: String = SleeveConstants.DEFAULT_IMPORT_FOLDER): List<ImageItem> =
+    /**
+     * Import a batch of [uris] into [destFolderPath]. Returns the imported images.
+     *
+     * @param taskId optional background-task id; when provided the import loop
+     *  polls [BackgroundTaskService.isCancelled] and aborts early if the user
+     *  cancelled the task.
+     */
+    suspend fun import(
+        uris: List<Uri>,
+        destFolderPath: String = SleeveConstants.DEFAULT_IMPORT_FOLDER,
+        taskId: String? = null,
+    ): List<ImageItem> =
         withContext(ThreadPool.compute) {
             if (uris.isEmpty()) return@withContext emptyList()
             val folderPath = ensureFolder(destFolderPath)
@@ -54,6 +65,11 @@ class ImportService @Inject constructor(
             _progress.value = ImportProgress(0, uris.size, null)
 
             uris.forEachIndexed { index, uri ->
+                // Cooperative cancellation: stop importing if the task was cancelled.
+                if (taskId != null && taskService.isCancelled(taskId)) {
+                    Log.i(TAG, "Import cancelled by user at $index/${uris.size}")
+                    return@withContext results
+                }
                 runCatching {
                     val item = importOne(uri, folderPath)
                     results.add(item)

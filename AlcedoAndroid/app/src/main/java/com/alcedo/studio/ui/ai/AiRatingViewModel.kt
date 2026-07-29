@@ -98,14 +98,23 @@ class AiRatingViewModel @Inject constructor(
 
     fun cullBatch(images: List<ImageItem>) {
         if (images.isEmpty()) return
+        val state = _uiState.value
         _uiState.update { it.copy(isCulling = true, culledCount = 0, cullTotal = images.size, error = null) }
         viewModelScope.launch {
             val items = images.map { Uri.parse(it.originalUri) to it.id }
             val metadata = images.associate { it.id to mapOf("iso" to (it.iso?.toString() ?: "")) }
             runCatching {
-                aiRatingService.cullBatch(items, metadata) { done, total ->
-                    _uiState.update { it.copy(culledCount = done, cullTotal = total) }
-                }
+                // Forward the user-selected provider/strictness so the ratings
+                // reflect the current configuration rather than the defaults.
+                aiRatingService.cullBatch(
+                    items = items,
+                    metadata = metadata,
+                    onProgress = { done, total ->
+                        _uiState.update { it.copy(culledCount = done, cullTotal = total) }
+                    },
+                    provider = state.selectedProvider.name,
+                    strictness = state.strictness,
+                )
             }.onSuccess {
                 _uiState.update { it.copy(isCulling = false) }
                 loadTopRated()

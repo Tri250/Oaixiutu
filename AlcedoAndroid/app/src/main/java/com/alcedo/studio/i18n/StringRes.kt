@@ -289,6 +289,8 @@ interface StringRes {
     val whiteBalance: String
     val flash: String
     val dimensions: String
+    val description: String
+    val copyright: String
 
     // ---- History ----
     val history: String

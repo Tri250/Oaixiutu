@@ -18,9 +18,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +44,12 @@ enum class CompareMode {
     SPLIT, SIDE_BY_SIDE, OVERLAY
 }
 
+/** Saves [CompareMode] across configuration changes/process death by its name. */
+private val CompareModeSaver = Saver<CompareMode, String>(
+    save = { it.name },
+    restore = { runCatching { CompareMode.valueOf(it) }.getOrDefault(CompareMode.SPLIT) },
+)
+
 /**
  * Before/after comparison view with three modes:
  * - **Split**: A draggable vertical divider clips the before image on the left
@@ -61,9 +67,9 @@ fun CompareView(
     initialMode: CompareMode = CompareMode.SPLIT,
 ) {
     val s = Strings.res
-    var mode by remember { mutableStateOf(initialMode) }
-    var split by remember { mutableFloatStateOf(0.5f) }
-    var overlayOpacity by remember { mutableFloatStateOf(0.5f) }
+    var mode by rememberSaveable(stateSaver = CompareModeSaver) { mutableStateOf(initialMode) }
+    var split by rememberSaveable { mutableStateOf(0.5f) }
+    var overlayOpacity by rememberSaveable { mutableStateOf(0.5f) }
 
     Column(modifier = modifier) {
         // Mode selector

@@ -26,7 +26,8 @@ class PipelineExecutor;
 // Operates on the in-memory element storage held by StorageService.
 class NodeStorageHandler {
  public:
-  NodeStorageHandler(std::unordered_map<sl_element_id_t, std::shared_ptr<SleeveElement>>& storage);
+  NodeStorageHandler(std::unordered_map<sl_element_id_t, std::shared_ptr<SleeveElement>>& storage,
+                     std::mutex& storage_lock);
   void AddToStorage(std::shared_ptr<SleeveElement> new_element);
   void EnsureChildrenLoaded(std::shared_ptr<SleeveFolder> folder);
   auto GetElement(sl_element_id_t id) -> std::shared_ptr<SleeveElement>;
@@ -34,6 +35,7 @@ class NodeStorageHandler {
 
  private:
   std::unordered_map<sl_element_id_t, std::shared_ptr<SleeveElement>>& storage_;
+  std::mutex&                                                          storage_lock_;
 };
 
 class StorageService {
@@ -46,6 +48,9 @@ class StorageService {
   }
   auto GetNodeStorageHandler() -> NodeStorageHandler& { return node_handler_; }
   auto GetDBPath() const -> const std::filesystem::path& { return db_path_; }
+  // Lock protecting the in-memory element storage map. Callers that iterate or
+  // mutate storage_ directly (outside NodeStorageHandler) must hold this lock.
+  auto GetLiveStateLock() -> std::mutex& { return live_state_lock_; }
 
   // Live edit-history cache (keyed by sleeve file element id).
   void RememberLiveEditHistory(sl_element_id_t file_id,

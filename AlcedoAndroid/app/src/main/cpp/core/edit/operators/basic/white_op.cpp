@@ -13,7 +13,11 @@ void WhiteOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r *= scale; p.g *= scale; p.b *= scale;
   });
 }
-void WhiteOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void WhiteOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto WhiteOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = white_point_; return o;
 }

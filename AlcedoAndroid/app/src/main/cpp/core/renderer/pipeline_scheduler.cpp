@@ -86,7 +86,9 @@ void PipelineScheduler::WorkerLoop() {
         auto input = std::make_shared<ImageBuffer>(req.image->GetImageData().Clone());
         auto output = executor->Apply(input);
         if (output) {
-          req.image->LoadOriginalData(std::move(*output));
+          // Store the rendered result in a separate processed buffer so the
+          // original image data is preserved for future re-renders.
+          req.image->SetImageData(std::move(*output));
         }
       }
     }

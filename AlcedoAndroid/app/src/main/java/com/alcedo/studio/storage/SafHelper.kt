@@ -31,10 +31,11 @@ object SafHelper {
     /** Copy a content [uri] into a local [dest] file. Returns bytes copied. */
     fun copyToLocal(uri: Uri, dest: File, context: Context = ContextProvider.requireContext()): Long {
         return runCatching {
+            // input.copyTo returns the exact byte count; return that rather than
+            // dest.length(), which could be stale or non-zero even on failure.
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(dest).use { output -> input.copyTo(output) }
             } ?: 0L
-            dest.length()
         }.onFailure { Log.w(TAG, "copyToLocal failed", it) }.getOrDefault(0L)
     }
 

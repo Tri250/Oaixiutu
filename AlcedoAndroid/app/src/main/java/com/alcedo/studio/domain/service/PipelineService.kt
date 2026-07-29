@@ -48,6 +48,12 @@ class PipelineService @Inject constructor(
     private var pendingParams: AdjustmentParams = AdjustmentParams.DEFAULT
     private var dirty = false
 
+    /** Dedicated (off-screen) pipeline handles keyed by pipeline handle, with
+     *  the associated decoded image handle so it can be released on close.
+     *  Used by batch export so each image renders through its own pipeline
+     *  without disturbing the editor's open image. */
+    private val dedicatedHandles = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
     private val json = Json { encodeDefaults = true }
 
     /** Open an image and create its pipeline. */
@@ -132,6 +138,60 @@ class PipelineService @Inject constructor(
     val handle: Long get() = pipelineHandle
     val isDirty: Boolean get() = dirty
 
+    /**
+     * Create a dedicated (off-screen) pipeline for [uri] without disturbing the
+     * editor's currently open image. Returns a non-zero pipeline handle on
+     * success, or 0L on failure. The caller MUST release it via
+     * [releaseHandle] when done. Use [applyParamsToHandle] to push edit state
+     * and render through [com.alcedo.studio.ndk.AlcedoNativeBridge.nativeRenderToBitmap].
+     */
+    suspend fun createForImage(uri: android.net.Uri): Long = withContext(ThreadPool.compute) {
+        val decoded = decodeService.decode(uri) ?: return@withContext 0L
+        val h = NdkSafeCall.handle { AlcedoNativeBridge.nativeCreatePipeline(decoded.handle) }
+        if (h == 0L) {
+            decodeService.release(decoded)
+            return@withContext 0L
+        }
+        dedicatedHandles[h] = decoded.handle
+        h
+    }
+
+    /** Apply [params] to a dedicated [handle] returned by [createForImage]. */
+    fun applyParamsToHandle(handle: Long, params: AdjustmentParams) {
+        if (handle == 0L) return
+        NdkSafeCall.call(default = false) {
+            AlcedoNativeBridge.nativeApplyAdjustments(handle, AlcedoNativeBridge.paramsToJson(params))
+        }
+    }
+
+    /** Render a dedicated [handle] to a bitmap at [maxWidth] (for export). */
+    suspend fun renderHandleToBitmap(handle: Long, maxWidth: Int): Bitmap? = withContext(ThreadPool.compute) {
+        if (handle == 0L) return@withContext null
+        NdkSafeCall.callOrNull { AlcedoNativeBridge.nativeRenderToBitmap(handle, maxWidth) }
+    }
+
+    /** Release a dedicated [handle] and its decoded image. Safe to call once. */
+    fun releaseHandle(handle: Long) {
+        if (handle == 0L) return
+        val decodedHandle = dedicatedHandles.remove(handle)
+        NdkSafeCall.run { AlcedoNativeBridge.nativeDestroyPipeline(handle) }
+        decodedHandle?.let { NdkSafeCall.run { AlcedoNativeBridge.nativeReleaseImage(it) } }
+    }
+
+    /**
+     * Clear all masks currently applied to the editor's pipeline so they can be
+     * re-applied selectively (e.g. after a toggle/remove). Best-effort: relies
+     * on the native layer resetting mask state for the active stage.
+     */
+    fun clearMasks(): Boolean {
+        if (pipelineHandle == 0L) return false
+        val ok = NdkSafeCall.call(default = false) {
+            AlcedoNativeBridge.nativeClearMasks(pipelineHandle)
+        }
+        if (ok) dirty = true
+        return ok
+    }
+
     /** Close the pipeline and release the decoded image. */
     fun close() {
         if (pipelineHandle != 0L) {
@@ -140,6 +200,8 @@ class PipelineService @Inject constructor(
         }
         currentImage?.let { decodeService.release(it) }
         currentImage = null
+        // Release any leaked dedicated handles.
+        dedicatedHandles.keys.toList().forEach { releaseHandle(it) }
         _state.value = PipelineState()
     }
 

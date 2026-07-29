@@ -269,6 +269,8 @@ object StringResourcesEn : StringRes {
     override val whiteBalance = "White Balance"
     override val flash = "Flash"
     override val dimensions = "Dimensions"
+    override val description = "Description"
+    override val copyright = "Copyright"
 
     override val history = "History"
     override val versions = "Versions"

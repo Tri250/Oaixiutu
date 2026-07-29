@@ -77,7 +77,11 @@ void CurveOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r *= scale; p.g *= scale; p.b *= scale;
   });
 }
-void CurveOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void CurveOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto CurveOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   nlohmann::json arr = nlohmann::json::array();

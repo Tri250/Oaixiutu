@@ -22,7 +22,11 @@ void ColorWheelOp::Apply(std::shared_ptr<ImageBuffer> input) {
     }
   });
 }
-void ColorWheelOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void ColorWheelOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto ColorWheelOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   o["lift"]  = {lift_[0], lift_[1], lift_[2]};

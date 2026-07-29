@@ -70,7 +70,11 @@ void HlsOp::Apply(std::shared_ptr<ImageBuffer> input) {
     HslToRgb(h, s, l, p.r, p.g, p.b);
   });
 }
-void HlsOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void HlsOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto HlsOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;
   nlohmann::json arr = nlohmann::json::array();

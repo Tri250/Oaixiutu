@@ -40,8 +40,15 @@ class ExportService @Inject constructor(
         val done: Boolean = false,
     )
 
+    /** Sub-progress for the single image currently being exported (0..1). */
     private val _progress = MutableStateFlow<ExportProgress?>(null)
     val progress: StateFlow<ExportProgress?> = _progress.asStateFlow()
+
+    /** Overall batch progress (completed/total across the whole batch). Kept
+     *  separate from single-export [progress] so batch progress is not
+     *  overwritten by the per-image sub-progress of the current image. */
+    private val _batchProgress = MutableStateFlow<ExportProgress?>(null)
+    val batchProgress: StateFlow<ExportProgress?> = _batchProgress.asStateFlow()
 
     data class ExportRequest(
         val imageId: String,
@@ -57,7 +64,14 @@ class ExportService @Inject constructor(
         val outDir = cfg.outputDirectory?.let { File(it) }
             ?: File(ContextProvider.requireContext().cacheDir, "exports").apply { mkdirs() }
         val name = resolveName(request.displayName, cfg.namingPattern)
-        val outFile = File(outDir, "$name.${cfg.format.extension}")
+        // TIFF is not natively encodable on Android; it degrades to PNG, so the
+        // output file must use the .png extension (not .tif) to stay consistent
+        // with the bytes actually written.
+        val effectiveExt = effectiveExtension(cfg.format)
+        val outFile = File(outDir, "$name.$effectiveExt")
+        val degradedCfg = if (effectiveExt != cfg.format.extension) {
+            cfg.copy(fallbackExtension = effectiveExt)
+        } else cfg
         _progress.value = ExportProgress(request.imageId, 0, 1)
 
         // Render through the pipeline.
@@ -76,7 +90,7 @@ class ExportService @Inject constructor(
         val finalBitmap = if (cfg.includeWatermark) watermarkService.apply(bitmap, cfg.watermark) else bitmap
 
         // Encode.
-        val encoded = encode(finalBitmap, outFile, cfg)
+        val encoded = encode(finalBitmap, outFile, degradedCfg)
         if (!encoded) {
             _progress.value = ExportProgress(request.imageId, 2, 2, error = "encode_failed", done = true)
             return@withContext null
@@ -132,12 +146,29 @@ class ExportService @Inject constructor(
 
     /** Export many images sequentially, returning the paths of successful exports. */
     suspend fun exportBatch(requests: List<ExportRequest>): List<String> = withContext(ThreadPool.compute) {
+        _batchProgress.value = ExportProgress(id = "batch", completed = 0, total = requests.size)
         val results = mutableListOf<String>()
         requests.forEachIndexed { index, req ->
             export(req)?.let { results.add(it) }
-            _progress.value = _progress.value?.copy(completed = index + 1, total = requests.size)
+            // Overall batch progress is tracked separately from the per-image
+            // sub-progress so consumers can show both without one clobbering the other.
+            _batchProgress.value = ExportProgress(
+                id = "batch",
+                completed = index + 1,
+                total = requests.size,
+                done = index + 1 >= requests.size,
+            )
         }
         results
+    }
+
+    /** The file extension actually written for [format] (TIFF degrades to PNG). */
+    private fun effectiveExtension(format: ExportFormat): String = when (format) {
+        ExportFormat.TIFF -> {
+            Log.w(TAG, "TIFF is not natively encodable on Android; writing PNG bytes with .png extension")
+            ExportFormat.PNG.extension
+        }
+        else -> format.extension
     }
 
     private fun encode(bitmap: Bitmap, outFile: File, cfg: ExportConfig): Boolean = runCatching {

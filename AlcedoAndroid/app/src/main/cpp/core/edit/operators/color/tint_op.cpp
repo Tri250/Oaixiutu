@@ -16,7 +16,11 @@ void TintOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b -= t * 0.5f;
   });
 }
-void TintOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void TintOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto TintOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = tint_offset_; return o;
 }

@@ -25,7 +25,11 @@ void HighlightOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.r += off * m; p.g += off * m; p.b += off * m;
   });
 }
-void HighlightOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void HighlightOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto HighlightOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = highlight_offset_; return o;
 }

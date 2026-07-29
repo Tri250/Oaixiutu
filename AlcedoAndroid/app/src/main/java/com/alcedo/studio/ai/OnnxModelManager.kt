@@ -47,8 +47,15 @@ class OnnxModelManager @Inject constructor() {
     private val handles = ConcurrentHashMap<String, Long>()
     private var handleCounter = 1L
 
-    /** Load an ONNX model file and return a non-zero handle on success. */
-    fun loadModel(modelPath: String, deviceId: Int = DEVICE_NNAPI): Long {
+    /**
+     * Load an ONNX model file and return a non-zero handle on success.
+     *
+     * @param modelId the logical model-asset id (e.g. asset.id) used by callers
+     *  to look up the handle via [handleFor]. The handle is stored under BOTH
+     *  [modelId] and [modelPath] so [handleFor] resolves regardless of whether
+     *  the caller passes the asset id or the file path.
+     */
+    fun loadModel(modelPath: String, deviceId: Int = DEVICE_NNAPI, modelId: String? = null): Long {
         return runCatching {
             val opts = OrtSession.SessionOptions().apply {
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
@@ -73,9 +80,15 @@ class OnnxModelManager @Inject constructor() {
             )
             sessions[id] = session
             val handle = handleCounter++
+            // Store the handle by file path AND by the logical model id so
+            // handleFor(modelId) and handleFor(path) both resolve.
             handles[modelPath] = handle
+            if (modelId != null && modelId != modelPath) {
+                handles[modelId] = handle
+                modelIdByHandle[handle] = modelId
+            }
             handleMap[handle] = id
-            Log.i(TAG, "Loaded ONNX model $modelPath (id=$id, inputs=${session.inputNames})")
+            Log.i(TAG, "Loaded ONNX model $modelPath (id=$id, modelId=$modelId, inputs=${session.inputNames})")
             handle
         }.onFailure {
             Log.e(TAG, "Failed to load ONNX model $modelPath", it)
@@ -83,12 +96,18 @@ class OnnxModelManager @Inject constructor() {
     }
 
     private val handleMap = ConcurrentHashMap<Long, String>()
+    /** Maps a handle back to the logical model-asset id passed at load time. */
+    private val modelIdByHandle = ConcurrentHashMap<Long, String>()
 
-    /** Resolve the internal session id for an external handle. */
+    /**
+     * Resolve the external handle for [modelId]. Looks up by the logical
+     * model-asset id first, then by file path, then accepts a raw numeric handle.
+     */
     fun handleFor(modelId: String): Long {
-        // Caller passes the model-asset id; map it to the loaded session via the
-        // last-loaded handle for that asset. We also accept the raw handle.
-        return handles[modelId] ?: runCatching { modelId.toLong() }.getOrDefault(0L)
+        // Look up by the logical model-asset id first (preferred), then by the
+        // raw file path (some callers pass path), then accept a numeric handle.
+        handles[modelId]?.let { return it }
+        return runCatching { modelId.toLong() }.getOrDefault(0L)
     }
 
     private fun sessionFor(handle: Long): Session? {
@@ -142,11 +161,14 @@ class OnnxModelManager @Inject constructor() {
         }.onFailure { Log.w(TAG, "float run failed", it) }.getOrDefault(FloatArray(0))
     }
 
-    /** Unload a single model session by external handle. */
+    /** Unload a single model session by logical model id (or file path). */
     fun unload(modelId: String) {
-        val id = handleMap.remove(handles[modelId] ?: return) ?: return
+        val handle = handles[modelId] ?: return
+        val id = handleMap.remove(handle) ?: return
         sessions.remove(id)?.ort?.close()
-        handles.remove(modelId)
+        modelIdByHandle.remove(handle)
+        // Remove every key (path and/or model id) that pointed at this handle.
+        handles.entries.removeAll { it.value == handle }
     }
 
     /** Release all sessions (low memory / app exit). */
@@ -155,6 +177,7 @@ class OnnxModelManager @Inject constructor() {
         sessions.clear()
         handles.clear()
         handleMap.clear()
+        modelIdByHandle.clear()
     }
 
     @Suppress("UNCHECKED_CAST")

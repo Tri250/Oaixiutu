@@ -36,7 +36,11 @@ void SharpenOp::Apply(std::shared_ptr<ImageBuffer> input) {
   }
   img = std::move(out);
 }
-void SharpenOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void SharpenOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto SharpenOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = offset_;
   o["radius"] = radius_; o["threshold"] = threshold_; return o;

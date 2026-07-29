@@ -10,10 +10,10 @@
 
 extern "C" {
 
-typedef struct duckdb_database* duckdb_database;
-typedef struct duckdb_connection* duckdb_connection;
-typedef struct duckdb_result* duckdb_result;
-typedef struct duckdb_prepared_statement* duckdb_prepared_statement;
+typedef struct duckdb_database_s* duckdb_database;
+typedef struct duckdb_connection_s* duckdb_connection;
+typedef struct duckdb_result_s* duckdb_result;
+typedef struct duckdb_prepared_statement_s* duckdb_prepared_statement;
 
 enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 };
 

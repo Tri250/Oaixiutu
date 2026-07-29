@@ -17,7 +17,11 @@ void OdtOp::Apply(std::shared_ptr<ImageBuffer> input) {
     aces_.Apply(img, display_white_l_, display_black_l_);
   }
 }
-void OdtOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void OdtOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 
 auto OdtOp::GetParams() const -> nlohmann::json {
   nlohmann::json o;

@@ -80,6 +80,14 @@ fun BackgroundTaskBar(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AlcedoColors.TextTertiary,
                             )
+                            val etaText = formatEta(task.etaMs)
+                            if (etaText.isNotBlank()) {
+                                Text(
+                                    text = "  $etaText",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AlcedoColors.TextTertiary,
+                                )
+                            }
                         }
                         if (task.indeterminate) {
                             IndeterminateProgressBar()

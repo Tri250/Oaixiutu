@@ -36,6 +36,7 @@ class SafetensorsReader {
   std::ifstream                              file_;
   int64_t                                    header_size_ = 0;
   int64_t                                    data_start_  = 0;
+  int64_t                                    file_size_   = 0;
   std::unordered_map<std::string, SafetensorInfo> tensors_;
   bool                                       opened_ = false;
 };

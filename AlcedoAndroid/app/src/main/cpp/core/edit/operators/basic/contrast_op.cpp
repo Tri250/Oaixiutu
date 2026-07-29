@@ -16,7 +16,11 @@ void ContrastOp::Apply(std::shared_ptr<ImageBuffer> input) {
     p.b = pivot + (p.b - pivot) * k;
   });
 }
-void ContrastOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) { input->SyncToGPU(); }
+void ContrastOp::ApplyGPU(std::shared_ptr<ImageBuffer> input) {
+  input->SyncToCPU();
+  Apply(input);
+  input->SyncToGPU();
+}
 auto ContrastOp::GetParams() const -> nlohmann::json {
   nlohmann::json o; o[std::string(script_name_)] = contrast_scale_; return o;
 }

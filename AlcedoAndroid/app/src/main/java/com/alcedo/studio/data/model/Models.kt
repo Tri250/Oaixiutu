@@ -279,6 +279,15 @@ data class ExportConfig(
     val ultraHdr: Boolean = false,
     val outputDirectory: String? = null,
     val namingPattern: String = "{name}_edit",
+    val bitDepth: Int = 8,
+    val metaMode: String = "KEEP_ALL",
+    val maintainAspect: Boolean = true,
+    val resizeWidth: Int = 0,
+    val resizeHeight: Int = 0,
+    val iccProfile: String = "sRGB IEC61966-2.1",
+    /** When the requested format is unsupported on-device, the file is written
+     *  with this extension instead (e.g. TIFF degrades to PNG). */
+    val fallbackExtension: String? = null,
 )
 
 @Serializable

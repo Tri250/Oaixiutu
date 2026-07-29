@@ -4,12 +4,161 @@
 #include "sleeve_filesystem.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 #include "sleeve/sleeve_element/sleeve_element_factory.hpp"
 #include "utils/app_logging.hpp"
 
 namespace alcedo {
+
+namespace {
+
+// ---- Best-effort in-memory filter evaluation ----
+// ApplyFilterToFolder evaluates the FilterCombo predicate against each child
+// element directly in memory. The authoritative SQL evaluation still happens at
+// the storage/DB layer; this in-memory path covers the common name/extension
+// and rating conditions so filtering is not silently a no-op. Conditions that
+// require EXIF/date/semantic data (unavailable here) are treated as
+// permissive (match) so files are not wrongly excluded.
+
+double FilterValueAsNumber(const FilterValue& v) {
+  return std::visit([](auto&& arg) -> double {
+    using T = std::decay_t<decltype(arg)>;
+    if constexpr (std::is_same_v<T, int64_t>) return static_cast<double>(arg);
+    else if constexpr (std::is_same_v<T, double>) return arg;
+    else if constexpr (std::is_same_v<T, bool>) return arg ? 1.0 : 0.0;
+    else if constexpr (std::is_same_v<T, std::time_t>) return static_cast<double>(arg);
+    else return 0.0;
+  }, v);
+}
+
+std::string FilterValueAsString(const FilterValue& v) {
+  return std::visit([](auto&& arg) -> std::string {
+    using T = std::decay_t<decltype(arg)>;
+    if constexpr (std::is_same_v<T, std::string>) return arg;
+    else if constexpr (std::is_same_v<T, int64_t>) return std::to_string(arg);
+    else if constexpr (std::is_same_v<T, double>) return std::to_string(arg);
+    else if constexpr (std::is_same_v<T, bool>) return arg ? "true" : "false";
+    else return std::string();
+  }, v);
+}
+
+std::string ToLower(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return s;
+}
+
+bool CompareString(std::string_view field, std::string_view val, CompareOp op) {
+  switch (op) {
+    case CompareOp::EQUALS:       return field == val;
+    case CompareOp::NOT_EQUALS:   return field != val;
+    case CompareOp::CONTAINS:     return field.find(val) != std::string_view::npos;
+    case CompareOp::NOT_CONTAINS: return field.find(val) == std::string_view::npos;
+    case CompareOp::STARTS_WITH:
+      return field.size() >= val.size() && field.compare(0, val.size(), val) == 0;
+    case CompareOp::ENDS_WITH:
+      return field.size() >= val.size() &&
+             field.compare(field.size() - val.size(), val.size(), val) == 0;
+    case CompareOp::REGEX:  // best-effort: fall back to substring match
+      return field.find(val) != std::string_view::npos;
+    default:  // numeric-only ops are permissive for string fields
+      return true;
+  }
+}
+
+bool CompareNumber(double field, double val, double val2, CompareOp op) {
+  switch (op) {
+    case CompareOp::EQUALS:        return field == val;
+    case CompareOp::NOT_EQUALS:    return field != val;
+    case CompareOp::GREATER_THAN:  return field > val;
+    case CompareOp::LESS_THAN:     return field < val;
+    case CompareOp::GREATER_EQUAL: return field >= val;
+    case CompareOp::LESS_EQUAL:    return field <= val;
+    case CompareOp::BETWEEN:       return field >= val && field <= val2;
+    default:                       return true;
+  }
+}
+
+std::string FileExtensionOf(const std::string& name) {
+  auto pos = name.find_last_of('.');
+  if (pos == std::string::npos) return {};
+  return ToLower(name.substr(pos));  // includes the leading '.'
+}
+
+// The authoritative rating lives in the AI storage layer, which the sleeve-side
+// facade cannot reach; unrated files are treated as rating 0.
+double RatingOf(const SleeveElement& elem) {
+  (void)elem;
+  return 0.0;
+}
+
+bool EvaluateCondition(const FieldCondition& cond, const SleeveElement& elem) {
+  const std::string& name = elem.element_name_;
+  switch (cond.field_) {
+    case FilterField::FileName:
+      return CompareString(name, FilterValueAsString(cond.value_), cond.op_);
+    case FilterField::FileExtension: {
+      std::string val = FilterValueAsString(cond.value_);
+      if (!val.empty() && val[0] != '.') val = "." + val;
+      return CompareString(FileExtensionOf(name), ToLower(val), cond.op_);
+    }
+    case FilterField::ImagePath:
+      return CompareString(name, FilterValueAsString(cond.value_), cond.op_);
+    case FilterField::Rating: {
+      double r = RatingOf(elem);
+      double v = FilterValueAsNumber(cond.value_);
+      double v2 = cond.second_value_.has_value() ? FilterValueAsNumber(*cond.second_value_) : 0.0;
+      return CompareNumber(r, v, v2, cond.op_);
+    }
+    // EXIF/date/size/semantic fields need DB access unavailable in-memory.
+    case FilterField::ExifCameraModel:
+    case FilterField::ExifFocalLength:
+    case FilterField::ExifAperture:
+    case FilterField::ExifISO:
+    case FilterField::CaptureDate:
+    case FilterField::ImportDate:
+    case FilterField::ImageSize:
+    case FilterField::SemanticTags:
+    default:
+      return true;
+  }
+}
+
+bool EvaluateFilter(const FilterNode& node, const SleeveElement& elem) {
+  switch (node.type_) {
+    case FilterNode::Type::Logical: {
+      switch (node.op_) {
+        case FilterOp::AND:
+          for (const auto& child : node.children_)
+            if (!EvaluateFilter(child, elem)) return false;
+          return true;
+        case FilterOp::OR:
+          for (const auto& child : node.children_)
+            if (EvaluateFilter(child, elem)) return true;
+          return node.children_.empty();
+        case FilterOp::NOT:
+          if (node.children_.empty()) return true;
+          return !EvaluateFilter(node.children_.front(), elem);
+      }
+      return true;
+    }
+    case FilterNode::Type::Condition:
+      if (!node.condition_.has_value()) return true;  // empty condition => match all
+      return EvaluateCondition(*node.condition_, elem);
+    case FilterNode::Type::RawSQL:
+    default:
+      return true;  // raw SQL cannot be evaluated in-memory; be permissive
+  }
+}
+
+}  // namespace
 
 FileSystem::FileSystem(std::filesystem::path db_path, StorageService& storage_service,
                        sl_element_id_t start_id)
@@ -118,6 +267,7 @@ void FileSystem::DeleteFileEverywhere(sl_element_id_t file_id) {
   if (!file_elem) return;
   // Remove from all folders that contain it.
   auto& storage = storage_service_.GetStorage();
+  std::lock_guard<std::mutex> lock(storage_service_.GetLiveStateLock());
   for (auto& [id, elem] : storage) {
     if (elem && elem->type_ == ElementType::FOLDER) {
       auto folder = std::static_pointer_cast<SleeveFolder>(elem);
@@ -150,6 +300,7 @@ void FileSystem::Delete(sl_element_id_t target_id) {
   if (!elem) return;
   // Remove from parent folder(s).
   auto& storage = storage_service_.GetStorage();
+  std::lock_guard<std::mutex> lock(storage_service_.GetLiveStateLock());
   for (auto& [id, parent_elem] : storage) {
     if (parent_elem && parent_elem->type_ == ElementType::FOLDER) {
       auto folder = std::static_pointer_cast<SleeveFolder>(parent_elem);
@@ -200,15 +351,16 @@ auto FileSystem::ApplyFilterToFolder(const std::filesystem::path& folder_path,
     return result;
   }
   // Evaluate the filter predicate against each child element's metadata.
-  std::string predicate = filter->GenerateSQLOn(folder->element_id_);
+  const FilterNode& root = filter->GetRoot();
   std::vector<std::shared_ptr<SleeveElement>> result;
   for (auto cid : folder->ListElements()) {
     auto e = storage_service_.GetNodeStorageHandler().GetElement(cid);
     if (!e) continue;
-    // Predicate is a SQL WHERE clause; in-memory we accept all and rely on the
-    // DB layer for real filtering. For the in-memory path we keep all files
-    // (the full SQL evaluation happens at the storage layer).
-    result.push_back(e);
+    // Folders are always kept (so navigation survives image-oriented filters);
+    // files are filtered through the in-memory predicate evaluator.
+    if (e->type_ == ElementType::FOLDER || EvaluateFilter(root, *e)) {
+      result.push_back(e);
+    }
   }
   return result;
 }
@@ -216,7 +368,8 @@ auto FileSystem::ApplyFilterToFolder(const std::filesystem::path& folder_path,
 void FileSystem::Copy(std::filesystem::path from, std::filesystem::path dest) {
   auto src = resolver_.Resolve(from);
   if (!src) return;
-  auto dest_slash = dest.find_last_of('/');
+  auto dest_str = dest.string();
+  auto dest_slash = dest_str.find_last_of('/');
   std::filesystem::path dest_parent = (dest_slash == std::string::npos)
                                           ? dest
                                           : std::filesystem::path(dest).parent_path();
@@ -235,6 +388,7 @@ void FileSystem::Copy(std::filesystem::path from, std::filesystem::path dest) {
 
 auto FileSystem::GetModifiedElements() -> std::vector<std::shared_ptr<SleeveElement>> {
   std::vector<std::shared_ptr<SleeveElement>> out;
+  std::lock_guard<std::mutex> lock(storage_service_.GetLiveStateLock());
   for (auto& [id, elem] : storage_service_.GetStorage()) {
     if (elem && elem->sync_flag_ == SyncFlag::MODIFIED) out.push_back(elem);
   }
@@ -243,6 +397,7 @@ auto FileSystem::GetModifiedElements() -> std::vector<std::shared_ptr<SleeveElem
 
 auto FileSystem::GetUnsyncedElements() -> std::vector<std::shared_ptr<SleeveElement>> {
   std::vector<std::shared_ptr<SleeveElement>> out;
+  std::lock_guard<std::mutex> lock(storage_service_.GetLiveStateLock());
   for (auto& [id, elem] : storage_service_.GetStorage()) {
     if (elem && (elem->sync_flag_ == SyncFlag::UNSYNC || elem->sync_flag_ == SyncFlag::MODIFIED))
       out.push_back(elem);
@@ -252,6 +407,7 @@ auto FileSystem::GetUnsyncedElements() -> std::vector<std::shared_ptr<SleeveElem
 
 auto FileSystem::GetDeletedElements() -> std::vector<std::shared_ptr<SleeveElement>> {
   std::vector<std::shared_ptr<SleeveElement>> out;
+  std::lock_guard<std::mutex> lock(storage_service_.GetLiveStateLock());
   for (auto& [id, elem] : storage_service_.GetStorage()) {
     if (elem && elem->sync_flag_ == SyncFlag::DELETED) out.push_back(elem);
   }

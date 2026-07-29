@@ -30,6 +30,14 @@ class HistoryMgmtService @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    /**
+     * Undo/redo cursor per version id: the number of trailing transactions that
+     * are currently "undone" (inactive). 0 means nothing is undone (all
+     * transactions applied). Used to recompute [Version.cumulativeParams] by
+     * replaying only the active prefix of the transaction list.
+     */
+    private val undoCursor = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
     fun observeVersions(imageId: String): Flow<List<Version>> =
         editHistoryRepository.observeVersions(imageId)
 
@@ -56,6 +64,9 @@ class HistoryMgmtService @Inject constructor(
     suspend fun recordChange(imageId: String, delta: AdjustmentParamsDelta, label: String): EditTransaction? =
         withContext(ThreadPool.database) {
             val active = editHistoryRepository.getActiveVersion(imageId) ?: return@withContext null
+            // A new edit after undos discards the redo tail: reset the cursor so
+            // every transaction is active again before appending the new one.
+            undoCursor.remove(active.id)
             val transaction = EditTransaction(
                 id = IdGenerator.newId("tx"),
                 versionId = active.id,
@@ -91,40 +102,56 @@ class HistoryMgmtService @Inject constructor(
         imageRepository.setCurrentVersion(imageId, versionId)
     }
 
-    /** Undo the last transaction on the active version (best-effort). */
+    /**
+     * Undo the last active transaction on the active version. Rather than
+     * appending a marker, this advances an in-memory undo cursor and
+     * recomputes [Version.cumulativeParams] by replaying only the still-active
+     * prefix of the transaction list from the base state. The editor reloads
+     * the pipeline from the updated cumulative params.
+     */
     suspend fun undo(imageId: String) = withContext(ThreadPool.database) {
         val active = editHistoryRepository.getActiveVersion(imageId) ?: return@withContext
         val txs = editHistoryRepository.getTransactions(active.id)
         if (txs.isEmpty()) return@withContext
-        val last = txs.last()
-        // Record an inverse marker transaction (full recompute handled by replay).
-        editHistoryRepository.addTransaction(
-            last.copy(
-                id = IdGenerator.newId("tx"),
-                timestamp = System.currentTimeMillis(),
-                label = "Undo: ${last.label}",
-                source = TransactionSource.UNDO,
-            ),
-        )
+        val cursor = undoCursor[active.id] ?: 0
+        if (cursor >= txs.size) return@withContext // nothing left to undo
+        val nextCursor = cursor + 1
+        undoCursor[active.id] = nextCursor
+        val replayed = replayPrefix(txs, txs.size - nextCursor)
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(replayed))
     }
 
-    /** Redo the last undone transaction on the active version (best-effort). */
+    /**
+     * Redo the most recently undone transaction on the active version. Decrements
+     * the undo cursor and recomputes cumulative params by replaying the larger
+     * active prefix.
+     */
     suspend fun redo(imageId: String) = withContext(ThreadPool.database) {
         val active = editHistoryRepository.getActiveVersion(imageId) ?: return@withContext
         val txs = editHistoryRepository.getTransactions(active.id)
-        // Find the most recent UNDO marker; replay the original transaction it
-        // negated as a REDO marker so the version tree stays replayable.
-        val undoIdx = txs.indexOfLast { it.source == TransactionSource.UNDO }
-        if (undoIdx < 0 || undoIdx == 0) return@withContext
-        val undone = txs[undoIdx - 1]
-        editHistoryRepository.addTransaction(
-            undone.copy(
-                id = IdGenerator.newId("tx"),
-                timestamp = System.currentTimeMillis(),
-                label = "Redo: ${undone.label}",
-                source = TransactionSource.REDO,
-            ),
-        )
+        if (txs.isEmpty()) return@withContext
+        val cursor = undoCursor[active.id] ?: 0
+        if (cursor <= 0) return@withContext // nothing to redo
+        val nextCursor = cursor - 1
+        if (nextCursor == 0) undoCursor.remove(active.id) else undoCursor[active.id] = nextCursor
+        val replayed = replayPrefix(txs, txs.size - nextCursor)
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(replayed))
+    }
+
+    /**
+     * Replay the first [count] transactions' param deltas onto the base
+     * [AdjustmentParams.DEFAULT], producing the cumulative params for that
+     * prefix. Skips no-op UNDO/REDO marker transactions emitted by legacy code.
+     */
+    private fun replayPrefix(transactions: List<EditTransaction>, count: Int): AdjustmentParams {
+        var params = AdjustmentParams.DEFAULT
+        val n = count.coerceIn(0, transactions.size)
+        for (i in 0 until n) {
+            val tx = transactions[i]
+            if (tx.source == TransactionSource.UNDO || tx.source == TransactionSource.REDO) continue
+            params = params.applyDelta(tx.paramDelta)
+        }
+        return params
     }
 
     /** Delete a version (and its transactions) from the tree. */

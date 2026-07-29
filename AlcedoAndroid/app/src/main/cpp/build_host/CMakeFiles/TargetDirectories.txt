@@ -1,0 +1,3 @@
+/workspace/AlcedoAndroid/app/src/main/cpp/build_host/CMakeFiles/alcedo_native.dir
+/workspace/AlcedoAndroid/app/src/main/cpp/build_host/CMakeFiles/edit_cache.dir
+/workspace/AlcedoAndroid/app/src/main/cpp/build_host/CMakeFiles/rebuild_cache.dir

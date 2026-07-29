@@ -1,13 +1,22 @@
 package com.alcedo.studio.domain.service
 
+import android.util.Log
+import com.alcedo.studio.util.ContextProvider
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Minimal CLIP text tokenizer (BPE) matching the OpenAI CLIP vocabulary.
  * Implements byte-level BPE encoding with a compact built-in vocab + merges
- * subset sufficient for semantic-search query strings; for full coverage the
- * native tokenizer (core/nn) is used via [ClipInferenceEngine] when available.
+ * subset sufficient for semantic-search query strings; for full coverage
+ * [loadVocabFromFile] replaces the compact vocab with the full ~49k token CLIP
+ * vocab bundled alongside the ONNX model. The native tokenizer (core/nn) is
+ * used via [ClipInferenceEngine] when available.
  *
  * The implementation here is a faithful, self-contained fallback so semantic
  * search works even without the native model loaded.
@@ -25,6 +34,19 @@ class ClipTokenizer @Inject constructor() {
     /** PAD token id. */
     val padId: Int = 0
 
+    /**
+     * Active vocabulary. Seeded with a compact built-in subset covering common
+     * photography terms; [loadVocabFromFile] replaces it with the full CLIP
+     * vocab when the bundled vocab.json is present on disk.
+     */
+    private val vocab: MutableMap<String, Int> = HashMap(COMPACT_VOCAB)
+
+    @Volatile
+    private var fullVocabLoaded = false
+
+    /** True once a full vocab file has been loaded successfully. */
+    val hasFullVocab: Boolean get() = fullVocabLoaded
+
     /** Tokenize [text] into CLIP token ids, padded/truncated to [maxLen]. */
     fun encode(text: String): IntArray {
         val cleaned = text.lowercase().trim().take(200)
@@ -35,9 +57,17 @@ class ClipTokenizer @Inject constructor() {
         tokens.add(bosId)
         for (word in cleaned.split(Regex("\\s+"))) {
             if (word.isBlank()) continue
+            // Fast path: the whole word is a single CLIP token (with or
+            // without the CLIP "</w>" word-end marker).
+            lookupWord(word)?.let { id ->
+                tokens.add(id)
+                if (tokens.size >= maxLen - 1) break
+                return@for
+            }
             val subwords = greedySplit(word)
-            for (sw in subwords) {
-                val id = vocab[sw] ?: unkId(sw)
+            for (idx in subwords.indices) {
+                val sw = subwords[idx]
+                val id = lookupSubword(sw, isLast = idx == subwords.lastIndex)
                 tokens.add(id)
                 if (tokens.size >= maxLen - 1) break
             }
@@ -57,7 +87,7 @@ class ClipTokenizer @Inject constructor() {
             var matched = false
             for (len in minOf(8, w.length - i) downTo 1) {
                 val sub = w.substring(i, i + len)
-                if (vocab.containsKey(sub)) {
+                if (matchesVocab(sub)) {
                     result.add(sub)
                     i += len
                     matched = true
@@ -72,15 +102,82 @@ class ClipTokenizer @Inject constructor() {
         return result
     }
 
+    /** True if [token] (or its CLIP word-end variant) is in the vocab. */
+    private fun matchesVocab(token: String): Boolean {
+        if (vocab.containsKey(token)) return true
+        if (!token.endsWith(WORD_END)) return vocab.containsKey(token + WORD_END)
+        return false
+    }
+
+    /** Look up a complete word, trying the CLIP "</w>" word-end variant. */
+    private fun lookupWord(word: String): Int? {
+        vocab[word]?.let { return it }
+        if (!word.endsWith(WORD_END)) vocab[word + WORD_END]?.let { return it }
+        return null
+    }
+
+    /** Look up a subword; the final subword of a word may match a "</w>" token. */
+    private fun lookupSubword(subword: String, isLast: Boolean): Int {
+        vocab[subword]?.let { return it }
+        if (isLast && !subword.endsWith(WORD_END)) {
+            vocab[subword + WORD_END]?.let { return it }
+        }
+        return unkId(subword)
+    }
+
     /** Stable pseudo-id for OOV tokens derived from the byte value. */
     private fun unkId(token: String): Int {
         val b = token.first().code
         return 49408 + (b and 0x3FF)
     }
 
+    /**
+     * Load the full CLIP vocabulary from a JSON file mapping tokens to ids
+     * ({"token": id, ...}). On success this replaces the compact built-in
+     * vocab so all real CLIP tokens resolve correctly. Returns false if the
+     * file is missing or unreadable, in which case the compact vocab continues
+     * to be used.
+     */
+    fun loadVocabFromFile(file: File): Boolean {
+        if (!file.exists() || !file.isFile || file.length() == 0L) return false
+        return runCatching {
+            val parsed = Json { ignoreUnknownKeys = true }
+                .parseToJsonElement(file.readText()).jsonObject
+            if (parsed.isEmpty()) return false
+            val loaded = HashMap<String, Int>(parsed.size)
+            parsed.forEach { (token, element) ->
+                element.jsonPrimitive.intOrNull?.let { id -> loaded[token] = id }
+            }
+            if (loaded.isEmpty()) return false
+            vocab.clear()
+            vocab.putAll(loaded)
+            fullVocabLoaded = true
+            Log.i(TAG, "Loaded ${loaded.size} CLIP vocab tokens from ${file.name}")
+            true
+        }.onFailure { Log.w(TAG, "Failed to load CLIP vocab from ${file.absolutePath}", it) }
+            .getOrDefault(false)
+    }
+
+    /**
+     * Convenience: load the default CLIP vocab.json from the AI models
+     * directory (next to the ONNX model). Returns false (and keeps the compact
+     * vocab) when the file isn't bundled.
+     */
+    fun loadDefaultVocab(): Boolean = runCatching {
+        val dir = File(ContextProvider.context()?.filesDir ?: return false, MODELS_DIR)
+        loadVocabFromFile(File(dir, DEFAULT_VOCAB_NAME)) ||
+            loadVocabFromFile(File(dir, FALLBACK_VOCAB_NAME))
+    }.getOrDefault(false)
+
     companion object {
+        private const val TAG = "ClipTokenizer"
+        private const val MODELS_DIR = "ai_models"
+        private const val DEFAULT_VOCAB_NAME = "vocab.json"
+        private const val FALLBACK_VOCAB_NAME = "clip_vocab.json"
+        private const val WORD_END = "</w>"
+
         // Compact subset of the CLIP vocab covering common photography terms.
-        private val vocab: Map<String, Int> = buildMap {
+        private val COMPACT_VOCAB: Map<String, Int> = buildMap {
             put("</w>", 49405)
             put(".", 262)
             put(",", 11)
