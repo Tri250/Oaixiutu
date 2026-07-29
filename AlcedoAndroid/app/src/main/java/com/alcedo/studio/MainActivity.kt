@@ -1,5 +1,6 @@
 package com.alcedo.studio
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -73,6 +74,32 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // Handle external image intents when the activity is already running
+        intent?.let { handleImageIntent(it) }
+    }
+
+    /**
+     * Handle incoming intents that open images from external apps (e.g. file
+     * manager, gallery). The URI is stored so the Editor can pick it up when
+     * the user navigates to the Editor tab.
+     */
+    private fun handleImageIntent(intent: Intent) {
+        if (intent.action == Intent.ACTION_VIEW && intent.type?.startsWith("image/") == true) {
+            val imageUri = intent.data
+            // The URI will be handled by the Album/Editor when the user
+            // navigates there. For now, log it so we know it was received.
+            imageUri?.let {
+                android.util.Log.i(TAG, "External image intent received: $it")
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }
 

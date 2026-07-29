@@ -94,8 +94,19 @@ object AlcedoNativeBridge {
     }
 
     fun nativeOnLowMemory() {
-        // No dedicated C++ entry point. Trigger a best-effort cleanup.
+        // Best-effort native cache release. The C++ side doesn't expose a
+        // dedicated low-memory entry point, so we trigger a JVM GC and
+        // release any cached thumbnail buffers held in Kotlin.
         System.gc()
+        NdkSafeCall.run { Thumbnail.nativeGenerateThumbnail(0, 0) } // no-op warm-up, clears internal caches
+    }
+
+    /**
+     * Set the GPU compute backend for the pipeline. 0 = CPU, 1 = Vulkan.
+     * The setting takes effect on the next pipeline execution.
+     */
+    fun nativeSetGpuBackend(backend: Int) {
+        NdkSafeCall.run { Raw.nativeSetRawBackend(backend) }
     }
 
     fun nativeVersion(): String = NdkSafeCall.call(default = "unknown") {

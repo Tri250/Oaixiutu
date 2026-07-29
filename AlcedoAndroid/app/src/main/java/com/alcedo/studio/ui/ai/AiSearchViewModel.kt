@@ -98,6 +98,11 @@ class AiSearchViewModel @Inject constructor(
             _uiState.update { it.copy(results = emptyList()) }
             return
         }
+        // Check if model is ready before searching
+        if (!_uiState.value.modelStatus.isReady) {
+            _uiState.update { it.copy(error = "AI model not ready. Please download and activate a model first.", isSearching = false) }
+            return
+        }
         _uiState.update { it.copy(isSearching = true, error = null) }
         viewModelScope.launch {
             runCatching { searchService.search(query, 100) }

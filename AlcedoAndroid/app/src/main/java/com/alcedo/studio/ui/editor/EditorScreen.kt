@@ -146,10 +146,10 @@ fun EditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.undo() }, enabled = state.versions.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.undo() }, enabled = state.canUndo) {
                         Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = s.undo)
                     }
-                    IconButton(onClick = { viewModel.redo() }) {
+                    IconButton(onClick = { viewModel.redo() }, enabled = state.canRedo) {
                         Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = s.redo)
                     }
                     // Version menu

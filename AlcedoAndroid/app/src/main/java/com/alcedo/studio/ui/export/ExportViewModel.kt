@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.AdjustmentParams
 import com.alcedo.studio.data.model.ExportConfig
+import com.alcedo.studio.permission.PermissionHelper
 import com.alcedo.studio.data.model.ExportFormat
 import com.alcedo.studio.data.model.ImageItem
 import com.alcedo.studio.data.model.WatermarkConfig
@@ -154,6 +155,10 @@ class ExportViewModel @Inject constructor(
 
     /** Export the currently open editor image. */
     fun exportCurrent(imageId: String) {
+        if (!hasExportPermissions()) {
+            _uiState.update { it.copy(error = "Storage write permission required for export. Please grant the permission in Settings.") }
+            return
+        }
         val handle = pipelineService.handle
         if (handle == 0L) {
             _uiState.update { it.copy(error = "No active pipeline. Open an image in the editor first.") }
@@ -176,6 +181,10 @@ class ExportViewModel @Inject constructor(
      */
     fun exportBatch(imageIds: List<String>) {
         if (imageIds.isEmpty()) return
+        if (!hasExportPermissions()) {
+            _uiState.update { it.copy(error = "Storage write permission required for export. Please grant the permission in Settings.") }
+            return
+        }
         startExport {
             val items = imageIds.mapNotNull { id -> imageRepository.getImage(id) }
             if (items.isEmpty()) {
@@ -299,5 +308,19 @@ class ExportViewModel @Inject constructor(
 
     fun resetResults() {
         _uiState.update { it.copy(results = emptyList(), completedCount = 0, totalCount = 0, lastOutputPath = null) }
+    }
+
+    /**
+     * Check if the app has the necessary write permissions for export.
+     * On API 29 and below, WRITE_EXTERNAL_STORAGE is required.
+     * On API 30+, scoped storage handles this automatically.
+     */
+    private fun hasExportPermissions(): Boolean {
+        val writePerms = PermissionHelper.exportPermissions()
+        if (writePerms.isEmpty()) return true // API 30+ — no write permission needed
+        return PermissionHelper.areAllGranted(
+            com.alcedo.studio.util.ContextProvider.requireContext(),
+            writePerms,
+        )
     }
 }

@@ -88,12 +88,14 @@ class BackgroundTaskService @Inject constructor() {
         cancelled.add(taskId)
         val current = active[taskId]
         if (current != null) {
-            active[taskId] = current.copy(error = "cancelled")
+            active[taskId] = current.copy(error = "cancelled", progress = 1f)
             publish()
         }
         // Evict the cancelled task so it no longer counts as active.
         active.remove(taskId)
         startTimes.remove(taskId)
+        // Clean up the cancellation flag after eviction so it doesn't accumulate.
+        cancelled.remove(taskId)
         publish()
     }
 

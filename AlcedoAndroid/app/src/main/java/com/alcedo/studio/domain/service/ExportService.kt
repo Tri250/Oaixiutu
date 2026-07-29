@@ -91,11 +91,10 @@ class ExportService @Inject constructor(
 
         // Encode.
         val encoded = encode(finalBitmap, outFile, degradedCfg)
-        // Eagerly recycle the large bitmaps to avoid OOM during batch export.
-        // Bitmap.recycle() is idempotent; safe even if bitmap == finalBitmap.
-        if (bitmap !== finalBitmap) bitmap.recycle()
-        finalBitmap.recycle()
         if (!encoded) {
+            // Eagerly recycle the large bitmaps to avoid OOM during batch export.
+            if (bitmap !== finalBitmap) bitmap.recycle()
+            finalBitmap.recycle()
             _progress.value = ExportProgress(request.imageId, 2, 2, error = "encode_failed", done = true)
             return@withContext null
         }
@@ -113,12 +112,13 @@ class ExportService @Inject constructor(
             }
         }
 
-        // Optional UltraHDR.
+        // Optional UltraHDR — must use finalBitmap BEFORE recycling.
         if (cfg.ultraHdr && cfg.format == ExportFormat.JPEG) {
             val gainmapFile = File(outDir, "$name.gainmap.jpg")
             val hdrBitmap = pipelineService.renderToBitmap(cfg.maxDimension.coerceAtLeast(1))
             if (hdrBitmap != null) {
                 val gainBytes = ultraHdrWriter.buildGainMapBytes(finalBitmap, hdrBitmap)
+                hdrBitmap.recycle()
                 if (gainBytes != null) {
                     val gainWritten = runCatching {
                         FileOutputStream(gainmapFile).use { it.write(gainBytes) }
@@ -128,6 +128,9 @@ class ExportService @Inject constructor(
                         val ultraFile = File(outDir, "$name.ultrahdr.jpg")
                         val ultraOk = ultraHdrWriter.write(outFile.absolutePath, gainmapFile.absolutePath, ultraFile.absolutePath)
                         if (ultraOk && ultraFile.exists() && ultraFile.length() > 0L) {
+                            // Recycle bitmaps after successful UltraHDR write.
+                            if (bitmap !== finalBitmap) bitmap.recycle()
+                            finalBitmap.recycle()
                             outFile.delete()
                             return@withContext finish(request, ultraFile, start)
                         } else {
@@ -137,6 +140,11 @@ class ExportService @Inject constructor(
                 }
             }
         }
+
+        // Eagerly recycle the large bitmaps to avoid OOM during batch export.
+        // Bitmap.recycle() is idempotent; safe even if bitmap == finalBitmap.
+        if (bitmap !== finalBitmap) bitmap.recycle()
+        finalBitmap.recycle()
         finish(request, outFile, start)
     }
 

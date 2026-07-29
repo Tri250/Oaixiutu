@@ -114,8 +114,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setGpuBackend(backend: String) = viewModelScope.launch {
-        runCatching { privacyManager.setGpuBackend(backend) }
-            .onFailure { e -> _uiState.update { it.copy(error = e.message) } }
+        runCatching {
+            privacyManager.setGpuBackend(backend)
+            // Pass backend selection to native layer so the pipeline uses it
+            val useVulkan = backend == "Vulkan"
+            NdkSafeCall.run { AlcedoNativeBridge.nativeSetGpuBackend(if (useVulkan) 1 else 0) }
+        }.onFailure { e -> _uiState.update { it.copy(error = e.message) } }
     }
 
     fun setAiStrictness(strictness: Float) = viewModelScope.launch {

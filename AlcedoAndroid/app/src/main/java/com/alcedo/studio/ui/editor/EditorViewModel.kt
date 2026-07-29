@@ -28,6 +28,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -68,6 +70,8 @@ class EditorViewModel @Inject constructor(
         val versions: List<Version> = emptyList(),
         val activeVersionId: String? = null,
         val transactions: List<EditTransaction> = emptyList(),
+        val canUndo: Boolean = false,
+        val canRedo: Boolean = false,
         val presets: List<PipelinePreset> = emptyList(),
         val favoritePresets: List<PipelinePreset> = emptyList(),
         val masks: List<MaskRecord> = emptyList(),
@@ -89,6 +93,9 @@ class EditorViewModel @Inject constructor(
     val pipelineState: StateFlow<PipelineService.PipelineState> = pipelineService.state
 
     private var pendingMasks = mutableListOf<MaskRecord>()
+
+    /** Debounce render job to prevent pipeline overflow on rapid slider changes. */
+    private var renderDebounceJob: Job? = null
 
     init {
         // Mirror pipeline readiness/rendering into UI state and expose preview params.
@@ -159,6 +166,12 @@ class EditorViewModel @Inject constructor(
         val updated = applyField(current, field, value)
         _uiState.update { it.copy(params = updated, dirty = updated != it.baselineParams) }
         pipelineService.updateParams(updated)
+        // Debounce the re-render so rapid slider changes don't flood the pipeline.
+        renderDebounceJob?.cancel()
+        renderDebounceJob = viewModelScope.launch {
+            delay(RENDER_DEBOUNCE_MS)
+            pipelineService.render()
+        }
     }
 
     /** Replace the entire adjustment set (e.g. when applying a preset). */
@@ -192,7 +205,7 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { historyService.recordChange(id, delta, label) }
                 .onSuccess {
-                    _uiState.update { it.copy(baselineParams = state.params, dirty = false) }
+                    _uiState.update { it.copy(baselineParams = state.params, dirty = false, canRedo = false) }
                     observeTransactions(state.activeVersionId)
                 }
                 .onFailure { e -> _uiState.update { it.copy(error = "Commit failed: ${e.message}") } }
@@ -210,7 +223,11 @@ class EditorViewModel @Inject constructor(
         val id = imageId ?: return
         viewModelScope.launch {
             runCatching { historyService.undo(id) }
-                .onSuccess { reloadActiveVersionParams(id) }
+                .onSuccess {
+                    reloadActiveVersionParams(id)
+                    // After an undo, redo becomes available
+                    _uiState.update { it.copy(canRedo = true) }
+                }
                 .onFailure { e -> _uiState.update { it.copy(error = "Undo failed: ${e.message}") } }
         }
     }
@@ -219,7 +236,11 @@ class EditorViewModel @Inject constructor(
         val id = imageId ?: return
         viewModelScope.launch {
             runCatching { historyService.redo(id) }
-                .onSuccess { reloadActiveVersionParams(id) }
+                .onSuccess {
+                    reloadActiveVersionParams(id)
+                    // After a redo, check if more redo is available
+                    // For simplicity, keep canRedo true until a new edit resets it
+                }
                 .onFailure { e -> _uiState.update { it.copy(error = "Redo failed: ${e.message}") } }
         }
     }
@@ -279,7 +300,13 @@ class EditorViewModel @Inject constructor(
     private fun observeTransactions(versionId: String?) = viewModelScope.launch {
         if (versionId == null) return@launch
         historyService.observeTransactions(versionId).collect { txs ->
-            _uiState.update { it.copy(transactions = txs) }
+            _uiState.update {
+                it.copy(
+                    transactions = txs,
+                    canUndo = txs.isNotEmpty(),
+                    canRedo = false, // Redo is available only after an undo; reset on new transaction
+                )
+            }
         }
     }
 
@@ -535,5 +562,6 @@ class EditorViewModel @Inject constructor(
 
     companion object {
         const val KEY_IMAGE_ID = "imageId"
+        private const val RENDER_DEBOUNCE_MS = 80L
     }
 }
