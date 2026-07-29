@@ -67,6 +67,24 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
 
+      - name: Upload mapping file
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 90
+
+      - name: Build summary
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+            echo "- **APK**: \`$(basename $APK)\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Size**: $(du -h "$APK" | cut -f1)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Version**: $(git describe --tags --always 2>/dev/null || echo unknown)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Get version info
         id: version
         run: |
@@ -122,4 +140,30 @@ jobs:
           for apk in ./apk/*.apk; do
             echo "=== Native libs in $apk ==="
             unzip -l "$apk" | grep "lib/arm64-v8a/libalcedo" || echo "WARNING: alcedo_native not found!"
+          done
+
+      - name: Verify APK signing
+        run: |
+          for apk in ./apk/*.apk; do
+            echo "=== Signing info for $apk ==="
+            if command -v apksigner &>/dev/null; then
+              apksigner verify --print-certs "$apk" 2>&1 || true
+            elif command -v jarsigner &>/dev/null; then
+              jarsigner -verify -verbose:summary -certs "$apk" 2>&1 | tail -5 || true
+            else
+              echo "apksigner/jarsigner not available; skipping signature verification"
+              # Basic check: APK must contain a META-INF signature block
+              unzip -l "$apk" | grep -E "META-INF/.*\.(RSA|SF|MF)" || echo "WARNING: No signing metadata found!"
+            fi
+          done
+
+      - name: Verify verification summary
+        run: |
+          echo "## Verification Summary" >> $GITHUB_STEP_SUMMARY
+          for apk in ./apk/*.apk; do
+            echo "- **APK**: \`$(basename $apk)\` ($(du -h "$apk" | cut -f1))" >> $GITHUB_STEP_SUMMARY
+            NATIVE_COUNT=$(unzip -l "$apk" | grep -c "lib/arm64-v8a/" || true)
+            echo "- **Native libs**: $NATIVE_COUNT" >> $GITHUB_STEP_SUMMARY
+            DEX_COUNT=$(unzip -l "$apk" | grep -c "classes.*\.dex" || true)
+            echo "- **DEX files**: $DEX_COUNT" >> $GITHUB_STEP_SUMMARY
           done

@@ -105,7 +105,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            isZipAlignEnabled = true
+            // ZipAlign is always enabled in AGP 8.x release builds
             isCrunchPngs = true
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")

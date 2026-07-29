@@ -4,9 +4,18 @@
         <include domain="sharedpref" path="." />
         <include domain="file" path="projects" />
         <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
+        <exclude domain="file" path="crashlogs" />
+        <exclude domain="file" path="alcedo_temp" />
+        <exclude domain="file" path="models" />
+        <exclude domain="file" path="cache" />
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="." />
         <include domain="file" path="projects" />
+        <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
+        <exclude domain="file" path="crashlogs" />
+        <exclude domain="file" path="alcedo_temp" />
+        <exclude domain="file" path="models" />
+        <exclude domain="file" path="cache" />
     </device-transfer>
 </data-extraction-rules>

@@ -3,4 +3,6 @@
     <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
     <exclude domain="file" path="cache" />
     <exclude domain="file" path="models" />
+    <exclude domain="file" path="crashlogs" />
+    <exclude domain="file" path="alcedo_temp" />
 </full-backup-content>

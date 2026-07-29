@@ -8,6 +8,8 @@
     <domain-config>
         <domain includeSubdomains="true">api.openai.com</domain>
         <domain includeSubdomains="true">api.anthropic.com</domain>
+        <domain includeSubdomains="true">huggingface.co</domain>
+        <domain includeSubdomains="true">cdn-lfs.huggingface.co</domain>
         <domain includeSubdomains="true">ark.cn-beijing.volces.com</domain>
         <domain includeSubdomains="true">github.com</domain>
         <domain includeSubdomains="true">raw.githubusercontent.com</domain>
