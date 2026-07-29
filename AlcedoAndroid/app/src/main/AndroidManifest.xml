@@ -21,7 +21,7 @@
     <uses-feature
         android:name="android.hardware.vulkan.level"
         android:version="1"
-        android:required="true" />
+        android:required="false" />
 
     <application
         android:name=".AlcedoApplication"

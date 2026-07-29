@@ -81,14 +81,23 @@ android {
         }
     }
 
+    // Whether a production release keystore is configured via keystore.properties.
+    // When false, the release build type falls back to the debug signing config so
+    // CI can still produce a release APK for testing (it must be re-signed with the
+    // production key before distribution).
+    val hasReleaseKeystore = run {
+        val storeFilePath = keystoreProperties.getProperty("storeFile", "")
+        storeFilePath.isNotEmpty() && rootProject.file(storeFilePath).exists()
+    }
+
     signingConfigs {
         create("release") {
-            // Read from environment variables or a keystore.properties file.
-            // keystoreProperties is loaded at the top of the file
-            storeFile = file(keystoreProperties.getProperty("storeFile", "debug.keystore"))
-            storePassword = keystoreProperties.getProperty("storePassword", "android")
-            keyAlias = keystoreProperties.getProperty("keyAlias", "androiddebugkey")
-            keyPassword = keystoreProperties.getProperty("keyPassword", "android")
+            if (hasReleaseKeystore) {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword", "")
+                keyAlias = keystoreProperties.getProperty("keyAlias", "")
+                keyPassword = keystoreProperties.getProperty("keyPassword", "")
+            }
         }
     }
 
@@ -96,7 +105,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -146,8 +159,7 @@ android {
                 "/META-INF/{AL2.0,LGPL2.1}",
                 "/META-INF/DEPENDENCIES",
                 "/META-INF/LICENSE*",
-                "/META-INF/NOTICE*",
-                "META-INF/*.kotlin_module"
+                "/META-INF/NOTICE*"
             )
         }
         jniLibs {

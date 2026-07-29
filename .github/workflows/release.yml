@@ -13,6 +13,7 @@ on:
 
 env:
   APK_PATH: AlcedoAndroid/app/build/outputs/apk/release/app-release.apk
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4"
 
 jobs:
   build:
@@ -41,6 +42,10 @@ jobs:
           ndk-version: 27.0.12077973
           cmake-version: 3.22.1
 
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
         with:
@@ -51,6 +56,9 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('AlcedoAndroid/**/*.gradle*', 'AlcedoAndroid/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
+
+      - name: Ensure gradlew is executable
+        run: chmod +x ./gradlew
 
       - name: Set up signing
         env:
@@ -70,11 +78,25 @@ jobs:
           EOF
             echo "keystore.properties created."
           else
-            echo "No signing secrets found. Falling back to debug signing."
+            echo "::warning::No signing secrets found. Release APK will be signed with the debug key and must be re-signed before distribution."
           fi
 
       - name: Build release APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace --no-build-cache
+
+      - name: Verify APK artifact exists
+        run: |
+          # path is relative to repo root, not the working directory
+          APK_ABS="$GITHUB_WORKSPACE/$APK_PATH"
+          if [ ! -f "$APK_ABS" ]; then
+            echo "::error::Release APK not found at $APK_ABS"
+            echo "Listing build outputs directory for diagnostics:"
+            ls -la "$GITHUB_WORKSPACE/AlcedoAndroid/app/build/outputs/apk/" 2>/dev/null || true
+            find "$GITHUB_WORKSPACE/AlcedoAndroid/app/build/outputs" -name "*.apk" 2>/dev/null || true
+            exit 1
+          fi
+          echo "APK size: $(du -h "$APK_ABS" | cut -f1)"
+          ls -la "$APK_ABS"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -82,6 +104,7 @@ jobs:
           name: release-apk
           path: ${{ env.APK_PATH }}
           if-no-files-found: error
+          retention-days: 30
 
   release:
     name: Create GitHub Release
@@ -100,6 +123,14 @@ jobs:
         with:
           name: release-apk
           path: artifact
+
+      - name: Verify downloaded artifact
+        run: |
+          ls -la artifact/
+          if [ ! -f artifact/app-release.apk ]; then
+            echo "::error::app-release.apk missing from downloaded artifact"
+            exit 1
+          fi
 
       - name: Determine release tag
         id: tag
