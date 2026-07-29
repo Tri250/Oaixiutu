@@ -85,11 +85,7 @@ android {
     signingConfigs {
         create("release") {
             // Read from environment variables or a keystore.properties file.
-            val keystoreProperties = java.util.Properties()
-            val keystoreFile = rootProject.file("keystore.properties")
-            if (keystoreFile.exists()) {
-                keystoreProperties.load(keystoreFile.inputStream())
-            }
+            // keystoreProperties is loaded at the top of the file
             storeFile = file(keystoreProperties.getProperty("storeFile", "debug.keystore"))
             storePassword = keystoreProperties.getProperty("storePassword", "android")
             keyAlias = keystoreProperties.getProperty("keyAlias", "androiddebugkey")
