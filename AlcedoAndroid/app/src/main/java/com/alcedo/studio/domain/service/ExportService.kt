@@ -91,6 +91,10 @@ class ExportService @Inject constructor(
 
         // Encode.
         val encoded = encode(finalBitmap, outFile, degradedCfg)
+        // Eagerly recycle the large bitmaps to avoid OOM during batch export.
+        // Bitmap.recycle() is idempotent; safe even if bitmap == finalBitmap.
+        if (bitmap !== finalBitmap) bitmap.recycle()
+        finalBitmap.recycle()
         if (!encoded) {
             _progress.value = ExportProgress(request.imageId, 2, 2, error = "encode_failed", done = true)
             return@withContext null

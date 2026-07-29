@@ -40,8 +40,17 @@ object PermissionHelper {
             listOf(Manifest.permission.POST_NOTIFICATIONS)
         else emptyList()
 
+    /** Write permission for exporting images to shared storage (API 29 and below). */
+    fun writeStoragePermission(): List<String> =
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q)
+            listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        else emptyList()
+
     /** All runtime permissions the app needs at first launch. */
     fun allRequired(): List<String> = requiredMediaPermissions() + notificationPermission()
+
+    /** All permissions needed for export functionality. */
+    fun exportPermissions(): List<String> = writeStoragePermission()
 
     /** True when [permission] is granted. */
     fun isGranted(context: Context, permission: String): Boolean =

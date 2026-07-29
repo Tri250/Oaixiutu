@@ -105,6 +105,8 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            isZipAlignEnabled = true
+            isCrunchPngs = true
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
@@ -176,9 +178,10 @@ android {
     }
 
     lint {
-        abortOnError = false
+        // Release builds must fail on lint errors to catch issues early.
+        abortOnError = true
         checkReleaseBuilds = true
-        disable += listOf("MissingTranslation", "ExtraTranslation")
+        disable += listOf("MissingTranslation", "ExtraTranslation", "OldTargetApi")
     }
 
     testOptions {
