@@ -83,22 +83,27 @@ auto SemanticStorageController::SelectActiveModel() -> std::optional<SemanticMod
 }
 
 void SemanticStorageController::UpsertEmbedding(const SemanticEmbeddingRecord& rec) {
-  // Store embedding as JSON array for simplicity (DuckDB FLOAT[] binding via C API is complex).
+  // Store embedding as a JSON array string. The schema column is TEXT (the
+  // DuckDB FLOAT[] array type is not available on the SQLite-backed C API
+  // shim), so a JSON literal is the faithful, queryable representation.
   std::string emb_json = "[";
   for (size_t i = 0; i < rec.embedding.size(); ++i) {
     if (i > 0) emb_json += ",";
     emb_json += std::to_string(rec.embedding[i]);
   }
   emb_json += "]";
-  char sql[256];
-  std::snprintf(sql, sizeof(sql),
-                "INSERT OR REPLACE INTO SemanticImageEmbedding (file_id, image_id, model_key, "
-                "embedding, embedding_dim, thumbnail_resolution, status) VALUES (%u, %u, %s, "
-                "'%s', %d, %d, %s)",
-                rec.file_id, rec.image_id,
-                escape_sql_string(rec.model_key).c_str(), emb_json.c_str(),
-                rec.embedding_dim, rec.thumbnail_resolution,
-                escape_sql_string(rec.status).c_str());
+  // Build with std::string concatenation: a 512-dim embedding JSON is several
+  // KB and would silently truncate a fixed char[] buffer (malformed SQL).
+  std::string sql =
+      "INSERT OR REPLACE INTO SemanticImageEmbedding (file_id, image_id, model_key, "
+      "embedding, embedding_dim, thumbnail_resolution, status) VALUES (" +
+      std::to_string(rec.file_id) + ", " +
+      std::to_string(rec.image_id) + ", " +
+      escape_sql_string(rec.model_key) + ", " +
+      escape_sql_string(emb_json) + ", " +
+      std::to_string(rec.embedding_dim) + ", " +
+      std::to_string(rec.thumbnail_resolution) + ", " +
+      escape_sql_string(rec.status) + ")";
   Exec(sql);
 }
 

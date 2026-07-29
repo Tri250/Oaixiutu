@@ -1,7 +1,7 @@
 # AlcedoAndroid CMake Build
 # Vulkan Compute backend for Android
 cmake_minimum_required(VERSION 3.22.1)
-project(alcedo_android LANGUAGES CXX)
+project(alcedo_android LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -124,6 +124,7 @@ set(CORE_SOURCES
     # Storage / ORM
     core/storage/db_controller.cpp
     core/storage/controller_types.cpp
+    core/storage/duckdb_capi.cpp
     core/storage/mapper/image_mapper.cpp
     core/storage/mapper/pipeline_mapper.cpp
     core/storage/mapper/sleeve_mapper.cpp
@@ -227,6 +228,23 @@ set(VULKAN_SHADERS
 # Build native library
 # ============================================================
 
+# SQLite amalgamation (backing store for the DuckDB C API shim). Compiled as a
+# separate C static library with a tuned feature set for Android.
+add_library(alcedo_sqlite STATIC third_party/sqlite/sqlite3.c)
+target_include_directories(alcedo_sqlite PUBLIC third_party/sqlite)
+target_compile_definitions(alcedo_sqlite PRIVATE
+    SQLITE_OMIT_LOAD_EXTENSION        # no dynamic extension loading on Android
+    SQLITE_OMIT_DEPRECATED
+    SQLITE_THREADSAFE=1              # serialize at the sqlite3 layer (FULLMUTEX)
+    SQLITE_DEFAULT_MEMSTATUS=0       # skip memory stats bookkeeping
+    SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 # NORMAL sync for WAL (faster, durable enough)
+    SQLITE_ENABLE_FTS5               # full-text search (used by AiImageFtsDocument)
+    SQLITE_ENABLE_JSON1              # JSON1 functions (always on in 3.45, kept explicit)
+)
+# The amalgamation is one large TU; compile it with optimisation but without
+# LTO to keep build time predictable.
+target_compile_options(alcedo_sqlite PRIVATE -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections)
+
 add_library(alcedo_native SHARED
     ${CORE_SOURCES}
     ${VULKAN_SOURCES}
@@ -240,6 +258,7 @@ target_include_directories(alcedo_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/vulkan
     ${CMAKE_CURRENT_SOURCE_DIR}/jni
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite
 )
 
 target_link_libraries(alcedo_native
@@ -249,6 +268,7 @@ target_link_libraries(alcedo_native
     ${jnigraphics-lib}
     EGL
     GLESv3
+    alcedo_sqlite
 )
 
 # Optimization flags

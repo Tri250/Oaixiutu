@@ -36,7 +36,7 @@ constexpr const char* kSchemaInit =
     "created_at TIMESTAMP DEFAULT current_timestamp);"
     "CREATE TABLE IF NOT EXISTS SemanticImageEmbedding ("
     "file_id BIGINT NOT NULL, image_id BIGINT NOT NULL, model_key VARCHAR NOT NULL, "
-    "embedding FLOAT[512] NOT NULL, embedding_dim INTEGER NOT NULL, thumbnail_resolution INTEGER NOT NULL, "
+    "embedding TEXT NOT NULL, embedding_dim INTEGER NOT NULL, thumbnail_resolution INTEGER NOT NULL, "
     "generated_at TIMESTAMP DEFAULT current_timestamp, status VARCHAR NOT NULL, error VARCHAR, "
     "PRIMARY KEY(file_id, model_key));"
     "CREATE TABLE IF NOT EXISTS SemanticImageLabel ("
