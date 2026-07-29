@@ -2,7 +2,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="." />
-        <include domain="file" path="projects" />
+        <include domain="file" path="." />
         <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
         <exclude domain="file" path="crashlogs" />
         <exclude domain="file" path="alcedo_temp" />
@@ -11,7 +11,7 @@
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="." />
-        <include domain="file" path="projects" />
+        <include domain="file" path="." />
         <exclude domain="sharedpref" path="alcedo_ai_creds.xml" />
         <exclude domain="file" path="crashlogs" />
         <exclude domain="file" path="alcedo_temp" />
