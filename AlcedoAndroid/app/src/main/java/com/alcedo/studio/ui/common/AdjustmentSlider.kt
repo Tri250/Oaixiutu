@@ -88,14 +88,14 @@ fun AdjustmentSlider(
                 },
                 enabled = enabled && isModified,
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(24.dp)              // 20dp→24dp: larger touch target for Chinese users
                     .semantics { contentDescription = "Reset $label" },
             ) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = null,
                     tint = if (enabled && isModified) AlcedoColors.TextTertiary else AlcedoColors.TextDisabled,
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(16.dp),  // 14dp→16dp: larger icon for clarity
                 )
             }
         }
