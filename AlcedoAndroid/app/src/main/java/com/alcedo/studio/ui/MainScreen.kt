@@ -1,23 +1,26 @@
 package com.alcedo.studio.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Collections
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,14 +34,14 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -55,7 +58,7 @@ import com.alcedo.studio.ui.album.AlbumScreen
 import com.alcedo.studio.ui.ai.AiModelManagerScreen
 import com.alcedo.studio.ui.ai.AiRatingScreen
 import com.alcedo.studio.ui.ai.AiSearchScreen
-import com.alcedo.studio.ui.common.NavTransitions
+import com.alcedo.studio.ui.common.rememberHapticFeedback
 import com.alcedo.studio.ui.editor.EditorScreen
 import com.alcedo.studio.ui.export.ExportScreen
 import com.alcedo.studio.ui.onboarding.OnboardingScreen
@@ -286,28 +289,107 @@ fun MainScreen(
     }
 }
 
+/**
+ * 增强版底部导航栏 — 参考国内主流摄影App（醒图/美图秀秀/Lightroom Mobile）的交互模式。
+ *
+ * 交互优化：
+ * - **触觉反馈**：点击Tab时提供轻触感反馈
+ * - **弹性动画**：选中图标带缩放弹跳动画（spring）
+ * - **颜色渐变过渡**：选中/未选中颜色平滑过渡（animateColorAsState）
+ * - **渐变指示器**：选中项带微妙的顶部渐变条
+ * - **底部安全区适配**：适配全面屏手势导航栏
+ */
 @Composable
 private fun AlcedoBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
 ) {
+    val haptics = rememberHapticFeedback()
     val destinations = topDestinations()
+
     NavigationBar(
         containerColor = AlcedoColors.Graphite,
         contentColor = AlcedoColors.TextSecondary,
+        tonalElevation = 0.dp,
     ) {
         destinations.forEach { dest ->
             val selected = currentRoute == dest.route ||
                 (dest.route == Routes.EDITOR && currentRoute?.startsWith("editor/") == true)
+
+            // Animated colors for smooth transition
+            val iconColor by animateColorAsState(
+                targetValue = if (selected) AlcedoColors.AccentBlue else AlcedoColors.TextTertiary,
+                animationSpec = tween(250),
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (selected) AlcedoColors.AccentBlue else AlcedoColors.TextTertiary,
+                animationSpec = tween(250),
+            )
+
+            // Spring scale animation for selected icon
+            val iconScale by animateFloatAsState(
+                targetValue = if (selected) 1.15f else 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.5f,
+                    stiffness = 300f,
+                ),
+            )
+
+            // Indicator offset animation
+            val indicatorAlpha by animateFloatAsState(
+                targetValue = if (selected) 1f else 0f,
+                animationSpec = tween(200),
+            )
+
             NavigationBarItem(
                 selected = selected,
-                onClick = { onNavigate(dest.route) },
-                icon = { Icon(imageVector = dest.icon, contentDescription = dest.label) },
-                label = { Text(text = dest.label) },
+                onClick = {
+                    haptics.click()
+                    onNavigate(dest.route)
+                },
+                icon = {
+                    // Icon with scale animation and gradient indicator
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        // Top gradient indicator bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f)
+                                .height(3.dp)
+                                .alpha(indicatorAlpha)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            AlcedoColors.AccentBlue.copy(alpha = 0f),
+                                            AlcedoColors.AccentBlue,
+                                            AlcedoColors.AccentBlue.copy(alpha = 0f),
+                                        ),
+                                    ),
+                                ),
+                        )
+                        Icon(
+                            imageVector = dest.icon,
+                            contentDescription = dest.label,
+                            tint = iconColor,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .scale(iconScale),
+                        )
+                    }
+                },
+                label = {
+                    Text(
+                        text = dest.label,
+                        color = textColor,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = AlcedoColors.AccentBlue,
                     selectedTextColor = AlcedoColors.AccentBlue,
-                    indicatorColor = AlcedoColors.SurfaceSelected,
+                    indicatorColor = AlcedoColors.SurfaceSelected.copy(alpha = 0.5f),
                     unselectedIconColor = AlcedoColors.TextTertiary,
                     unselectedTextColor = AlcedoColors.TextTertiary,
                 ),
@@ -321,6 +403,7 @@ private fun AlcedoNavRail(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
 ) {
+    val haptics = rememberHapticFeedback()
     val destinations = topDestinations()
     NavigationRail(
         containerColor = AlcedoColors.Graphite,
@@ -329,15 +412,41 @@ private fun AlcedoNavRail(
         destinations.forEach { dest ->
             val selected = currentRoute == dest.route ||
                 (dest.route == Routes.EDITOR && currentRoute?.startsWith("editor/") == true)
+
+            val iconColor by animateColorAsState(
+                targetValue = if (selected) AlcedoColors.AccentBlue else AlcedoColors.TextTertiary,
+                animationSpec = tween(250),
+            )
+            val iconScale by animateFloatAsState(
+                targetValue = if (selected) 1.1f else 1f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+            )
+
             NavigationRailItem(
                 selected = selected,
-                onClick = { onNavigate(dest.route) },
-                icon = { Icon(imageVector = dest.icon, contentDescription = dest.label) },
-                label = { Text(text = dest.label, style = MaterialTheme.typography.labelSmall) },
+                onClick = {
+                    haptics.click()
+                    onNavigate(dest.route)
+                },
+                icon = {
+                    Icon(
+                        imageVector = dest.icon,
+                        contentDescription = dest.label,
+                        tint = iconColor,
+                        modifier = Modifier.size(24.dp).scale(iconScale),
+                    )
+                },
+                label = {
+                    Text(
+                        text = dest.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = iconColor,
+                    )
+                },
                 colors = NavigationRailItemDefaults.colors(
                     selectedIconColor = AlcedoColors.AccentBlue,
                     selectedTextColor = AlcedoColors.AccentBlue,
-                    indicatorColor = AlcedoColors.SurfaceSelected,
+                    indicatorColor = AlcedoColors.SurfaceSelected.copy(alpha = 0.5f),
                     unselectedIconColor = AlcedoColors.TextTertiary,
                     unselectedTextColor = AlcedoColors.TextTertiary,
                 ),

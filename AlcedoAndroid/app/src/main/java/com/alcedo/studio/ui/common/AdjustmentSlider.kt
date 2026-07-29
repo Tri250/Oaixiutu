@@ -1,5 +1,9 @@
 package com.alcedo.studio.ui.common
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -31,22 +36,21 @@ import com.alcedo.studio.ui.theme.AlcedoTheme
 import com.alcedo.studio.ui.theme.DesignTokens
 
 /**
- * A labeled adjustment slider with a numeric readout and a reset-to-default
- * button. This is the canonical control used across all editor panels.
+ * 增强型调节滑块 — 参考醒图/美图秀秀/Lightroom Mobile的滑块交互：
+ * - **双击标签复位**：双击标签区域快速恢复到默认值
+ * - **触觉反馈**：拖拽结束时触发振动反馈
+ * - **动态颜色**：值已修改时数值高亮显示
+ * - **更大的触摸目标**：为中国用户优化触控区域
  *
- * The slider emits the final value via [onValueChangeFinished] (committed) and
- * a live value via [onValueChange] (for live preview). The reset icon restores
- * [defaultValue] and reports it through [onValueChange] + [onValueChangeFinished].
- *
- * @param label    Human-readable control name (e.g. "Exposure").
- * @param value     Current value.
- * @param defaultValue Value considered "reset" (shown muted when value equals it).
- * @param range     Inclusive value range.
- * @param onValueChange Live updates while dragging.
- * @param onValueChangeFinished Fired when the drag ends / reset is pressed.
- * @param valueFormatter Converts the float to a display string.
- * @param enabled   Whether the control is interactive.
- * @param unit      Optional unit suffix appended to the readout.
+ * @param label        控制名称（如"曝光"）
+ * @param value        当前值
+ * @param defaultValue 默认值（"复位"目标）
+ * @param range        值范围
+ * @param onValueChange 实时更新回调
+ * @param onValueChangeFinished 拖拽结束回调
+ * @param valueFormatter 格式化函数
+ * @param enabled      是否启用
+ * @param unit         单位后缀
  */
 @Composable
 fun AdjustmentSlider(
@@ -61,12 +65,26 @@ fun AdjustmentSlider(
     unit: String = "",
     enabled: Boolean = true,
 ) {
+    val haptics = rememberHapticFeedback()
     val isModified = value != defaultValue
     val valueColor = if (isModified) AlcedoColors.TextPrimary else AlcedoColors.TextTertiary
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // 双击标签区域复位
+                .pointerInput(label) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            if (enabled && isModified) {
+                                haptics.click()
+                                onValueChange(defaultValue)
+                                onValueChangeFinished()
+                            }
+                        },
+                    )
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
         ) {
@@ -82,36 +100,41 @@ fun AdjustmentSlider(
                 color = if (enabled) valueColor else AlcedoColors.TextDisabled,
                 textAlign = TextAlign.End,
             )
+            // 重置按钮（值修改后显示）
             IconButton(
                 onClick = {
+                    haptics.click()
                     onValueChange(defaultValue)
                     onValueChangeFinished()
                 },
                 enabled = enabled && isModified,
                 modifier = Modifier
-                    .size(24.dp)              // 20dp→24dp: larger touch target for Chinese users
+                    .size(24.dp)
                     .semantics { contentDescription = "Reset $label" },
             ) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = null,
                     tint = if (enabled && isModified) AlcedoColors.TextTertiary else AlcedoColors.TextDisabled,
-                    modifier = Modifier.size(16.dp),  // 14dp→16dp: larger icon for clarity
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }
         Slider(
             value = value.coerceIn(range.start, range.endInclusive),
             onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
+            onValueChangeFinished = {
+                haptics.commit()
+                onValueChangeFinished()
+            },
             valueRange = range,
             enabled = enabled,
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentDescription = "$label slider" },
             colors = SliderDefaults.colors(
-                thumbColor = AlcedoTheme.extendedColors.accent,           // RapidRAW: white accent (dark)
-                activeTrackColor = AlcedoTheme.extendedColors.accent,     // RapidRAW: white accent
+                thumbColor = AlcedoTheme.extendedColors.accent,
+                activeTrackColor = AlcedoTheme.extendedColors.accent,
                 inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 disabledThumbColor = AlcedoColors.TextDisabled,
                 disabledActiveTrackColor = AlcedoColors.TextDisabled,
@@ -121,8 +144,7 @@ fun AdjustmentSlider(
 }
 
 /**
- * Convenience for sliders that drive a single committed value with no separate
- * live/finished distinction (the host applies changes immediately).
+ * 简化版滑块（不带默认值）。
  */
 @Composable
 fun AdjustmentSliderSimple(
@@ -133,6 +155,8 @@ fun AdjustmentSliderSimple(
     modifier: Modifier = Modifier,
     step: Float? = null,
 ) {
+    val haptics = rememberHapticFeedback()
+
     Column(modifier = modifier.fillMaxWidth().padding(vertical = DesignTokens.spacingXs)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -157,12 +181,13 @@ fun AdjustmentSliderSimple(
             Slider(
                 value = value.coerceIn(range.start, range.endInclusive),
                 onValueChange = onValueChange,
+                onValueChangeFinished = { haptics.commit() },
                 valueRange = range,
                 steps = steps.coerceAtLeast(0),
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    thumbColor = AlcedoTheme.extendedColors.accent,
+                    activeTrackColor = AlcedoTheme.extendedColors.accent,
                     inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 ),
             )
@@ -170,11 +195,12 @@ fun AdjustmentSliderSimple(
             Slider(
                 value = value.coerceIn(range.start, range.endInclusive),
                 onValueChange = onValueChange,
+                onValueChangeFinished = { haptics.commit() },
                 valueRange = range,
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    thumbColor = AlcedoTheme.extendedColors.accent,
+                    activeTrackColor = AlcedoTheme.extendedColors.accent,
                     inactiveTrackColor = AlcedoTheme.extendedColors.sliderTrackInactive,
                 ),
             )
@@ -183,7 +209,7 @@ fun AdjustmentSliderSimple(
 }
 
 /**
- * A remembered draggable float state used by custom trackball/curve controls.
+ * 可记忆的拖拽浮点状态。
  */
 @Composable
 fun rememberDraggableFloat(initial: Float): Pair<Float, (Float) -> Unit> {

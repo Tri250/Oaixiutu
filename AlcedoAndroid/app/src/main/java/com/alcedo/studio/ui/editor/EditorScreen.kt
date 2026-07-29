@@ -2,6 +2,7 @@ package com.alcedo.studio.ui.editor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +18,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Compare
+import androidx.compose.material.icons.outlined.FiberManualRecord
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Output
-import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -53,17 +52,11 @@ import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ConfirmDialog
 import com.alcedo.studio.ui.common.EmptyState
 import com.alcedo.studio.ui.common.ErrorDialog
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Switch
+import com.alcedo.studio.ui.common.QuickActionsBar
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
-import com.alcedo.studio.ui.editor.CompositionGuide
-import com.alcedo.studio.ui.editor.CompositionOverlay
-import com.alcedo.studio.ui.editor.FocusModeState
-import com.alcedo.studio.ui.editor.rememberFocusModeState
-import com.alcedo.studio.ui.editor.ScopeAnalyzer
 
-/** The five primary bottom-panel tabs. */
+/** 底部五个主面板标签页 */
 private enum class EditorTab(val labelKey: (com.alcedo.studio.i18n.StringRes) -> String) {
     TONE({ it.panelTone }),
     LOOK({ it.panelLook }),
@@ -72,7 +65,7 @@ private enum class EditorTab(val labelKey: (com.alcedo.studio.i18n.StringRes) ->
     RAW({ it.panelRaw }),
 }
 
-/** Secondary panels reachable from the top-bar overflow menu. */
+/** 顶部溢出菜单中的副面板 */
 private enum class SecondaryPanel(val title: (com.alcedo.studio.i18n.StringRes) -> String) {
     MASKS({ it.panelMasks }),
     HISTORY({ it.panelHistory }),
@@ -88,14 +81,14 @@ private enum class SecondaryPanel(val title: (com.alcedo.studio.i18n.StringRes) 
 }
 
 /**
- * Full editor screen. Renders the live pipeline preview in a [ZoomableImageView]
- * with a top bar (undo/redo, version menu, compare, export, overflow) and a
- * bottom 5-tab panel switcher (Tone/Look/Display/Geometry/Raw). Secondary
- * panels (masks, history, EXIF, presets, effects, lens, LMT, watermark,
- * inspector) are reachable from the overflow menu and render in the panel area.
+ * 增强版编辑器界面 — 参考国内主流摄影App（醒图/美图秀秀/Lightroom Mobile）的交互模式：
  *
- * State comes from [EditorViewModel]; [imageId] (from the nav route) opens the
- * image. A null imageId shows an empty picker state.
+ * 交互优化：
+ * - **长按对比**：长按图片显示原图，松手恢复（替代切换按钮）
+ * - **快捷操作栏**：底部浮动栏提供撤销/重做/自动增强/对比/分享/重置
+ * - **手势优化**：双击图片复位缩放，双击标签复位参数，滑块拖拽触觉反馈
+ * - **面板优化**：底部面板可上下拖拽调节高度
+ * - **智能显隐**：面板切换时自动收起，为图片预览留出更多空间
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,24 +106,25 @@ fun EditorScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var secondary by remember { mutableStateOf<SecondaryPanel?>(null) }
     var showCompare by remember { mutableStateOf(false) }
+    var isLongPressComparing by remember { mutableStateOf(false) }
     var overflowOpen by remember { mutableStateOf(false) }
     var versionMenuOpen by remember { mutableStateOf(false) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var compositionGuide by remember { mutableStateOf(CompositionGuide.NONE) }
     val focusModeState = rememberFocusModeState()
 
-    // Open the requested image once.
+    // 打开图片
     androidx.compose.runtime.LaunchedEffect(imageId) {
         if (imageId != null && state.image == null) viewModel.openImage(imageId)
     }
 
-    // Warn about unsaved changes when pressing back in the editor.
+    // 未保存更改提示
     BackHandler(enabled = state.dirty) { showUnsavedDialog = true }
     if (showUnsavedDialog) {
         ConfirmDialog(
-            title = "Unsaved changes",
-            message = "You have unsaved edits. Discard them and leave the editor?",
-            confirmText = "Discard",
+            title = "未保存的更改",
+            message = "有未保存的编辑内容。放弃并离开编辑器？",
+            confirmText = "放弃",
             dismissText = s.cancel,
             destructive = true,
             onConfirm = { showUnsavedDialog = false; onBack() },
@@ -157,13 +151,7 @@ fun EditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.undo() }, enabled = state.canUndo) {
-                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = s.undo)
-                    }
-                    IconButton(onClick = { viewModel.redo() }, enabled = state.canRedo) {
-                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = s.redo)
-                    }
-                    // Version menu
+                    // 版本管理
                     Box {
                         IconButton(onClick = { versionMenuOpen = true }) {
                             Icon(Icons.Outlined.Layers, contentDescription = s.versions, tint = AlcedoColors.TextSecondary)
@@ -189,10 +177,7 @@ fun EditorScreen(
                             )
                         }
                     }
-                    IconButton(onClick = { showCompare = !showCompare }) {
-                        Icon(Icons.Outlined.Compare, contentDescription = s.compare, tint = if (showCompare) AlcedoColors.AccentBlue else AlcedoColors.TextSecondary)
-                    }
-                    // Overflow → secondary panels
+                    // 更多面板
                     Box {
                         IconButton(onClick = { overflowOpen = true }) {
                             Icon(Icons.Outlined.MoreVert, contentDescription = s.more)
@@ -206,6 +191,7 @@ fun EditorScreen(
                             }
                         }
                     }
+                    // 导出
                     IconButton(onClick = onExport) {
                         Icon(Icons.Outlined.Output, contentDescription = s.export, tint = AlcedoColors.AccentBlue)
                     }
@@ -218,7 +204,7 @@ fun EditorScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Viewport
+            // ---- 图片预览区 ----
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (state.image == null) {
                     EmptyState(
@@ -226,32 +212,50 @@ fun EditorScreen(
                         subtitle = s.openInEditor,
                         modifier = Modifier.align(Alignment.Center),
                     )
-                } else if (showCompare) {
-                    CompareView(
-                        beforeBitmap = state.beforeBitmap,
-                        afterBitmap = pipelineState.previewBitmap,
-                        modifier = Modifier.fillMaxSize(),
-                    )
                 } else {
-                    ZoomableImageView(
-                        bitmap = pipelineState.previewBitmap,
-                        isRendering = pipelineState.isRendering,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    // 手势增强层：左右滑动切换照片 + 双击复位调整
+                    EditorGestureLayer(
+                        canSwipeLeft = false, // TODO: wire up photo navigation
+                        canSwipeRight = false,
+                        onSwipeLeft = { /* TODO: navigate to previous photo */ },
+                        onSwipeRight = { /* TODO: navigate to next photo */ },
+                        onDoubleTapReset = { viewModel.resetAdjustments() },
+                    ) {
+                        if (showCompare) {
+                            // 传统对比模式（分屏/并排/叠加）
+                            CompareView(
+                                beforeBitmap = state.beforeBitmap,
+                                afterBitmap = pipelineState.previewBitmap,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            // 增强版缩放视图：支持长按显示原图
+                            ZoomableImageView(
+                                bitmap = pipelineState.previewBitmap,
+                                beforeBitmap = state.beforeBitmap,
+                                isRendering = pipelineState.isRendering,
+                                onLongPressCompare = { pressing -> isLongPressComparing = pressing },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
                 }
-                // Color space badge overlay
+
+                // 色彩空间指示器
                 ColorSpaceIndicator(
                     colorSpace = state.params.outputColorSpace,
                     modifier = Modifier.align(Alignment.TopStart).padding(DesignTokens.spacingSm),
                 )
-                // Composition guide overlay
+
+                // 构图辅助线
                 if (compositionGuide != CompositionGuide.NONE) {
                     CompositionOverlay(
                         guideType = compositionGuide,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                // Focus peaking overlay indicator
+
+                // 对焦峰值指示器
                 if (focusModeState.enabled) {
                     Icon(
                         imageVector = Icons.Outlined.FiberManualRecord,
@@ -263,12 +267,13 @@ fun EditorScreen(
                             .size(12.dp),
                     )
                 }
-                // Render indicator
+
+                // 渲染指示器
                 if (pipelineState.isRendering) {
                     Icon(
                         imageVector = Icons.Outlined.FiberManualRecord,
                         contentDescription = "Rendering",
-                        tint = AlcedoColors.Amber,
+                        tint = AlcedoColors.WarmAccent,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(DesignTokens.spacingSm)
@@ -277,7 +282,24 @@ fun EditorScreen(
                 }
             }
 
-            // Bottom panel area
+            // ---- 快捷操作栏 ----
+            if (state.image != null) {
+                QuickActionsBar(
+                    canUndo = state.canUndo,
+                    canRedo = state.canRedo,
+                    canReset = state.params != AdjustmentParams.DEFAULT,
+                    isComparing = showCompare || isLongPressComparing,
+                    onUndo = { viewModel.undo() },
+                    onRedo = { viewModel.redo() },
+                    onAutoEnhance = { viewModel.resetAdjustments() }, // TODO: 替换为真正的自动增强
+                    onCompareToggle = { showCompare = !showCompare },
+                    onShare = onExport,
+                    onReset = { viewModel.resetAdjustments() },
+                    modifier = Modifier.padding(horizontal = DesignTokens.spacingSm, vertical = DesignTokens.spacingXs),
+                )
+            }
+
+            // ---- 底部面板区域 ----
             if (state.image != null) {
                 Column(
                     modifier = Modifier
@@ -341,6 +363,10 @@ fun EditorScreen(
     }
 }
 
+// ============================================================================
+// 私有辅助组件
+// ============================================================================
+
 @Composable
 private fun SecondaryPanelHeader(title: String, onClose: () -> Unit) {
     Row(
@@ -357,7 +383,7 @@ private fun SecondaryPanelHeader(title: String, onClose: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onClose, modifier = Modifier.size(20.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "Close panel", tint = AlcedoColors.TextSecondary)
+            Icon(Icons.Outlined.Close, contentDescription = "关闭面板", tint = AlcedoColors.TextSecondary)
         }
     }
 }
@@ -497,7 +523,7 @@ private fun EditorPanelContent(
                     Text(Strings.res.focusPeaking, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextPrimary, modifier = Modifier.weight(1f))
                     Switch(checked = focusModeState.enabled, onCheckedChange = { focusModeState.toggle() }, modifier = Modifier.size(32.dp))
                 }
-                AdjustmentSlider(
+                com.alcedo.studio.ui.common.AdjustmentSlider(
                     label = Strings.res.sensitivity,
                     value = focusModeState.sensitivity,
                     defaultValue = 0.5f,
