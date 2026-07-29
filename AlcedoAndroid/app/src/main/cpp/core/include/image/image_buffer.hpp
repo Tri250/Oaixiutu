@@ -13,10 +13,9 @@
 #include <vector>
 
 #include "image/gpu_backend.hpp"
+#include "image/vulkan_image.hpp"
 
 namespace alcedo {
-
-class VulkanImage;  // forward
 
 // A packed 3-channel (RGB) float pixel used by point operators.
 struct alignas(16) Pixel {
