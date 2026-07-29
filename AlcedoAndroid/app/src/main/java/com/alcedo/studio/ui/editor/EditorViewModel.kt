@@ -576,7 +576,7 @@ class EditorViewModel @Inject constructor(
         if (current.rawDemosaic != baseline.rawDemosaic) overrides["rawDemosaic"] = current.rawDemosaic
         if (current.rawBlackLevel != baseline.rawBlackLevel) overrides["rawBlackLevel"] = current.rawBlackLevel.toString()
         if (current.rawWhitePoint != baseline.rawWhitePoint) overrides["rawWhitePoint"] = current.rawWhitePoint.toString()
-        if (current.lutPath != baseline.lutPath) overrides["lutPath"] = current.lutPath
+        if (current.lutPath != baseline.lutPath) overrides["lutPath"] = current.lutPath.orEmpty()
         return AdjustmentParamsDelta(overrides)
     }
 

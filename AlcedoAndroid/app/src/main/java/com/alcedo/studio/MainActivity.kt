@@ -79,10 +79,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Handle external image intents when the activity is already running
-        intent?.let { handleImageIntent(it) }
+        handleImageIntent(intent)
     }
 
     /**
