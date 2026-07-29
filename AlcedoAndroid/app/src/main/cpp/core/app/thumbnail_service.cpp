@@ -45,7 +45,7 @@ void ThumbnailService::GenerateThumbnail(const std::shared_ptr<Image>& image, ui
       }
     }
   }
-  image->GetThumbnailBuffer() = FloatMat(std::move(thumb));
+  image->GetThumbnailBuffer().GetCPUData() = std::move(thumb);
   image->has_thumbnail_.store(true);
   image->thumb_state_.store(ThumbState::READY);
 }
