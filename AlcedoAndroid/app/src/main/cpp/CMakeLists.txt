@@ -239,6 +239,7 @@ target_include_directories(alcedo_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core/include
     ${CMAKE_CURRENT_SOURCE_DIR}/vulkan
     ${CMAKE_CURRENT_SOURCE_DIR}/jni
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 target_link_libraries(alcedo_native

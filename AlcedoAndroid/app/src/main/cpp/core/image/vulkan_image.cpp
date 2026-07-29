@@ -25,8 +25,10 @@ VulkanImage& VulkanImage::operator=(VulkanImage&& other) noexcept {
     height_         = other.height_;
     channels_       = other.channels_;
     other.ctx_ = nullptr;
-    other.device_buffer_ = other.device_memory_ = VK_NULL_HANDLE;
-    other.staging_buffer_ = other.staging_memory_ = VK_NULL_HANDLE;
+    other.device_buffer_  = VK_NULL_HANDLE;
+    other.device_memory_  = VK_NULL_HANDLE;
+    other.staging_buffer_ = VK_NULL_HANDLE;
+    other.staging_memory_ = VK_NULL_HANDLE;
     other.width_ = other.height_ = other.channels_ = 0;
   }
   return *this;
@@ -85,7 +87,10 @@ bool VulkanImage::Create(VulkanContext* ctx, int width, int height, int channels
 void VulkanImage::Destroy() {
   if (!ctx_ || !ctx_->Valid()) {
     ctx_ = nullptr;
-    device_buffer_ = device_memory_ = staging_buffer_ = staging_memory_ = VK_NULL_HANDLE;
+    device_buffer_  = VK_NULL_HANDLE;
+    device_memory_  = VK_NULL_HANDLE;
+    staging_buffer_ = VK_NULL_HANDLE;
+    staging_memory_ = VK_NULL_HANDLE;
     width_ = height_ = channels_ = 0;
     return;
   }

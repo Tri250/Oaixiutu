@@ -59,10 +59,11 @@ class ClipTokenizer @Inject constructor() {
             if (word.isBlank()) continue
             // Fast path: the whole word is a single CLIP token (with or
             // without the CLIP "</w>" word-end marker).
-            lookupWord(word)?.let { id ->
-                tokens.add(id)
+            val wordId = lookupWord(word)
+            if (wordId != null) {
+                tokens.add(wordId)
                 if (tokens.size >= maxLen - 1) break
-                return@for
+                continue
             }
             val subwords = greedySplit(word)
             for (idx in subwords.indices) {
