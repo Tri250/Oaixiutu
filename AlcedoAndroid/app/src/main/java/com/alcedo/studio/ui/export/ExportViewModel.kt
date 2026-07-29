@@ -40,8 +40,21 @@ class ExportViewModel @Inject constructor(
         val totalCount: Int = 0,
         val lastOutputPath: String? = null,
         val results: List<ExportResult> = emptyList(),
+        val bitDepth: Int = 8,
+        val metaMode: MetadataMode = MetadataMode.KEEP_ALL,
+        val maintainAspect: Boolean = true,
+        val resizeWidth: String = "",
+        val resizeHeight: String = "",
+        val showWatermark: Boolean = false,
+        val iccProfile: String = "sRGB IEC61966-2.1",
         val error: String? = null,
     )
+
+    enum class MetadataMode(val label: String) {
+        KEEP_ALL("Keep All"),
+        STRIP("Strip All"),
+        COPYRIGHT_ONLY("Copyright Only"),
+    }
 
     data class ExportResult(
         val imageId: String,
@@ -73,6 +86,34 @@ class ExportViewModel @Inject constructor(
 
     fun setColorSpace(colorSpace: String) {
         _uiState.update { it.copy(config = it.config.copy(colorSpace = colorSpace)) }
+    }
+
+    fun setIccProfile(profile: String) {
+        _uiState.update { it.copy(iccProfile = profile) }
+    }
+
+    fun setBitDepth(depth: Int) {
+        _uiState.update { it.copy(bitDepth = depth) }
+    }
+
+    fun setMetaMode(mode: MetadataMode) {
+        _uiState.update { it.copy(metaMode = mode) }
+    }
+
+    fun setMaintainAspect(maintain: Boolean) {
+        _uiState.update { it.copy(maintainAspect = maintain) }
+    }
+
+    fun setResizeWidth(width: String) {
+        _uiState.update { it.copy(resizeWidth = width.filter { c -> c.isDigit() }) }
+    }
+
+    fun setResizeHeight(height: String) {
+        _uiState.update { it.copy(resizeHeight = height.filter { c -> c.isDigit() }) }
+    }
+
+    fun setShowWatermark(show: Boolean) {
+        _uiState.update { it.copy(showWatermark = show, config = it.config.copy(includeWatermark = show)) }
     }
 
     fun setIncludeMetadata(include: Boolean) {

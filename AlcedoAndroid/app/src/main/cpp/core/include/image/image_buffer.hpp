@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <functional>
@@ -169,9 +170,11 @@ class ImageBuffer {
   void ReleaseGPUData();
   void ReleaseBuffer();
 
-  bool cpu_data_valid_ = false;
-  bool gpu_data_valid_ = false;
-  bool buffer_valid_   = false;
+  // Accessed from multiple threads (decode workers, render thread, pipeline);
+  // kept atomic so readers observe a consistent validity state without locking.
+  std::atomic<bool> cpu_data_valid_{false};
+  std::atomic<bool> gpu_data_valid_{false};
+  bool              buffer_valid_   = false;
 
  private:
   FloatMat                      cpu_data_;

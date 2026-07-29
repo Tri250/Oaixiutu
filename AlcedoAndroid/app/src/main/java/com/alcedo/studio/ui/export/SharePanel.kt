@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Share
+import android.widget.Toast
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -65,15 +66,24 @@ fun SharePanel(
             ) {
                 // Copy path to clipboard
                 OutlinedButton(onClick = {
-                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(outputPath))
+                    runCatching {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(outputPath))
+                    }.onFailure {
+                        Toast.makeText(context, s.couldNotCopyPath, Toast.LENGTH_SHORT).show()
+                    }
                 }) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = AlcedoColors.AccentBlue)
-                    Text("Copy Path", color = AlcedoColors.AccentBlue)
+                    Text(s.copyPath, color = AlcedoColors.AccentBlue)
                 }
                 // Save to folder
                 OutlinedButton(onClick = {
                     scope.launch {
-                        withContext(Dispatchers.IO) { openInFiles(context, file) }
+                        withContext(Dispatchers.IO) {
+                            runCatching { openInFiles(context, file) }
+                                .onFailure {
+                                    Toast.makeText(context, s.noAppToOpenFile, Toast.LENGTH_SHORT).show()
+                                }
+                        }
                     }
                 }) {
                     Icon(Icons.Outlined.Folder, contentDescription = null, tint = AlcedoColors.AccentBlue)
@@ -84,7 +94,12 @@ fun SharePanel(
         dismissButton = {
             TextButton(onClick = {
                 scope.launch {
-                    withContext(Dispatchers.IO) { shareFile(context, file) }
+                    withContext(Dispatchers.IO) {
+                        runCatching { shareFile(context, file) }
+                            .onFailure {
+                                Toast.makeText(context, s.couldNotShareFile, Toast.LENGTH_SHORT).show()
+                            }
+                    }
                 }
             }) {
                 Icon(Icons.Outlined.Share, contentDescription = null, tint = AlcedoColors.AccentBlue)
@@ -95,6 +110,10 @@ fun SharePanel(
 }
 
 private fun shareFile(context: android.content.Context, file: File) {
+    if (!file.exists()) {
+        Toast.makeText(context, Strings.res.fileNoLongerExists, Toast.LENGTH_SHORT).show()
+        return
+    }
     val uri = FileProvider.getUriForFile(
         context,
         "${context.packageName}.fileprovider",
@@ -105,10 +124,14 @@ private fun shareFile(context: android.content.Context, file: File) {
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(intent, "Share"))
+    context.startActivity(Intent.createChooser(intent, Strings.res.share))
 }
 
 private fun openInFiles(context: android.content.Context, file: File) {
+    if (!file.exists()) {
+        Toast.makeText(context, Strings.res.fileNoLongerExists, Toast.LENGTH_SHORT).show()
+        return
+    }
     val uri = FileProvider.getUriForFile(
         context,
         "${context.packageName}.fileprovider",
@@ -118,5 +141,5 @@ private fun openInFiles(context: android.content.Context, file: File) {
         setDataAndType(uri, "image/*")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    runCatching { context.startActivity(intent) }
+    context.startActivity(intent)
 }

@@ -26,6 +26,10 @@ class ThumbnailDecoder : public DataDecoder {
 
  private:
   int max_long_edge_;
+  // Shared decode pipeline used by both path and buffer overloads: extracts
+  // metadata + an embedded EXIF JPEG thumbnail (or decodes the buffer) into a
+  // float RGB ImageBuffer scaled to max_long_edge_.
+  auto DecodeFromBytes(std::vector<uint8_t> bytes, image_id_t id) -> DecodeResult;
 };
 
 }  // namespace alcedo

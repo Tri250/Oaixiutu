@@ -33,11 +33,12 @@ class BackgroundTaskService @Inject constructor() {
         cancellable: Boolean = true,
     ): String {
         val id = IdGenerator.newId("task")
+        val completedItems = 0
         val info = BackgroundTaskInfo(
             id = id, type = type, title = title,
-            progress = if (totalItems > 0) 0f else 0f,
+            progress = if (totalItems > 0) completedItems.toFloat() / totalItems else 0f,
             indeterminate = totalItems == 0,
-            totalItems = totalItems, completedItems = 0,
+            totalItems = totalItems, completedItems = completedItems,
             cancellable = cancellable,
         )
         active[id] = info
@@ -77,15 +78,26 @@ class BackgroundTaskService @Inject constructor() {
         }
     }
 
-    /** Request cancellation of [taskId]. */
+    /**
+     * Request cancellation of [taskId]. Sets a volatile flag (the [cancelled]
+     * set) that running tasks must poll via [isCancelled] to abort early.
+     * The task is marked as cancelled and evicted from the active set.
+     */
     fun cancel(taskId: String) {
+        // Set the cancellation flag first so any task polling isCancelled() sees it.
         cancelled.add(taskId)
-        val current = active[taskId] ?: return
-        active[taskId] = current.copy(error = "cancelled")
+        val current = active[taskId]
+        if (current != null) {
+            active[taskId] = current.copy(error = "cancelled")
+            publish()
+        }
+        // Evict the cancelled task so it no longer counts as active.
+        active.remove(taskId)
+        startTimes.remove(taskId)
         publish()
     }
 
-    /** True when [taskId] has been cancelled via [cancel]. */
+    /** True when [taskId] has been cancelled via [cancel]. Running tasks should poll this. */
     fun isCancelled(taskId: String): Boolean = cancelled.contains(taskId)
 
     /** Remove a finished task from the list. */

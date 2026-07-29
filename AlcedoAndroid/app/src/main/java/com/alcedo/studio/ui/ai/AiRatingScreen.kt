@@ -14,10 +14,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -60,12 +62,6 @@ import com.alcedo.studio.ui.common.ErrorDialog
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
-enum class LlmProvider(val displayName: String) {
-    OPENAI("OpenAI"),
-    ANTHROPIC("Anthropic"),
-    VOLCENGINE("Volcengine"),
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiRatingScreen(
@@ -76,10 +72,9 @@ fun AiRatingScreen(
 ) {
     val s = Strings.res
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedProvider by remember { mutableStateOf(LlmProvider.OPENAI) }
-    var strictness by remember { mutableStateOf(0.5f) }
-    var providerExpanded by remember { mutableStateOf(false) }
     var showApplyDialog by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -93,8 +88,8 @@ fun AiRatingScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { viewModel.loadTopRated() }) {
-                        Text("↻", color = AlcedoColors.AccentBlue)
+                    IconButton(onClick = { viewModel.loadTopRated() }) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = s.back, tint = AlcedoColors.AccentBlue)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -118,7 +113,7 @@ fun AiRatingScreen(
                 ) {
                     // LLM Provider selection
                     Text(
-                        text = "LLM Provider",
+                        text = s.llmProvider,
                         style = MaterialTheme.typography.labelMedium,
                         color = AlcedoColors.TextTertiary,
                     )
@@ -127,8 +122,8 @@ fun AiRatingScreen(
                     ) {
                         LlmProvider.entries.forEach { provider ->
                             FilterChip(
-                                selected = selectedProvider == provider,
-                                onClick = { selectedProvider = provider },
+                                selected = state.selectedProvider == provider,
+                                onClick = { viewModel.setSelectedProvider(provider) },
                                 label = {
                                     Text(
                                         provider.displayName,
@@ -146,7 +141,7 @@ fun AiRatingScreen(
                         horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
                     ) {
                         Text(
-                            text = "Generous",
+                            text = s.strictnessGenerous,
                             style = MaterialTheme.typography.labelSmall,
                             color = AlcedoColors.TextTertiary,
                             modifier = Modifier.weight(1f),
@@ -156,14 +151,14 @@ fun AiRatingScreen(
                             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXxs),
                         ) {
                             Text(
-                                text = "Strictness: ${"%.0f%%".format(strictness * 100)}",
+                                text = "${s.strictness}: ${"%.0f%%".format(state.strictness * 100)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AlcedoColors.TextPrimary,
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
                             )
                             Slider(
-                                value = strictness,
-                                onValueChange = { strictness = it },
+                                value = state.strictness,
+                                onValueChange = viewModel::setStrictness,
                                 colors = SliderDefaults.colors(
                                     thumbColor = AlcedoColors.AccentBlue,
                                     activeTrackColor = AlcedoColors.AccentBlue,
@@ -171,7 +166,7 @@ fun AiRatingScreen(
                             )
                         }
                         Text(
-                            text = "Critical",
+                            text = s.strictnessCritical,
                             style = MaterialTheme.typography.labelSmall,
                             color = AlcedoColors.TextTertiary,
                             modifier = Modifier.weight(1f),
@@ -180,12 +175,12 @@ fun AiRatingScreen(
 
                     // Analyze button
                     Button(
-                        onClick = { /* trigger batch analysis */ },
+                        onClick = { viewModel.analyzeSelected() },
                         enabled = !state.isCulling,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text("Analyze Images", modifier = Modifier.padding(start = DesignTokens.spacingSm))
+                        Text(s.analyzeImages, modifier = Modifier.padding(start = DesignTokens.spacingSm))
                     }
                 }
             }
@@ -198,7 +193,7 @@ fun AiRatingScreen(
                         .padding(horizontal = DesignTokens.spacingLg, vertical = DesignTokens.spacingSm),
                 ) {
                     Text(
-                        text = "Analyzing ${state.culledCount}/${state.cullTotal} images",
+                        text = s.analyzingImages.format(state.culledCount, state.cullTotal),
                         style = MaterialTheme.typography.bodyMedium,
                         color = AlcedoColors.TextSecondary,
                     )
@@ -214,7 +209,7 @@ fun AiRatingScreen(
             if (state.topRated.isEmpty() && !state.isCulling) {
                 EmptyState(
                     title = s.aiRating,
-                    subtitle = "Select images and analyze to get AI ratings",
+                    subtitle = s.analyzeHint,
                     icon = Icons.Outlined.AutoAwesome,
                     modifier = Modifier.weight(1f),
                 )
@@ -238,13 +233,22 @@ fun AiRatingScreen(
             if (state.topRated.isNotEmpty() && !state.isCulling) {
                 OutlinedButton(
                     onClick = { showApplyDialog = true },
+                    enabled = !state.isApplyingRatings,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(DesignTokens.spacingLg),
                 ) {
-                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = AlcedoColors.AccentBlue)
+                    if (state.isApplyingRatings) {
+                        CircularProgressIndicator(
+                            color = AlcedoColors.AccentBlue,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    } else {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = AlcedoColors.AccentBlue)
+                    }
                     Text(
-                        text = "Apply Ratings to EXIF",
+                        text = if (state.isApplyingRatings) s.applying else s.applyRatingsToExif,
                         modifier = Modifier.padding(start = DesignTokens.spacingSm),
                         color = AlcedoColors.AccentBlue,
                     )
@@ -265,16 +269,19 @@ fun AiRatingScreen(
     if (showApplyDialog) {
         AlertDialog(
             onDismissRequest = { showApplyDialog = false },
-            title = { Text("Apply Ratings to EXIF") },
+            title = { Text(s.applyRatingsToExif) },
             text = {
                 Text(
-                    "This will write the AI-suggested star ratings to the EXIF metadata of ${state.topRated.size} images. This action modifies original metadata.",
+                    s.applyRatingsConfirm.format(state.topRated.size),
                     style = MaterialTheme.typography.bodyMedium,
                     color = AlcedoColors.TextSecondary,
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showApplyDialog = false /* apply */ }) {
+                TextButton(onClick = {
+                    showApplyDialog = false
+                    viewModel.applyRatingsToExif()
+                }) {
                     Text(s.confirm, color = AlcedoColors.AccentBlue)
                 }
             },
@@ -288,6 +295,19 @@ fun AiRatingScreen(
 
     state.error?.let { err ->
         ErrorDialog(title = s.error, message = err, onDismiss = viewModel::dismissError)
+    }
+
+    state.message?.let { msg ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissMessage,
+            title = { Text(s.done) },
+            text = { Text(msg, style = MaterialTheme.typography.bodyMedium, color = AlcedoColors.TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissMessage) {
+                    Text(s.close, color = AlcedoColors.AccentBlue)
+                }
+            },
+        )
     }
 }
 
@@ -336,9 +356,9 @@ private fun RatingRow(
                 // Quality flags row
                 if (rating != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
-                        QualityFlag(label = "Focus", score = rating.sharpnessScore)
-                        QualityFlag(label = "Motion", score = 1f - (rating.sharpnessScore * 0.3f))
-                        QualityFlag(label = "Comp.", score = rating.compositionScore)
+                        QualityFlag(label = s.focus, score = rating.sharpnessScore)
+                        QualityFlag(label = s.motion, score = 1f - (rating.sharpnessScore * 0.3f))
+                        QualityFlag(label = s.compShort, score = rating.compositionScore)
                     }
                 }
                 if (rating != null) {
@@ -352,7 +372,7 @@ private fun RatingRow(
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                TextButton(onClick = onClick) { Text("Detail", color = AlcedoColors.TextSecondary) }
+                TextButton(onClick = onClick) { Text(s.detail, color = AlcedoColors.TextSecondary) }
                 TextButton(onClick = onOpen) { Text(s.edit, color = AlcedoColors.AccentBlue) }
             }
         }
@@ -388,7 +408,7 @@ private fun RatingDetailDialog(rating: AiRating, onDismiss: () -> Unit) {
     val s = Strings.res
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rating Details") },
+        title = { Text(s.ratingDetails) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
                 ScoreRow(s.overallScore, rating.overallScore)
@@ -429,9 +449,9 @@ private fun RatingDetailDialog(rating: AiRating, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(top = DesignTokens.spacingSm),
                     horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
                 ) {
-                    QualityFlag(label = "Focus", score = rating.sharpnessScore)
-                    QualityFlag(label = "Motion Blur", score = 1f - rating.sharpnessScore * 0.5f)
-                    QualityFlag(label = "Composition", score = rating.compositionScore)
+                    QualityFlag(label = s.focus, score = rating.sharpnessScore)
+                    QualityFlag(label = s.motionBlur, score = 1f - rating.sharpnessScore * 0.5f)
+                    QualityFlag(label = s.compositionScore, score = rating.compositionScore)
                 }
             }
         },

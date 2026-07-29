@@ -28,6 +28,15 @@ JniAppContext* JniAppContext::Get() {
   return g_ctx;
 }
 
+JniAppContext* JniAppContext::GetOrCreate() {
+  // Single atomic get-or-create under one lock: eliminates the TOCTOU window
+  // present in the previous Get()->check-null->Create()->Get() pattern, where
+  // two threads could both observe a null context and both proceed to create.
+  std::lock_guard<std::mutex> lk(g_ctx_mtx);
+  if (!g_ctx) g_ctx = new JniAppContext();
+  return g_ctx;
+}
+
 void JniAppContext::Create() {
   std::lock_guard<std::mutex> lk(g_ctx_mtx);
   if (!g_ctx) g_ctx = new JniAppContext();
@@ -70,10 +79,12 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* /*vm*/, void* /*reserved*/) {
 
 JNIEXPORT jboolean JNICALL Java_com_alcedo_studio_ndk_Bridge_nativeInit(
     JNIEnv* env, jobject /*thiz*/, jstring cache_dir_js) {
-  auto* ctx = alcedo::JniAppContext::Get();
+  // Single atomic get-or-create: avoids the TOCTOU race where two threads
+  // could both pass the null check on Get() and both call Create().
+  auto* ctx = alcedo::JniAppContext::GetOrCreate();
   if (!ctx) {
-    alcedo::JniAppContext::Create();
-    ctx = alcedo::JniAppContext::Get();
+    ALOGE("nativeInit: failed to create JniAppContext");
+    return JNI_FALSE;
   }
   std::lock_guard<std::mutex> lk(ctx->mtx);
 
@@ -87,7 +98,7 @@ JNIEXPORT jboolean JNICALL Java_com_alcedo_studio_ndk_Bridge_nativeInit(
 
   ctx->cache_dir = alcedo::JStr(env, cache_dir_js);
   ctx->image_pool = std::make_shared<alcedo::ImagePoolManager>();
-  ctx->decoder = std::make_unique<alcedo::DecoderScheduler>(2);
+  ctx->decoder = std::make_shared<alcedo::DecoderScheduler>(2);
   ctx->pipeline_svc = std::make_unique<alcedo::PipelineAppService>();
   ctx->exporter = std::make_unique<alcedo::ExportService>();
   ctx->thumb_cache = std::make_unique<alcedo::ThumbnailDiskCacheService>(ctx->cache_dir / "thumbs");

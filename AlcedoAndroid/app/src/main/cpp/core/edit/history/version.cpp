@@ -220,6 +220,7 @@ auto Version::ToJSON() const -> nlohmann::json {
 }
 
 void Version::FromJSON(const nlohmann::json& j) {
+  try {  // Wrap all j.at() calls; on failure reset to a default/empty state.
   if (!j.is_object() || (!j.contains("version_id_low") && !j.contains("version_id")) ||
       !j.contains("added_time") || !j.contains("last_modified_time") ||
       !j.contains("bound_image")) {
@@ -264,6 +265,22 @@ void Version::FromJSON(const nlohmann::json& j) {
     version_hash_ = Hash128::FromString(j.at("version_hash").get<std::string>());
   } else {
     ComputeVersionHash();
+  }
+  } catch (const std::exception& e) {
+    ALOGW("Version::FromJSON: JSON parse failure: %s", e.what());
+    // Reset to a default/empty state so callers don't observe a half-parsed
+    // version with inconsistent cursor / transactions.
+    version_id_          = version_id_t{};
+    added_time_          = 0;
+    last_modified_time_ = 0;
+    creation_nonce_     = 0;
+    bound_image_        = 0;
+    materialized_params_ = std::nullopt;
+    last_transaction_   = std::nullopt;
+    display_name_.clear();
+    transactions_.clear();
+    cursor_             = 0;
+    version_hash_       = Hash128{};
   }
 }
 
@@ -367,6 +384,7 @@ auto WorkingVersion::ToJSON() const -> nlohmann::json {
 }
 
 void WorkingVersion::FromJSON(const nlohmann::json& j) {
+  try {  // Wrap all j.at() calls; on failure reset to a default/empty state.
   if (!j.is_object() || !j.contains("version_id") || !j.contains("bound_image") ||
       !j.contains("cursor") || !j.contains("transactions")) {
     throw std::runtime_error("WorkingVersion: Invalid JSON format");
@@ -385,6 +403,17 @@ void WorkingVersion::FromJSON(const nlohmann::json& j) {
     transactions_.push_back(std::move(tx));
   }
   cursor_ = std::min(cursor_, transactions_.size());
+  } catch (const std::exception& e) {
+    ALOGW("WorkingVersion::FromJSON: JSON parse failure: %s", e.what());
+    // Reset to a default/empty state so callers don't observe a half-parsed
+    // working version with a dangling cursor.
+    version_id_           = version_id_t{};
+    bound_image_          = 0;
+    transactions_.clear();
+    cursor_               = 0;
+    head_pipeline_params_ = std::nullopt;
+    tx_id_generator_.Reset(tx_id_t{0});
+  }
 }
 
 }  // namespace alcedo

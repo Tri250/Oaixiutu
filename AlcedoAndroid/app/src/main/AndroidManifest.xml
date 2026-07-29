@@ -60,6 +60,18 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.settings.ManageSpaceActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density|smallestScreenSize|navigation"
+            android:theme="@style/Theme.AlcedoStudio">
+            <intent-filter>
+                <action android:name="android.intent.action.MANAGE_STORAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".crash.CrashReportService"
             android:exported="false"

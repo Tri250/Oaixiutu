@@ -41,8 +41,9 @@ JNIEXPORT jstring JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeExportParams
   auto* ctx = alcedo::JniAppContext::Get();
   if (!ctx || !ctx->pipeline_svc) return env->NewStringUTF("{}");
   std::lock_guard<std::mutex> lk(ctx->mtx);
-  // The PipelineAppService wraps a PipelineExecutor; export its params.
-  auto executor = alcedo::CreatePipelineExecutor();
+  // Use the pipeline service's long-lived executor so exported params reflect
+  // previously imported/set state instead of a fresh throwaway object.
+  auto executor = ctx->pipeline_svc->GetExecutor();
   if (!executor) return env->NewStringUTF("{}");
   return env->NewStringUTF(executor->ExportPipelineParams().dump().c_str());
 }
@@ -51,10 +52,11 @@ JNIEXPORT jstring JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeExportParams
 JNIEXPORT void JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeImportParams(
     JNIEnv* env, jobject /*thiz*/, jint /*image_id*/, jstring param_json_js) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx) return;
+  if (!ctx || !ctx->pipeline_svc) return;
   std::string param_json = alcedo::JStr(env, param_json_js);
   std::lock_guard<std::mutex> lk(ctx->mtx);
-  auto executor = alcedo::CreatePipelineExecutor();
+  // Import into the service's persistent executor so params survive the call.
+  auto executor = ctx->pipeline_svc->GetExecutor();
   if (!executor) return;
   try {
     auto j = nlohmann::json::parse(param_json);
@@ -69,9 +71,9 @@ JNIEXPORT void JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeSetRenderRegion
     JNIEnv* /*env*/, jobject /*thiz*/, jint image_id, jint x, jint y,
     jfloat scale_x, jfloat scale_y, jint ref_w, jint ref_h) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx) return;
+  if (!ctx || !ctx->pipeline_svc) return;
   std::lock_guard<std::mutex> lk(ctx->mtx);
-  auto executor = alcedo::CreatePipelineExecutor();
+  auto executor = ctx->pipeline_svc->GetExecutor();
   if (!executor) return;
   executor->SetBoundFile(static_cast<alcedo::sl_element_id_t>(image_id));
   executor->SetRenderRegion(x, y, scale_x, scale_y, ref_w, ref_h);
@@ -81,9 +83,9 @@ JNIEXPORT void JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeSetRenderRegion
 JNIEXPORT void JNICALL Java_com_alcedo_studio_ndk_Pipeline_nativeSetRenderRes(
     JNIEnv* /*env*/, jobject /*thiz*/, jboolean full_res, jint max_side) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx) return;
+  if (!ctx || !ctx->pipeline_svc) return;
   std::lock_guard<std::mutex> lk(ctx->mtx);
-  auto executor = alcedo::CreatePipelineExecutor();
+  auto executor = ctx->pipeline_svc->GetExecutor();
   if (!executor) return;
   executor->SetRenderRes(full_res == JNI_TRUE, max_side);
 }

@@ -19,20 +19,22 @@ extern "C" {
 JNIEXPORT jboolean JNICALL Java_com_alcedo_studio_ndk_History_nativeUndo(
     JNIEnv* /*env*/, jobject /*thiz*/, jint file_id) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx || !ctx->project) return JNI_FALSE;
+  if (!ctx || !ctx->project || !ctx->pipeline_svc) return JNI_FALSE;
   std::lock_guard<std::mutex> lk(ctx->mtx);
   alcedo::HistoryMgmtService svc(ctx->project->GetSleeveManager());
-  return svc.Undo(static_cast<alcedo::sl_element_id_t>(file_id)) ? JNI_TRUE : JNI_FALSE;
+  return svc.Undo(static_cast<alcedo::sl_element_id_t>(file_id), *ctx->pipeline_svc)
+             ? JNI_TRUE : JNI_FALSE;
 }
 
 // Redo the next edit transaction for a file.
 JNIEXPORT jboolean JNICALL Java_com_alcedo_studio_ndk_History_nativeRedo(
     JNIEnv* /*env*/, jobject /*thiz*/, jint file_id) {
   auto* ctx = alcedo::JniAppContext::Get();
-  if (!ctx || !ctx->project) return JNI_FALSE;
+  if (!ctx || !ctx->project || !ctx->pipeline_svc) return JNI_FALSE;
   std::lock_guard<std::mutex> lk(ctx->mtx);
   alcedo::HistoryMgmtService svc(ctx->project->GetSleeveManager());
-  return svc.Redo(static_cast<alcedo::sl_element_id_t>(file_id)) ? JNI_TRUE : JNI_FALSE;
+  return svc.Redo(static_cast<alcedo::sl_element_id_t>(file_id), *ctx->pipeline_svc)
+             ? JNI_TRUE : JNI_FALSE;
 }
 
 // Get the version count for a file.

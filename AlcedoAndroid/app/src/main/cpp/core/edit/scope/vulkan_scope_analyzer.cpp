@@ -95,11 +95,16 @@ class VulkanScopeAnalyzer final : public IScopeAnalyzer {
 
   void SubmitFrame(const FinalDisplayFrameView& frame, const ScopeRequest& request) override {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (!cpu_fallback_) {
+      // No CPU analyzer available (creation failed); produce empty results so
+      // callers do not dereference a null fallback.
+      output_ = ScopeOutputSet{};
+      return;
+    }
     // Try the Vulkan histogram path; on any failure, delegate entirely to CPU.
     if (frame && frame.image && ctx_ && ctx_->Valid() &&
         TryVulkanHistogram(frame, request)) {
       // Waveform/vectorscope still computed on CPU for now.
-      ScopeOutputSet cpu_out = cpu_fallback_->GetLatestOutput();
       cpu_fallback_->SubmitFrame(frame, request);
       ScopeOutputSet fresh = cpu_fallback_->GetLatestOutput();
       // Merge: keep Vulkan histogram, take CPU waveform/vectorscope.
@@ -120,13 +125,13 @@ class VulkanScopeAnalyzer final : public IScopeAnalyzer {
 
   void ResizeResources(const ScopeRequest& request) override {
     std::lock_guard<std::mutex> lock(mutex_);
-    cpu_fallback_->ResizeResources(request);
+    if (cpu_fallback_) cpu_fallback_->ResizeResources(request);
     EnsureResources(request);
   }
 
   void ReleaseResources() override {
     std::lock_guard<std::mutex> lock(mutex_);
-    cpu_fallback_->ReleaseResources();
+    if (cpu_fallback_) cpu_fallback_->ReleaseResources();
     DestroyProgram();
     output_ = ScopeOutputSet{};
   }

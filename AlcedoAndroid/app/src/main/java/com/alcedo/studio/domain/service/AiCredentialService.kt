@@ -56,7 +56,7 @@ class AiCredentialService @Inject constructor(
 
     /** True when at least one provider is ready to make requests. */
     fun hasActiveCredentials(): Boolean =
-        _state.value.activeProviderId != null && store.hasApiKey(_state.value.activeProviderId!!)
+        _state.value.activeProviderId?.let { store.hasApiKey(it) } ?: false
 
     private fun refreshState(): CredentialState {
         val configured = store.configuredProviders()

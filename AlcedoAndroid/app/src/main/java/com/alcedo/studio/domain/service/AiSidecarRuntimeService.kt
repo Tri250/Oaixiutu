@@ -44,7 +44,26 @@ class AiSidecarRuntimeService @Inject constructor(
     /** True when the model file exists on disk and passes SHA verification. */
     fun isModelPresent(asset: AiModelAsset): Boolean {
         val file = localPathFor(asset)
-        return file.exists() && file.length() == asset.sizeBytes
+        if (!file.exists() || file.length() == 0L) return false
+        // When a SHA-256 is provided, verify the file hash; skip when empty.
+        if (asset.sha256.isNotEmpty()) {
+            val actualSha = sha256(file)
+            if (!actualSha.equals(asset.sha256, ignoreCase = true)) {
+                Log.w(TAG, "SHA mismatch for ${asset.id}: $actualSha != ${asset.sha256}")
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun sha256(file: File): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) md.update(buffer, 0, read)
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     /** Ensure a model is downloaded, then load it into an ONNX session. */

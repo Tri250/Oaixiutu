@@ -70,6 +70,7 @@ class VulkanContext {
   VkQueue                     compute_queue_    = VK_NULL_HANDLE;
   VkCommandPool               command_pool_     = VK_NULL_HANDLE;
   VkDescriptorPool            descriptor_pool_  = VK_NULL_HANDLE;
+  VkDebugUtilsMessengerEXT    debug_messenger_  = VK_NULL_HANDLE;
   bool                        initialized_      = false;
 
   std::mutex                  submit_mtx_;
@@ -81,6 +82,11 @@ class OneShotCompute {
   explicit OneShotCompute(VulkanContext* ctx);
   ~OneShotCompute();
   VkCommandBuffer Cmd() const { return cmd_; }
+  // Submit the recorded command buffer early without destroying the scope. The
+  // destructor becomes a no-op once Submit() has been called, which lets callers
+  // force an ordered submit before reusing resources (e.g. mapping staging
+  // memory) without triggering a double-destruct at end of scope.
+  void Submit();
  private:
   VulkanContext* ctx_;
   VkCommandBuffer cmd_;

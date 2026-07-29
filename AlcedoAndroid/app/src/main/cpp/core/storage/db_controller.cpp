@@ -73,22 +73,26 @@ DBController::~DBController() {
   if (db_) duckdb_close(&db_);
 }
 
-void DBController::RunSchemaInit(duckdb_connection conn) {
+auto DBController::RunSchemaInit(duckdb_connection conn) -> bool {
   duckdb_result result = nullptr;
   auto state = duckdb_query(conn, kSchemaInit, &result);
   if (state != DuckDBSuccess) {
     const char* err = result ? duckdb_result_error(result) : "unknown";
     ALOGE("DBController: schema init failed: %s", err ? err : "unknown");
+    if (result) duckdb_destroy_result(&result);
+    return false;
   }
   if (result) duckdb_destroy_result(&result);
+  return true;
 }
 
 void DBController::InitializeDB() {
-  if (initialized_) return;
+  if (initialized_ || in_error_state_) return;
   std::string path_str = db_path_.string();
   auto state = duckdb_open(path_str.c_str(), &db_);
   if (state != DuckDBSuccess) {
     ALOGE("DBController: duckdb_open failed for %s", path_str.c_str());
+    in_error_state_ = true;
     return;
   }
   // Create a temporary connection for schema init.
@@ -96,19 +100,40 @@ void DBController::InitializeDB() {
   state = duckdb_connect(db_, &conn);
   if (state != DuckDBSuccess || !conn) {
     ALOGE("DBController: duckdb_connect failed");
+    duckdb_close(&db_);
+    db_ = nullptr;
+    in_error_state_ = true;
     return;
   }
+  bool schema_ok = false;
   {
     std::unique_lock<std::recursive_mutex> lk(*db_lock_);
-    RunSchemaInit(conn);
+    schema_ok = RunSchemaInit(conn);
   }
   duckdb_disconnect(&conn);
+  if (!schema_ok) {
+    // Schema init failed: tear down the database handle and mark the controller
+    // as in error state so GetConnectionGuard() refuses to hand out
+    // connections to a half-initialised database instead of silently
+    // proceeding with missing tables.
+    ALOGE("DBController: aborting initialisation due to schema init failure");
+    duckdb_close(&db_);
+    db_ = nullptr;
+    in_error_state_ = true;
+    return;
+  }
   initialized_ = true;
   ALOGI("DBController: initialised db at %s", path_str.c_str());
 }
 
 auto DBController::GetConnectionGuard() -> ConnectionGuard {
+  if (in_error_state_) {
+    // Refuse to hand out connections once the database is in an unrecoverable
+    // error state (e.g. schema init failed).
+    return ConnectionGuard();
+  }
   if (!initialized_) InitializeDB();
+  if (in_error_state_) return ConnectionGuard();
   duckdb_connection conn = nullptr;
   if (db_) duckdb_connect(db_, &conn);
   return ConnectionGuard(conn, db_lock_);

@@ -3,9 +3,9 @@ package com.alcedo.studio.ui.ai
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alcedo.studio.data.model.AiModelAsset
-import com.alcedo.studio.data.model.AiModelKind
 import com.alcedo.studio.domain.service.AiSidecarRuntimeService
 import com.alcedo.studio.domain.service.ModelAssetCatalog
+import com.alcedo.studio.domain.service.ModelDownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +17,13 @@ import javax.inject.Inject
 /**
  * AI model manager ViewModel. Surfaces the model catalogue ([ModelAssetCatalog])
  * with live download/load state from [AiSidecarRuntimeService] and exposes
- * download/delete/set-default actions.
+ * download/delete/set-default actions. Real per-download progress is mirrored
+ * from [ModelDownloadService].
  */
 @HiltViewModel
 class AiModelManagerViewModel @Inject constructor(
     private val sidecarRuntime: AiSidecarRuntimeService,
+    private val modelDownloadService: ModelDownloadService,
 ) : ViewModel() {
 
     data class ModelUiState(
@@ -37,6 +39,8 @@ class AiModelManagerViewModel @Inject constructor(
         val isDownloaded: Boolean,
         val isLoaded: Boolean,
         val isDownloading: Boolean,
+        /** Live download fraction in [0,1] for this model, if downloading. */
+        val downloadFraction: Float = 0f,
     )
 
     private val _uiState = MutableStateFlow(ModelUiState())
@@ -50,18 +54,43 @@ class AiModelManagerViewModel @Inject constructor(
                 refresh(runtime.loadedModelIds, runtime.downloadingModelIds)
             }
         }
+        // Mirror real download progress (bytes read / total) from the download
+        // service so the model cards show an accurate progress bar.
+        viewModelScope.launch {
+            modelDownloadService.progress.collect { p ->
+                if (p == null) {
+                    _uiState.update { it.copy(activeDownloadId = null, downloadProgress = 0f) }
+                    refresh()
+                } else {
+                    val fraction = if (p.totalBytes > 0) {
+                        (p.bytesRead.toFloat() / p.totalBytes).coerceIn(0f, 1f)
+                    } else 0f
+                    _uiState.update {
+                        it.copy(
+                            activeDownloadId = if (p.done) null else p.modelId,
+                            downloadProgress = if (p.done) 0f else fraction,
+                            error = p.error?.let { err -> downloadErrorMessage(err) } ?: it.error,
+                        )
+                    }
+                    refresh()
+                }
+            }
+        }
     }
 
     private fun refresh(
         loaded: Set<String> = sidecarRuntime.state.value.loadedModelIds,
         downloading: Set<String> = sidecarRuntime.state.value.downloadingModelIds,
     ) {
+        val activeId = _uiState.value.activeDownloadId
+        val activeFraction = _uiState.value.downloadProgress
         val entries = ModelAssetCatalog.ALL.map { asset ->
             ModelEntry(
                 asset = asset,
                 isDownloaded = sidecarRuntime.isModelPresent(asset),
                 isLoaded = asset.id in loaded,
                 isDownloading = asset.id in downloading,
+                downloadFraction = if (asset.id == activeId) activeFraction else 0f,
             )
         }
         _uiState.update { it.copy(models = entries) }
@@ -69,23 +98,45 @@ class AiModelManagerViewModel @Inject constructor(
 
     fun download(asset: AiModelAsset) {
         viewModelScope.launch {
-            _uiState.update { it.copy(activeDownloadId = asset.id, error = null) }
+            _uiState.update { it.copy(activeDownloadId = asset.id, downloadProgress = 0f, error = null) }
             runCatching { sidecarRuntime.ensureLoaded(asset) }
-                .onSuccess { _uiState.update { it.copy(activeDownloadId = null) } }
-                .onFailure { e -> _uiState.update { it.copy(activeDownloadId = null, error = e.message) } }
+                .onSuccess { _uiState.update { it.copy(activeDownloadId = null, downloadProgress = 0f) } }
+                .onFailure { e -> _uiState.update { it.copy(activeDownloadId = null, downloadProgress = 0f, error = e.message) } }
+            refresh()
         }
     }
 
     fun delete(asset: AiModelAsset) {
-        val file = sidecarRuntime.localPathFor(asset)
-        if (sidecarRuntime.isModelPresent(asset)) {
-            sidecarRuntime.unload(asset.id)
-            file.delete()
+        viewModelScope.launch {
+            runCatching {
+                if (sidecarRuntime.isModelPresent(asset)) {
+                    sidecarRuntime.unload(asset.id)
+                    sidecarRuntime.localPathFor(asset).delete()
+                }
+            }.onSuccess {
+                // If the deleted model was the default, fall back to the catalogue default.
+                if (_uiState.value.defaultClipId == asset.id) {
+                    _uiState.update { it.copy(defaultClipId = ModelAssetCatalog.CLIP_VIT_BASE_PATCH32.id) }
+                }
+                refresh()
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = e.message ?: "Failed to delete model") }
+            }
         }
-        refresh()
+    }
+
+    /** Mark [asset] as the default CLIP model for semantic search. */
+    fun setDefaultModel(asset: AiModelAsset) {
+        _uiState.update { it.copy(defaultClipId = asset.id) }
     }
 
     fun dismissError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    private fun downloadErrorMessage(code: String): String = when (code) {
+        "sha_mismatch" -> "Download failed: file integrity check failed"
+        "write_failed" -> "Download failed: could not write model file"
+        else -> "Download failed: $code"
     }
 }

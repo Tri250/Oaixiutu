@@ -24,6 +24,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
+        // Certificate pins (SPKI SHA-256, base64) for hosts whose live certs
+        // could not be baked in here. Populate with the verified pin for each
+        // host at release; leave blank in debug to disable pinning for that
+        // host (OkHttp treats an absent pin as "no enforcement"). Obtain a pin
+        // with:  echo | openssl s_client -connect HOST:443 -servername HOST \
+        //   | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
+        //   | openssl dgst -sha256 -binary | openssl base64
+        buildConfigField("String", "ALCEDO_PIN_OPENAI", "\"\"")
+        buildConfigField("String", "ALCEDO_PIN_HUGGINGFACE", "\"\"")
+        buildConfigField("String", "ALCEDO_PIN_HF_CDN", "\"\"")
+        // Expected release signing-certificate SHA-256 (hex). Blank in debug =>
+        // signature verification is skipped (debug builds use the debug key).
+        // Set to the release key's SHA-256 for release builds.
+        buildConfigField("String", "ALCEDO_RELEASE_SIGNATURE_SHA256", "\"\"")
+
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

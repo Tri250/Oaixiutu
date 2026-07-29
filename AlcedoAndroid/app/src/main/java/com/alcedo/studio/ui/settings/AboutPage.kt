@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -84,11 +85,11 @@ fun AboutPage(
                     .background(AlcedoColors.AccentBlue, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "A",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = AlcedoColors.TextOnAccent,
-                    fontWeight = FontWeight.Bold,
+                Icon(
+                    Icons.Outlined.PhotoCamera,
+                    contentDescription = null,
+                    tint = AlcedoColors.TextOnAccent,
+                    modifier = Modifier.size(40.dp),
                 )
             }
 
@@ -98,7 +99,7 @@ fun AboutPage(
                 color = AlcedoColors.TextPrimary,
             )
             Text(
-                text = "Professional RAW Photo Editor",
+                text = s.appTagline,
                 style = MaterialTheme.typography.bodyMedium,
                 color = AlcedoColors.TextTertiary,
             )
@@ -111,9 +112,9 @@ fun AboutPage(
                 verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
             ) {
                 InfoRow(s.version, appVersion())
-                InfoRow("Version Code", appVersionCode())
-                InfoRow("Build Info", "Release · ${com.alcedo.studio.util.ContextProvider.requireContext().packageName}")
-                InfoRow(s.license, "GPL-3.0")
+                InfoRow(s.versionCode, appVersionCode())
+                InfoRow(s.buildInfo, "Release · ${com.alcedo.studio.util.ContextProvider.requireContext().packageName}")
+                InfoRow(s.license, s.licenseGpl)
             }
 
             HorizontalDivider(color = AlcedoColors.Divider)
@@ -126,9 +127,7 @@ fun AboutPage(
                 modifier = Modifier.align(Alignment.Start),
             )
             Text(
-                text = "Alcedo Studio — Professional RAW Photo Editor.\n" +
-                    "Built on a Vulkan/NDK non-destructive pipeline.\n" +
-                    "Powered by ONNX Runtime for on-device AI.",
+                text = s.aboutCreditsText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = AlcedoColors.TextTertiary,
                 modifier = Modifier.align(Alignment.Start),
@@ -138,7 +137,7 @@ fun AboutPage(
 
             // Links
             Text(
-                text = "Links",
+                text = s.links,
                 style = MaterialTheme.typography.titleMedium,
                 color = AlcedoColors.TextSecondary,
                 modifier = Modifier.align(Alignment.Start),
@@ -149,11 +148,11 @@ fun AboutPage(
             ) {
                 OutlinedButton(onClick = { runCatching { uriHandler.openUri("https://github.com/alcedo-studio") } }) {
                     Icon(Icons.Outlined.Code, contentDescription = null, tint = AlcedoColors.AccentBlue, modifier = Modifier.size(18.dp))
-                    Text("GitHub", color = AlcedoColors.AccentBlue)
+                    Text(s.github, color = AlcedoColors.AccentBlue)
                 }
                 OutlinedButton(onClick = { runCatching { uriHandler.openUri("https://alcedo.studio") } }) {
                     Icon(Icons.Outlined.Language, contentDescription = null, tint = AlcedoColors.AccentBlue, modifier = Modifier.size(18.dp))
-                    Text("Website", color = AlcedoColors.AccentBlue)
+                    Text(s.website, color = AlcedoColors.AccentBlue)
                 }
             }
 
@@ -161,7 +160,7 @@ fun AboutPage(
 
             // Third-party licenses
             Text(
-                text = "Third-Party Licenses",
+                text = s.thirdPartyLicenses,
                 style = MaterialTheme.typography.titleMedium,
                 color = AlcedoColors.TextSecondary,
                 modifier = Modifier.align(Alignment.Start),

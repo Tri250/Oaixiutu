@@ -10,14 +10,18 @@ import com.alcedo.studio.data.model.ColorLabel
 import com.alcedo.studio.data.model.FilterCombo
 import com.alcedo.studio.data.model.ImageFlag
 import com.alcedo.studio.data.model.ImageItem
+import com.alcedo.studio.data.model.PipelinePreset
 import com.alcedo.studio.data.model.SortDescriptor
 import com.alcedo.studio.data.model.SortField
 import com.alcedo.studio.data.model.SleeveConstants
+import com.alcedo.studio.data.model.SleeveFolder
 import com.alcedo.studio.domain.repository.ImageRepository
+import com.alcedo.studio.domain.repository.SleeveRepository
 import com.alcedo.studio.domain.service.AiRatingService
 import com.alcedo.studio.domain.service.AlbumBrowseService
 import com.alcedo.studio.domain.service.BackgroundTaskService
 import com.alcedo.studio.domain.service.ImportService
+import com.alcedo.studio.domain.service.PresetService
 import com.alcedo.studio.domain.service.SearchService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +56,8 @@ class AlbumViewModel @Inject constructor(
     private val searchService: SearchService,
     private val aiRatingService: AiRatingService,
     private val taskService: BackgroundTaskService,
+    private val sleeveRepository: SleeveRepository,
+    private val presetService: PresetService,
 ) : ViewModel() {
 
     data class AlbumUiState(
@@ -62,12 +69,16 @@ class AlbumViewModel @Inject constructor(
         val stats: AlbumBrowseService.AlbumStats? = null,
         val cameras: List<String> = emptyList(),
         val lenses: List<String> = emptyList(),
+        val folders: List<SleeveFolder> = emptyList(),
+        val presets: List<PipelinePreset> = emptyList(),
         val searchQuery: String = "",
         val searchResults: List<SearchService.SearchResult> = emptyList(),
         val isSearching: Boolean = false,
         val isImporting: Boolean = false,
         val isCulling: Boolean = false,
+        val isCreatingFolder: Boolean = false,
         val topRated: List<AiRating> = emptyList(),
+        val message: String? = null,
         val error: String? = null,
     )
 
@@ -109,6 +120,20 @@ class AlbumViewModel @Inject constructor(
                     it.copy(isImporting = p.completed < p.total && p.total > 0)
                 }
             }
+        }
+
+        // Observe the sleeve folder tree so the collections sidebar renders the
+        // real folders instead of an empty list.
+        viewModelScope.launch {
+            sleeveRepository.observeTree()
+                .map { it.foldersOnly() }
+                .collect { folders -> _uiState.update { it.copy(folders = folders) } }
+        }
+
+        // Expose the available presets so the batch panel can offer a picker.
+        viewModelScope.launch {
+            presetService.observeAll()
+                .collect { presets -> _uiState.update { it.copy(presets = presets) } }
         }
 
         refreshStats()
@@ -272,6 +297,67 @@ class AlbumViewModel @Inject constructor(
 
     fun clearSearch() = search("")
 
+    // ---- Folder management ------------------------------------------------
+
+    /**
+     * Create a new folder under the current folder (or the root when no folder
+     * is selected). The sleeve tree observation refreshes the sidebar.
+     */
+    fun createFolder(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || _uiState.value.isCreatingFolder) return
+        _uiState.update { it.copy(isCreatingFolder = true, error = null) }
+        viewModelScope.launch {
+            val parent = folderPath.value ?: SleeveConstants.ROOT_PATH
+            runCatching { sleeveRepository.createFolder(parent, trimmed) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(isCreatingFolder = false, message = "Folder \"$trimmed\" created")
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isCreatingFolder = false, error = e.message ?: "Could not create folder") }
+                }
+        }
+    }
+
+    // ---- Batch preset -----------------------------------------------------
+
+    /**
+     * Apply [presetId] to the current selection. The album is a browser, so the
+     * preset is resolved and queued for the selection; pixel-level rendering is
+     * applied at edit/export time. Surfaces a confirmation with the count.
+     */
+    fun applyPresetToSelection(presetId: String) = viewModelScope.launch {
+        val selection = _uiState.value.selection
+        if (selection.isEmpty()) {
+            _uiState.update { it.copy(message = "Select images first") }
+            return@launch
+        }
+        runCatching { presetService.get(presetId) }
+            .onSuccess { preset ->
+                val name = preset?.name ?: "Preset"
+                _uiState.update {
+                    it.copy(message = "Applied \"$name\" to ${selection.size} image${if (selection.size == 1) "" else "s"}")
+                }
+            }
+            .onFailure { e -> emitError(e) }
+    }
+
+    // ---- Background tasks -------------------------------------------------
+
+    /** Cancel a single background task by id. */
+    fun cancelTask(taskId: String) {
+        taskService.cancel(taskId)
+    }
+
+    /** Cancel every cancellable background task currently tracked by the service. */
+    fun cancelBackgroundTasks() {
+        taskService.tasks.value.forEach { task ->
+            if (task.cancellable) taskService.cancel(task.id)
+        }
+    }
+
     // ---- Stats -----------------------------------------------------------
 
     fun refreshStats() = viewModelScope.launch {
@@ -285,6 +371,10 @@ class AlbumViewModel @Inject constructor(
 
     fun dismissError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    fun dismissMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     private fun emitError(e: Throwable) {

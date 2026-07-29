@@ -15,9 +15,9 @@ namespace alcedo {
 
 DecoderScheduler::DecoderScheduler(size_t thread_count)
     : pool_(thread_count),
-      raw_decoder_(std::make_unique<RawDecoder>()),
-      thumb_decoder_(std::make_unique<ThumbnailDecoder>()),
-      meta_decoder_(std::make_unique<MetadataDecoder>()) {}
+      raw_decoder_(std::make_shared<RawDecoder>()),
+      thumb_decoder_(std::make_shared<ThumbnailDecoder>()),
+      meta_decoder_(std::make_shared<MetadataDecoder>()) {}
 
 DecoderScheduler::~DecoderScheduler() { Shutdown(); }
 
@@ -25,12 +25,14 @@ auto DecoderScheduler::ScheduleRawDecode(image_id_t id, const image_path_t& path
     -> std::future<DecodeResult> {
   auto promise = std::make_shared<std::promise<DecodeResult>>();
   auto fut = promise->get_future();
-  // Capture copies of the path and a raw pointer to the decoder (pool lifetime
-  // owns the decoder; the scheduler outlives its tasks via Shutdown()).
-  pool_.Submit([this, id, path, promise]() {
+  // Capture a shared_ptr copy of the decoder so the task keeps it alive even if
+  // the scheduler is destroyed before the task runs to completion. Do not
+  // capture `this`: raw_decoder_ would dangle after destruction.
+  auto raw = raw_decoder_;
+  pool_.Submit([raw, id, path, promise]() {
     DecodeResult result;
     try {
-      result = raw_decoder_->Decode(path, id, DecodeType::RAW);
+      result = raw->Decode(path, id, DecodeType::RAW);
     } catch (const std::exception& e) {
       result.success = false;
       result.error = e.what();
@@ -45,10 +47,11 @@ auto DecoderScheduler::ScheduleThumbnailDecode(image_id_t id, const image_path_t
     -> std::future<DecodeResult> {
   auto promise = std::make_shared<std::promise<DecodeResult>>();
   auto fut = promise->get_future();
-  pool_.Submit([this, id, path, promise]() {
+  auto thumb = thumb_decoder_;
+  pool_.Submit([thumb, id, path, promise]() {
     DecodeResult result;
     try {
-      result = thumb_decoder_->Decode(path, id, DecodeType::THUMB);
+      result = thumb->Decode(path, id, DecodeType::THUMB);
     } catch (const std::exception& e) {
       result.success = false;
       result.error = e.what();
@@ -63,10 +66,11 @@ auto DecoderScheduler::ScheduleMetadataDecode(image_id_t id, const image_path_t&
     -> std::future<DecodeResult> {
   auto promise = std::make_shared<std::promise<DecodeResult>>();
   auto fut = promise->get_future();
-  pool_.Submit([this, id, path, promise]() {
+  auto meta = meta_decoder_;
+  pool_.Submit([meta, id, path, promise]() {
     DecodeResult result;
     try {
-      result = meta_decoder_->Decode(path, id, DecodeType::REGULAR);
+      result = meta->Decode(path, id, DecodeType::REGULAR);
     } catch (const std::exception& e) {
       result.success = false;
       result.error = e.what();

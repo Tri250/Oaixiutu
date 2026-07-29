@@ -84,11 +84,14 @@ class ExportService @Inject constructor(
 
         // Native export path (metadata/ICC) when a pipeline handle is available.
         if (request.pipelineHandle != 0L && cfg.includeMetadata) {
-            NdkSafeCall.call(default = false) {
+            val nativeOk = NdkSafeCall.call(default = false) {
                 AlcedoNativeBridge.nativeExportImage(
                     request.pipelineHandle, outFile.absolutePath,
                     cfg.format.name, cfg.quality, cfg.colorSpace, cfg.includeMetadata,
                 )
+            }
+            if (!nativeOk) {
+                Log.w(TAG, "nativeExportImage failed for ${request.imageId}; metadata/ICC not embedded")
             }
         }
 
@@ -99,12 +102,19 @@ class ExportService @Inject constructor(
             if (hdrBitmap != null) {
                 val gainBytes = ultraHdrWriter.buildGainMapBytes(finalBitmap, hdrBitmap)
                 if (gainBytes != null) {
-                    FileOutputStream(gainmapFile).use { it.write(gainBytes) }
-                    val ultraFile = File(outDir, "$name.ultrahdr.jpg")
-                    ultraHdrWriter.write(outFile.absolutePath, gainmapFile.absolutePath, ultraFile.absolutePath)
-                    if (ultraFile.exists()) {
-                        outFile.delete()
-                        return@withContext finish(request, ultraFile, start)
+                    val gainWritten = runCatching {
+                        FileOutputStream(gainmapFile).use { it.write(gainBytes) }
+                        true
+                    }.onFailure { Log.w(TAG, "failed to write gainmap", it) }.getOrDefault(false)
+                    if (gainWritten) {
+                        val ultraFile = File(outDir, "$name.ultrahdr.jpg")
+                        val ultraOk = ultraHdrWriter.write(outFile.absolutePath, gainmapFile.absolutePath, ultraFile.absolutePath)
+                        if (ultraOk && ultraFile.exists() && ultraFile.length() > 0L) {
+                            outFile.delete()
+                            return@withContext finish(request, ultraFile, start)
+                        } else {
+                            Log.w(TAG, "UltraHDR write failed; falling back to SDR JPEG")
+                        }
                     }
                 }
             }
@@ -131,16 +141,18 @@ class ExportService @Inject constructor(
     }
 
     private fun encode(bitmap: Bitmap, outFile: File, cfg: ExportConfig): Boolean = runCatching {
-        FileOutputStream(outFile).use { out ->
-            val format = when (cfg.format) {
-                ExportFormat.JPEG -> Bitmap.CompressFormat.JPEG
-                ExportFormat.PNG -> Bitmap.CompressFormat.PNG
-                ExportFormat.WEBP -> Bitmap.CompressFormat.WEBP
-                ExportFormat.TIFF -> Bitmap.CompressFormat.PNG // TIFF encoded natively; PNG fallback
+        val format = when (cfg.format) {
+            ExportFormat.JPEG -> Bitmap.CompressFormat.JPEG
+            ExportFormat.PNG -> Bitmap.CompressFormat.PNG
+            ExportFormat.WEBP -> Bitmap.CompressFormat.WEBP
+            ExportFormat.TIFF -> {
+                Log.w(TAG, "TIFF encoding not supported on Android; degrading to PNG. Output: ${outFile.name}")
+                Bitmap.CompressFormat.PNG
             }
+        }
+        FileOutputStream(outFile).use { out ->
             bitmap.compress(format, cfg.quality, out)
         }
-        outFile.exists()
     }.onFailure { Log.w(TAG, "encode failed", it) }.getOrDefault(false)
 
     private fun resolveName(displayName: String, pattern: String): String {

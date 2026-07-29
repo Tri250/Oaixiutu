@@ -44,7 +44,7 @@ class ClipInferenceEngine @Inject constructor(
     }
 
     /** Encode an image at [uri] to an L2-normalised embedding. */
-    suspend fun encodeImage(uri: Uri): AiEmbedding? = withContext(ThreadPool.aiInference) {
+    suspend fun encodeImage(uri: Uri, imageId: String): AiEmbedding? = withContext(ThreadPool.aiInference) {
         if (!ensureReady()) return@withContext null
         val asset = clipAsset ?: return@withContext null
         val modelHandle = onnxModelManager.handleFor(asset.id) ?: return@withContext null
@@ -58,7 +58,7 @@ class ClipInferenceEngine @Inject constructor(
         val normalised = l2Normalise(vector)
         val now = System.currentTimeMillis()
         val embedding = AiEmbedding(
-            imageId = uri.toString(),
+            imageId = imageId,
             embedding = normalised,
             modelId = asset.id,
             dimensions = normalised.size,

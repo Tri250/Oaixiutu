@@ -1,5 +1,6 @@
 package com.alcedo.studio.ui.export
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alcedo.studio.data.model.ExportFormat
-import com.alcedo.studio.data.model.WatermarkConfig
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.ErrorDialog
 import com.alcedo.studio.ui.common.ExportProgressWithEta
@@ -62,13 +61,9 @@ fun ExportScreen(
     var formatExpanded by remember { mutableStateOf(false) }
     var csExpanded by remember { mutableStateOf(false) }
     var iccExpanded by remember { mutableStateOf(false) }
-    var bitDepth by remember { mutableStateOf(8) }
-    var metaMode by remember { mutableStateOf(MetadataMode.KEEP_ALL) }
-    var maintainAspect by remember { mutableStateOf(true) }
-    var resizeWidth by remember { mutableStateOf("") }
-    var resizeHeight by remember { mutableStateOf("") }
-    var showWatermark by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
+
+    BackHandler { onBack() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -117,12 +112,12 @@ fun ExportScreen(
             }
 
             // ---- Bit depth ----
-            SectionLabel("Bit Depth")
+            SectionLabel(s.bitDepth)
             Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
                 listOf(8, 16, 32).forEach { depth ->
                     FilterChip(
-                        selected = bitDepth == depth,
-                        onClick = { bitDepth = depth },
+                        selected = state.bitDepth == depth,
+                        onClick = { viewModel.setBitDepth(depth) },
                         label = { Text("${depth}-bit", style = MaterialTheme.typography.bodySmall) },
                     )
                 }
@@ -147,28 +142,28 @@ fun ExportScreen(
             }
 
             // ---- Resize options ----
-            SectionLabel("Resize")
+            SectionLabel(s.resize)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = maintainAspect, onCheckedChange = { maintainAspect = it })
-                Text("Maintain Aspect Ratio", modifier = Modifier.padding(start = DesignTokens.spacingSm))
+                Switch(checked = state.maintainAspect, onCheckedChange = { viewModel.setMaintainAspect(it) })
+                Text(s.maintainAspectRatio, modifier = Modifier.padding(start = DesignTokens.spacingSm))
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
             ) {
                 OutlinedTextField(
-                    value = resizeWidth,
-                    onValueChange = { resizeWidth = it },
-                    label = { Text("Width") },
-                    placeholder = { Text("Original") },
+                    value = state.resizeWidth,
+                    onValueChange = { viewModel.setResizeWidth(it) },
+                    label = { Text(s.width) },
+                    placeholder = { Text(s.aspectOriginal) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
                 OutlinedTextField(
-                    value = resizeHeight,
-                    onValueChange = { resizeHeight = it },
-                    label = { Text("Height") },
-                    placeholder = { Text("Auto") },
+                    value = state.resizeHeight,
+                    onValueChange = { viewModel.setResizeHeight(it) },
+                    label = { Text(s.height) },
+                    placeholder = { Text(s.perspectiveAuto) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
@@ -176,7 +171,7 @@ fun ExportScreen(
 
             // ---- Max dimension (legacy slider) ----
             SectionLabel(
-                "${s.maxDimension}: ${if (config.maxDimension == 0) "Original" else "${config.maxDimension}px"}",
+                "${s.maxDimension}: ${if (config.maxDimension == 0) s.aspectOriginal else "${config.maxDimension}px"}",
             )
             Slider(
                 value = config.maxDimension.toFloat(),
@@ -205,10 +200,10 @@ fun ExportScreen(
             }
 
             // ---- ICC Profile selector ----
-            SectionLabel("ICC Profile")
+            SectionLabel(s.iccProfile)
             Box {
                 OutlinedTextField(
-                    value = "sRGB IEC61966-2.1",
+                    value = state.iccProfile,
                     onValueChange = {},
                     readOnly = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -225,19 +220,19 @@ fun ExportScreen(
                     ).forEach { profile ->
                         DropdownMenuItem(
                             text = { Text(profile) },
-                            onClick = { iccExpanded = false },
+                            onClick = { viewModel.setIccProfile(profile); iccExpanded = false },
                         )
                     }
                 }
             }
 
             // ---- Metadata handling ----
-            SectionLabel("Metadata Handling")
+            SectionLabel(s.metadataHandling)
             Row(horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs)) {
-                MetadataMode.entries.forEach { mode ->
+                ExportViewModel.MetadataMode.entries.forEach { mode ->
                     FilterChip(
-                        selected = metaMode == mode,
-                        onClick = { metaMode = mode },
+                        selected = state.metaMode == mode,
+                        onClick = { viewModel.setMetaMode(mode) },
                         label = { Text(mode.label, style = MaterialTheme.typography.bodySmall) },
                     )
                 }
@@ -254,7 +249,7 @@ fun ExportScreen(
 
             // ---- Output directory ----
             OutlinedTextField(
-                value = config.outputDirectory ?: "Pictures/Alcedo",
+                value = config.outputDirectory ?: s.defaultOutputDir,
                 onValueChange = { viewModel.setOutputDirectory(it) },
                 label = { Text(s.outputDirectory) },
                 singleLine = true,
@@ -272,9 +267,9 @@ fun ExportScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = config.includeWatermark,
-                    onCheckedChange = { viewModel.setWatermarkEnabled(it) },
+                    onCheckedChange = { viewModel.setShowWatermark(it) },
                 )
-                TextButton(onClick = { showWatermark = !showWatermark }) {
+                TextButton(onClick = { viewModel.setShowWatermark(!state.showWatermark) }) {
                     Text(s.watermark, color = AlcedoColors.AccentBlue)
                 }
             }
@@ -341,22 +336,18 @@ fun ExportScreen(
         }
     }
 
-    if (showShare && state.lastOutputPath != null) {
-        SharePanel(
-            outputPath = state.lastOutputPath!!,
-            onDismiss = { showShare = false },
-        )
+    state.lastOutputPath?.let { path ->
+        if (showShare) {
+            SharePanel(
+                outputPath = path,
+                onDismiss = { showShare = false },
+            )
+        }
     }
 
     state.error?.let { err ->
         ErrorDialog(title = s.exportFailed, message = err, onDismiss = viewModel::dismissError)
     }
-}
-
-enum class MetadataMode(val label: String) {
-    KEEP_ALL("Keep All"),
-    STRIP("Strip All"),
-    COPYRIGHT_ONLY("Copyright Only"),
 }
 
 @Composable

@@ -54,8 +54,6 @@ std::shared_ptr<ImageBuffer> RunVulkanStage(PipelineStage& stage,
   if (!vin || !vin->Valid()) return nullptr;
 
   // Build (or reuse) a pipeline for this stage.
-  auto& stream = *reinterpret_cast<VulkanKernelStream*>(nullptr);  // placeholder
-  (void)stream;
   // For a production build the VulkanKernelStream is owned by the executor and
   // rebuilt only when the program changes. Here we construct a transient
   // pipeline to keep this stage self-contained.

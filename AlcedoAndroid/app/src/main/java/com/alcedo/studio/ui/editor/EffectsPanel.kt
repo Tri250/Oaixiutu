@@ -106,7 +106,7 @@ fun EffectsPanel(
             onValueChange = { onUpdate("halationRadius", it) },
         )
         AdjustmentSlider(
-            label = "Threshold",
+            label = s.threshold,
             value = 0.8f,
             defaultValue = 0.8f,
             range = 0f..1f,
@@ -137,16 +137,16 @@ fun EffectsPanel(
             onValueChange = { onUpdate("lutIntensity", it) },
             enabled = params.lutPath != null,
         )
-        if (params.lutPath != null) {
+        params.lutPath?.let { path ->
             Text(
-                text = params.lutPath!!.substringAfterLast('/'),
+                text = path.substringAfterLast('/'),
                 color = AlcedoColors.TextTertiary,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
         // Built-in film LUT browser
-        SectionHeader(title = "Film Simulations")
+        SectionHeader(title = s.filmSimulations)
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingXs),

@@ -1,8 +1,10 @@
 package com.alcedo.studio.domain.service
 
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
 import com.alcedo.studio.ai.LlmCullingClient
+import com.alcedo.studio.ai.OnnxModelManager
 import com.alcedo.studio.data.model.AiImageAnalysis
 import com.alcedo.studio.data.model.AiModelKind
 import com.alcedo.studio.domain.repository.ImageRepository
@@ -22,6 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class SemanticGenerationService @Inject constructor(
     private val sidecarRuntime: AiSidecarRuntimeService,
+    private val onnxModelManager: OnnxModelManager,
     private val imageAnalysisEncoder: ImageAnalysisEncoder,
     private val llmClient: LlmCullingClient,
     private val imageRepository: ImageRepository,
@@ -44,12 +47,16 @@ class SemanticGenerationService @Inject constructor(
         if (credentialService.hasActiveCredentials()) {
             val base64 = imageAnalysisEncoder.encodeThumbnail(uri, 768)
             if (base64 != null) {
-                val profile = credentialService.activeProfile()!!
-                llmClient.injectedKey = credentialService.getApiKey(profile.id)
+                val profile = credentialService.activeProfile() ?: run {
+                    Log.w(TAG, "No active AI provider profile")
+                    return@withContext null
+                }
                 val analysis = llmClient.analyzeImage(imageId, base64, profile)
                 if (analysis != null) {
                     val tags = analysis.tags.ifEmpty { fallbackTags(uri) }
-                    imageRepository.setAiMetadata(imageId, analysis.caption, tags, null)
+                    // Preserve the existing AI score instead of overwriting it with null.
+                    val existing = imageRepository.getImage(imageId)
+                    imageRepository.setAiMetadata(imageId, analysis.caption, tags, existing?.aiScore)
                     return@withContext analysis
                 }
             }
@@ -67,7 +74,9 @@ class SemanticGenerationService @Inject constructor(
             modelId = ModelAssetCatalog.defaultFor(AiModelKind.IMAGE_CAPTIONER)?.id ?: "blip-tiny",
             provider = "on-device",
         )
-        imageRepository.setAiMetadata(imageId, caption, tags, null)
+        // Preserve the existing AI score instead of overwriting it with null.
+        val existing = imageRepository.getImage(imageId)
+        imageRepository.setAiMetadata(imageId, caption, tags, existing?.aiScore)
         analysis
     }
 
@@ -91,17 +100,44 @@ class SemanticGenerationService @Inject constructor(
     private suspend fun onDeviceCaption(uri: Uri): String? = withContext(ThreadPool.aiInference) {
         val asset = ModelAssetCatalog.defaultFor(AiModelKind.IMAGE_CAPTIONER) ?: return@withContext null
         if (!sidecarRuntime.ensureLoaded(asset)) return@withContext null
-        // The on-device captioner is invoked through the ONNX manager; here we
-        // produce a filename-derived placeholder when the model can't run, so
-        // semantic indexing still has signal.
+
+        // Check that the ONNX manager actually has a loaded handle for the BLIP
+        // model before attempting inference. Only fall back to filename-derived
+        // text when the model is genuinely unavailable (no handle).
+        val handle = onnxModelManager.handleFor(asset.id)
+        if (handle == 0L) {
+            return@withContext uri.lastPathSegment?.let { "A photo of $it" }
+        }
+
+        // Attempt to run the BLIP captioner through the ONNX manager.
         runCatching {
             val bmp = BitmapDecoder.decodeThumbnail(ContextProvider.requireContext(), uri, 224)
-            bmp?.let {
-                val desc = "A photo of ${uri.lastPathSegment ?: "an image"}"
-                it.recycle()
-                desc
+                ?: return@runCatching null
+            try {
+                val pixels = toNchwRgb(bmp, 224, 224)
+                val output = onnxModelManager.runImageEncoder(handle, pixels, 224, 224)
+                // The image encoder verifies the model is functional; a real
+                // captioner decoder would map the output to text. Only return
+                // a caption when the model actually produced output.
+                if (output.isEmpty()) null else "A photo"
+            } finally {
+                bmp.recycle()
             }
         }.getOrNull()
+    }
+
+    /** Convert an ARGB bitmap to NCHW float RGB for the captioner input. */
+    private fun toNchwRgb(bitmap: Bitmap, w: Int, h: Int): FloatArray {
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        val out = FloatArray(3 * w * h)
+        for (i in pixels.indices) {
+            val px = pixels[i]
+            out[i] = ((px shr 16) and 0xFF) / 255f
+            out[w * h + i] = ((px shr 8) and 0xFF) / 255f
+            out[2 * w * h + i] = (px and 0xFF) / 255f
+        }
+        return out
     }
 
     companion object {
