@@ -24,15 +24,14 @@ static auto escape_sql_string(const std::string& s) -> std::string {
   return out;
 }
 
-// Copy a duckdb_value_varchar() result into `dst` and free the DuckDB-owned
-// buffer. Every duckdb_value_varchar() call returns a string the caller MUST
-// release with duckdb_free(); previously the returned pointers were assigned
-// into std::string fields and then leaked on every column of every row.
+// Copy a duckdb_value_varchar() result into `dst`.
+// duckdb_value_varchar returns a const char* owned by the result set; it is
+// valid until duckdb_destroy_result is called, so we copy it into dst and do
+// not free it (consistent with all other mapper/controller files).
 static void AssignDuckdbString(std::string& dst, duckdb_result result, int col) {
-  char* v = duckdb_value_varchar(result, col, /*row=*/0);
+  const char* v = duckdb_value_varchar(result, col, /*row=*/0);
   if (v) {
     dst = v;
-    duckdb_free(v);
   } else {
     dst.clear();
   }
@@ -255,10 +254,9 @@ auto AiStorageController::SelectFtsDocument(sl_element_id_t file_id) -> std::opt
     return std::nullopt;
   }
   std::optional<std::string> out;
-  char* body = duckdb_value_varchar(result, 0, 0);
+  const char* body = duckdb_value_varchar(result, 0, 0);
   if (body) {
     out = std::string(body);
-    duckdb_free(body);  // duckdb_value_varchar result must be freed.
   }
   duckdb_destroy_result(&result);
   return out;

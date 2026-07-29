@@ -31,6 +31,8 @@ struct AiImageRatingRecord {
   std::string     task_id;
   std::string     provider_id;
   std::string     model_id;
+  std::string     prompt_profile_id;
+  std::string     rendition_kind;
   int             rating      = 0;
   std::string     rubric_id;
   std::string     rubric_version;
