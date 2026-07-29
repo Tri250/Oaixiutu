@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import kotlin.math.pow
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
@@ -169,4 +168,4 @@ private fun computeChromaXY(bitmap: Bitmap?): List<Pair<Float, Float>> {
     return samples
 }
 
-private fun linearize(c: Double): Double = if (c <= 0.04045) c / 12.92 else pow((c + 0.055) / 1.055, 2.4)
+private fun linearize(c: Double): Double = if (c <= 0.04045) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
