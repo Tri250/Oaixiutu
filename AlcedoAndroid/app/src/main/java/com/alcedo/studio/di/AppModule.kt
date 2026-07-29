@@ -16,6 +16,8 @@ import com.alcedo.studio.domain.repository.EditHistoryRepository
 import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.repository.ProjectRepository
 import com.alcedo.studio.domain.repository.SleeveRepository
+import com.alcedo.studio.domain.service.AiService
+import com.alcedo.studio.domain.service.AiServiceImpl
 import com.alcedo.studio.utils.MemoryGuard
 import dagger.Binds
 import dagger.Module
@@ -145,6 +147,10 @@ abstract class RepositoryBindingsModule {
     @Binds
     @Singleton
     abstract fun bindEditHistoryRepository(impl: EditHistoryRepositoryImpl): EditHistoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiService(impl: AiServiceImpl): AiService
 }
 
 // ---- Dispatcher qualifiers ---------------------------------------------

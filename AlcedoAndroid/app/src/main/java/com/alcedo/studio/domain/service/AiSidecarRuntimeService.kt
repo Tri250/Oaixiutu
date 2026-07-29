@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
+import java.util.Properties
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +40,26 @@ class AiSidecarRuntimeService @Inject constructor(
     val modelsDir: File
         get() = File(ContextProvider.requireContext().filesDir, "ai_models").apply { mkdirs() }
 
+    /**
+     * SHA-256 integrity store. Persisted as a simple properties file so that
+     * hashes computed on first download survive process restarts. When the
+     * catalogue's [AiModelAsset.sha256] is empty, the hash is computed from the
+     * downloaded file and stored here for subsequent verification.
+     */
+    private val shaStore: Properties by lazy {
+        val file = File(modelsDir, "sha256.properties")
+        val props = Properties()
+        if (file.exists()) {
+            runCatching { file.inputStream().use { props.load(it) } }
+        }
+        props
+    }
+
+    private fun saveShaStore() {
+        val file = File(modelsDir, "sha256.properties")
+        runCatching { file.outputStream().use { shaStore.store(it, "ONNX model SHA-256 hashes") } }
+    }
+
     /** Local path for a model asset, whether or not it's downloaded. */
     fun localPathFor(asset: AiModelAsset): File = File(modelsDir, "${asset.id}.onnx")
 
@@ -45,11 +67,14 @@ class AiSidecarRuntimeService @Inject constructor(
     fun isModelPresent(asset: AiModelAsset): Boolean {
         val file = localPathFor(asset)
         if (!file.exists() || file.length() == 0L) return false
-        // When a SHA-256 is provided, verify the file hash; skip when empty.
-        if (asset.sha256.isNotEmpty()) {
+        // Verify against the catalogue SHA-256 if provided, otherwise check the
+        // persisted hash (computed on first download). Skip when neither exists.
+        val expected = asset.sha256.takeIf { it.isNotEmpty() }
+            ?: shaStore.getProperty(asset.id)?.takeIf { it.isNotEmpty() }
+        if (expected != null) {
             val actualSha = sha256(file)
-            if (!actualSha.equals(asset.sha256, ignoreCase = true)) {
-                Log.w(TAG, "SHA mismatch for ${asset.id}: $actualSha != ${asset.sha256}")
+            if (!actualSha.equals(expected, ignoreCase = true)) {
+                Log.w(TAG, "SHA mismatch for ${asset.id}: $actualSha != $expected")
                 return false
             }
         }
@@ -74,6 +99,17 @@ class AiSidecarRuntimeService @Inject constructor(
             val ok = modelDownloadService.download(asset, localPathFor(asset))
             _state.value = _state.value.copy(downloadingModelIds = _state.value.downloadingModelIds - asset.id)
             if (!ok) return@withContext false
+            // Compute and persist SHA-256 on first download when the catalogue
+            // entry lacks a pre-known hash, so subsequent loads are verified.
+            if (asset.sha256.isEmpty()) {
+                val file = localPathFor(asset)
+                if (file.exists() && file.length() > 0) {
+                    val computed = sha256(file)
+                    shaStore.setProperty(asset.id, computed)
+                    saveShaStore()
+                    Log.i(TAG, "Persisted SHA-256 for ${asset.id}: $computed")
+                }
+            }
         }
         val path = localPathFor(asset).absolutePath
         val deviceId = if (asset.kind == AiModelKind.MASK_SEGMENT) OnnxModelManager.DEVICE_CPU
