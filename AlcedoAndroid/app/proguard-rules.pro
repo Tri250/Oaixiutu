@@ -163,3 +163,8 @@
 -dontwarn org.slf4j.**
 -dontwarn javax.annotation.**
 
+# Tink transitive dependencies (not used at runtime)
+-dontwarn com.google.api.client.http.**
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn org.joda.time.**
+
