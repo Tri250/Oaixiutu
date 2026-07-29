@@ -84,7 +84,7 @@ class EditHistoryRepositoryImpl @Inject constructor(
             name = name,
             createdAt = now,
             transactions = emptyList(),
-            cumulativeParams = json.decodeFromString<com.alcedo.studio.data.model.AdjustmentParams>(cumulativeParamsJson),
+            cumulativeParams = json.decodeFromString(AdjustmentParams.serializer(), cumulativeParamsJson),
             isVirtualCopy = isVirtualCopy,
             isActive = false,
             note = null,
@@ -98,7 +98,7 @@ class EditHistoryRepositoryImpl @Inject constructor(
                 versionId = transaction.versionId,
                 timestamp = transaction.timestamp,
                 label = transaction.label,
-                paramDeltaJson = json.encodeToString<com.alcedo.studio.data.model.AdjustmentParamsDelta>(transaction.paramDelta),
+                paramDeltaJson = json.encodeToString(AdjustmentParamsDelta.serializer(), transaction.paramDelta),
                 maskIds = transaction.maskIds.takeIf { it.isNotEmpty() }?.joinToString(","),
                 source = transaction.source.name,
             ),
@@ -126,7 +126,7 @@ class EditHistoryRepositoryImpl @Inject constructor(
         createdAt = createdAt,
         transactions = emptyList(), // loaded lazily via observeTransactions
         cumulativeParams = runCatching {
-            json.decodeFromString<com.alcedo.studio.data.model.AdjustmentParams>(cumulativeParamsJson)
+            json.decodeFromString(AdjustmentParams.serializer(), cumulativeParamsJson)
         }.getOrDefault(com.alcedo.studio.data.model.AdjustmentParams.DEFAULT),
         isVirtualCopy = isVirtualCopy,
         isActive = isActive,
@@ -139,7 +139,7 @@ class EditHistoryRepositoryImpl @Inject constructor(
         timestamp = timestamp,
         label = label,
         paramDelta = runCatching {
-            json.decodeFromString<com.alcedo.studio.data.model.AdjustmentParamsDelta>(paramDeltaJson)
+            json.decodeFromString(AdjustmentParamsDelta.serializer(), paramDeltaJson)
         }.getOrDefault(com.alcedo.studio.data.model.AdjustmentParamsDelta()),
         maskIds = maskIds?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
         source = runCatching { TransactionSource.valueOf(source) }.getOrDefault(TransactionSource.MANUAL),

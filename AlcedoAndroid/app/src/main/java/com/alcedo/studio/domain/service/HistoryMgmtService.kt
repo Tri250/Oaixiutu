@@ -123,7 +123,7 @@ class HistoryMgmtService @Inject constructor(
         val nextCursor = cursor + 1
         undoCursor[active.id] = nextCursor
         val replayed = replayPrefix(txs, txs.size - nextCursor)
-        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(replayed))
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(AdjustmentParams.serializer(), replayed))
     }
 
     /**
@@ -140,7 +140,7 @@ class HistoryMgmtService @Inject constructor(
         val nextCursor = cursor - 1
         if (nextCursor == 0) undoCursor.remove(active.id) else undoCursor[active.id] = nextCursor
         val replayed = replayPrefix(txs, txs.size - nextCursor)
-        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(replayed))
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(AdjustmentParams.serializer(), replayed))
     }
 
     /**

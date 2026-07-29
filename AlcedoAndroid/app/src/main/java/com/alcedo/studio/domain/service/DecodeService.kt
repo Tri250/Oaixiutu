@@ -76,7 +76,7 @@ class DecodeService @Inject constructor(
             AlcedoNativeBridge.nativeExtractMetadata(uri.toString())
         } ?: return@withContext null
         runCatching {
-            val obj = Json.decodeFromString<kotlinx.serialization.json.JsonObject>(json)
+            val obj = Json.decodeFromString(kotlinx.serialization.json.JsonObject.serializer(), json)
             val str = { k: String -> obj[k]?.jsonPrimitive?.content }
             ImageMetadata(
                 imageId = uri.toString(),
