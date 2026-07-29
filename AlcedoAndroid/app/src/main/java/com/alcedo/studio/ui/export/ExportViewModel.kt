@@ -211,9 +211,9 @@ class ExportViewModel @Inject constructor(
         }
 
         val results = mutableListOf<ExportResult>()
-        items.forEachIndexed { index, item ->
+        for ((index, item) in items.withIndex()) {
             // Cooperative cancellation: abort early if the job was cancelled.
-            ensureActive()
+            coroutineContext.ensureActive()
             if (taskService.isCancelled(taskId)) break
 
             val handle = if (dedicatedHandles) {

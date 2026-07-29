@@ -457,7 +457,7 @@ object StringResourcesZhCn : StringRes {
     override val agreementAiFeaturesTitle = "3. AI 功能"
     override val agreementAiFeaturesBody = "AI 辅助功能（筛选、语义搜索、图像描述）作为辅助工作流的工具提供。您仍需对最终的选择和编辑决策负责。"
     override val agreementDisclaimerTitle = "4. 免责声明"
-    override val agreementDisclaimerBody = "本软件"按原样"提供，不附带任何形式的保证。作者不对因使用本应用而导致的任何数据丢失或损坏承担责任。"
+    override val agreementDisclaimerBody = "本软件\"按原样\"提供，不附带任何形式的保证。作者不对因使用本应用而导致的任何数据丢失或损坏承担责任。"
 
     override val copyPath = "复制路径"
     override val share = "分享"

@@ -7,6 +7,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import com.alcedo.studio.domain.repository.ImageRepository
 import com.alcedo.studio.domain.service.ExifEditorService
 import com.alcedo.studio.domain.service.HistoryMgmtService
+import com.alcedo.studio.domain.service.MaskInferenceService
 import com.alcedo.studio.domain.service.MaskService
 import com.alcedo.studio.domain.service.PipelineService
 import com.alcedo.studio.domain.service.PresetService
@@ -33,6 +34,7 @@ class EditorViewModelFactory(
     private val historyService: HistoryMgmtService,
     private val presetService: PresetService,
     private val maskService: MaskService,
+    private val maskInferenceService: MaskInferenceService,
     private val exifService: ExifEditorService,
     private val imageRepository: ImageRepository,
 ) : AbstractSavedStateViewModelFactory(owner, null) {
@@ -49,6 +51,7 @@ class EditorViewModelFactory(
             historyService = historyService,
             presetService = presetService,
             maskService = maskService,
+            maskInferenceService = maskInferenceService,
             exifService = exifService,
             imageRepository = imageRepository,
             savedStateHandle = handle,

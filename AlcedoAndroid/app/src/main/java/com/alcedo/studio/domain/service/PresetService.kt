@@ -79,7 +79,7 @@ class PresetService @Inject constructor(
         id = id,
         name = name,
         category = category,
-        adjustmentsJson = json.encodeToString(adjustments),
+        adjustmentsJson = json.encodeToString<AdjustmentParams>(adjustments),
         isBuiltIn = isBuiltIn,
         isFavorite = isFavorite,
         thumbnailPath = thumbnailPath,

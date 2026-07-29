@@ -44,6 +44,11 @@ class HistoryMgmtService @Inject constructor(
     fun observeTransactions(versionId: String): Flow<List<EditTransaction>> =
         editHistoryRepository.observeTransactions(versionId)
 
+    /** Get the currently active version for [imageId]. */
+    suspend fun getActiveVersion(imageId: String): Version? = withContext(ThreadPool.database) {
+        editHistoryRepository.getActiveVersion(imageId)
+    }
+
     /** Initialise an edit history for an image if none exists. */
     suspend fun ensureHistory(imageId: String): Version? = withContext(ThreadPool.database) {
         val existing = editHistoryRepository.getActiveVersion(imageId)
@@ -52,7 +57,7 @@ class HistoryMgmtService @Inject constructor(
             imageId = imageId,
             parentId = null,
             name = "Original",
-            cumulativeParamsJson = json.encodeToString(AdjustmentParams.DEFAULT),
+            cumulativeParamsJson = json.encodeToString<AdjustmentParams>(AdjustmentParams.DEFAULT),
             isVirtualCopy = false,
         )
         editHistoryRepository.setActiveVersion(imageId, version.id)
@@ -77,7 +82,7 @@ class HistoryMgmtService @Inject constructor(
             )
             editHistoryRepository.addTransaction(transaction)
             val updated = active.cumulativeParams.applyDelta(delta)
-            editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(updated))
+            editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(updated))
             transaction
         }
 
@@ -88,7 +93,7 @@ class HistoryMgmtService @Inject constructor(
             imageId = imageId,
             parentId = active.id,
             name = name,
-            cumulativeParamsJson = json.encodeToString(active.cumulativeParams),
+            cumulativeParamsJson = json.encodeToString<AdjustmentParams>(active.cumulativeParams),
             isVirtualCopy = true,
         )
         editHistoryRepository.setActiveVersion(imageId, copy.id)
@@ -118,7 +123,7 @@ class HistoryMgmtService @Inject constructor(
         val nextCursor = cursor + 1
         undoCursor[active.id] = nextCursor
         val replayed = replayPrefix(txs, txs.size - nextCursor)
-        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(replayed))
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(replayed))
     }
 
     /**
@@ -135,7 +140,7 @@ class HistoryMgmtService @Inject constructor(
         val nextCursor = cursor - 1
         if (nextCursor == 0) undoCursor.remove(active.id) else undoCursor[active.id] = nextCursor
         val replayed = replayPrefix(txs, txs.size - nextCursor)
-        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(replayed))
+        editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(replayed))
     }
 
     /**

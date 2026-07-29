@@ -44,7 +44,7 @@ class BatchEditService @Inject constructor(
                 editHistoryRepository.addTransaction(transaction)
                 // Recompute cumulative params and persist.
                 val updated = active.cumulativeParams.applyDelta(delta)
-                editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString(updated))
+                editHistoryRepository.updateCumulativeParams(active.id, json.encodeToString<AdjustmentParams>(updated))
                 applied++
             }
             applied

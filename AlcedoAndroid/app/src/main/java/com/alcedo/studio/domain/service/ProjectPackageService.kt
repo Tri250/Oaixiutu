@@ -112,12 +112,12 @@ class ProjectPackageService @Inject constructor(
 
                 // 2. Sleeve database entries (the virtual folder/file tree).
                 zos.putNextEntry(ZipEntry("sleeve/tree.json"))
-                zos.write(if (tree != null) json.encodeToString(tree) else "null".toByteArray())
+                zos.write((if (tree != null) json.encodeToString(tree) else "null").toByteArray())
                 zos.closeEntry()
 
                 // 3. Image references (the catalog of imported images).
                 zos.putNextEntry(ZipEntry("images/images.json"))
-                zos.write(json.encodeToString(images))
+                zos.write(json.encodeToString(images).toByteArray())
                 zos.closeEntry()
 
                 // 4. Edit history per image (versions + transactions).

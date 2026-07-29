@@ -91,7 +91,6 @@ fun CurvePanelV2(
             points = activeCurve,
             onPointsChange = onCurveChange,
             curveColor = channelColors[channel],
-            histogramBins = histogramBins,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(DesignTokens.scopeHeight)

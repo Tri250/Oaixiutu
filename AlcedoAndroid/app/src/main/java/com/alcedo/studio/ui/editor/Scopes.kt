@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.i18n.Strings
@@ -108,59 +107,6 @@ fun WaveformScope(
         }
         Text(
             text = s.waveform,
-            style = MaterialTheme.typography.labelSmall,
-            color = AlcedoColors.TextTertiary,
-            modifier = Modifier.align(Alignment.TopStart).padding(DesignTokens.spacingXs),
-        )
-    }
-}
-
-/**
- * Vectorscope. Plots chroma (Cb/Cr) samples from the bitmap inside a circle
- * with the standard skin-tone line.
- */
-@Composable
-fun VectorscopeView(
-    bitmap: Bitmap?,
-    modifier: Modifier = Modifier,
-) {
-    val s = Strings.res
-    Box(modifier = modifier.background(AlcedoColors.Obsidian)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val r = size.minDimension / 2f
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            drawCircle(color = AlcedoColors.Outline, radius = r, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
-            drawCircle(color = AlcedoColors.Divider, radius = r * 0.66f, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
-            drawCircle(color = AlcedoColors.Divider, radius = r * 0.33f, center = Offset(cx, cy), style = Stroke(width = 1.dp.toPx()))
-            // Skin-tone line (~123°)
-            val angle = Math.toRadians(123.0)
-            drawLine(
-                color = AlcedoColors.Amber.copy(alpha = 0.4f),
-                start = Offset(cx, cy),
-                end = Offset((cx + r * kotlin.math.cos(angle)).toFloat(), (cy + r * kotlin.math.sin(angle)).toFloat()),
-                strokeWidth = 1.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f)),
-            )
-            if (bitmap != null) {
-                val step = (bitmap.width / 64).coerceAtLeast(1)
-                val yStep = (bitmap.height / 64).coerceAtLeast(1)
-                for (px in 0 until bitmap.width step step) {
-                    for (py in 0 until bitmap.height step yStep) {
-                        val pixel = bitmap.getPixel(px, py)
-                        val rC = (pixel shr 16 and 0xFF) / 255f - 0.5f
-                        val bC = (pixel and 0xFF) / 255f - 0.5f
-                        val cb = -0.168736f * rC - 0.331264f * 0f + 0.5f * bC
-                        val cr = 0.5f * rC - 0.418688f * 0f - 0.081312f * bC
-                        val sx = cx + cb * r * 2f
-                        val sy = cy + cr * r * 2f
-                        drawCircle(color = AlcedoColors.VectorscopeTrace.copy(alpha = 0.25f), radius = 1.dp.toPx(), center = Offset(sx, sy))
-                    }
-                }
-            }
-        }
-        Text(
-            text = s.vectorscope,
             style = MaterialTheme.typography.labelSmall,
             color = AlcedoColors.TextTertiary,
             modifier = Modifier.align(Alignment.TopStart).padding(DesignTokens.spacingXs),

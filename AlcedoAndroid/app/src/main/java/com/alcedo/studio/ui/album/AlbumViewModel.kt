@@ -305,9 +305,12 @@ class AlbumViewModel @Inject constructor(
                 metadata[id] = buildMetadata(img)
             }
             runCatching {
-                aiRatingService.cullBatch(items, metadata, taskId = taskId) { completed, t ->
-                    taskService.update(taskId, completed, t)
-                }
+                aiRatingService.cullBatch(
+                    items,
+                    metadata,
+                    taskId = taskId,
+                    onProgress = { completed, t -> taskService.update(taskId, completed, t) },
+                )
             }.onSuccess { ratings ->
                 taskService.complete(taskId, if (taskService.isCancelled(taskId)) "cancelled" else null)
                 _uiState.update { it.copy(topRated = ratings.sortedByDescending { r -> r.overallScore }) }
