@@ -3,6 +3,7 @@
 #include "app/app_services.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <utility>
 

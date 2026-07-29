@@ -10,7 +10,12 @@ ImagePoolService::ImagePoolService(std::shared_ptr<ImagePoolManager> pool)
 auto ImagePoolService::PinImage(image_id_t id) -> ImagePoolManager::PinnedImageHandle {
   if (!pool_) return ImagePoolManager::PinnedImageHandle{};
   auto handle = pool_->GetImagePinned(id);
-  return handle.value_or(ImagePoolManager::PinnedImageHandle{});
+  // PinnedImageHandle is move-only (copy deleted), so std::optional::value_or
+  // cannot be used (it requires copy constructibility). Move out manually.
+  if (handle) {
+    return std::move(*handle);
+  }
+  return ImagePoolManager::PinnedImageHandle{};
 }
 
 void ImagePoolService::UnpinAll() {
