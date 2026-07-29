@@ -12,11 +12,10 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
 }
-
-apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
 
 android {
     namespace = "com.alcedo.studio"
