@@ -63,6 +63,7 @@ fun IndeterminateProgressBar(
     height: Dp = DesignTokens.sliderTrackHeight,
     color: Color = AlcedoTheme.extendedColors.accent,
 ) {
+    val trackColor = AlcedoTheme.extendedColors.sliderTrackInactive
     val transition = rememberInfiniteTransition(label = "indeterminate")
     val progress by transition.animateFloat(
         initialValue = 0f,
@@ -80,7 +81,7 @@ fun IndeterminateProgressBar(
     ) {
         val barHeight = size.height
         drawRoundRect(
-            color = AlcedoTheme.extendedColors.sliderTrackInactive,
+            color = trackColor,
             size = size,
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(barHeight / 2),
         )

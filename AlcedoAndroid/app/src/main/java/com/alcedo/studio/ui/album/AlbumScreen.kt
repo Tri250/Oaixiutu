@@ -130,7 +130,8 @@ fun AlbumScreen(
     val photoPicker = rememberImagePicker(maxItems = 50) { uris ->
         if (uris.isNotEmpty()) viewModel.import(uris)
     }
-    val isPhotoPickerAvailable = remember { PhotoPickerHelper.isPhotoPickerAvailable(LocalContext.current) }
+    val context = LocalContext.current
+    val isPhotoPickerAvailable = remember { PhotoPickerHelper.isPhotoPickerAvailable(context) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),

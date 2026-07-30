@@ -31,6 +31,7 @@ object DesignTokens {
     val radiusSm = 4.dp
     val radiusMd = 8.dp                          // RapidRAW --radius-md: 8px
     val radiusLg = 15.dp                         // RapidRAW --radius-lg: 15px (was 12dp)
+    val radiusFull = 9999.dp
     val radiusXl = 20.dp                         // Slightly more generous
     val radiusPill = 24.dp
 

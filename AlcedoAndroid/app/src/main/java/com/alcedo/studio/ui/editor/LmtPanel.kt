@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.common.SectionHeader
-import com.alcedo.studio.pipeline.LutUtils
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
