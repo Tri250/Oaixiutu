@@ -140,6 +140,7 @@ interface StringRes {
     val applyPreset: String
     val autoEnhance: String
     val rendering: String
+    val doubleTapToReset: String
 
     // ---- Tone panel ----
     val exposure: String

@@ -131,6 +131,7 @@ object StringResourcesEn : StringRes {
     override val applyPreset = "Apply"
     override val autoEnhance = "Auto"
     override val rendering = "Rendering"
+    override val doubleTapToReset = "Double-tap label to reset"
 
     override val exposure = "Exposure"
     override val contrast = "Contrast"

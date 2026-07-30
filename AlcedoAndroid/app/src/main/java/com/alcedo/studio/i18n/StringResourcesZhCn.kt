@@ -130,6 +130,7 @@ object StringResourcesZhCn : StringRes {
     override val applyPreset = "应用"
     override val autoEnhance = "自动"
     override val rendering = "渲染中"
+    override val doubleTapToReset = "双击标签复位"
 
     override val exposure = "曝光"
     override val contrast = "对比度"
