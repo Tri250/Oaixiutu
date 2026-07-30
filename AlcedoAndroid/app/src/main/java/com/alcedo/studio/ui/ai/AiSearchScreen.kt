@@ -118,7 +118,7 @@ fun AiSearchScreen(
                         Icon(Icons.Outlined.Settings, contentDescription = s.settings, tint = AlcedoColors.TextTertiary)
                     }
                     IconButton(onClick = { showSemanticDialog = true }) {
-                        Icon(Icons.Outlined.AutoAwesome, contentDescription = "Generate Tags", tint = AlcedoColors.TextTertiary)
+                        Icon(Icons.Outlined.AutoAwesome, contentDescription = s.generateTags, tint = AlcedoColors.TextTertiary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -142,7 +142,7 @@ fun AiSearchScreen(
                     onValueChange = viewModel::updateQuery,
                     placeholder = {
                         Text(
-                            text = "Type a description like 'sunset at the beach'",
+                            text = s.aiSearchHint,
                             style = MaterialTheme.typography.bodyMedium,
                             color = AlcedoColors.TextDisabled,
                         )
@@ -194,7 +194,7 @@ fun AiSearchScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Recent Searches",
+                                text = s.recentSearches,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = AlcedoColors.TextTertiary,
                                 modifier = Modifier.weight(1f),
@@ -226,7 +226,7 @@ fun AiSearchScreen(
 
                     // Search suggestions
                     Text(
-                        text = "Suggestions",
+                        text = s.suggestions,
                         style = MaterialTheme.typography.labelMedium,
                         color = AlcedoColors.TextTertiary,
                         modifier = Modifier.padding(top = DesignTokens.spacingSm),
@@ -279,7 +279,7 @@ fun AiSearchScreen(
                     state.results.isEmpty() && state.query.isNotBlank() -> {
                         EmptyState(
                             title = s.noSearchResults,
-                            subtitle = "Try a different description",
+                            subtitle = s.tryDifferentDescription,
                             icon = Icons.Outlined.ImageNotSupported,
                             modifier = Modifier.align(Alignment.Center),
                         )
@@ -324,6 +324,7 @@ fun AiSearchScreen(
 
 @Composable
 private fun ModelStatusBar(isReady: Boolean, isDownloading: Boolean, modelName: String) {
+    val s = Strings.res
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -346,9 +347,9 @@ private fun ModelStatusBar(isReady: Boolean, isDownloading: Boolean, modelName: 
         )
         Text(
             text = when {
-                isReady -> "$modelName • Ready"
-                isDownloading -> "$modelName • Downloading…"
-                else -> "$modelName • Not downloaded"
+                isReady -> "$modelName • ${s.available}"
+                isDownloading -> "$modelName • ${s.downloading}"
+                else -> "$modelName • ${s.modelNotDownloaded}"
             },
             style = MaterialTheme.typography.labelSmall,
             color = AlcedoColors.TextTertiary,

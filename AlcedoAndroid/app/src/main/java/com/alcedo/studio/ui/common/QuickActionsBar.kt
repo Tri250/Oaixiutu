@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.AlcedoTheme
 import com.alcedo.studio.ui.theme.DesignTokens
@@ -63,6 +64,7 @@ fun QuickActionsBar(
     onReset: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val s = Strings.res
     val haptics = rememberHapticFeedback()
     val accent = AlcedoTheme.extendedColors.accent
 
@@ -78,7 +80,7 @@ fun QuickActionsBar(
         // 撤销
         QuickActionButton(
             icon = Icons.AutoMirrored.Filled.Undo,
-            label = "撤销",
+            label = s.undo,
             enabled = canUndo,
             accent = accent,
             onClick = { haptics.click(); onUndo() },
@@ -87,7 +89,7 @@ fun QuickActionsBar(
         // 重做
         QuickActionButton(
             icon = Icons.AutoMirrored.Filled.Redo,
-            label = "重做",
+            label = s.redo,
             enabled = canRedo,
             accent = accent,
             onClick = { haptics.click(); onRedo() },
@@ -100,7 +102,7 @@ fun QuickActionsBar(
         onAutoEnhance?.let { handler ->
             QuickActionButton(
                 icon = Icons.Filled.AutoFixHigh,
-                label = "自动",
+                label = s.autoEnhance,
                 enabled = true,
                 accent = AlcedoColors.WarmAccent,
                 highlightColor = AlcedoColors.WarmAccent,
@@ -113,7 +115,7 @@ fun QuickActionsBar(
         // 对比 (长按/切换)
         QuickActionButton(
             icon = Icons.Outlined.Compare,
-            label = "对比",
+            label = s.compare,
             enabled = true,
             accent = accent,
             isActive = isComparing,
@@ -124,7 +126,7 @@ fun QuickActionsBar(
         onShare?.let { handler ->
             QuickActionButton(
                 icon = Icons.Outlined.Share,
-                label = "分享",
+                label = s.share,
                 enabled = true,
                 accent = accent,
                 onClick = { haptics.click(); handler() },
@@ -135,7 +137,7 @@ fun QuickActionsBar(
         onReset?.let { handler ->
             QuickActionButton(
                 icon = Icons.Outlined.DeleteSweep,
-                label = "重置",
+                label = s.reset,
                 enabled = canReset,
                 accent = AlcedoColors.Danger,
                 onClick = { haptics.click(); handler() },

@@ -122,9 +122,9 @@ fun EditorScreen(
     BackHandler(enabled = state.dirty) { showUnsavedDialog = true }
     if (showUnsavedDialog) {
         ConfirmDialog(
-            title = "未保存的更改",
-            message = "有未保存的编辑内容。放弃并离开编辑器？",
-            confirmText = "放弃",
+            title = s.unsavedChanges,
+            message = s.unsavedChangesMessage,
+            confirmText = s.discard,
             dismissText = s.cancel,
             destructive = true,
             onConfirm = { showUnsavedDialog = false; onBack() },
@@ -259,7 +259,7 @@ fun EditorScreen(
                 if (focusModeState.enabled) {
                     Icon(
                         imageVector = Icons.Outlined.FiberManualRecord,
-                        contentDescription = "Focus peaking",
+                        contentDescription = s.focusPeaking,
                         tint = focusModeState.overlayColor,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -272,7 +272,7 @@ fun EditorScreen(
                 if (pipelineState.isRendering) {
                     Icon(
                         imageVector = Icons.Outlined.FiberManualRecord,
-                        contentDescription = "Rendering",
+                        contentDescription = s.rendering,
                         tint = AlcedoColors.WarmAccent,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -369,6 +369,7 @@ fun EditorScreen(
 
 @Composable
 private fun SecondaryPanelHeader(title: String, onClose: () -> Unit) {
+    val s = Strings.res
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -383,7 +384,7 @@ private fun SecondaryPanelHeader(title: String, onClose: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onClose, modifier = Modifier.size(20.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "关闭面板", tint = AlcedoColors.TextSecondary)
+            Icon(Icons.Outlined.Close, contentDescription = s.close, tint = AlcedoColors.TextSecondary)
         }
     }
 }

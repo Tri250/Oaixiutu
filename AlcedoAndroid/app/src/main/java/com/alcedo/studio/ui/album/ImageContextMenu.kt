@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.ColorLabel
 import com.alcedo.studio.data.model.ImageFlag
 import com.alcedo.studio.data.model.ImageItem
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
@@ -57,27 +58,28 @@ fun ImageContextMenu(
     onAddToCollection: () -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
+    val s = Strings.res
     DropdownMenu(
         expanded = expanded && image != null,
         offset = offset,
         onDismissRequest = onDismiss,
     ) {
         if (image == null) return@DropdownMenu
-        ContextItem(Icons.Outlined.ContentCopy, "Copy Adjustments", onCopyAdjustments)
-        ContextItem(Icons.Outlined.ContentPaste, "Paste Adjustments", onPasteAdjustments)
+        ContextItem(Icons.Outlined.ContentCopy, s.copyAdjustments, onCopyAdjustments)
+        ContextItem(Icons.Outlined.ContentPaste, s.pasteAdjustments, onPasteAdjustments)
         HorizontalDivider(color = AlcedoColors.Divider)
-        ContextItem(Icons.Outlined.Star, "Rate 1★", onClick = { onRate(1) })
-        ContextItem(Icons.Outlined.Star, "Rate 3★", onClick = { onRate(3) })
-        ContextItem(Icons.Outlined.Star, "Rate 5★", onClick = { onRate(5) })
+        ContextItem(Icons.Outlined.Star, s.rate + " 1★", onClick = { onRate(1) })
+        ContextItem(Icons.Outlined.Star, s.rate + " 3★", onClick = { onRate(3) })
+        ContextItem(Icons.Outlined.Star, s.rate + " 5★", onClick = { onRate(5) })
         HorizontalDivider(color = AlcedoColors.Divider)
-        ContextItem(Icons.Outlined.Flag, "Flag Pick", onClick = { onSetFlag(ImageFlag.PICK) })
-        ContextItem(Icons.Outlined.Flag, "Flag Reject", onClick = { onSetFlag(ImageFlag.REJECT) })
-        ContextItem(Icons.Outlined.Flag, "Clear Flag", onClick = { onSetFlag(ImageFlag.NONE) })
+        ContextItem(Icons.Outlined.Flag, s.flagPick, onClick = { onSetFlag(ImageFlag.PICK) })
+        ContextItem(Icons.Outlined.Flag, s.flagReject, onClick = { onSetFlag(ImageFlag.REJECT) })
+        ContextItem(Icons.Outlined.Flag, s.flagClear, onClick = { onSetFlag(ImageFlag.NONE) })
         HorizontalDivider(color = AlcedoColors.Divider)
         ColorLabelRow(onSetColorLabel)
         HorizontalDivider(color = AlcedoColors.Divider)
-        ContextItem(Icons.Outlined.Folder, "Add to Collection", onAddToCollection)
-        ContextItem(Icons.Outlined.Delete, "Delete", onDelete, tint = AlcedoColors.Danger)
+        ContextItem(Icons.Outlined.Folder, s.addToCollection, onAddToCollection)
+        ContextItem(Icons.Outlined.Delete, s.delete, onDelete, tint = AlcedoColors.Danger)
     }
 }
 
@@ -97,8 +99,9 @@ private fun ContextItem(
 
 @Composable
 private fun ColorLabelRow(onSetColorLabel: (ColorLabel) -> Unit) {
+    val s = Strings.res
     Column(modifier = Modifier.padding(horizontal = DesignTokens.spacingLg, vertical = DesignTokens.spacingSm)) {
-        Text(text = "Color Label", style = MaterialTheme.typography.labelMedium, color = AlcedoColors.TextTertiary)
+        Text(text = s.colorLabel, style = MaterialTheme.typography.labelMedium, color = AlcedoColors.TextTertiary)
         Row(
             modifier = Modifier
                 .fillMaxWidth()

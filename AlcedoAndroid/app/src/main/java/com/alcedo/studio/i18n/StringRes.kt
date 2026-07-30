@@ -138,6 +138,8 @@ interface StringRes {
     val deleteVersion: String
     val savePreset: String
     val applyPreset: String
+    val autoEnhance: String
+    val rendering: String
 
     // ---- Tone panel ----
     val exposure: String
@@ -328,6 +330,10 @@ interface StringRes {
     val siglip: String
     val maskSegment: String
     val setAsDefault: String
+    val recentSearches: String
+    val suggestions: String
+    val tryDifferentDescription: String
+    val downloading: String
 
     // ---- Onboarding ----
     val welcome: String
@@ -391,6 +397,9 @@ interface StringRes {
     val dismiss: String
     val more: String
     val back: String
+    val unsavedChanges: String
+    val unsavedChangesMessage: String
+    val discard: String
 
     // ---- Compare modes ----
     val compareSplit: String

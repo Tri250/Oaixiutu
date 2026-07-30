@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
@@ -25,6 +26,7 @@ fun ErrorDialog(
     retryText: String? = null,
     onRetry: (() -> Unit)? = null,
 ) {
+    val s = Strings.res
     androidx.compose.material3.AlertDialog(
         modifier = modifier,
         onDismissRequest = onDismiss,
@@ -55,12 +57,12 @@ fun ErrorDialog(
                 }
             } else {
                 TextButton(onClick = onDismiss) {
-                    Text(text = "Dismiss", color = AlcedoColors.TextSecondary)
+                    Text(text = s.dismiss, color = AlcedoColors.TextSecondary)
                 }
             }
         },
         dismissButton = if (retryText != null && onRetry != null) {
-            { TextButton(onClick = onDismiss) { Text(text = "Dismiss", color = AlcedoColors.TextSecondary) } }
+            { TextButton(onClick = onDismiss) { Text(text = s.dismiss, color = AlcedoColors.TextSecondary) } }
         } else null,
     )
 }

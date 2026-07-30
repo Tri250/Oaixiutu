@@ -6,6 +6,8 @@ import com.alcedo.studio.data.model.AdjustmentParams
 import com.alcedo.studio.data.model.MaskRecord
 import com.alcedo.studio.ndk.AlcedoNativeBridge
 import com.alcedo.studio.ndk.NdkSafeCall
+import com.alcedo.studio.util.BitmapDecoder
+import com.alcedo.studio.util.ContextProvider
 import com.alcedo.studio.utils.ThreadPool
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +50,11 @@ class PipelineService @Inject constructor(
     private var pendingParams: AdjustmentParams = AdjustmentParams.DEFAULT
     private var dirty = false
 
+    /** Platform-decoded bitmap captured when the native decoder or pipeline
+     *  could not be initialised in [open]; used by [render] as a last-resort
+     *  preview so the editor always shows something instead of a blank frame. */
+    private var fallbackBitmap: Bitmap? = null
+
     /** Dedicated (off-screen) pipeline handles keyed by pipeline handle, with
      *  the associated decoded image handle so it can be released on close.
      *  Used by batch export so each image renders through its own pipeline
@@ -59,17 +66,33 @@ class PipelineService @Inject constructor(
     /** Open an image and create its pipeline. */
     suspend fun open(uri: android.net.Uri): Boolean = withContext(ThreadPool.compute) {
         close()
-        val decoded = decodeService.decode(uri) ?: run {
-            _state.value = _state.value.copy(isReady = false, error = "decode_failed")
-            return@withContext false
-        }
-        currentImage = decoded
-        pipelineHandle = NdkSafeCall.handle {
-            AlcedoNativeBridge.nativeCreatePipeline(decoded.handle)
-        }
-        if (pipelineHandle == 0L) {
-            _state.value = _state.value.copy(isReady = false, error = "pipeline_create_failed")
-            return@withContext false
+        val decoded = decodeService.decode(uri)
+        if (decoded == null) {
+            // Native decode failed: fall back to the platform decoder so we can
+            // at least show the original image for viewing/basic edits.
+            val platformBitmap = ContextProvider.context()?.let {
+                BitmapDecoder.decodeSampled(it, uri, 2048)
+            }
+            if (platformBitmap == null) {
+                _state.value = _state.value.copy(isReady = false, error = "decode_failed")
+                return@withContext false
+            }
+            currentImage = DecodeService.DecodedImage(
+                handle = 0L,
+                width = platformBitmap.width,
+                height = platformBitmap.height,
+                isRaw = false,
+            )
+            fallbackBitmap = platformBitmap
+            pipelineHandle = 0L
+        } else {
+            currentImage = decoded
+            pipelineHandle = NdkSafeCall.handle {
+                AlcedoNativeBridge.nativeCreatePipeline(decoded.handle)
+            }
+            // If pipeline creation failed, render() will fall back to decoding
+            // the source image directly; keep isReady true so the editor can
+            // still display the image instead of reporting a hard failure.
         }
         pendingParams = AdjustmentParams.DEFAULT
         dirty = true
@@ -103,23 +126,37 @@ class PipelineService @Inject constructor(
 
     /** Force a re-render of the current params and publish a new preview. */
     suspend fun render(): Boolean = withContext(ThreadPool.compute) {
-        if (pipelineHandle == 0L) return@withContext false
         _state.value = _state.value.copy(isRendering = true)
-        val applied = NdkSafeCall.call(default = false) {
-            AlcedoNativeBridge.nativeApplyAdjustments(
-                pipelineHandle,
-                AlcedoNativeBridge.paramsToJson(pendingParams),
-            )
+        var bitmap: Bitmap? = null
+        if (pipelineHandle != 0L) {
+            NdkSafeCall.call(default = false) {
+                AlcedoNativeBridge.nativeApplyAdjustments(
+                    pipelineHandle,
+                    AlcedoNativeBridge.paramsToJson(pendingParams),
+                )
+            }
+            // Even when apply fails, the native pipeline may still hold a
+            // cached display frame from a previous render, so attempt to fetch
+            // it regardless of the apply result.
+            bitmap = NdkSafeCall.callOrNull<Bitmap> {
+                AlcedoNativeBridge.nativeGetFinalDisplayFrame(pipelineHandle)
+            }
         }
-        if (!applied) {
-            _state.value = _state.value.copy(isRendering = false, error = "apply_failed")
-            return@withContext false
+        // Fallback 1: render the decoded source image directly (no adjustments).
+        if (bitmap == null) {
+            bitmap = currentImage?.let { decodeService.toBitmap(it) }
         }
-        val bitmap = NdkSafeCall.callOrNull<Bitmap> {
-            AlcedoNativeBridge.nativeGetFinalDisplayFrame(pipelineHandle)
+        // Fallback 2: platform-decoded bitmap captured in open() when neither
+        // the native decoder nor the pipeline could be initialised.
+        if (bitmap == null) {
+            bitmap = fallbackBitmap
         }
         dirty = false
-        _state.value = _state.value.copy(isRendering = false, previewBitmap = bitmap, error = null)
+        if (bitmap != null) {
+            _state.value = _state.value.copy(isRendering = false, previewBitmap = bitmap, error = null)
+        } else {
+            _state.value = _state.value.copy(isRendering = false, error = "render_failed")
+        }
         bitmap != null
     }
 
@@ -200,6 +237,7 @@ class PipelineService @Inject constructor(
         }
         currentImage?.let { decodeService.release(it) }
         currentImage = null
+        fallbackBitmap = null
         // Release any leaked dedicated handles.
         dedicatedHandles.keys.toList().forEach { releaseHandle(it) }
         _state.value = PipelineState()

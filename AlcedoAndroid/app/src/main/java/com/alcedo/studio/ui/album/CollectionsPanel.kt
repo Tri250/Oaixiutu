@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.data.model.SleeveFolder
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.DesignTokens
 
@@ -44,6 +45,7 @@ fun CollectionsPanel(
     onCreateFolder: () -> Unit = {},
     onImport: () -> Unit = {},
 ) {
+    val s = Strings.res
     Column(
         modifier = modifier
             .background(AlcedoColors.Graphite)
@@ -56,13 +58,13 @@ fun CollectionsPanel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "COLLECTIONS",
+                text = s.collections,
                 style = MaterialTheme.typography.labelMedium,
                 color = AlcedoColors.TextTertiary,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onCreateFolder, modifier = Modifier.size(20.dp)) {
-                Icon(Icons.Filled.CreateNewFolder, contentDescription = "New folder", tint = AlcedoColors.TextSecondary)
+                Icon(Icons.Filled.CreateNewFolder, contentDescription = s.createFolder, tint = AlcedoColors.TextSecondary)
             }
         }
         Button(
@@ -72,7 +74,7 @@ fun CollectionsPanel(
                 .padding(horizontal = DesignTokens.spacingMd, vertical = DesignTokens.spacingXs),
         ) {
             Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("Import", modifier = Modifier.padding(start = DesignTokens.spacingXs))
+            Text(s.import, modifier = Modifier.padding(start = DesignTokens.spacingXs))
         }
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
             items(folders, key = { it.id }) { folder ->
@@ -99,6 +101,7 @@ private fun FolderRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val s = Strings.res
     val bg = if (selected) AlcedoColors.SurfaceSelected else androidx.compose.ui.graphics.Color.Transparent
     Row(
         modifier = Modifier
@@ -117,7 +120,7 @@ private fun FolderRow(
             modifier = Modifier.size(16.dp),
         )
         Text(
-            text = folder?.name ?: "All Photos",
+            text = folder?.name ?: s.allPhotos,
             style = MaterialTheme.typography.bodyMedium,
             color = if (selected) AlcedoColors.TextPrimary else AlcedoColors.TextSecondary,
             maxLines = 1,

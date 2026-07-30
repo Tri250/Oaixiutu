@@ -135,6 +135,8 @@ class EditorViewModel @Inject constructor(
                 // The pipeline resets params to DEFAULT on open, so re-push the
                 // version's cumulative params so the preview matches saved state.
                 pipelineService.updateParams(baseline)
+                // Re-render with the version's actual params (not just DEFAULT).
+                runCatching { pipelineService.render() }
                 // Snapshot the unedited preview as the "before" bitmap for compare mode.
                 val initial = pipelineService.state.value.previewBitmap
                 _uiState.update { it.copy(beforeBitmap = initial) }
@@ -170,7 +172,7 @@ class EditorViewModel @Inject constructor(
         renderDebounceJob?.cancel()
         renderDebounceJob = viewModelScope.launch {
             delay(RENDER_DEBOUNCE_MS)
-            pipelineService.render()
+            runCatching { pipelineService.render() }
         }
     }
 

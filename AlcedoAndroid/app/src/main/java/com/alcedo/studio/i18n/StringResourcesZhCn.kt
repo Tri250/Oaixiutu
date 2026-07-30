@@ -128,6 +128,8 @@ object StringResourcesZhCn : StringRes {
     override val deleteVersion = "删除版本"
     override val savePreset = "存为预设"
     override val applyPreset = "应用"
+    override val autoEnhance = "自动"
+    override val rendering = "渲染中"
 
     override val exposure = "曝光"
     override val contrast = "对比度"
@@ -305,6 +307,10 @@ object StringResourcesZhCn : StringRes {
     override val siglip = "SigLIP"
     override val maskSegment = "蒙版分割"
     override val setAsDefault = "设为默认"
+    override val recentSearches = "最近搜索"
+    override val suggestions = "建议"
+    override val tryDifferentDescription = "尝试换一个描述"
+    override val downloading = "下载中…"
 
     override val welcome = "欢迎使用 Alcedo"
     override val welcomeSubtitle = "专业 RAW 照片编辑器"
@@ -365,6 +371,9 @@ object StringResourcesZhCn : StringRes {
     override val dismiss = "关闭"
     override val more = "更多"
     override val back = "返回"
+    override val unsavedChanges = "未保存的更改"
+    override val unsavedChangesMessage = "有未保存的编辑内容。放弃并离开编辑器？"
+    override val discard = "放弃"
 
     override val compareSplit = "分屏"
     override val compareSideBySide = "并排"

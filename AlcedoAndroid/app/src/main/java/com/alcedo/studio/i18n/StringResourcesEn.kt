@@ -129,6 +129,8 @@ object StringResourcesEn : StringRes {
     override val deleteVersion = "Delete Version"
     override val savePreset = "Save as Preset"
     override val applyPreset = "Apply"
+    override val autoEnhance = "Auto"
+    override val rendering = "Rendering"
 
     override val exposure = "Exposure"
     override val contrast = "Contrast"
@@ -306,6 +308,10 @@ object StringResourcesEn : StringRes {
     override val siglip = "SigLIP"
     override val maskSegment = "Mask Segment"
     override val setAsDefault = "Set as Default"
+    override val recentSearches = "Recent Searches"
+    override val suggestions = "Suggestions"
+    override val tryDifferentDescription = "Try a different description"
+    override val downloading = "Downloading…"
 
     override val welcome = "Welcome to Alcedo"
     override val welcomeSubtitle = "Professional RAW photo editor"
@@ -366,6 +372,9 @@ object StringResourcesEn : StringRes {
     override val dismiss = "Dismiss"
     override val more = "More"
     override val back = "Back"
+    override val unsavedChanges = "Unsaved Changes"
+    override val unsavedChangesMessage = "You have unsaved edits. Discard and leave the editor?"
+    override val discard = "Discard"
 
     override val compareSplit = "Split"
     override val compareSideBySide = "Side by Side"

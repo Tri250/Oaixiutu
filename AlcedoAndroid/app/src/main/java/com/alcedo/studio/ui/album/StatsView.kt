@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alcedo.studio.domain.service.AlbumBrowseService
+import com.alcedo.studio.i18n.Strings
 import com.alcedo.studio.ui.theme.AlcedoColors
 import com.alcedo.studio.ui.theme.AlcedoMonoStyle
 import com.alcedo.studio.ui.theme.DesignTokens
@@ -36,6 +37,7 @@ fun StatsView(
     taggedCount: Int,
     modifier: Modifier = Modifier,
 ) {
+    val s = Strings.res
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -43,7 +45,7 @@ fun StatsView(
         verticalArrangement = Arrangement.spacedBy(DesignTokens.spacingMd),
     ) {
         Text(
-            text = "STATISTICS",
+            text = s.stats,
             style = MaterialTheme.typography.labelMedium,
             color = AlcedoColors.TextTertiary,
         )
@@ -51,25 +53,25 @@ fun StatsView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
         ) {
-            StatCard("Total", stats?.totalImages?.toString() ?: "—", Modifier.weight(1f))
-            StatCard("RAW", stats?.rawImages?.toString() ?: "—", Modifier.weight(1f))
-            StatCard("Picks", stats?.picks?.toString() ?: "—", Modifier.weight(1f))
+            StatCard(s.statTotalImages, stats?.totalImages?.toString() ?: "—", Modifier.weight(1f))
+            StatCard(s.statRawImages, stats?.rawImages?.toString() ?: "—", Modifier.weight(1f))
+            StatCard(s.statPicks, stats?.picks?.toString() ?: "—", Modifier.weight(1f))
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(DesignTokens.spacingSm),
         ) {
-            StatCard("Rejects", stats?.rejects?.toString() ?: "—", Modifier.weight(1f))
-            StatCard("Rated", ratedCount.toString(), Modifier.weight(1f))
-            StatCard("Tagged", taggedCount.toString(), Modifier.weight(1f))
+            StatCard(s.statRejects, stats?.rejects?.toString() ?: "—", Modifier.weight(1f))
+            StatCard(s.statRated, ratedCount.toString(), Modifier.weight(1f))
+            StatCard(s.statTagged, taggedCount.toString(), Modifier.weight(1f))
         }
-        StatCard("Folders", stats?.folders?.toString() ?: "—", Modifier.fillMaxWidth())
+        StatCard(s.statFolders, stats?.folders?.toString() ?: "—", Modifier.fillMaxWidth())
 
         if (cameras.isNotEmpty()) {
-            BreakdownList("By Camera", cameras)
+            BreakdownList(s.byCamera, cameras)
         }
         if (lenses.isNotEmpty()) {
-            BreakdownList("By Lens", lenses)
+            BreakdownList(s.byLens, lenses)
         }
     }
 }
